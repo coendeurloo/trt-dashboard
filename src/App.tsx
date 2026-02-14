@@ -102,6 +102,12 @@ interface EditableCellProps {
   onCommit: (value: string) => void;
 }
 
+interface MarkerMergeSuggestion {
+  sourceCanonical: string;
+  targetCanonical: string;
+  score: number;
+}
+
 const markerColor = (index: number): string => {
   const palette = ["#22d3ee", "#34d399", "#60a5fa", "#f59e0b", "#f472b6", "#facc15", "#a78bfa"];
   return palette[index % palette.length];
@@ -170,6 +176,107 @@ const normalizeAnalysisTextForDisplay = (raw: string): string => {
     )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+};
+
+const normalizeMarkerKey = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const markerSimilarity = (left: string, right: string): number => {
+  const a = normalizeMarkerKey(left);
+  const b = normalizeMarkerKey(right);
+  if (!a || !b) {
+    return 0;
+  }
+  if (a === b) {
+    return 1;
+  }
+  if (a.includes(b) || b.includes(a)) {
+    return 0.9;
+  }
+
+  const aTokens = new Set(a.split(" "));
+  const bTokens = new Set(b.split(" "));
+  const sharedTokens = Array.from(aTokens).filter((token) => bTokens.has(token)).length;
+  const tokenScore = (2 * sharedTokens) / (aTokens.size + bTokens.size);
+
+  const aBigrams = new Set(Array.from({ length: Math.max(0, a.length - 1) }, (_, i) => a.slice(i, i + 2)));
+  const bBigrams = new Set(Array.from({ length: Math.max(0, b.length - 1) }, (_, i) => b.slice(i, i + 2)));
+  const sharedBigrams = Array.from(aBigrams).filter((token) => bBigrams.has(token)).length;
+  const bigramScore = aBigrams.size === 0 || bBigrams.size === 0 ? 0 : (2 * sharedBigrams) / (aBigrams.size + bBigrams.size);
+
+  return tokenScore * 0.65 + bigramScore * 0.35;
+};
+
+const dedupeMarkersInReport = (markers: MarkerValue[]): MarkerValue[] =>
+  Array.from(
+    markers
+      .reduce((map, marker) => {
+        const key = [
+          marker.canonicalMarker,
+          marker.value,
+          marker.unit,
+          marker.referenceMin ?? "",
+          marker.referenceMax ?? "",
+          marker.isCalculated ? "calc" : "raw"
+        ].join("|");
+        const existing = map.get(key);
+        if (!existing || marker.confidence > existing.confidence) {
+          map.set(key, marker);
+        }
+        return map;
+      }, new Map<string, MarkerValue>())
+      .values()
+  );
+
+const detectMarkerMergeSuggestions = (
+  incomingCanonicalMarkers: string[],
+  existingCanonicalMarkers: string[]
+): MarkerMergeSuggestion[] => {
+  const existingSet = new Set(existingCanonicalMarkers);
+  const suggestions = incomingCanonicalMarkers
+    .map((source) => {
+      if (existingSet.has(source) || source === "Unknown Marker") {
+        return null;
+      }
+      let bestTarget = "";
+      let bestScore = 0;
+      for (const candidate of existingCanonicalMarkers) {
+        if (candidate === source) {
+          continue;
+        }
+        const score = markerSimilarity(source, candidate);
+        if (score > bestScore) {
+          bestScore = score;
+          bestTarget = candidate;
+        }
+      }
+      if (!bestTarget || bestScore < 0.82) {
+        return null;
+      }
+      return {
+        sourceCanonical: source,
+        targetCanonical: bestTarget,
+        score: Number(bestScore.toFixed(2))
+      } satisfies MarkerMergeSuggestion;
+    })
+    .filter((item): item is MarkerMergeSuggestion => item !== null);
+
+  return Array.from(
+    suggestions
+      .reduce((map, suggestion) => {
+        const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
+        const existing = map.get(key);
+        if (!existing || suggestion.score > existing.score) {
+          map.set(key, suggestion);
+        }
+        return map;
+      }, new Map<string, MarkerMergeSuggestion>())
+      .values()
+  );
 };
 
 const EditableCell = ({ value, align = "left", placeholder = "", editLabel = "Edit value", onCommit }: EditableCellProps) => {
@@ -712,7 +819,7 @@ const MarkerInfoBadge = ({ marker, language }: MarkerInfoBadgeProps) => {
       >
         <Info className="h-3.5 w-3.5" />
       </button>
-      <div className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-72 -translate-x-1/2 rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-left text-xs text-slate-200 shadow-xl group-hover:block">
+      <div className="marker-info-tooltip pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-72 -translate-x-1/2 rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-left text-xs text-slate-200 shadow-xl group-hover:block">
         <p className="font-semibold text-slate-100">{meta.title}</p>
         <p className="mt-1">{meta.what}</p>
         <p className="mt-1 text-slate-300">
@@ -813,7 +920,7 @@ const MarkerTrendChart = ({
               return null;
             }
             return (
-              <div className="min-w-[220px] rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-xl">
+              <div className="chart-tooltip min-w-[220px] rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-xl">
                 <p className="font-semibold text-slate-100">{formatDate(point.date)}</p>
                 <p className="mt-1 text-sm text-cyan-200">
                   {markerLabel}: <strong>{formatAxisTick(point.value)}</strong> {point.unit}
@@ -935,7 +1042,7 @@ const AlertTrendMiniChart = ({ marker, points, highlightDate, language, height =
                 return null;
               }
               return (
-                <div className="rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
+                <div className="chart-tooltip-mini rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
                   <p className="font-medium text-slate-100">{formatDate(point.date)}</p>
                   <p className="mt-1 text-cyan-200">
                     {markerLabel}: {formatAxisTick(point.value)} {point.unit}
@@ -1393,7 +1500,7 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
               const isProjectionPoint = point.actual === null && point.projected !== null;
               const value = isProjectionPoint ? point.projected : point.actual ?? point.projected;
               return (
-                <div className="rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
+                <div className="chart-tooltip-mini rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
                   <p className="font-medium text-slate-100">{formatDate(point.date)}</p>
                   <p className="mt-1 text-cyan-200">
                     {markerLabel}: {value === null ? "-" : `${formatAxisTick(value)} ${prediction.unit}`}
@@ -1495,6 +1602,10 @@ const App = () => {
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
+  const [markerSuggestions, setMarkerSuggestions] = useState<MarkerMergeSuggestion[]>([]);
+  const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
+  const [mergeFromMarker, setMergeFromMarker] = useState("");
+  const [mergeIntoMarker, setMergeIntoMarker] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -1530,6 +1641,45 @@ const App = () => {
       report.markers.forEach((marker) => set.add(marker.canonicalMarker));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [reports]);
+  const editableMarkers = useMemo(
+    () =>
+      allMarkers.filter((marker) =>
+        reports.some((report) => report.markers.some((entry) => entry.canonicalMarker === marker && !entry.isCalculated))
+      ),
+    [allMarkers, reports]
+  );
+  const markerUsage = useMemo(() => {
+    const byMarker = new Map<
+      string,
+      {
+        marker: string;
+        valueCount: number;
+        reportCount: number;
+      }
+    >();
+
+    reports.forEach((report) => {
+      const seenInReport = new Set<string>();
+      report.markers.forEach((entry) => {
+        if (entry.isCalculated) {
+          return;
+        }
+        const current = byMarker.get(entry.canonicalMarker) ?? {
+          marker: entry.canonicalMarker,
+          valueCount: 0,
+          reportCount: 0
+        };
+        current.valueCount += 1;
+        if (!seenInReport.has(entry.canonicalMarker)) {
+          current.reportCount += 1;
+          seenInReport.add(entry.canonicalMarker);
+        }
+        byMarker.set(entry.canonicalMarker, current);
+      });
+    });
+
+    return Array.from(byMarker.values()).sort((a, b) => b.valueCount - a.valueCount || a.marker.localeCompare(b.marker));
   }, [reports]);
   const primaryMarkers = useMemo(() => {
     const base: string[] = [...PRIMARY_MARKERS];
@@ -1651,6 +1801,21 @@ const App = () => {
   }, [allMarkers]);
 
   useEffect(() => {
+    if (editableMarkers.length === 0) {
+      setMergeFromMarker("");
+      setMergeIntoMarker("");
+      return;
+    }
+    setMergeFromMarker((current) => (editableMarkers.includes(current) ? current : editableMarkers[0]));
+    setMergeIntoMarker((current) => {
+      if (editableMarkers.includes(current) && current !== (editableMarkers[0] ?? "")) {
+        return current;
+      }
+      return editableMarkers.find((marker) => marker !== (editableMarkers[0] ?? "")) ?? "";
+    });
+  }, [editableMarkers]);
+
+  useEffect(() => {
     setExpandedReportIds((current) => current.filter((id) => reports.some((report) => report.id === id)));
   }, [reports]);
 
@@ -1675,6 +1840,57 @@ const App = () => {
         ...patch
       }
     }));
+  };
+
+  const remapMarkerAcrossReports = (sourceCanonical: string, targetLabel: string) => {
+    const cleanLabel = targetLabel.trim();
+    if (!cleanLabel) {
+      return;
+    }
+    const targetCanonical = canonicalizeMarker(cleanLabel);
+    setAppData((prev) => ({
+      ...prev,
+      reports: prev.reports.map((report) => {
+        const rewritten = report.markers.map((marker) => {
+          if (marker.canonicalMarker !== sourceCanonical || marker.isCalculated) {
+            return marker;
+          }
+          const normalized = normalizeMarkerMeasurement({
+            canonicalMarker: targetCanonical,
+            value: marker.value,
+            unit: marker.unit,
+            referenceMin: marker.referenceMin,
+            referenceMax: marker.referenceMax
+          });
+          return {
+            ...marker,
+            marker: cleanLabel,
+            canonicalMarker: targetCanonical,
+            value: normalized.value,
+            unit: normalized.unit,
+            referenceMin: normalized.referenceMin,
+            referenceMax: normalized.referenceMax,
+            abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+          };
+        });
+        return {
+          ...report,
+          markers: dedupeMarkersInReport(rewritten)
+        };
+      })
+    }));
+    setMarkerSuggestions((current) =>
+      current.filter(
+        (item) => item.sourceCanonical !== sourceCanonical && item.targetCanonical !== sourceCanonical
+      )
+    );
+  };
+
+  const openRenameDialog = (sourceCanonical: string) => {
+    setRenameDialog({
+      sourceCanonical,
+      draftName: sourceCanonical
+    });
   };
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
@@ -1830,11 +2046,30 @@ const App = () => {
       extraction: draft.extraction
     };
     const enrichedReport = enrichReportWithCalculatedMarkers(report);
+    const incomingCanonicalMarkers = Array.from(new Set(enrichedReport.markers.map((marker) => marker.canonicalMarker)));
+    const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
     setAppData((prev) => ({
       ...prev,
       reports: sortReportsChronological([...prev.reports, enrichedReport])
     }));
+    if (suggestions.length > 0) {
+      setMarkerSuggestions((current) => {
+        const merged = [...current, ...suggestions];
+        return Array.from(
+          merged
+            .reduce((map, suggestion) => {
+              const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
+              const existing = map.get(key);
+              if (!existing || suggestion.score > existing.score) {
+                map.set(key, suggestion);
+              }
+              return map;
+            }, new Map<string, MarkerMergeSuggestion>())
+            .values()
+        );
+      });
+    }
 
     setDraft(null);
     setDraftAnnotations(blankAnnotations());
@@ -1946,6 +2181,9 @@ const App = () => {
   const applyImportedData = (incomingRaw: unknown, mode: "merge" | "replace") => {
     const incoming = coerceStoredAppData(incomingRaw as Record<string, unknown>);
     const importedReports = sortReportsChronological(enrichReportsWithCalculatedMarkers(incoming.reports));
+    const incomingCanonicalMarkers = Array.from(
+      new Set(importedReports.flatMap((report) => report.markers.map((marker) => marker.canonicalMarker)))
+    );
 
     if (mode === "replace") {
       const replaceConfirmed =
@@ -1983,6 +2221,8 @@ const App = () => {
       return;
     }
 
+    const mergeSuggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
+
     setAppData((prev) => {
       const byId = new Map<string, LabReport>();
       prev.reports.forEach((report) => {
@@ -2004,6 +2244,23 @@ const App = () => {
         `Backup merged: processed ${importedReports.length} reports.`
       )
     });
+    if (mergeSuggestions.length > 0) {
+      setMarkerSuggestions((current) => {
+        const merged = [...current, ...mergeSuggestions];
+        return Array.from(
+          merged
+            .reduce((map, suggestion) => {
+              const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
+              const existing = map.get(key);
+              if (!existing || suggestion.score > existing.score) {
+                map.set(key, suggestion);
+              }
+              return map;
+            }, new Map<string, MarkerMergeSuggestion>())
+            .values()
+        );
+      });
+    }
   };
 
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -3406,6 +3663,17 @@ const App = () => {
                                 <span className="inline-flex items-center gap-1">
                                   {getMarkerDisplayName(marker.canonicalMarker, appData.settings.language)}
                                   <MarkerInfoBadge marker={marker.canonicalMarker} language={appData.settings.language} />
+                                  {!marker.isCalculated ? (
+                                    <button
+                                      type="button"
+                                      className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
+                                      onClick={() => openRenameDialog(marker.canonicalMarker)}
+                                      aria-label={tr("Marker hernoemen", "Rename marker")}
+                                      title={tr("Marker hernoemen", "Rename marker")}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
                                   {marker.isCalculated ? (
                                     <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">
                                       fx
@@ -3674,6 +3942,88 @@ const App = () => {
               </div>
 
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {tr(
+                    "Beheer markernaam-normalisatie zonder je dashboard te verstoren. Je kunt markers handmatig samenvoegen of hernoemen.",
+                    "Manage marker-name normalization without cluttering the dashboard. You can manually merge or rename markers."
+                  )}
+                </p>
+                <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+                  <select
+                    className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
+                    value={mergeFromMarker}
+                    onChange={(event) => setMergeFromMarker(event.target.value)}
+                  >
+                    {editableMarkers.length === 0 ? (
+                      <option value="">{tr("Geen markers beschikbaar", "No markers available")}</option>
+                    ) : (
+                      editableMarkers.map((marker) => (
+                        <option key={`from-${marker}`} value={marker}>
+                          {getMarkerDisplayName(marker, appData.settings.language)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <div className="self-center text-center text-xs text-slate-400">{tr("naar", "into")}</div>
+                  <select
+                    className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
+                    value={mergeIntoMarker}
+                    onChange={(event) => setMergeIntoMarker(event.target.value)}
+                  >
+                    <option value="">{tr("Selecteer target", "Select target")}</option>
+                    {editableMarkers
+                      .filter((marker) => marker !== mergeFromMarker)
+                      .map((marker) => (
+                        <option key={`to-${marker}`} value={marker}>
+                          {getMarkerDisplayName(marker, appData.settings.language)}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 disabled:opacity-50"
+                    disabled={!mergeFromMarker || !mergeIntoMarker || mergeFromMarker === mergeIntoMarker}
+                    onClick={() => remapMarkerAcrossReports(mergeFromMarker, mergeIntoMarker)}
+                  >
+                    {tr("Voer merge uit", "Merge markers")}
+                  </button>
+                </div>
+
+                <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-900/40">
+                  <table className="min-w-full divide-y divide-slate-700 text-sm">
+                    <thead className="bg-slate-900/70 text-slate-300">
+                      <tr>
+                        <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
+                        <th className="px-3 py-2 text-right">{tr("Waarden", "Values")}</th>
+                        <th className="px-3 py-2 text-right">{tr("Rapporten", "Reports")}</th>
+                        <th className="px-3 py-2 text-right">{tr("Actie", "Action")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {markerUsage.map((item) => (
+                        <tr key={item.marker} className="bg-slate-900/30 text-slate-200">
+                          <td className="px-3 py-2">{getMarkerDisplayName(item.marker, appData.settings.language)}</td>
+                          <td className="px-3 py-2 text-right">{item.valueCount}</td>
+                          <td className="px-3 py-2 text-right">{item.reportCount}</td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              className="rounded p-1 text-slate-400 transition hover:text-cyan-200"
+                              onClick={() => openRenameDialog(item.marker)}
+                              aria-label={tr("Marker hernoemen", "Rename marker")}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">Claude API</h3>
                 <p className="mt-1 text-sm text-slate-400">
                   {tr(
@@ -3936,6 +4286,140 @@ const App = () => {
                   height={460}
                   showYearHints
                 />
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
+        {!isShareMode && markerSuggestions.length > 0 ? (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-3 sm:p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMarkerSuggestions([])}
+          >
+            <motion.div
+              className="w-full max-w-2xl rounded-2xl border border-slate-700/80 bg-slate-900 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 4 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-slate-700/70 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-100">
+                  {tr("Marker review nodig", "Marker review needed")}
+                </h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  {tr(
+                    "Deze markers lijken mogelijk dubbel. Je kunt nu meteen mergen of later via Settings > Marker Manager.",
+                    "These markers may be duplicates. Merge now or do it later in Settings > Marker Manager."
+                  )}
+                </p>
+              </div>
+              <div className="max-h-[58vh] space-y-2 overflow-auto px-4 py-3">
+                {markerSuggestions.map((item) => (
+                  <div key={`${item.sourceCanonical}-${item.targetCanonical}`} className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                    <p className="text-sm text-slate-200">
+                      <strong className="text-slate-100">{getMarkerDisplayName(item.sourceCanonical, appData.settings.language)}</strong>{" "}
+                      {tr("lijkt op", "looks like")}{" "}
+                      <strong className="text-slate-100">{getMarkerDisplayName(item.targetCanonical, appData.settings.language)}</strong>.
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {tr("Matchscore", "Match score")}: {(item.score * 100).toFixed(0)}%
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-xs text-cyan-200"
+                        onClick={() => remapMarkerAcrossReports(item.sourceCanonical, item.targetCanonical)}
+                      >
+                        {tr("Merge nu", "Merge now")}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300"
+                        onClick={() =>
+                          setMarkerSuggestions((current) =>
+                            current.filter(
+                              (entry) =>
+                                !(entry.sourceCanonical === item.sourceCanonical && entry.targetCanonical === item.targetCanonical)
+                            )
+                          )
+                        }
+                      >
+                        {tr("Later", "Later")}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-slate-700/70 px-4 py-3 text-right">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                  onClick={() => setMarkerSuggestions([])}
+                >
+                  {tr("Sluiten", "Close")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
+        {renameDialog ? (
+          <motion.div
+            className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/75 p-3 sm:p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setRenameDialog(null)}
+          >
+            <motion.div
+              className="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-900 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 4 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-slate-700/70 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-100">{tr("Marker hernoemen", "Rename marker")}</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  {tr("Wijzigt alle rapporten met deze marker.", "This updates all reports containing this marker.")}
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <label className="block text-xs uppercase tracking-wide text-slate-400">{tr("Nieuwe markernaam", "New marker name")}</label>
+                <input
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+                  value={renameDialog.draftName}
+                  onChange={(event) =>
+                    setRenameDialog((current) => (current ? { ...current, draftName: event.target.value } : current))
+                  }
+                  placeholder={tr("Bijv. Hematocrit", "e.g. Hematocrit")}
+                />
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-700/70 px-4 py-3">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                  onClick={() => setRenameDialog(null)}
+                >
+                  {tr("Annuleren", "Cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                  onClick={() => {
+                    if (!renameDialog.draftName.trim()) {
+                      return;
+                    }
+                    remapMarkerAcrossReports(renameDialog.sourceCanonical, renameDialog.draftName);
+                    setRenameDialog(null);
+                  }}
+                >
+                  {tr("Opslaan", "Save")}
+                </button>
               </div>
             </motion.div>
           </motion.div>

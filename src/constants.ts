@@ -21,7 +21,7 @@ export const CARDIO_PRIORITY_MARKERS = [
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   unitSystem: "eu",
-  language: "nl",
+  language: "en",
   enableSamplingControls: false,
   showReferenceRanges: true,
   showAbnormalHighlights: true,
