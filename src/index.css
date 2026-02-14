@@ -20,11 +20,212 @@ body {
 
 body.light {
   background:
-    radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.1), transparent 45%),
-    radial-gradient(circle at 85% 20%, rgba(16, 185, 129, 0.09), transparent 40%),
-    radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.08), transparent 50%),
-    #f1f5f9;
+    radial-gradient(circle at 8% 8%, rgba(2, 132, 199, 0.14), transparent 46%),
+    radial-gradient(circle at 88% 14%, rgba(20, 184, 166, 0.13), transparent 42%),
+    radial-gradient(circle at 54% 82%, rgba(37, 99, 235, 0.1), transparent 52%),
+    linear-gradient(180deg, #eaf4fb 0%, #f4f9fc 50%, #eff6fb 100%);
   color: #0f172a;
+}
+
+body.light .shadow-soft {
+  box-shadow: 0 18px 38px -26px rgba(15, 23, 42, 0.32);
+}
+
+body.light .bg-slate-900\/80,
+body.light .bg-slate-900\/70,
+body.light .bg-slate-900\/60,
+body.light .bg-slate-900\/50,
+body.light .bg-slate-900\/35,
+body.light .bg-slate-900,
+body.light .bg-slate-950\/40,
+body.light .bg-slate-950\/30 {
+  background-color: rgba(255, 255, 255, 0.86) !important;
+}
+
+body.light .bg-slate-800,
+body.light .bg-slate-800\/80,
+body.light .bg-slate-800\/70 {
+  background-color: rgba(233, 242, 250, 0.9) !important;
+}
+
+body.light .bg-slate-700,
+body.light .bg-slate-700\/70 {
+  background-color: rgba(217, 230, 242, 0.9) !important;
+}
+
+body.light .border-slate-700,
+body.light .border-slate-700\/70,
+body.light .border-slate-700\/80,
+body.light .border-slate-600,
+body.light .border-slate-600\/50 {
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+body.light .text-slate-100 {
+  color: #0b1220 !important;
+}
+
+body.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+body.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+body.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+body.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+body.light .text-cyan-200 {
+  color: #0e7490 !important;
+}
+
+body.light .text-cyan-300 {
+  color: #0891b2 !important;
+}
+
+body.light .text-emerald-100 {
+  color: #064e3b !important;
+}
+
+body.light .text-emerald-200 {
+  color: #065f46 !important;
+}
+
+body.light .text-emerald-300 {
+  color: #0f766e !important;
+}
+
+body.light .text-rose-100 {
+  color: #881337 !important;
+}
+
+body.light .text-rose-200 {
+  color: #9f1239 !important;
+}
+
+body.light .text-rose-300 {
+  color: #be123c !important;
+}
+
+body.light .text-amber-100 {
+  color: #78350f !important;
+}
+
+body.light .text-amber-200 {
+  color: #92400e !important;
+}
+
+body.light .text-amber-300 {
+  color: #b45309 !important;
+}
+
+body.light .hover\:bg-slate-800\/70:hover {
+  background-color: rgba(220, 232, 244, 0.95) !important;
+}
+
+body.light .hover\:text-slate-100:hover {
+  color: #0f172a !important;
+}
+
+body.light .bg-cyan-500\/20 {
+  background-color: rgba(6, 182, 212, 0.18) !important;
+}
+
+body.light .bg-cyan-500\/10 {
+  background-color: rgba(6, 182, 212, 0.12) !important;
+}
+
+body.light .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+body.light .bg-rose-500\/10 {
+  background-color: rgba(244, 63, 94, 0.11) !important;
+}
+
+body.light .bg-amber-500\/10 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+}
+
+body.light .bg-emerald-500\/20 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+body.light .bg-rose-500\/20 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+}
+
+body.light .bg-gradient-to-br.from-cyan-400\/20.to-emerald-400\/15 {
+  background-image: linear-gradient(
+    to bottom right,
+    rgba(8, 145, 178, 0.24),
+    rgba(20, 184, 166, 0.2)
+  ) !important;
+}
+
+body.light .brand-card {
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+body.light .brand-kicker {
+  color: #0e7490 !important;
+}
+
+body.light .brand-title {
+  color: #0f172a !important;
+}
+
+body.light .brand-subtitle {
+  color: #334155 !important;
+}
+
+body.light .upload-panel-shell {
+  border-color: rgba(14, 116, 144, 0.3) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.92) 100%) !important;
+}
+
+body.light .upload-panel-shell:hover {
+  border-color: rgba(6, 182, 212, 0.5) !important;
+}
+
+body.light .upload-panel-dropzone {
+  border: 1px dashed rgba(14, 116, 144, 0.25);
+  background: linear-gradient(180deg, rgba(236, 253, 255, 0.9) 0%, rgba(224, 242, 254, 0.88) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+body.light .analysis-latest-btn:disabled {
+  opacity: 0.82 !important;
+  color: #475569 !important;
+  border-color: rgba(148, 163, 184, 0.55) !important;
+  background-color: rgba(226, 232, 240, 0.8) !important;
+}
+
+body.light .alerts-hero {
+  background: linear-gradient(180deg, rgba(226, 239, 250, 0.96) 0%, rgba(216, 232, 245, 0.94) 100%) !important;
+  border-color: rgba(148, 163, 184, 0.5) !important;
+}
+
+body.light .positive-alert-card {
+  background: linear-gradient(180deg, rgba(220, 252, 231, 0.72) 0%, rgba(209, 250, 229, 0.6) 100%) !important;
+  border-color: rgba(16, 185, 129, 0.42) !important;
+}
+
+body.light .positive-alert-card .text-emerald-200\/90,
+body.light .positive-alert-card .text-emerald-200\/80 {
+  color: #065f46 !important;
+}
+
+body.light .medical-disclaimer {
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.82) 0%, rgba(253, 230, 138, 0.62) 100%) !important;
+  border-color: rgba(245, 158, 11, 0.42) !important;
 }
 
 #root {
