@@ -81,6 +81,36 @@ export interface ProtocolImpactSummary {
   insights: ProtocolImpactInsight[];
 }
 
+export interface ProtocolImpactMarkerRow {
+  marker: string;
+  unit: string;
+  beforeAvg: number | null;
+  afterAvg: number | null;
+  deltaAbs: number | null;
+  deltaPct: number | null;
+  trend: "up" | "down" | "flat" | "insufficient";
+  confidence: "High" | "Medium" | "Low";
+  confidenceReason: string;
+  insufficientData: boolean;
+}
+
+export interface ProtocolImpactDoseEvent {
+  id: string;
+  fromDose: number | null;
+  toDose: number | null;
+  changeDate: string;
+  beforeCount: number;
+  afterCount: number;
+  rows: ProtocolImpactMarkerRow[];
+  topImpacts: ProtocolImpactMarkerRow[];
+}
+
+export interface DoseCorrelationInsight {
+  marker: string;
+  r: number;
+  n: number;
+}
+
 export interface TrtStabilityResult {
   score: number | null;
   components: Partial<Record<"Testosterone" | "Estradiol" | "Hematocrit" | "SHBG", number>>;
@@ -115,6 +145,7 @@ interface TargetZone {
 
 const ROUND_2 = (value: number): number => Number(value.toFixed(2));
 const ROUND_3 = (value: number): number => Number(value.toFixed(3));
+const DOSE_MONOTONIC_MARKERS = new Set(["Testosterone", "Free Testosterone", "Free Androgen Index"]);
 
 const normalizeProtocolText = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -156,6 +187,68 @@ const linearRegression = (
   const rSquared = ssTot <= 0.000001 ? 0 : clip(1 - ssRes / ssTot, 0, 1);
 
   return { slope, intercept, rSquared };
+};
+
+const pearsonCorrelation = (points: Array<{ x: number; y: number }>): number | null => {
+  if (points.length < 3) {
+    return null;
+  }
+  const n = points.length;
+  const sumX = points.reduce((sum, item) => sum + item.x, 0);
+  const sumY = points.reduce((sum, item) => sum + item.y, 0);
+  const sumXY = points.reduce((sum, item) => sum + item.x * item.y, 0);
+  const sumXX = points.reduce((sum, item) => sum + item.x * item.x, 0);
+  const sumYY = points.reduce((sum, item) => sum + item.y * item.y, 0);
+  const numerator = n * sumXY - sumX * sumY;
+  const denominator = Math.sqrt((n * sumXX - sumX * sumX) * (n * sumYY - sumY * sumY));
+  if (Math.abs(denominator) <= 0.000001) {
+    return null;
+  }
+  return numerator / denominator;
+};
+
+const trendFromDelta = (delta: number | null): ProtocolImpactMarkerRow["trend"] => {
+  if (delta === null) {
+    return "insufficient";
+  }
+  if (Math.abs(delta) <= 0.000001) {
+    return "flat";
+  }
+  return delta > 0 ? "up" : "down";
+};
+
+const protocolConfidenceForWindows = (
+  beforeValues: number[],
+  afterValues: number[],
+  baseline: number
+): { level: "High" | "Medium" | "Low"; reason: string } => {
+  if (beforeValues.length === 0 || afterValues.length === 0) {
+    return {
+      level: "Low",
+      reason: "Insufficient data"
+    };
+  }
+  if (beforeValues.length >= 2 && afterValues.length >= 2) {
+    const signs = afterValues
+      .map((value) => value - baseline)
+      .filter((value) => Math.abs(value) > 0.000001)
+      .map((value) => (value > 0 ? 1 : -1));
+    const consistent = signs.length <= 1 || signs.every((value) => value === signs[0]);
+    if (consistent) {
+      return {
+        level: "High",
+        reason: `${beforeValues.length}/${afterValues.length} points; consistent direction`
+      };
+    }
+    return {
+      level: "Medium",
+      reason: `${beforeValues.length}/${afterValues.length} points; mixed direction`
+    };
+  }
+  return {
+    level: "Medium",
+    reason: `${beforeValues.length}/${afterValues.length} points`
+  };
 };
 
 const mean = (values: number[]): number => values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -1174,6 +1267,126 @@ export const buildProtocolImpactSummary = (
   };
 };
 
+export const buildProtocolImpactDoseEvents = (
+  reports: LabReport[],
+  unitSystem: AppSettings["unitSystem"],
+  windowSize: number
+): ProtocolImpactDoseEvent[] => {
+  const sorted = sortReportsChronological(reports);
+  if (sorted.length < 2) {
+    return [];
+  }
+
+  const safeWindow = clip(Math.round(windowSize), 1, 4);
+  const events: ProtocolImpactDoseEvent[] = [];
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1];
+    const current = sorted[index];
+    if (previous.annotations.dosageMgPerWeek === current.annotations.dosageMgPerWeek) {
+      continue;
+    }
+
+    // Event detection: each time dose changes between consecutive reports.
+    const beforeReports = sorted.slice(Math.max(0, index - safeWindow), index);
+    const afterReports = sorted.slice(index, Math.min(sorted.length, index + safeWindow));
+    const markerSet = new Set<string>();
+    [...beforeReports, ...afterReports].forEach((report) => {
+      report.markers.forEach((marker) => {
+        if (!marker.isCalculated) {
+          markerSet.add(marker.canonicalMarker);
+        }
+      });
+    });
+
+    const rows: ProtocolImpactMarkerRow[] = Array.from(markerSet)
+      .map((marker) => {
+        const beforeSeries = buildMarkerSeries(beforeReports, marker, unitSystem);
+        const afterSeries = buildMarkerSeries(afterReports, marker, unitSystem);
+        const beforeValues = beforeSeries.map((point) => point.value);
+        const afterValues = afterSeries.map((point) => point.value);
+        const beforeAvg = beforeValues.length > 0 ? mean(beforeValues) : null;
+        const afterAvg = afterValues.length > 0 ? mean(afterValues) : null;
+        const deltaAbs = beforeAvg === null || afterAvg === null ? null : afterAvg - beforeAvg;
+        const deltaPct = beforeAvg === null || afterAvg === null ? null : calculatePercentChange(afterAvg, beforeAvg);
+        const confidence =
+          beforeAvg === null
+            ? { level: "Low" as const, reason: "Insufficient data" }
+            : protocolConfidenceForWindows(beforeValues, afterValues, beforeAvg);
+        const unit = afterSeries[0]?.unit ?? beforeSeries[0]?.unit ?? "";
+
+        return {
+          marker,
+          unit,
+          beforeAvg: beforeAvg === null ? null : ROUND_2(beforeAvg),
+          afterAvg: afterAvg === null ? null : ROUND_2(afterAvg),
+          deltaAbs: deltaAbs === null ? null : ROUND_2(deltaAbs),
+          deltaPct: deltaPct === null ? null : ROUND_2(deltaPct),
+          trend: trendFromDelta(deltaAbs),
+          confidence: confidence.level,
+          confidenceReason: confidence.reason,
+          insufficientData: beforeValues.length === 0 || afterValues.length === 0
+        } satisfies ProtocolImpactMarkerRow;
+      })
+      .sort((left, right) => {
+        const leftAbs = left.deltaPct === null ? -1 : Math.abs(left.deltaPct);
+        const rightAbs = right.deltaPct === null ? -1 : Math.abs(right.deltaPct);
+        return rightAbs - leftAbs;
+      });
+
+    const topImpacts = rows.filter((row) => !row.insufficientData && row.deltaPct !== null).slice(0, 3);
+
+    events.push({
+      id: `${previous.id}-${current.id}`,
+      fromDose: previous.annotations.dosageMgPerWeek,
+      toDose: current.annotations.dosageMgPerWeek,
+      changeDate: current.testDate,
+      beforeCount: beforeReports.length,
+      afterCount: afterReports.length,
+      rows,
+      topImpacts
+    });
+  }
+
+  return events;
+};
+
+export const buildDoseCorrelationInsights = (
+  reports: LabReport[],
+  markerNames: string[],
+  unitSystem: AppSettings["unitSystem"]
+): DoseCorrelationInsight[] => {
+  const sorted = sortReportsChronological(reports);
+  return markerNames
+    .map((marker) => {
+      const points = sorted
+        .map((report) => {
+          const dose = report.annotations.dosageMgPerWeek;
+          if (dose === null || !Number.isFinite(dose)) {
+            return null;
+          }
+          const value = buildMarkerSeries([report], marker, unitSystem)[0]?.value;
+          if (value === undefined || !Number.isFinite(value)) {
+            return null;
+          }
+          return { x: dose, y: value };
+        })
+        .filter((item): item is { x: number; y: number } => item !== null);
+      const r = pearsonCorrelation(points);
+      if (r === null) {
+        return null;
+      }
+      return {
+        marker,
+        r: ROUND_3(r),
+        n: points.length
+      } satisfies DoseCorrelationInsight;
+    })
+    .filter((item): item is DoseCorrelationInsight => item !== null)
+    .sort((left, right) => Math.abs(right.r) - Math.abs(left.r))
+    .slice(0, 6);
+};
+
 export const buildDosePhaseBlocks = (reports: LabReport[]): DosePhaseBlock[] => {
   const sorted = sortReportsChronological(reports);
   if (sorted.length < 2) {
@@ -1441,6 +1654,169 @@ export const calculatePercentVsBaseline = (current: number, baseline: number): n
   return ROUND_2(((current - baseline) / baseline) * 100);
 };
 
+interface DoseModel {
+  estimateAtDose: (dose: number) => number;
+  slopePerMg: number;
+  intercept: number;
+  rSquared: number;
+}
+
+const calculateRSquared = (actual: number[], predicted: number[]): number => {
+  if (actual.length === 0 || predicted.length !== actual.length) {
+    return 0;
+  }
+  const avg = mean(actual);
+  const ssTotal = actual.reduce((sum, value) => sum + (value - avg) ** 2, 0);
+  if (Math.abs(ssTotal) <= 0.000001) {
+    return 1;
+  }
+  const ssResidual = actual.reduce((sum, value, index) => sum + (value - (predicted[index] ?? value)) ** 2, 0);
+  return clip(1 - ssResidual / ssTotal, 0, 1);
+};
+
+const isotonicNonDecreasing = (values: number[], weights: number[]): number[] => {
+  const blocks = values.map((value, index) => ({
+    start: index,
+    end: index,
+    weight: Math.max(1, weights[index] ?? 1),
+    mean: value
+  }));
+
+  for (let index = 0; index < blocks.length - 1; ) {
+    if (blocks[index].mean <= blocks[index + 1].mean) {
+      index += 1;
+      continue;
+    }
+    const left = blocks[index];
+    const right = blocks[index + 1];
+    const mergedWeight = left.weight + right.weight;
+    const mergedMean = (left.mean * left.weight + right.mean * right.weight) / mergedWeight;
+    blocks.splice(index, 2, {
+      start: left.start,
+      end: right.end,
+      weight: mergedWeight,
+      mean: mergedMean
+    });
+    if (index > 0) {
+      index -= 1;
+    }
+  }
+
+  const fitted = new Array(values.length).fill(0);
+  blocks.forEach((block) => {
+    for (let index = block.start; index <= block.end; index += 1) {
+      fitted[index] = block.mean;
+    }
+  });
+  return fitted;
+};
+
+const interpolateDose = (
+  points: Array<{ dose: number; value: number }>,
+  dose: number
+): number => {
+  if (points.length === 0) {
+    return 0;
+  }
+  if (points.length === 1) {
+    return points[0].value;
+  }
+
+  if (dose <= points[0].dose) {
+    const left = points[0];
+    const right = points[1];
+    const span = right.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return left.value;
+    }
+    return left.value + ((dose - left.dose) / span) * (right.value - left.value);
+  }
+
+  const last = points[points.length - 1];
+  if (dose >= last.dose) {
+    const left = points[points.length - 2];
+    const span = last.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return last.value;
+    }
+    return left.value + ((dose - left.dose) / span) * (last.value - left.value);
+  }
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const left = points[index];
+    const right = points[index + 1];
+    if (dose < left.dose || dose > right.dose) {
+      continue;
+    }
+    const span = right.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return left.value;
+    }
+    return left.value + ((dose - left.dose) / span) * (right.value - left.value);
+  }
+
+  return last.value;
+};
+
+const buildLinearDoseModel = (samples: Array<{ dose: number; value: number }>): DoseModel | null => {
+  const regression = linearRegression(samples.map((sample) => ({ x: sample.dose, y: sample.value })));
+  if (!regression) {
+    return null;
+  }
+  return {
+    estimateAtDose: (dose: number) => regression.intercept + regression.slope * dose,
+    slopePerMg: regression.slope,
+    intercept: regression.intercept,
+    rSquared: regression.rSquared
+  };
+};
+
+const buildMonotonicDoseModel = (samples: Array<{ dose: number; value: number }>): DoseModel | null => {
+  const grouped = Array.from(
+    samples.reduce((map, sample) => {
+      const doseKey = ROUND_2(sample.dose);
+      const existing = map.get(doseKey) ?? [];
+      existing.push(sample.value);
+      map.set(doseKey, existing);
+      return map;
+    }, new Map<number, number[]>())
+  )
+    .map(([dose, values]) => ({
+      dose,
+      values,
+      avg: mean(values)
+    }))
+    .sort((left, right) => left.dose - right.dose);
+
+  if (grouped.length < 2) {
+    return null;
+  }
+
+  const fitted = isotonicNonDecreasing(
+    grouped.map((item) => item.avg),
+    grouped.map((item) => item.values.length)
+  );
+  const points = grouped.map((item, index) => ({
+    dose: item.dose,
+    value: fitted[index]
+  }));
+
+  const estimateAtDose = (dose: number) => interpolateDose(points, dose);
+  const predicted = samples.map((sample) => estimateAtDose(sample.dose));
+  const rSquared = calculateRSquared(samples.map((sample) => sample.value), predicted);
+  const minDose = points[0].dose;
+  const maxDose = points[points.length - 1].dose;
+  const doseSpan = Math.max(maxDose - minDose, 1);
+  const slopePerMg = (estimateAtDose(maxDose) - estimateAtDose(minDose)) / doseSpan;
+
+  return {
+    estimateAtDose,
+    slopePerMg,
+    intercept: estimateAtDose(0),
+    rSquared
+  };
+};
+
 export const estimateDoseResponse = (
   reports: LabReport[],
   markerNames: string[],
@@ -1477,8 +1853,9 @@ export const estimateDoseResponse = (
       continue;
     }
 
-    const regression = linearRegression(samples.map((sample) => ({ x: sample.dose, y: sample.value })));
-    if (!regression) {
+    const useMonotonicModel = DOSE_MONOTONIC_MARKERS.has(marker);
+    const model = useMonotonicModel ? buildMonotonicDoseModel(samples) : buildLinearDoseModel(samples);
+    if (!model) {
       continue;
     }
 
@@ -1491,14 +1868,30 @@ export const estimateDoseResponse = (
     const observedDoseMax = Math.max(...samples.map((sample) => sample.dose));
     const currentDose = latestDoseSample.dose;
     const suggestedDose = clip(currentDose - 20, Math.max(40, observedDoseMin - 20), observedDoseMax + 20);
-    const currentEstimate = regression.intercept + regression.slope * currentDose;
-    const suggestedEstimate = regression.intercept + regression.slope * suggestedDose;
+    const currentEstimate = model.estimateAtDose(currentDose);
+    let suggestedEstimate = model.estimateAtDose(suggestedDose);
+
+    if (useMonotonicModel && currentDose > 0 && suggestedDose !== currentDose) {
+      const ratioEstimate = currentEstimate * (suggestedDose / currentDose);
+      if (suggestedDose < currentDose) {
+        suggestedEstimate = Math.min(suggestedEstimate, ratioEstimate);
+        if (suggestedEstimate >= currentEstimate) {
+          suggestedEstimate = currentEstimate - Math.max(Math.abs(currentEstimate) * 0.01, 0.05);
+        }
+      } else {
+        suggestedEstimate = Math.max(suggestedEstimate, ratioEstimate);
+        if (suggestedEstimate <= currentEstimate) {
+          suggestedEstimate = currentEstimate + Math.max(Math.abs(currentEstimate) * 0.01, 0.05);
+        }
+      }
+    }
+    suggestedEstimate = Math.max(0, suggestedEstimate);
 
     const scenarioCandidates = [80, 100, 120, 140, 160, 180]
       .filter((dose) => dose >= observedDoseMin - 20 && dose <= observedDoseMax + 30)
       .map((dose) => ({
         dose,
-        estimatedValue: ROUND_2(regression.intercept + regression.slope * dose)
+        estimatedValue: ROUND_2(model.estimateAtDose(dose))
       }));
 
     if (!scenarioCandidates.some((scenario) => scenario.dose === ROUND_2(suggestedDose))) {
@@ -1511,15 +1904,15 @@ export const estimateDoseResponse = (
     predictions.push({
       marker,
       unit: samples[0].unit,
-      slopePerMg: ROUND_3(regression.slope),
-      intercept: ROUND_3(regression.intercept),
-      rSquared: ROUND_3(regression.rSquared),
+      slopePerMg: ROUND_3(model.slopePerMg),
+      intercept: ROUND_3(model.intercept),
+      rSquared: ROUND_3(model.rSquared),
       currentDose: ROUND_2(currentDose),
       suggestedDose: ROUND_2(suggestedDose),
       currentEstimate: ROUND_2(currentEstimate),
       suggestedEstimate: ROUND_2(suggestedEstimate),
       suggestedPercentChange: calculatePercentChange(suggestedEstimate, currentEstimate),
-      confidence: regression.rSquared >= 0.65 ? "High" : regression.rSquared >= 0.35 ? "Medium" : "Low",
+      confidence: model.rSquared >= 0.65 ? "High" : model.rSquared >= 0.35 ? "Medium" : "Low",
       scenarios: scenarioCandidates.sort((left, right) => left.dose - right.dose)
     });
   }

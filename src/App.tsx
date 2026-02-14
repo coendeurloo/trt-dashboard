@@ -6,10 +6,13 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import {
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ReferenceArea,
   ResponsiveContainer,
   Tooltip,
@@ -50,8 +53,11 @@ import {
   MarkerSeriesPoint,
   MarkerTrendSummary,
   DosePrediction,
+  ProtocolImpactDoseEvent,
   buildAlerts,
   buildAlertsByMarker,
+  buildDoseCorrelationInsights,
+  buildProtocolImpactDoseEvents,
   buildDosePhaseBlocks,
   buildMarkerSeries,
   buildProtocolImpactSummary,
@@ -176,6 +182,80 @@ const normalizeAnalysisTextForDisplay = (raw: string): string => {
     )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+};
+
+const MARKERS_EXPECTED_TO_MOVE_WITH_TESTOSTERONE_DOSE = new Set([
+  "Testosterone",
+  "Free Testosterone",
+  "Free Androgen Index"
+]);
+
+const stabilityColor = (score: number | null): string => {
+  if (score === null) {
+    return "#64748b";
+  }
+  if (score >= 80) {
+    return "#22c55e";
+  }
+  if (score >= 60) {
+    return "#f59e0b";
+  }
+  return "#fb7185";
+};
+
+const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
+  Hormones: ["Testosterone", "Free Testosterone", "Estradiol", "SHBG", "Free Androgen Index", "Dihydrotestosteron (DHT)"],
+  Lipids: ["LDL Cholesterol", "HDL Cholesterol", "Cholesterol", "Triglyceriden", "Apolipoprotein B", "Non-HDL Cholesterol"],
+  Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
+  Inflammation: ["CRP"]
+};
+
+const estimateFromScenarios = (
+  scenarios: Array<{ dose: number; estimatedValue: number }>,
+  dose: number
+): number | null => {
+  if (scenarios.length === 0 || !Number.isFinite(dose)) {
+    return null;
+  }
+  const ordered = [...scenarios].sort((left, right) => left.dose - right.dose);
+  if (ordered.length === 1) {
+    return ordered[0].estimatedValue;
+  }
+
+  if (dose <= ordered[0].dose) {
+    const left = ordered[0];
+    const right = ordered[1];
+    const span = right.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return left.estimatedValue;
+    }
+    return left.estimatedValue + ((dose - left.dose) / span) * (right.estimatedValue - left.estimatedValue);
+  }
+
+  const last = ordered[ordered.length - 1];
+  if (dose >= last.dose) {
+    const left = ordered[ordered.length - 2];
+    const span = last.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return last.estimatedValue;
+    }
+    return left.estimatedValue + ((dose - left.dose) / span) * (last.estimatedValue - left.estimatedValue);
+  }
+
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const left = ordered[index];
+    const right = ordered[index + 1];
+    if (dose < left.dose || dose > right.dose) {
+      continue;
+    }
+    const span = right.dose - left.dose;
+    if (Math.abs(span) <= 0.000001) {
+      return left.estimatedValue;
+    }
+    return left.estimatedValue + ((dose - left.dose) / span) * (right.estimatedValue - left.estimatedValue);
+  }
+
+  return last.estimatedValue;
 };
 
 const normalizeMarkerKey = (value: string): string =>
@@ -733,6 +813,7 @@ interface MarkerChartCardProps {
   baselineDelta: number | null;
   isCalculatedMarker: boolean;
   onOpenLarge: () => void;
+  onRenameMarker: (marker: string) => void;
 }
 
 interface MarkerTrendChartProps {
@@ -1089,7 +1170,8 @@ const MarkerChartCard = ({
   percentChange,
   baselineDelta,
   isCalculatedMarker,
-  onOpenLarge
+  onOpenLarge,
+  onRenameMarker
 }: MarkerChartCardProps) => {
   const latestPoint = points[points.length - 1] ?? null;
   const trend = trendVisual(trendSummary?.direction ?? null);
@@ -1125,6 +1207,17 @@ const MarkerChartCard = ({
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-slate-100">{markerLabel}</h3>
           <MarkerInfoBadge marker={marker} language={language} />
+          {!isCalculatedMarker ? (
+            <button
+              type="button"
+              className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
+              onClick={() => onRenameMarker(marker)}
+              aria-label={language === "nl" ? "Marker hernoemen" : "Rename marker"}
+              title={language === "nl" ? "Marker hernoemen" : "Rename marker"}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
           {isCalculatedMarker ? (
             <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">fx</span>
           ) : null}
@@ -1417,7 +1510,7 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
     return null;
   }
 
-  const recentHistorical = historical.slice(-2);
+  const recentHistorical = historical.slice(-3);
   const latest = recentHistorical[recentHistorical.length - 1];
   if (!latest) {
     return null;
@@ -1602,6 +1695,11 @@ const App = () => {
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
+  const [protocolWindowSize, setProtocolWindowSize] = useState(2);
+  const [protocolMarkerSearch, setProtocolMarkerSearch] = useState("");
+  const [protocolCategoryFilter, setProtocolCategoryFilter] = useState<"all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation">("all");
+  const [protocolSortKey, setProtocolSortKey] = useState<"deltaPct" | "deltaAbs" | "marker">("deltaPct");
+  const [collapsedProtocolEvents, setCollapsedProtocolEvents] = useState<string[]>([]);
   const [markerSuggestions, setMarkerSuggestions] = useState<MarkerMergeSuggestion[]>([]);
   const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
   const [mergeFromMarker, setMergeFromMarker] = useState("");
@@ -1735,6 +1833,25 @@ const App = () => {
     () => buildProtocolImpactSummary(visibleReports, appData.settings.unitSystem),
     [visibleReports, appData.settings.unitSystem]
   );
+  const protocolDoseEvents = useMemo(
+    () => buildProtocolImpactDoseEvents(visibleReports, appData.settings.unitSystem, protocolWindowSize),
+    [visibleReports, appData.settings.unitSystem, protocolWindowSize]
+  );
+  const protocolDoseOverview = useMemo(
+    () => buildDoseCorrelationInsights(visibleReports, allMarkers, appData.settings.unitSystem),
+    [visibleReports, allMarkers, appData.settings.unitSystem]
+  );
+
+  useEffect(() => {
+    setCollapsedProtocolEvents((current) => {
+      const available = new Set(protocolDoseEvents.map((event) => event.id));
+      const retained = current.filter((id) => available.has(id));
+      if (retained.length > 0) {
+        return retained;
+      }
+      return protocolDoseEvents.map((event) => event.id);
+    });
+  }, [protocolDoseEvents]);
   const dosePredictions = useMemo(
     () => estimateDoseResponse(visibleReports, allMarkers, appData.settings.unitSystem),
     [visibleReports, allMarkers, appData.settings.unitSystem]
@@ -2604,11 +2721,11 @@ const App = () => {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-4" id="dashboard-export-root">
-          <header className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 sm:p-4">
+        <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
+          <header className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-2.5 sm:p-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-100">{activeTabTitle}</h2>
+                  <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
                   <p className="text-sm text-slate-400">
                     {isShareMode
                       ? isNl
@@ -2620,17 +2737,17 @@ const App = () => {
                   </p>
                 </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
-                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50"
+                  className="rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200 hover:border-cyan-500/50"
                   onClick={() => updateSettings({ language: appData.settings.language === "nl" ? "en" : "nl" })}
                 >
                   {t(appData.settings.language, "language")}: {appData.settings.language.toUpperCase()}
                 </button>
                 <button
                   type="button"
-                  className={`rounded-md px-3 py-1.5 text-sm ${
+                  className={`rounded-md px-2.5 py-1.25 text-sm ${
                     appData.settings.theme === "dark" ? "bg-slate-800 text-slate-100" : "bg-slate-200 text-slate-900"
                   }`}
                   onClick={() => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" })}
@@ -2643,7 +2760,7 @@ const App = () => {
                 {isShareMode ? null : (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200 hover:border-cyan-500/50"
                     onClick={exportJson}
                   >
                     <Download className="h-4 w-4" /> JSON
@@ -2670,14 +2787,14 @@ const App = () => {
           </AnimatePresence>
 
           {activeTab === "dashboard" ? (
-            <section className="space-y-4 fade-in">
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
-                <div className="flex flex-wrap items-center gap-2">
+            <section className="space-y-3 fade-in">
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {timeRangeOptions.map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
-                      className={`rounded-md px-2.5 py-1.5 text-xs sm:text-sm ${
+                      className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
                         appData.settings.timeRange === value
                           ? "bg-cyan-500/20 text-cyan-200"
                           : "bg-slate-800 text-slate-300 hover:text-slate-100"
@@ -2707,7 +2824,7 @@ const App = () => {
 
                   <button
                     type="button"
-                    className={`ml-auto rounded-md px-2.5 py-1.5 text-xs sm:text-sm ${
+                    className={`ml-auto rounded-md px-2.5 py-1 text-xs sm:text-sm ${
                       comparisonMode ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300"
                     }`}
                     onClick={() => setComparisonMode((prev) => !prev)}
@@ -2716,10 +2833,17 @@ const App = () => {
                       <SlidersHorizontal className="h-4 w-4" /> {isNl ? "Multi-marker modus" : "Multi-marker mode"}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    className="rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+                    onClick={() => updateSettings({ unitSystem: appData.settings.unitSystem === "eu" ? "us" : "eu" })}
+                  >
+                    {isNl ? "Eenheden" : "Units"}: {appData.settings.unitSystem.toUpperCase()}
+                  </button>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.showReferenceRanges}
@@ -2727,7 +2851,7 @@ const App = () => {
                     />
                     {isNl ? "Referentiebereiken" : "Reference ranges"}
                   </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.showAbnormalHighlights}
@@ -2735,7 +2859,7 @@ const App = () => {
                     />
                     {isNl ? "Afwijkende waarden markeren" : "Abnormal highlights"}
                   </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.showAnnotations}
@@ -2743,7 +2867,7 @@ const App = () => {
                     />
                     {isNl ? "Dosisfase-overlay" : "Dose-phase overlays"}
                   </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.showTrtTargetZone}
@@ -2751,7 +2875,7 @@ const App = () => {
                     />
                     {isNl ? "TRT-doelzone" : "TRT optimal zone"}
                   </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.showLongevityTargetZone}
@@ -2759,7 +2883,7 @@ const App = () => {
                     />
                     {isNl ? "Longevity-doelzone" : "Longevity zone"}
                   </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                     <input
                       type="checkbox"
                       checked={appData.settings.yAxisMode === "data"}
@@ -2767,25 +2891,18 @@ const App = () => {
                     />
                     {isNl ? "Gebruik data-bereik Y-as" : "Use data-range Y-axis"}
                   </label>
-                  <button
-                    type="button"
-                    className="rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm"
-                    onClick={() => updateSettings({ unitSystem: appData.settings.unitSystem === "eu" ? "us" : "eu" })}
-                  >
-                    {isNl ? "Eenheden" : "Units"}: {appData.settings.unitSystem.toUpperCase()}
-                  </button>
                 </div>
 
                 {samplingControlsEnabled ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                       {isNl ? "Meetmoment-filter" : "Sampling filter"}
                     </span>
                     {samplingOptions.map(([value, label]) => (
                       <button
                         key={value}
                         type="button"
-                        className={`rounded-md px-2.5 py-1.5 text-xs sm:text-sm ${
+                        className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
                           appData.settings.samplingFilter === value
                             ? "bg-cyan-500/20 text-cyan-200"
                             : "bg-slate-800 text-slate-300 hover:text-slate-100"
@@ -2795,7 +2912,7 @@ const App = () => {
                         {label}
                       </button>
                     ))}
-                    <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 sm:text-sm">
+                    <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                       <input
                         type="checkbox"
                         checked={appData.settings.compareToBaseline}
@@ -2808,7 +2925,7 @@ const App = () => {
               </div>
 
               {comparisonMode ? (
-                <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+                <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <select
                       className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
@@ -2856,7 +2973,7 @@ const App = () => {
                 </div>
               ) : null}
 
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
                 <div className="mb-3 flex gap-2">
                   <button
                     type="button"
@@ -2879,38 +2996,7 @@ const App = () => {
                 </div>
 
                 {dashboardView === "primary" ? (
-                  <div className="mb-3 grid gap-2 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-100">TRT Stability Index</p>
-                        <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
-                          {trtStability.score === null ? "-" : `${trtStability.score}/100`}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {isNl
-                          ? "100 = stabielere waardes over tijd (niet per se “perfect”)."
-                          : "100 = more stable values over time (not necessarily “perfect”)."}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left transition hover:border-cyan-500/40"
-                      onClick={() => setActiveTab("alerts")}
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-100">{isNl ? "Alerts-overzicht" : "Alerts overview"}</p>
-                        <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-xs text-rose-200">
-                          {actionableAlerts.length} {isNl ? "actie nodig" : "need action"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {isNl
-                          ? `Inclusief suggesties per alert. Positieve signalen: ${positiveAlerts.length}.`
-                          : `Includes suggestions per alert. Positive signals: ${positiveAlerts.length}.`}
-                      </p>
-                    </button>
-                  </div>
+                  <div className="mb-1" />
                 ) : null}
 
                 {visibleReports.length === 0 ? (
@@ -2949,11 +3035,63 @@ const App = () => {
                           baselineDelta={markerBaselineDelta(marker)}
                           isCalculatedMarker={points.length > 0 && points.every((point) => point.isCalculated)}
                           onOpenLarge={() => setExpandedMarker(marker)}
+                          onRenameMarker={openRenameDialog}
                         />
                       );
                     })}
                   </div>
                 )}
+
+                {dashboardView === "primary" ? (
+                  <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
+                    <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
+                      <div className="mx-auto h-28 w-28">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: "score", value: trtStability.score ?? 0 },
+                                { name: "rest", value: 100 - (trtStability.score ?? 0) }
+                              ]}
+                              dataKey="value"
+                              innerRadius={34}
+                              outerRadius={48}
+                              stroke="none"
+                              startAngle={90}
+                              endAngle={-270}
+                            >
+                              <Cell fill={stabilityColor(trtStability.score)} />
+                              <Cell fill="#334155" />
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-100">TRT Stability Index</p>
+                          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
+                            {trtStability.score === null ? "-" : `${trtStability.score}/100`}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-300">
+                          {isNl
+                            ? "Dit is een rust-score van je kern TRT-markers over tijd (Testosteron, Estradiol, Hematocriet, SHBG)."
+                            : "This is a steadiness score of your core TRT markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {isNl
+                            ? "Belangrijk: het zegt niets over ‘goed’ of ‘slecht’, alleen hoe stabiel je patroon is."
+                            : "Important: it does not mean 'good' or 'bad'; it only reflects how stable your pattern is."}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {isNl
+                            ? "Snelle interpretatie: 80-100 = vrij stabiel, 60-79 = matig stabiel, <60 = duidelijk wisselend."
+                            : "Quick interpretation: 80-100 = fairly stable, 60-79 = moderately stable, <60 = clearly variable."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
@@ -3115,50 +3253,188 @@ const App = () => {
             <section className="space-y-3 fade-in">
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{isNl ? "Protocol-impact" : "Protocol Impact"}</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {isNl
-                    ? "In gewone taal: dit laat zien wat er gemiddeld met je waardes gebeurde nadat je dosis of protocol veranderde."
-                    : "In plain language: this shows what your values tended to do after dose or protocol changes."}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {isNl ? "Dit is een trend-inschatting, geen hard bewijs van oorzaak en gevolg." : "This is trend estimation, not hard proof of causality."}
-                </p>
-                {protocolImpactSummary.insights.length === 0 ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                  <label className="text-xs text-slate-300">
+                    {isNl ? "Zoek marker" : "Filter markers"}
+                    <input
+                      value={protocolMarkerSearch}
+                      onChange={(event) => setProtocolMarkerSearch(event.target.value)}
+                      placeholder={isNl ? "bijv. Estradiol" : "e.g. Estradiol"}
+                      className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    {isNl ? "Window grootte" : "Window size"}
+                    <select
+                      value={protocolWindowSize}
+                      onChange={(event) => setProtocolWindowSize(Number(event.target.value))}
+                      className="mt-1 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
+                    >
+                      {[1, 2, 3, 4].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    {isNl ? "Categorie" : "Category"}
+                    <select
+                      value={protocolCategoryFilter}
+                      onChange={(event) =>
+                        setProtocolCategoryFilter(event.target.value as "all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation")
+                      }
+                      className="mt-1 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
+                    >
+                      <option value="all">{isNl ? "Alle categorieën" : "All categories"}</option>
+                      <option value="Hormones">{isNl ? "Hormonen" : "Hormones"}</option>
+                      <option value="Lipids">{isNl ? "Lipiden" : "Lipids"}</option>
+                      <option value="Hematology">{isNl ? "Hematologie" : "Hematology"}</option>
+                      <option value="Inflammation">{isNl ? "Ontsteking" : "Inflammation"}</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
+                  <h4 className="text-sm font-semibold text-slate-100">{isNl ? "Dosis-respons overzicht" : "Dose Response Overview"}</h4>
+                  {protocolDoseOverview.length === 0 ? (
+                    <p className="mt-2 text-xs text-slate-400">
+                      {isNl ? "Nog te weinig punten (minimaal n=3 per marker) voor correlatie-overzicht." : "Not enough points yet (minimum n=3 per marker) for correlation overview."}
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                      {protocolDoseOverview.map((item) => (
+                        <li key={item.marker}>
+                          {getMarkerDisplayName(item.marker, appData.settings.language)}{" "}
+                          {item.r >= 0
+                            ? isNl
+                              ? "neigt omhoog bij hogere dosis"
+                              : "tends to increase with higher dose"
+                            : isNl
+                              ? "neigt omlaag bij hogere dosis"
+                              : "tends to decrease with higher dose"}{" "}
+                          (r={formatAxisTick(item.r)}, n={item.n})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {protocolDoseEvents.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-400">
                     {isNl
-                      ? "Nog te weinig data rond protocolwijzigingen om dit betrouwbaar te tonen."
-                      : "Not enough protocol-change data yet to show this reliably."}
+                      ? "Nog geen dosisveranderingsevents gevonden in je huidige datafilter."
+                      : "No dose change events found in your current data filter."}
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-sm">
-                    {protocolImpactSummary.insights.slice(0, 10).map((insight, index) => {
-                      const markerLabel = getMarkerDisplayName(insight.marker, appData.settings.language);
-                      const fromText = `${formatAxisTick(insight.fromValue)} ${insight.unit}`;
-                      const toText = `${formatAxisTick(insight.toValue)} ${insight.unit}`;
-                      const pctText =
-                        insight.percentChange === null
-                          ? isNl
-                            ? "zonder betrouwbare procentinschatting"
-                            : "without a reliable percent estimate"
-                          : `${insight.percentChange > 0 ? "+" : ""}${insight.percentChange}%`;
+                  <div className="mt-3 space-y-3">
+                    {protocolDoseEvents.map((event: ProtocolImpactDoseEvent) => {
+                      const isCollapsed = collapsedProtocolEvents.includes(event.id);
+                      const categorySet =
+                        protocolCategoryFilter === "all"
+                          ? null
+                          : new Set(PROTOCOL_MARKER_CATEGORIES[protocolCategoryFilter] ?? []);
+                      const query = protocolMarkerSearch.trim().toLowerCase();
+                      const rows = event.rows
+                        .filter((row) => {
+                          if (categorySet && !categorySet.has(row.marker)) {
+                            return false;
+                          }
+                          if (!query) {
+                            return true;
+                          }
+                          const label = getMarkerDisplayName(row.marker, appData.settings.language).toLowerCase();
+                          return label.includes(query) || row.marker.toLowerCase().includes(query);
+                        })
+                        .sort((left, right) => {
+                          if (protocolSortKey === "marker") {
+                            return left.marker.localeCompare(right.marker);
+                          }
+                          if (protocolSortKey === "deltaAbs") {
+                            return Math.abs(right.deltaAbs ?? -Infinity) - Math.abs(left.deltaAbs ?? -Infinity);
+                          }
+                          return Math.abs(right.deltaPct ?? -Infinity) - Math.abs(left.deltaPct ?? -Infinity);
+                        });
                       return (
-                        <li key={`${insight.marker}-${insight.eventDate}-${index}`} className="rounded-lg bg-slate-800/70 px-3 py-2 text-slate-200">
-                          <p className="font-medium">{markerLabel}</p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-200">
-                            {isNl
-                              ? `Na deze wijziging zag je ${markerLabel} gemiddeld van ${fromText} naar ${toText} gaan (${pctText}).`
-                              : `After this change, ${markerLabel} moved on average from ${fromText} to ${toText} (${pctText}).`}
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-400">
-                            {isNl ? "Context" : "Context"}: {insight.trigger}
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-400">
-                            {isNl ? "Betrouwbaarheid van deze inschatting" : "Confidence of this estimate"}: {confidenceLabel(insight.confidence)}
-                          </p>
-                        </li>
+                        <article key={event.id} className="rounded-xl border border-slate-700 bg-slate-800/70 p-3">
+                          <button
+                            type="button"
+                            className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+                            onClick={() =>
+                              setCollapsedProtocolEvents((current) =>
+                                current.includes(event.id) ? current.filter((id) => id !== event.id) : [...current, event.id]
+                              )
+                            }
+                          >
+                            <h4 className="text-sm font-semibold text-slate-100">
+                              {(event.fromDose ?? "-")} {"->"} {(event.toDose ?? "-")} mg/week
+                            </h4>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-slate-400">
+                                {formatDate(event.changeDate)} | {isNl ? "Window" : "Window"}: {event.beforeCount} {isNl ? "voor" : "before"} /{" "}
+                                {event.afterCount} {isNl ? "na" : "after"}
+                              </p>
+                              <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isCollapsed ? "" : "rotate-180"}`} />
+                            </div>
+                          </button>
+                          {!isCollapsed ? (
+                            <>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {event.topImpacts.length === 0 ? (
+                                  <span className="text-xs text-slate-400">{isNl ? "Top impacts: onvoldoende data" : "Top impacts: insufficient data"}</span>
+                                ) : (
+                                  event.topImpacts.map((row) => (
+                                    <span key={`${event.id}-${row.marker}`} className="rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-cyan-200">
+                                      {getMarkerDisplayName(row.marker, appData.settings.language)}{" "}
+                                      {row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                              <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                                <span>{isNl ? "Sorteer op" : "Sort by"}:</span>
+                                <button type="button" className={`rounded px-2 py-0.5 ${protocolSortKey === "deltaPct" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`} onClick={() => setProtocolSortKey("deltaPct")}>Δ%</button>
+                                <button type="button" className={`rounded px-2 py-0.5 ${protocolSortKey === "deltaAbs" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`} onClick={() => setProtocolSortKey("deltaAbs")}>Δ</button>
+                                <button type="button" className={`rounded px-2 py-0.5 ${protocolSortKey === "marker" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`} onClick={() => setProtocolSortKey("marker")}>{isNl ? "Marker" : "Marker"}</button>
+                              </div>
+                              <div className="mt-2 overflow-x-auto rounded-lg border border-slate-700">
+                                <table className="min-w-full divide-y divide-slate-700 text-xs">
+                                  <thead className="bg-slate-900/70 text-slate-300">
+                                    <tr>
+                                      <th className="px-2 py-1.5 text-left">{isNl ? "Marker" : "Marker"}</th>
+                                      <th className="px-2 py-1.5 text-right">{isNl ? "Voor gem." : "Before avg"}</th>
+                                      <th className="px-2 py-1.5 text-right">{isNl ? "Na gem." : "After avg"}</th>
+                                      <th className="px-2 py-1.5 text-right">Δ</th>
+                                      <th className="px-2 py-1.5 text-right">Δ%</th>
+                                      <th className="px-2 py-1.5 text-center">{isNl ? "Trend" : "Trend"}</th>
+                                      <th className="px-2 py-1.5 text-left">{isNl ? "Confidence" : "Confidence"}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-800">
+                                    {rows.map((row) => (
+                                      <tr key={`${event.id}-${row.marker}`} className="bg-slate-900/30 text-slate-200">
+                                        <td className="px-2 py-1.5">{getMarkerDisplayName(row.marker, appData.settings.language)}</td>
+                                        <td className="px-2 py-1.5 text-right">{row.beforeAvg === null ? "Insufficient data" : `${formatAxisTick(row.beforeAvg)} ${row.unit}`}</td>
+                                        <td className="px-2 py-1.5 text-right">{row.afterAvg === null ? "Insufficient data" : `${formatAxisTick(row.afterAvg)} ${row.unit}`}</td>
+                                        <td className="px-2 py-1.5 text-right">{row.deltaAbs === null ? "-" : formatAxisTick(row.deltaAbs)}</td>
+                                        <td className="px-2 py-1.5 text-right">{row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}</td>
+                                        <td className="px-2 py-1.5 text-center">
+                                          {row.trend === "up" ? "↑" : row.trend === "down" ? "↓" : row.trend === "flat" ? "→" : "·"}
+                                        </td>
+                                        <td className="px-2 py-1.5" title={row.confidenceReason}>
+                                          {confidenceLabel(row.confidence)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          ) : null}
+                        </article>
                       );
                     })}
-                  </ul>
+                  </div>
                 )}
               </div>
             </section>
@@ -3222,8 +3498,26 @@ const App = () => {
                     {dosePredictions.slice(0, 10).map((prediction) => {
                       const markerLabel = getMarkerDisplayName(prediction.marker, appData.settings.language);
                       const targetDose = hasCustomDose && customDoseValue !== null ? customDoseValue : prediction.suggestedDose;
-                      const rawTargetEstimate = prediction.intercept + prediction.slopePerMg * targetDose;
-                      const targetEstimate = Number.isFinite(rawTargetEstimate) ? rawTargetEstimate : prediction.suggestedEstimate;
+                      const scenarioEstimate = estimateFromScenarios(prediction.scenarios, targetDose);
+                      let targetEstimate = Number.isFinite(scenarioEstimate ?? NaN)
+                        ? (scenarioEstimate as number)
+                        : prediction.suggestedEstimate;
+                      if (MARKERS_EXPECTED_TO_MOVE_WITH_TESTOSTERONE_DOSE.has(prediction.marker)) {
+                        // Force directional consistency for androgen markers.
+                        if (prediction.currentDose > 0 && targetDose < prediction.currentDose) {
+                          const ratioEstimate = prediction.currentEstimate * (targetDose / prediction.currentDose);
+                          targetEstimate = Math.min(targetEstimate, ratioEstimate);
+                          if (targetEstimate >= prediction.currentEstimate) {
+                            targetEstimate = prediction.currentEstimate - Math.max(Math.abs(prediction.currentEstimate) * 0.01, 0.05);
+                          }
+                        } else if (prediction.currentDose > 0 && targetDose > prediction.currentDose) {
+                          const ratioEstimate = prediction.currentEstimate * (targetDose / prediction.currentDose);
+                          targetEstimate = Math.max(targetEstimate, ratioEstimate);
+                          if (targetEstimate <= prediction.currentEstimate) {
+                            targetEstimate = prediction.currentEstimate + Math.max(Math.abs(prediction.currentEstimate) * 0.01, 0.05);
+                          }
+                        }
+                      }
                       const targetPercentChange = calculatePercentChange(targetEstimate, prediction.currentEstimate);
                       const currentEstimate = `${formatAxisTick(prediction.currentEstimate)} ${prediction.unit}`;
                       const projectedEstimate = `${formatAxisTick(targetEstimate)} ${prediction.unit}`;
@@ -3250,8 +3544,8 @@ const App = () => {
                           <p className="font-medium">{markerLabel}</p>
                           <p className="mt-1 text-xs leading-relaxed text-slate-200">
                             {isNl
-                              ? `Als je dosis rond ${formatAxisTick(targetDose)} mg/week ligt, verwacht dit model dat ${markerLabel} ongeveer ${projectedEstimate} wordt (nu ongeveer ${currentEstimate}). Dat is waarschijnlijk een ${directionText} van ${pctText}.`
-                              : `If your dose is around ${formatAxisTick(targetDose)} mg/week, this model expects ${markerLabel} to be about ${projectedEstimate} (currently about ${currentEstimate}). That is likely a ${directionText} of ${pctText}.`}
+                              ? `Als je dosis rond ${formatAxisTick(targetDose)} mg/week ligt, verwacht dit model dat ${markerLabel} ongeveer ${projectedEstimate} wordt. Ter vergelijking: bij ongeveer ${formatAxisTick(prediction.currentDose)} mg/week is de modelwaarde nu ${currentEstimate}. Dat is waarschijnlijk een ${directionText} van ${pctText}.`
+                              : `If your dose is around ${formatAxisTick(targetDose)} mg/week, this model expects ${markerLabel} to be about ${projectedEstimate}. For reference, at around ${formatAxisTick(prediction.currentDose)} mg/week the current model value is ${currentEstimate}. That is likely a ${directionText} of ${pctText}.`}
                           </p>
                           <p className="mt-1 text-[11px] text-slate-400">
                             {isNl ? "Betrouwbaarheid van deze inschatting" : "Confidence of this estimate"}: {confidenceLabel(prediction.confidence)} (R²=

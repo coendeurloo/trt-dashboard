@@ -213,9 +213,9 @@ export const MARKER_ALIAS_LOOKUP = Object.entries(RAW_ALIASES).reduce(
 
 export const TAB_ITEMS = [
   { key: "dashboard", label: "Dashboard" },
-  { key: "protocolImpact", label: "Protocol Impact" },
   { key: "doseResponse", label: "Dose Response" },
   { key: "analysis", label: "AI Lab Analysis" },
+  { key: "protocolImpact", label: "Protocol Impact" },
   { key: "alerts", label: "Alerts" },
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
