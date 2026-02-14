@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDropzone } from "react-dropzone";
@@ -73,7 +73,7 @@ import { getMarkerDisplayName, getMarkerMeta, getTabLabel, t } from "./i18n";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
-import { loadAppData, saveAppData } from "./storage";
+import { coerceStoredAppData, loadAppData, saveAppData } from "./storage";
 import { canonicalizeMarker, convertBySystem, normalizeMarkerMeasurement } from "./unitConversion";
 import {
   AppSettings,
@@ -1495,6 +1495,9 @@ const App = () => {
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const reports = useMemo(
     () => sortReportsChronological(enrichReportsWithCalculatedMarkers(appData.reports)),
@@ -1921,6 +1924,109 @@ const App = () => {
       reports: prev.reports.filter((report) => !selected.has(report.id))
     }));
     setSelectedReports([]);
+  };
+
+  const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] => {
+    let baselineSeen = false;
+    return reportsToNormalize.map((report) => {
+      if (!report.isBaseline) {
+        return report;
+      }
+      if (!baselineSeen) {
+        baselineSeen = true;
+        return report;
+      }
+      return {
+        ...report,
+        isBaseline: false
+      };
+    });
+  };
+
+  const applyImportedData = (incomingRaw: unknown, mode: "merge" | "replace") => {
+    const incoming = coerceStoredAppData(incomingRaw as Record<string, unknown>);
+    const importedReports = sortReportsChronological(enrichReportsWithCalculatedMarkers(incoming.reports));
+
+    if (mode === "replace") {
+      const replaceConfirmed =
+        typeof window === "undefined"
+          ? true
+          : window.confirm(
+              tr(
+                "Dit vervangt al je huidige data. Weet je het zeker?",
+                "This will replace your current data. Are you sure?"
+              )
+            );
+      if (!replaceConfirmed) {
+        return;
+      }
+
+      setAppData((prev) => ({
+        ...incoming,
+        // Keep current API key locally to avoid accidental key loss during restore.
+        settings: {
+          ...incoming.settings,
+          claudeApiKey: prev.settings.claudeApiKey
+        },
+        reports: normalizeBaselineFlags(importedReports)
+      }));
+      setSelectedReports([]);
+      setEditingReportId(null);
+      setEditingAnnotations(blankAnnotations());
+      setImportStatus({
+        type: "success",
+        message: tr(
+          `Backup hersteld: ${importedReports.length} rapporten geladen.`,
+          `Backup restored: ${importedReports.length} reports loaded.`
+        )
+      });
+      return;
+    }
+
+    setAppData((prev) => {
+      const byId = new Map<string, LabReport>();
+      prev.reports.forEach((report) => {
+        byId.set(report.id, report);
+      });
+      importedReports.forEach((report) => {
+        byId.set(report.id, report);
+      });
+      const merged = normalizeBaselineFlags(sortReportsChronological(Array.from(byId.values())));
+      return {
+        ...prev,
+        reports: merged
+      };
+    });
+    setImportStatus({
+      type: "success",
+      message: tr(
+        `Backup samengevoegd: ${importedReports.length} rapporten verwerkt.`,
+        `Backup merged: processed ${importedReports.length} reports.`
+      )
+    });
+  };
+
+  const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      applyImportedData(parsed, importMode);
+    } catch {
+      setImportStatus({
+        type: "error",
+        message: tr(
+          "Import mislukt: dit lijkt geen geldig TRT backup JSON-bestand.",
+          "Import failed: this does not look like a valid TRT backup JSON file."
+        )
+      });
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const exportJson = () => {
@@ -3646,6 +3752,65 @@ const App = () => {
                     <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
                   </button>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">{tr("Backup & Herstel", "Backup & Restore")}</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {tr(
+                    "Maak een JSON-backup van al je data. Je kunt die later importeren als merge of volledige restore.",
+                    "Create a JSON backup of all your data. You can later import it as a merge or full restore."
+                  )}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                    onClick={exportJson}
+                  >
+                    <Download className="h-4 w-4" /> {tr("Backup maken (JSON)", "Create backup (JSON)")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+                    onClick={() => {
+                      setImportMode("merge");
+                      importFileInputRef.current?.click();
+                    }}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Importeer backup (samenvoegen)", "Import backup (merge)")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
+                    onClick={() => {
+                      setImportMode("replace");
+                      importFileInputRef.current?.click();
+                    }}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Herstel backup (vervangen)", "Restore backup (replace)")}
+                  </button>
+                </div>
+
+                <input
+                  ref={importFileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={onImportBackupFile}
+                />
+
+                {importStatus ? (
+                  <div
+                    className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+                      importStatus.type === "success"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                    }`}
+                  >
+                    {importStatus.message}
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
