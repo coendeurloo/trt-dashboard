@@ -248,7 +248,7 @@ const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProp
   return (
     <motion.div
       layout
-      className={`rounded-2xl border border-dashed p-5 transition ${
+      className={`upload-panel-shell rounded-2xl border border-dashed p-5 transition ${
         isDragActive
           ? "border-cyan-400 bg-cyan-500/10"
           : "border-slate-600/50 bg-slate-900/30 hover:border-cyan-500/50"
@@ -256,7 +256,7 @@ const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProp
     >
       <div
         {...getRootProps()}
-        className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl px-4 py-9 text-center"
+        className="upload-panel-dropzone flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl px-4 py-9 text-center"
       >
         <input {...getInputProps()} />
         {isProcessing ? (
@@ -2250,10 +2250,10 @@ const App = () => {
     <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
         <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
-          <div className="mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-cyan-200">TRT Lab Tracker</p>
-            <h1 className="mt-1 text-xl font-bold text-white">Blood Work Timeline</h1>
-            <p className="mt-1 text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
+          <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
+            <p className="brand-kicker text-xs uppercase tracking-[0.14em] text-cyan-200">TRT Lab Tracker</p>
+            <h1 className="brand-title mt-1 text-xl font-bold text-white">Blood Work Timeline</h1>
+            <p className="brand-subtitle mt-1 text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
           </div>
 
           <nav className="space-y-1.5">
@@ -2703,7 +2703,7 @@ const App = () => {
 
           {activeTab === "alerts" ? (
             <section className="space-y-4 fade-in">
-              <div className="rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
+              <div className="alerts-hero rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-100">{isNl ? "Alerts Centrum" : "Alerts Center"}</h3>
@@ -2756,7 +2756,7 @@ const App = () => {
                     {positiveAlerts.map((alert) => {
                       const series = alertSeriesByMarker[alert.marker] ?? [];
                       return (
-                      <article key={alert.id} className="mb-3 break-inside-avoid rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-emerald-100">
+                      <article key={alert.id} className="positive-alert-card mb-3 break-inside-avoid rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-emerald-100">
                         <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_190px]">
                           <div>
                             <div className="flex items-center justify-between gap-2">
@@ -3476,7 +3476,7 @@ const App = () => {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200 disabled:opacity-50"
+                    className="analysis-latest-btn inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200 disabled:opacity-50"
                     onClick={() => runAiAnalysis("latestComparison")}
                     disabled={isAnalyzingLabs || visibleReports.length < 2 || !appData.settings.claudeApiKey.trim()}
                   >
@@ -3691,70 +3691,6 @@ const App = () => {
               </div>
 
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-                <h3 className="text-base font-semibold text-slate-100">{tr("Export", "Export")}</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {tr(
-                    "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
-                    "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
-                  )}
-                </p>
-
-                <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {allMarkers.map((marker) => {
-                      const selected = csvMarkerSelection.includes(marker);
-                      return (
-                        <button
-                          key={marker}
-                          type="button"
-                          className={`rounded-full border px-3 py-1 text-xs ${
-                            selected
-                              ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200"
-                              : "border-slate-600 text-slate-300"
-                          }`}
-                          onClick={() => {
-                            setCsvMarkerSelection((current) => {
-                              if (current.includes(marker)) {
-                                return current.filter((item) => item !== marker);
-                              }
-                              return [...current, marker];
-                            });
-                          }}
-                        >
-                          {getMarkerDisplayName(marker, appData.settings.language)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                    onClick={exportJson}
-                  >
-                    <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                    onClick={exportCsv}
-                  >
-                    <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                    onClick={exportPdf}
-                  >
-                    <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{tr("Backup & Herstel", "Backup & Restore")}</h3>
                 <p className="mt-1 text-sm text-slate-400">
                   {tr(
@@ -3879,7 +3815,71 @@ const App = () => {
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">{tr("Export", "Export")}</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {tr(
+                    "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
+                    "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
+                  )}
+                </p>
+
+                <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {allMarkers.map((marker) => {
+                      const selected = csvMarkerSelection.includes(marker);
+                      return (
+                        <button
+                          key={marker}
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            selected
+                              ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200"
+                              : "border-slate-600 text-slate-300"
+                          }`}
+                          onClick={() => {
+                            setCsvMarkerSelection((current) => {
+                              if (current.includes(marker)) {
+                                return current.filter((item) => item !== marker);
+                              }
+                              return [...current, marker];
+                            });
+                          }}
+                        >
+                          {getMarkerDisplayName(marker, appData.settings.language)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                    onClick={exportJson}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                    onClick={exportCsv}
+                  >
+                    <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                    onClick={exportPdf}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
+                  </button>
+                </div>
+              </div>
+
+              <div className="medical-disclaimer rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
                 <p className="font-semibold">{tr("Medische disclaimer", "Medical disclaimer")}</p>
                 <p className="mt-1">
                   {tr(
