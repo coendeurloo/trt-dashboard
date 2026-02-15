@@ -17,7 +17,6 @@ interface ClaudeResponse {
 }
 
 interface AnalyzeLabDataOptions {
-  apiKey: string;
   reports: LabReport[];
   unitSystem: UnitSystem;
   language?: AppLanguage;
@@ -435,17 +434,12 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
 };
 
 export const analyzeLabDataWithClaude = async ({
-  apiKey,
   reports,
   unitSystem,
   language = "nl",
   analysisType = "full",
   context
 }: AnalyzeLabDataOptions): Promise<string> => {
-  const sanitizedKey = apiKey.trim();
-  if (!sanitizedKey) {
-    throw new Error("Vul eerst je Claude API key in bij Settings.");
-  }
   if (reports.length === 0) {
     throw new Error("Er zijn nog geen rapporten om te analyseren.");
   }
@@ -580,7 +574,7 @@ export const analyzeLabDataWithClaude = async ({
           "content-type": "application/json"
         },
         body: JSON.stringify({
-          apiKey: sanitizedKey,
+          requestType: "analysis",
           payload: {
             model,
             max_tokens: 3000,
@@ -627,6 +621,11 @@ export const analyzeLabDataWithClaude = async ({
     }
 
     const errorMessage = result.body.error?.message ?? "";
+    if (result.status === 429) {
+      const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
+      const retryAfter = typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
+      throw new Error(`AI_RATE_LIMITED:${retryAfter}`);
+    }
     lastErrorMessage = errorMessage;
     const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
     if (missingModel) {
