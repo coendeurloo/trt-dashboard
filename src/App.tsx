@@ -79,6 +79,7 @@ import MarkerChartCard from "./components/MarkerChartCard";
 import MarkerInfoBadge from "./components/MarkerInfoBadge";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
+import { getDemoReports } from "./demoData";
 import {
   abnormalStatusLabel,
   blankAnnotations,
@@ -287,6 +288,7 @@ const App = () => {
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const uploadPanelRef = useRef<HTMLDivElement | null>(null);
 
   const {
     reports,
@@ -318,6 +320,8 @@ const App = () => {
     protocolWindowSize,
     doseResponseInput
   });
+  const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
+  const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
 
   const {
     isAnalyzingLabs,
@@ -504,6 +508,48 @@ const App = () => {
       }
     });
     setActiveTab("dashboard");
+  };
+
+  const loadDemoData = () => {
+    if (isShareMode) {
+      return;
+    }
+    const demoReports = getDemoReports();
+    setAppData((prev) => ({
+      ...prev,
+      reports: demoReports
+    }));
+    setActiveTab("dashboard");
+  };
+
+  const clearDemoData = () => {
+    if (isShareMode) {
+      return;
+    }
+    setAppData((prev) => ({
+      ...prev,
+      reports: prev.reports.filter((report) => report.extraction.model !== "demo-data")
+    }));
+    setActiveTab("dashboard");
+  };
+
+  const scrollToUploadPanel = () => {
+    if (isShareMode) {
+      return;
+    }
+    if (activeTab !== "dashboard") {
+      setActiveTab("dashboard");
+    }
+    requestAnimationFrame(() => {
+      uploadPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  const clearDemoAndUpload = () => {
+    clearDemoData();
+    requestAnimationFrame(() => {
+      scrollToUploadPanel();
+    });
   };
 
   const handleUpload = async (file: File) => {
@@ -1102,7 +1148,7 @@ const App = () => {
               ) : null}
             </div>
           ) : (
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
+            <div ref={uploadPanelRef} className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
               <UploadPanel isProcessing={isProcessing} onFileSelected={handleUpload} language={appData.settings.language} />
               <button
@@ -1205,6 +1251,52 @@ const App = () => {
                 onSave={saveDraftAsReport}
                 onCancel={() => setDraft(null)}
               />
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {!isShareMode && hasDemoData ? (
+              <motion.section
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4"
+              >
+                <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-2 text-sm text-cyan-100">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>
+                      {isDemoMode
+                        ? tr(
+                            "Je bekijkt demodata. Dit zijn voorbeeldgegevens om te laten zien hoe de app werkt.",
+                            "You're viewing demo data. This is sample data to show how the app works."
+                          )
+                        : tr(
+                            "Demodata is nog geladen. Wis het wanneer je klaar bent.",
+                            "Demo data is still loaded. Clear it when you're ready."
+                          )}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-cyan-500/50 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
+                      onClick={clearDemoData}
+                    >
+                      {tr("Wis demo & begin opnieuw", "Clear demo & start fresh")}
+                    </button>
+                    {isDemoMode ? (
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+                        onClick={clearDemoAndUpload}
+                      >
+                        {tr("Upload je eigen PDF", "Upload your own PDF")}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </motion.section>
             ) : null}
           </AnimatePresence>
 
