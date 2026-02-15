@@ -90,6 +90,10 @@ export const UI_TEXT = {
     nl: "AI-analyse mislukt.",
     en: "AI analysis failed."
   },
+  aiRateLimited: {
+    nl: "Je hebt het maximale aantal analyses bereikt. Probeer het over {minutes} minuten opnieuw.",
+    en: "You've reached the analysis limit. Please try again in {minutes} minutes."
+  },
   pdfProxyUnreachable: {
     nl: "Kon de lokale AI-proxy niet bereiken voor PDF-extractie. Herstart de app-server en probeer opnieuw.",
     en: "Could not reach the local AI proxy for PDF extraction. Restart the app server and try again."
