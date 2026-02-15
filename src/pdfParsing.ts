@@ -50,6 +50,19 @@ interface DateScore {
   firstIndex: number;
 }
 
+type ParserProfileId =
+  | "generic"
+  | "dutch_hormone"
+  | "uk_results"
+  | "quest_hormone"
+  | "mijn_gezondheid";
+
+interface ParserProfile {
+  id: ParserProfileId;
+  requireUnit: boolean;
+  lineNoisePattern?: RegExp;
+}
+
 const NOISE_SYMBOL_PATTERN = /[ñò↑↓]/g;
 const SECTION_PREFIX_PATTERN =
   /^(?:nuchter|hematology|clinical chemistry|hormones|vitamins|tumor markers|cardial markers|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
@@ -77,6 +90,49 @@ const RECEIPT_CONTEXT_HINT_PATTERN = /\b(?:arrival|received|ontvangst|materiaal\
 const REPORT_CONTEXT_HINT_PATTERN =
   /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
 const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
+const DASH_TOKEN_PATTERN = /^[-–]$/;
+
+const PROFILE_RULES: Array<{ id: ParserProfileId; detect: RegExp; profile: ParserProfile }> = [
+  {
+    id: "mijn_gezondheid",
+    detect: /\bUw metingen\b/i,
+    profile: {
+      id: "mijn_gezondheid",
+      requireUnit: false
+    }
+  },
+  {
+    id: "dutch_hormone",
+    detect: /\bPrecision Analytical\b|\bCollection Times\b|\bDried Urine\b/i,
+    profile: {
+      id: "dutch_hormone",
+      requireUnit: true,
+      lineNoisePattern: /\b(?:daily free cortisol pattern|metabolite ratios|patient details|reference ranges)\b/i
+    }
+  },
+  {
+    id: "uk_results",
+    detect: /\bResults for your Doctor\b|\bLondon Medical Laboratory\b|\bResult Normal\b/i,
+    profile: {
+      id: "uk_results",
+      requireUnit: true,
+      lineNoisePattern: /\b(?:comment|clinical history|interpretation|notes?)\b/i
+    }
+  },
+  {
+    id: "quest_hormone",
+    detect: /\bTestosterone,\s*Total,\s*LC\/MS\/MS\b|\bCollected:\b/i,
+    profile: {
+      id: "quest_hormone",
+      requireUnit: true
+    }
+  }
+];
+
+const GENERIC_PROFILE: ParserProfile = {
+  id: "generic",
+  requireUnit: true
+};
 
 const extractPdfText = async (file: File): Promise<string> => {
   const arrayBuffer = await file.arrayBuffer();
@@ -190,6 +246,9 @@ const cleanWhitespace = (value: string): string => {
     .replace(/([0-9])(?=(?:Uw waarde:|Normale waarde:|Datum:))/g, "$1 ")
     .replace(/([µμ])\s+g\s*\/\s*l/gi, "µg/L")
     .replace(/([µμ])\s+mol\s*\/\s*l/gi, "µmol/L")
+    .replace(/u?mol\s*\/\s*l/gi, (value) => (/^umol/i.test(value.replace(/\s+/g, "")) ? "umol/L" : value))
+    .replace(/ug\s*\/\s*l/gi, "ug/L")
+    .replace(/ug\s*\/\s*dl/gi, "ug/dL")
     .replace(/mcg\s*\/\s*dl/gi, "mcg/dL")
     .replace(/mcg\s*\/\s*ml/gi, "mcg/mL")
     .replace(/ng\s*\/\s*ml/gi, "ng/mL")
@@ -234,14 +293,38 @@ const normalizeUnit = (unit: string): string => {
   if (/^µmol\/l$/i.test(compact)) {
     return "µmol/L";
   }
+  if (/^umol\/l$/i.test(compact)) {
+    return "µmol/L";
+  }
   if (/^µg\/l$/i.test(compact)) {
     return "µg/L";
+  }
+  if (/^ug\/l$/i.test(compact)) {
+    return "µg/L";
+  }
+  if (/^ug\/dl$/i.test(compact)) {
+    return "µg/dL";
   }
   if (/^g\/l$/i.test(compact)) {
     return "g/L";
   }
   if (/^g\/dl$/i.test(compact)) {
     return "g/dL";
+  }
+  if (/^iu\/l$/i.test(compact)) {
+    return "IU/L";
+  }
+  if (/^iu\/ml$/i.test(compact)) {
+    return "IU/mL";
+  }
+  if (/^u\/ml$/i.test(compact)) {
+    return "U/mL";
+  }
+  if (/^10\^?9\/l$/i.test(compact) || /^10\*9\/l$/i.test(compact)) {
+    return "10^9/L";
+  }
+  if (/^10\^?12\/l$/i.test(compact) || /^10\*12\/l$/i.test(compact)) {
+    return "10^12/L";
   }
   if (/^u\/l$/i.test(compact)) {
     return "U/L";
@@ -254,6 +337,12 @@ const normalizeUnit = (unit: string): string => {
   }
   if (/^fl$/i.test(compact)) {
     return "fL";
+  }
+  if (/^pg$/i.test(compact)) {
+    return "pg";
+  }
+  if (/^mm\/hr$/i.test(compact)) {
+    return "mm/hr";
   }
   if (/^l\/l$/i.test(compact)) {
     return "L/L";
@@ -270,7 +359,9 @@ const isLikelyUnit = (token: string): boolean => {
     return true;
   }
 
-  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|mg|g|µg|µmol|fL|fl|fmol|ratio|l\/l)$/i.test(token);
+  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|IU|mg|g|µg|ug|µmol|umol|fL|fl|fmol|ratio|l\/l|mm\/hr)$/i.test(
+    token
+  );
 };
 
 const toIsoDate = (day: string, month: string, year: string): string | null => {
@@ -323,6 +414,16 @@ const extractDateByPattern = (text: string, pattern: RegExp): string | null => {
     return null;
   }
   return toIsoDate(match[1], match[2], match[3]);
+};
+
+const detectParserProfile = (text: string, fileName: string): ParserProfile => {
+  const haystack = `${fileName}\n${text.slice(0, 4000)}`;
+  for (const rule of PROFILE_RULES) {
+    if (rule.detect.test(haystack)) {
+      return rule.profile;
+    }
+  }
+  return GENERIC_PROFILE;
 };
 
 const isPlausibleLabDate = (iso: string): boolean => {
@@ -491,7 +592,7 @@ const extractDateCandidate = (text: string): string => {
   return new Date().toISOString().slice(0, 10);
 };
 
-const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
+const parseMijnGezondheidRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   const normalized = cleanWhitespace(text);
   if (!/\bUw metingen\b/i.test(normalized)) {
     return [];
@@ -511,7 +612,7 @@ const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
     /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,140}?)\s+Uw waarde:\s*([<>]?\d+(?:[.,]\d+)?)\s+Normale waarde:\s*((?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?(?:\s*-\s*(?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?)?)/gi;
 
   for (const match of section.matchAll(pattern)) {
-    const markerName = cleanMarkerName(match[1]);
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]), profile);
     if (looksLikeNoiseMarker(markerName)) {
       continue;
     }
@@ -619,6 +720,23 @@ const cleanMarkerName = (rawMarker: string): string => {
   return marker.replace(/[.,;:]+$/, "").trim();
 };
 
+const applyProfileMarkerFixes = (markerName: string, profile: ParserProfile): string => {
+  let marker = markerName;
+
+  if (profile.id === "uk_results") {
+    marker = marker.replace(/^Result\s+/i, "");
+  }
+
+  if (profile.id === "dutch_hormone") {
+    marker = marker.replace(/\bT otal\b/g, "Total");
+  }
+
+  marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
+  marker = marker.replace(/\s{2,}/g, " ").trim();
+
+  return marker;
+};
+
 const looksLikeNoiseMarker = (marker: string): boolean => {
   if (!marker || marker.length < 2) {
     return true;
@@ -686,7 +804,95 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   };
 };
 
-const parseSingleRow = (rawRow: string, confidence: number): ParsedFallbackRow | null => {
+const isNumericToken = (token: string): boolean => {
+  return safeNumber(token) !== null;
+};
+
+const parseRowByRightAnchoredUnit = (
+  rawRow: string,
+  confidence: number,
+  profile: ParserProfile
+): ParsedFallbackRow | null => {
+  const cleanedRow = cleanWhitespace(rawRow);
+  if (!cleanedRow) {
+    return null;
+  }
+
+  const tokens = cleanedRow
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.length < 3) {
+    return null;
+  }
+
+  let unitIndex = -1;
+  for (let index = tokens.length - 1; index >= 1; index -= 1) {
+    if (!isLikelyUnit(tokens[index])) {
+      continue;
+    }
+    unitIndex = index;
+    break;
+  }
+
+  if (unitIndex < 0 && profile.requireUnit) {
+    return null;
+  }
+
+  const valueSearchEnd = unitIndex > 0 ? unitIndex - 1 : tokens.length - 1;
+  let valueIndex = -1;
+  for (let index = 1; index <= valueSearchEnd; index += 1) {
+    if (!isNumericToken(tokens[index])) {
+      continue;
+    }
+
+    if (index + 2 <= valueSearchEnd && DASH_TOKEN_PATTERN.test(tokens[index + 1]) && isNumericToken(tokens[index + 2])) {
+      continue;
+    }
+
+    valueIndex = index;
+    break;
+  }
+
+  if (valueIndex < 1) {
+    return null;
+  }
+
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(tokens.slice(0, valueIndex).join(" ")), profile);
+  if (looksLikeNoiseMarker(markerName)) {
+    return null;
+  }
+
+  const value = safeNumber(tokens[valueIndex]);
+  if (value === null) {
+    return null;
+  }
+
+  const explicitUnit = unitIndex >= 0 ? normalizeUnit(tokens[unitIndex]) : "";
+  const middleTokens = tokens.slice(valueIndex + 1, unitIndex >= 0 ? unitIndex : tokens.length);
+  const trailingTokens = unitIndex >= 0 ? tokens.slice(unitIndex + 1) : [];
+  const parsedReference = extractReferenceAndUnit([...middleTokens, ...trailingTokens].join(" "));
+
+  return {
+    markerName,
+    value,
+    unit: explicitUnit || parsedReference.unit,
+    referenceMin: parsedReference.referenceMin,
+    referenceMax: parsedReference.referenceMax,
+    confidence
+  };
+};
+
+const parseSingleRow = (
+  rawRow: string,
+  confidence: number,
+  profile: ParserProfile = GENERIC_PROFILE
+): ParsedFallbackRow | null => {
+  const rightAnchored = parseRowByRightAnchoredUnit(rawRow, confidence + 0.04, profile);
+  if (rightAnchored) {
+    return rightAnchored;
+  }
+
   const cleanedRow = cleanWhitespace(rawRow);
   if (!cleanedRow) {
     return null;
@@ -697,7 +903,7 @@ const parseSingleRow = (rawRow: string, confidence: number): ParsedFallbackRow |
     return null;
   }
 
-  const markerName = cleanMarkerName(baseMatch[1]);
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(baseMatch[1]), profile);
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -742,7 +948,7 @@ const looksLikeNonResultLine = (line: string): boolean => {
   return false;
 };
 
-const shouldKeepParsedRow = (row: ParsedFallbackRow): boolean => {
+const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = GENERIC_PROFILE): boolean => {
   if (
     /\b(?:report|sample|date|patient|doctor|laboratory|result|normal|range|collection|precision analytical|daily free cortisol pattern|described|section|comment|defines|followed by|levels below)\b/i.test(
       row.markerName
@@ -755,6 +961,10 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow): boolean => {
     return false;
   }
 
+  if (profile.requireUnit && !row.unit) {
+    return false;
+  }
+
   if (row.unit || row.referenceMin !== null || row.referenceMax !== null) {
     return true;
   }
@@ -762,22 +972,31 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow): boolean => {
   return IMPORTANT_MARKERS.has(canonical);
 };
 
-const parseTwoLineRow = (line: string, nextLine: string): ParsedFallbackRow | null => {
+const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile): ParsedFallbackRow | null => {
   const markerAndValue = line.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)$/);
   if (markerAndValue) {
-    const markerName = cleanMarkerName(markerAndValue[1]);
-    const value = safeNumber(markerAndValue[2]);
-    if (value !== null && !looksLikeNoiseMarker(markerName)) {
-      const parsedReference = extractReferenceAndUnit(nextLine);
-      if (parsedReference.referenceMin !== null || parsedReference.referenceMax !== null || parsedReference.unit) {
-        return {
-          markerName,
-          value,
-          unit: parsedReference.unit,
-          referenceMin: parsedReference.referenceMin,
-          referenceMax: parsedReference.referenceMax,
-          confidence: 0.64
-        };
+    const leftTokens = cleanWhitespace(markerAndValue[1]).split(" ").filter(Boolean);
+    const leftNumericCount = leftTokens.filter((token) => isNumericToken(token)).length;
+    const probablyRangeTail =
+      leftNumericCount >= 2 ||
+      (leftTokens.length >= 2 && DASH_TOKEN_PATTERN.test(leftTokens[leftTokens.length - 1])) ||
+      /(?:\d+\s*[-–]\s*$)/.test(markerAndValue[1]);
+
+    if (!probablyRangeTail) {
+      const markerName = applyProfileMarkerFixes(cleanMarkerName(markerAndValue[1]), profile);
+      const value = safeNumber(markerAndValue[2]);
+      if (value !== null && !looksLikeNoiseMarker(markerName)) {
+        const parsedReference = extractReferenceAndUnit(nextLine);
+        if (parsedReference.referenceMin !== null || parsedReference.referenceMax !== null || parsedReference.unit) {
+          return {
+            markerName,
+            value,
+            unit: parsedReference.unit,
+            referenceMin: parsedReference.referenceMin,
+            referenceMax: parsedReference.referenceMax,
+            confidence: 0.64
+          };
+        }
       }
     }
   }
@@ -786,7 +1005,7 @@ const parseTwoLineRow = (line: string, nextLine: string): ParsedFallbackRow | nu
     return null;
   }
 
-  const markerName = cleanMarkerName(line);
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(line), profile);
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -796,6 +1015,11 @@ const parseTwoLineRow = (line: string, nextLine: string): ParsedFallbackRow | nu
     /^(?:result(?:\s+(?:normal|high|low))?|normal|abnormal|in\s+range|out\s+of\s+range|value)\s+/i,
     ""
   );
+  const directNext = parseSingleRow(`${markerName} ${normalizedNext}`, 0.64, profile);
+  if (directNext) {
+    return directNext;
+  }
+
   const nextMatch = normalizedNext.match(
     /^([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?))?\s*(.*)$/i
   );
@@ -827,7 +1051,7 @@ const parseTwoLineRow = (line: string, nextLine: string): ParsedFallbackRow | nu
   };
 };
 
-const parseLineRows = (text: string): ParsedFallbackRow[] => {
+const parseLineRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   const lines = text
     .split("\n")
     .map((line) => cleanWhitespace(line))
@@ -843,9 +1067,12 @@ const parseLineRows = (text: string): ParsedFallbackRow[] => {
     if (looksLikeNonResultLine(line)) {
       continue;
     }
+    if (profile.lineNoisePattern?.test(line)) {
+      continue;
+    }
 
-    const direct = parseSingleRow(line, 0.68);
-    if (direct && shouldKeepParsedRow(direct)) {
+    const direct = parseSingleRow(line, 0.68, profile);
+    if (direct && shouldKeepParsedRow(direct, profile)) {
       rows.push(direct);
       continue;
     }
@@ -855,8 +1082,8 @@ const parseLineRows = (text: string): ParsedFallbackRow[] => {
       continue;
     }
 
-    const twoLine = parseTwoLineRow(line, nextLine);
-    if (twoLine && shouldKeepParsedRow(twoLine)) {
+    const twoLine = parseTwoLineRow(line, nextLine, profile);
+    if (twoLine && shouldKeepParsedRow(twoLine, profile)) {
       rows.push(twoLine);
       consumed.add(index + 1);
     }
@@ -865,13 +1092,36 @@ const parseLineRows = (text: string): ParsedFallbackRow[] => {
   return rows;
 };
 
-const parseIndexedRows = (text: string): ParsedFallbackRow[] => {
+const parseColumnRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  const rows: ParsedFallbackRow[] = [];
+  const lines = text
+    .split("\n")
+    .map((line) => line.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+
+  for (const rawLine of lines) {
+    const columns = rawLine.split(/\s{2,}/).map((column) => cleanWhitespace(column)).filter(Boolean);
+    if (columns.length < 2) {
+      continue;
+    }
+
+    const merged = cleanWhitespace(`${columns[0]} ${columns.slice(1).join(" ")}`);
+    const parsed = parseSingleRow(merged, 0.74, profile);
+    if (parsed && shouldKeepParsedRow(parsed, profile)) {
+      rows.push(parsed);
+    }
+  }
+
+  return rows;
+};
+
+const parseIndexedRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   const normalized = cleanWhitespace(text);
   const rows: ParsedFallbackRow[] = [];
   const rowPattern = /\b\d{1,3}\/\d{2,3}\s+A?\s+([\s\S]*?)(?=\b\d{1,3}\/\d{2,3}\s+A?\s+|$)/g;
 
   for (const match of normalized.matchAll(rowPattern)) {
-    const row = parseSingleRow(match[1], 0.72);
+    const row = parseSingleRow(match[1], 0.72, profile);
     if (row) {
       rows.push(row);
     }
@@ -880,15 +1130,15 @@ const parseIndexedRows = (text: string): ParsedFallbackRow[] => {
   return rows;
 };
 
-const parseLooseRows = (text: string): ParsedFallbackRow[] => {
+const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   const normalized = cleanWhitespace(text);
   const rows: ParsedFallbackRow[] = [];
 
   const rowPattern =
-    /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,120}?)\s+(?:[A-Z]{2,8}\s+)?(?:[ñò↑↓]\s+)?([<>]?\d+(?:[.,]\d+)?)\s+([A-Za-z%µμ/0-9.\-²]+)\s+(?:-\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)|([<>≤≥])\s*(\d+(?:[.,]\d+)?))/g;
+    /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,120}?)\s+(?:[A-Z]{2,8}\s+)?(?:[ñò↑↓]\s+)?([<>]?\d+(?:[.,]\d+)?)\s+([A-Za-z%µμ/][A-Za-z%µμ/0-9.\-²]*)\s+(?:-\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)|([<>≤≥])\s*(\d+(?:[.,]\d+)?))/g;
 
   for (const match of normalized.matchAll(rowPattern)) {
-    const markerName = cleanMarkerName(match[1]);
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]), profile);
     if (looksLikeNoiseMarker(markerName)) {
       continue;
     }
@@ -919,14 +1169,20 @@ const parseLooseRows = (text: string): ParsedFallbackRow[] => {
       }
     }
 
-    rows.push({
+    const row: ParsedFallbackRow = {
       markerName,
       value,
       unit,
       referenceMin,
       referenceMax,
       confidence: 0.58
-    });
+    };
+
+    if (!shouldKeepParsedRow(row, profile)) {
+      continue;
+    }
+
+    rows.push(row);
   }
 
   return rows;
@@ -1001,21 +1257,23 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
 };
 
 const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
-  const lineRows = parseLineRows(text);
-  const indexedRows = parseIndexedRows(text);
-  const looseRows = lineRows.length < 5 ? parseLooseRows(text) : [];
-  const huisartsRows = parseMijnGezondheidRows(text);
+  const profile = detectParserProfile(text, fileName);
+  const columnRows = parseColumnRows(text, profile);
+  const lineRows = parseLineRows(text, profile);
+  const indexedRows = parseIndexedRows(text, profile);
+  const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
+  const huisartsRows = profile.id === "mijn_gezondheid" ? parseMijnGezondheidRows(text, profile) : [];
 
   const combinedRows =
     indexedRows.length > 0
-      ? [...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
-      : [...lineRows, ...looseRows, ...huisartsRows];
+      ? [...columnRows, ...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
+      : [...columnRows, ...lineRows, ...looseRows, ...huisartsRows];
   const markers = dedupeRows(combinedRows);
 
-  const confidence =
-    markers.length > 0
-      ? Math.min(0.82, markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length)
-      : 0.1;
+  const averageConfidence =
+    markers.length > 0 ? markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length : 0;
+  const unitCoverage = markers.length > 0 ? markers.filter((marker) => marker.unit).length / markers.length : 0;
+  const confidence = markers.length > 0 ? Math.min(0.9, averageConfidence * 0.8 + unitCoverage * 0.2) : 0.1;
 
   return {
     sourceFileName: fileName,
@@ -1023,9 +1281,9 @@ const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
     markers,
     extraction: {
       provider: "fallback",
-      model: "regex-indexed+keyword-fallback",
+      model: `fallback-layered:${profile.id}`,
       confidence,
-      needsReview: confidence < 0.7 || markers.length === 0
+      needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7
     }
   };
 };
@@ -1205,4 +1463,14 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
     }
     return fallbackDraft;
   }
+};
+
+export const __pdfParsingInternals = {
+  detectParserProfile,
+  extractDateCandidate,
+  parseSingleRow,
+  parseTwoLineRow,
+  parseLineRows,
+  parseColumnRows,
+  fallbackExtract
 };
