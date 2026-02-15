@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { RequestType, checkRateLimit } from "../../src/rateLimit";
 
 interface ClaudeMessagePayload {
   model: string;
@@ -52,6 +53,30 @@ const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
     req.on("error", (error) => reject(error));
   });
 
+const getClientIp = (req: IncomingMessage): string => {
+  const forwarded = req.headers["x-forwarded-for"];
+  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  if (candidate && typeof candidate === "string") {
+    const first = candidate.split(",")[0]?.trim();
+    if (first) {
+      return first;
+    }
+  }
+  return req.socket.remoteAddress ?? "unknown";
+};
+
+const inferRequestType = (body: ProxyRequestBody): RequestType => {
+  if (body.requestType === "analysis" || body.requestType === "extraction") {
+    return body.requestType;
+  }
+  const firstMessage = body.payload?.messages?.[0];
+  const prompt = typeof firstMessage?.content === "string" ? firstMessage.content : "";
+  if (/LAB TEXT START|Extract blood lab data/i.test(prompt)) {
+    return "extraction";
+  }
+  return "analysis";
+};
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: { message: "Method not allowed" } });
@@ -74,6 +99,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (!body.payload || typeof body.payload !== "object") {
     sendJson(res, 400, { error: { message: "Missing payload" } });
+    return;
+  }
+
+  const requestType = inferRequestType(body);
+  const ip = getClientIp(req);
+  const limit = checkRateLimit(ip, requestType);
+  const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+  res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+  res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+  if (!limit.allowed) {
+    sendJson(res, 429, { error: "Rate limit exceeded", retryAfter });
     return;
   }
 
