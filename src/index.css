@@ -205,6 +205,21 @@ body.light .upload-panel-dropzone {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+body.light .welcome-hero {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(242, 249, 255, 0.92) 100%) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+body.light .welcome-hero-feature {
+  background: linear-gradient(180deg, rgba(235, 245, 255, 0.9) 0%, rgba(226, 238, 251, 0.84) 100%) !important;
+  border-color: rgba(148, 163, 184, 0.38) !important;
+}
+
+body.light .welcome-hero-step {
+  background-color: rgba(234, 243, 252, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.36) !important;
+}
+
 body.light .analysis-latest-btn:disabled {
   opacity: 0.82 !important;
   color: #475569 !important;

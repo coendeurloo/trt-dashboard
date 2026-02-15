@@ -50,7 +50,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
-      className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-6"
+      className="welcome-hero rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-6"
     >
       <div className="max-w-3xl">
         <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">{tr("Volg je TRT-bloedwaarden", "Track Your TRT Blood Work")}</h3>
@@ -71,7 +71,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: index * 0.06 }}
-              className="rounded-xl border border-slate-700/70 bg-slate-900/65 p-4"
+              className="welcome-hero-feature rounded-xl border border-slate-700/70 bg-slate-900/60 p-4"
             >
               <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/35 bg-cyan-500/15 text-cyan-200">
                 <Icon className="h-4 w-4" />
@@ -104,7 +104,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
         <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Hoe het werkt", "How it works")}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
           {steps.map((step, index) => (
-            <div key={step} className="flex items-start gap-2 rounded-lg border border-slate-700/70 bg-slate-900/45 p-3">
+            <div key={step} className="welcome-hero-step flex items-start gap-2 rounded-lg border border-slate-700/70 bg-slate-900/35 p-3">
               <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-xs font-semibold text-cyan-200">
                 {index + 1}
               </span>
