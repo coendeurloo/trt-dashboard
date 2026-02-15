@@ -2,12 +2,14 @@
 
 ![TRT Lab Tracker Logo](./src/assets/trt-logo-light.png)
 
-A modern React + TypeScript web app to upload blood test PDFs, review extracted results, track TRT-related markers, and visualize trends over time.
+TRT Lab Tracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
 
 ## Features implemented
 
 - Drag-and-drop PDF upload (`react-dropzone`)
-- PDF text extraction + Claude API structured extraction (with fallback parser)
+- Adaptive PDF parser for mixed lab layouts (tables, line-based rows, multi-line rows)
+- Smart OCR fallback for scanned PDFs (`tesseract.js`, client-side, only when needed)
+- Claude structured extraction + AI lab analysis (full and latest-vs-previous)
 - Editable extraction review table with hover edit icon
 - Report context fields:
   - Testosterone dosage (mg/week)
