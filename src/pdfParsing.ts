@@ -38,6 +38,18 @@ interface ParsedFallbackRow {
   confidence: number;
 }
 
+interface ParsedReference {
+  referenceMin: number | null;
+  referenceMax: number | null;
+  unit: string;
+}
+
+interface DateScore {
+  score: number;
+  count: number;
+  firstIndex: number;
+}
+
 const NOISE_SYMBOL_PATTERN = /[ñò↑↓]/g;
 const SECTION_PREFIX_PATTERN =
   /^(?:nuchter|hematology|clinical chemistry|hormones|vitamins|tumor markers|cardial markers|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
@@ -59,6 +71,13 @@ const EXTRACTION_MODEL_CANDIDATES = [
   "claude-3-5-sonnet-latest"
 ] as const;
 
+const DATE_CONTEXT_HINT_PATTERN =
+  /\b(?:sample\s*(?:draw|collection|date)|collection\s*times?|date\s*collected|collected|afname(?:datum)?|monster\s*afname|materiaal\s*afname|sample\s*taken)\b/i;
+const RECEIPT_CONTEXT_HINT_PATTERN = /\b(?:arrival|received|ontvangst|materiaal\s*ontvangst)\b/i;
+const REPORT_CONTEXT_HINT_PATTERN =
+  /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
+const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
+
 const extractPdfText = async (file: File): Promise<string> => {
   const arrayBuffer = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -67,13 +86,53 @@ const extractPdfText = async (file: File): Promise<string> => {
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum += 1) {
     const page = await doc.getPage(pageNum);
     const text = await page.getTextContent();
-    const pageText = text.items
-      .map((item) => {
-        const textItem = item as { str?: string };
-        return textItem.str ?? "";
+    const rows: Array<{ y: number; items: Array<{ x: number; text: string }> }> = [];
+
+    for (const item of text.items) {
+      const textItem = item as { str?: string; transform?: number[] };
+      const lineText = cleanWhitespace(textItem.str ?? "");
+      if (!lineText) {
+        continue;
+      }
+
+      const transform = Array.isArray(textItem.transform) ? textItem.transform : [];
+      const x = typeof transform[4] === "number" ? transform[4] : 0;
+      const y = typeof transform[5] === "number" ? transform[5] : 0;
+
+      const existing = rows.find((row) => Math.abs(row.y - y) <= 2);
+      if (existing) {
+        existing.items.push({ x, text: lineText });
+      } else {
+        rows.push({ y, items: [{ x, text: lineText }] });
+      }
+    }
+
+    const pageLines = rows
+      .sort((a, b) => {
+        if (Math.abs(b.y - a.y) > 2) {
+          return b.y - a.y;
+        }
+        return (a.items[0]?.x ?? 0) - (b.items[0]?.x ?? 0);
       })
-      .join(" ");
-    chunks.push(pageText);
+      .map((row) => {
+        const orderedItems = row.items.sort((a, b) => a.x - b.x);
+        let output = "";
+        let previousX: number | null = null;
+        for (const part of orderedItems) {
+          if (!output) {
+            output = part.text;
+            previousX = part.x;
+            continue;
+          }
+          const gap = previousX === null ? 0 : part.x - previousX;
+          output += `${gap > 18 ? "  " : " "}${part.text}`;
+          previousX = part.x;
+        }
+        return cleanWhitespace(output);
+      })
+      .filter(Boolean);
+
+    chunks.push(pageLines.join("\n"));
   }
 
   return chunks.join("\n");
@@ -131,9 +190,13 @@ const cleanWhitespace = (value: string): string => {
     .replace(/([0-9])(?=(?:Uw waarde:|Normale waarde:|Datum:))/g, "$1 ")
     .replace(/([µμ])\s+g\s*\/\s*l/gi, "µg/L")
     .replace(/([µμ])\s+mol\s*\/\s*l/gi, "µmol/L")
+    .replace(/mcg\s*\/\s*dl/gi, "mcg/dL")
+    .replace(/mcg\s*\/\s*ml/gi, "mcg/mL")
     .replace(/ng\s*\/\s*ml/gi, "ng/mL")
     .replace(/ng\s*\/\s*dl/gi, "ng/dL")
-    .replace(/pg\s*\/\s*ml/gi, "pg/mL");
+    .replace(/ng\s*\/\s*mg/gi, "ng/mg")
+    .replace(/pg\s*\/\s*ml/gi, "pg/mL")
+    .replace(/pg\s*\/\s*mg/gi, "pg/mg");
 };
 
 const normalizeUnit = (unit: string): string => {
@@ -150,11 +213,23 @@ const normalizeUnit = (unit: string): string => {
   if (/^pg\/ml$/i.test(compact)) {
     return "pg/mL";
   }
+  if (/^pg\/mg$/i.test(compact)) {
+    return "pg/mg";
+  }
   if (/^ng\/ml$/i.test(compact)) {
     return "ng/mL";
   }
+  if (/^ng\/mg$/i.test(compact)) {
+    return "ng/mg";
+  }
   if (/^ng\/dl$/i.test(compact)) {
     return "ng/dL";
+  }
+  if (/^mcg\/dl$/i.test(compact)) {
+    return "mcg/dL";
+  }
+  if (/^mcg\/ml$/i.test(compact)) {
+    return "mcg/mL";
   }
   if (/^µmol\/l$/i.test(compact)) {
     return "µmol/L";
@@ -250,46 +325,143 @@ const extractDateByPattern = (text: string, pattern: RegExp): string | null => {
   return toIsoDate(match[1], match[2], match[3]);
 };
 
-const collectAllDates = (text: string): string[] => {
-  const result: string[] = [];
+const isPlausibleLabDate = (iso: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return false;
+  }
+  if (iso < "1990-01-01") {
+    return false;
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const maxIso = tomorrow.toISOString().slice(0, 10);
+  return iso <= maxIso;
+};
 
-  const ymdMatches = text.matchAll(/\b(20\d{2})[./-](0?[1-9]|1[0-2])[./-](0?[1-9]|[12]\d|3[01])\b/g);
+const collectAllDates = (text: string): string[] => {
+  const result = new Set<string>();
+
+  const ymdMatches = text.matchAll(/\b(20\d{2})\s*[./-]\s*(0?[1-9]|1[0-2])\s*[./-]\s*(0?[1-9]|[12]\d|3[01])\b/g);
   for (const match of ymdMatches) {
     const iso = toIsoYmd(match[1], match[2], match[3]);
-    if (iso) {
-      result.push(iso);
+    if (iso && isPlausibleLabDate(iso)) {
+      result.add(iso);
     }
   }
 
-  const dateMatches = text.matchAll(/\b([0-3]?\d)[./-]([01]?\d)[./-](\d{2,4})\b/g);
+  const dateMatches = text.matchAll(
+    /\b([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})\b/g
+  );
 
   for (const match of dateMatches) {
     const iso = toIsoDate(match[1], match[2], match[3]);
-    if (iso) {
-      result.push(iso);
+    if (iso && isPlausibleLabDate(iso)) {
+      result.add(iso);
     }
   }
 
-  return result;
+  return Array.from(result);
+};
+
+const scoreDateCandidate = (
+  scores: Map<string, DateScore>,
+  isoDate: string,
+  weight: number,
+  lineIndex: number
+) => {
+  if (!isPlausibleLabDate(isoDate)) {
+    return;
+  }
+  const existing = scores.get(isoDate);
+  if (existing) {
+    existing.score += weight;
+    existing.count += 1;
+    if (lineIndex < existing.firstIndex) {
+      existing.firstIndex = lineIndex;
+    }
+    return;
+  }
+  scores.set(isoDate, { score: weight, count: 1, firstIndex: lineIndex });
+};
+
+const extractDateByContext = (text: string): string | null => {
+  const lines = text
+    .split("\n")
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean);
+
+  const scores = new Map<string, DateScore>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    for (const match of line.matchAll(
+      /\b(?:date\s*collected|collected|sample\s*(?:draw|collection|date)|collection\s*times?|afname(?:datum)?|monster\s*afname|materiaal\s*afname)\b[^0-9]{0,30}([0-9][0-9\s./-]{6,20})/gi
+    )) {
+      const chunkDates = collectAllDates(match[1]);
+      if (chunkDates.length > 0) {
+        scoreDateCandidate(scores, chunkDates[0], 8, index);
+      }
+    }
+
+    for (const match of line.matchAll(
+      /\b(?:arrival|arrival\s*date|received|ontvangst|materiaal\s*ontvangst)\b[^0-9]{0,30}([0-9][0-9\s./-]{6,20})/gi
+    )) {
+      const chunkDates = collectAllDates(match[1]);
+      if (chunkDates.length > 0) {
+        scoreDateCandidate(scores, chunkDates[0], 4, index);
+      }
+    }
+
+    const lineDates = collectAllDates(line);
+    if (lineDates.length === 0) {
+      continue;
+    }
+
+    if (/\bdatum\s*:\b/i.test(line) && lineDates.length >= 2) {
+      const sorted = [...lineDates].sort();
+      scoreDateCandidate(scores, sorted[sorted.length - 1], 6, index);
+      continue;
+    }
+
+    if (DATE_CONTEXT_HINT_PATTERN.test(line)) {
+      lineDates.forEach((date) => scoreDateCandidate(scores, date, 5, index));
+    } else if (RECEIPT_CONTEXT_HINT_PATTERN.test(line)) {
+      lineDates.forEach((date) => scoreDateCandidate(scores, date, 2, index));
+    } else if (REPORT_CONTEXT_HINT_PATTERN.test(line)) {
+      lineDates.forEach((date) => scoreDateCandidate(scores, date, -3, index));
+    }
+  }
+
+  const winner = Array.from(scores.entries()).sort((a, b) => {
+    const aScore = a[1];
+    const bScore = b[1];
+    if (bScore.score !== aScore.score) {
+      return bScore.score - aScore.score;
+    }
+    if (bScore.count !== aScore.count) {
+      return bScore.count - aScore.count;
+    }
+    if (aScore.firstIndex !== bScore.firstIndex) {
+      return aScore.firstIndex - bScore.firstIndex;
+    }
+    return b[0].localeCompare(a[0]);
+  })[0];
+
+  return winner?.[0] ?? null;
 };
 
 const extractDateCandidate = (text: string): string => {
-  const normalized = cleanWhitespace(text);
-
-  // MijnGezondheid reports often include two timeline dates in one line (e.g. 2023-05-02 2025-11-12)
-  // while the listed "Uw waarde" reflects the most recent measurement.
-  if (/\bdatum\s*:/i.test(normalized)) {
-    const timelineDates = collectAllDates(normalized)
-      .filter((value) => value >= "2000-01-01")
-      .sort();
-    if (timelineDates.length >= 2) {
-      return timelineDates[timelineDates.length - 1];
-    }
+  const fromContext = extractDateByContext(text);
+  if (fromContext) {
+    return fromContext;
   }
 
+  const normalized = cleanWhitespace(text);
+
   const priorityPatterns = [
-    /(?:sample\s*draw|monster\s*afname|monster\s*afname:|afname|sample\s*collection|collection\s*date)[^0-9]{0,40}([0-3]?\d)[./-]([01]?\d)[./-](\d{2,4})/i,
-    /(?:arrival\s*date,?\s*time|arrival\s*date|materiaal\s*ontvangst|ontvangst)[^0-9]{0,40}([0-3]?\d)[./-]([01]?\d)[./-](\d{2,4})/i
+    /(?:sample\s*draw|date\s*collected|monster\s*afname|monster\s*afname:|afname|sample\s*collection|collection\s*date)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})/i,
+    /(?:arrival\s*date,?\s*time|arrival\s*date|materiaal\s*ontvangst|ontvangst)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})/i
   ];
 
   for (const pattern of priorityPatterns) {
@@ -299,16 +471,21 @@ const extractDateCandidate = (text: string): string => {
     }
   }
 
-  const allDates = collectAllDates(normalized)
-    .filter((value) => value >= "2000-01-01")
-    .sort();
+  const allDates = collectAllDates(text).sort();
   if (allDates.length > 0) {
-    return allDates[0];
+    const counts = new Map<string, number>();
+    allDates.forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+    return Array.from(counts.entries()).sort((a, b) => {
+      if (b[1] !== a[1]) {
+        return b[1] - a[1];
+      }
+      return b[0].localeCompare(a[0]);
+    })[0][0];
   }
 
-  const iso = normalized.match(/\b(20\d{2})[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])\b/);
+  const iso = normalized.match(/\b(20\d{2})\s*[-/.]\s*(0[1-9]|1[0-2])\s*[-/.]\s*(0[1-9]|[12]\d|3[01])\b/);
   if (iso?.[0]) {
-    return iso[0].replace(/[/.]/g, "-");
+    return iso[0].replace(/\s+/g, "").replace(/[/.]/g, "-");
   }
 
   return new Date().toISOString().slice(0, 10);
@@ -395,6 +572,7 @@ const cleanMarkerName = (rawMarker: string): string => {
   let marker = cleanWhitespace(rawMarker)
     .replace(/^[^A-Za-zÀ-ž]+/, "")
     .replace(/\s*\([^)]*dr\.[^)]*\)$/i, "")
+    .replace(/\b(?:within|above|below)\s+(?:luteal|follicular|optimal|reference)?\s*range\b/gi, "")
     .trim();
 
   // Remove flattened row prefixes like "15.5 % 8/58 A " or "Nmol/l 53/58 A ".
@@ -446,9 +624,66 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
-  return /^(?:testing report|first name|arrival date|request complete|resultaat nummer|rapport|pagina|receiver|email|phone|fax|validated|end of report)\b/i.test(
+  if (!/[A-Za-zÀ-ž]{2}/.test(marker)) {
+    return true;
+  }
+
+  if (/^\d/.test(marker)) {
+    return true;
+  }
+
+  if (isLikelyUnit(marker) || (/^[A-Za-z%µμ/().-]+$/.test(marker) && marker.includes("/"))) {
+    return true;
+  }
+
+  return /^(?:testing report|first name|arrival date|request complete|resultaat nummer|rapport|pagina|receiver|email|phone|fax|validated|end of report|sample date|collection times?|patient|doctor|laboratory|specimen|requesting physician|units?|result normal|age reference range|daily free cortisol pattern|precision analytical|report date|date of birth|dob|sample material|requested test|request within|low limit high limit|that values below|this is a laboratory calculation|lower ground|muster|to|over|years?|www\.)\b/i.test(
     marker
   );
+};
+
+const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
+  const cleaned = cleanWhitespace(rawValue);
+  let referenceMin: number | null = null;
+  let referenceMax: number | null = null;
+  let unit = "";
+
+  const rangeMatches = Array.from(cleaned.matchAll(/(?:<|>|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/g));
+  if (rangeMatches.length > 0) {
+    const last = rangeMatches[rangeMatches.length - 1];
+    referenceMin = safeNumber(last[1]);
+    referenceMax = safeNumber(last[2]);
+  }
+
+  if (referenceMin === null && referenceMax === null) {
+    const upperMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    if (upperMatch) {
+      referenceMax = safeNumber(upperMatch[1]);
+    }
+  }
+
+  if (referenceMin === null && referenceMax === null) {
+    const lowerMatch = cleaned.match(/(?:^|\s)(?:>|≥)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    if (lowerMatch) {
+      referenceMin = safeNumber(lowerMatch[1]);
+    }
+  }
+
+  const tokens = cleaned
+    .split(" ")
+    .map((token) => token.trim().replace(/[),;]+$/, ""))
+    .filter(Boolean);
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    if (isLikelyUnit(tokens[index])) {
+      unit = normalizeUnit(tokens[index]);
+      break;
+    }
+  }
+
+  return {
+    referenceMin,
+    referenceMax,
+    unit
+  };
 };
 
 const parseSingleRow = (rawRow: string, confidence: number): ParsedFallbackRow | null => {
@@ -462,7 +697,7 @@ const parseSingleRow = (rawRow: string, confidence: number): ParsedFallbackRow |
     return null;
   }
 
-  let markerName = cleanMarkerName(baseMatch[1]);
+  const markerName = cleanMarkerName(baseMatch[1]);
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -473,53 +708,161 @@ const parseSingleRow = (rawRow: string, confidence: number): ParsedFallbackRow |
   }
 
   const rest = cleanWhitespace(baseMatch[3] ?? "");
-  let referenceMin: number | null = null;
-  let referenceMax: number | null = null;
-  let unit = "";
+  const parsedReference = extractReferenceAndUnit(rest);
 
-  const rangeMatch = rest.match(/(?:^|\s)(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)(?:\s+([A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*))?/i);
-  if (rangeMatch) {
-    referenceMin = safeNumber(rangeMatch[1]);
-    referenceMax = safeNumber(rangeMatch[2]);
-    if (rangeMatch[3]) {
-      unit = normalizeUnit(rangeMatch[3]);
+  return {
+    markerName,
+    value,
+    unit: parsedReference.unit,
+    referenceMin: parsedReference.referenceMin,
+    referenceMax: parsedReference.referenceMax,
+    confidence
+  };
+};
+
+const looksLikeNonResultLine = (line: string): boolean => {
+  if (!line || line.length < 3) {
+    return true;
+  }
+
+  if (
+    /^(?:page|pagina)\s+\d+\b/i.test(line) ||
+    /\b(?:reference range|units?|resultaat|report|laboratory|specimen|sample type|patient|address|telephone|fax)\b/i.test(line)
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:collected|received|report date|sample date|collection times?|date of birth|dob)\b/i.test(line) &&
+    /\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{2,4}/.test(line)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const shouldKeepParsedRow = (row: ParsedFallbackRow): boolean => {
+  if (
+    /\b(?:report|sample|date|patient|doctor|laboratory|result|normal|range|collection|precision analytical|daily free cortisol pattern|described|section|comment|defines|followed by|levels below)\b/i.test(
+      row.markerName
+    )
+  ) {
+    return false;
+  }
+
+  if (/\bN\/A\b/i.test(row.markerName) || /\bwww\./i.test(row.markerName)) {
+    return false;
+  }
+
+  if (row.unit || row.referenceMin !== null || row.referenceMax !== null) {
+    return true;
+  }
+  const canonical = canonicalizeMarker(row.markerName);
+  return IMPORTANT_MARKERS.has(canonical);
+};
+
+const parseTwoLineRow = (line: string, nextLine: string): ParsedFallbackRow | null => {
+  const markerAndValue = line.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)$/);
+  if (markerAndValue) {
+    const markerName = cleanMarkerName(markerAndValue[1]);
+    const value = safeNumber(markerAndValue[2]);
+    if (value !== null && !looksLikeNoiseMarker(markerName)) {
+      const parsedReference = extractReferenceAndUnit(nextLine);
+      if (parsedReference.referenceMin !== null || parsedReference.referenceMax !== null || parsedReference.unit) {
+        return {
+          markerName,
+          value,
+          unit: parsedReference.unit,
+          referenceMin: parsedReference.referenceMin,
+          referenceMax: parsedReference.referenceMax,
+          confidence: 0.64
+        };
+      }
     }
   }
 
-  const upperMatch = rest.match(/(?:^|\s)(?:<|≤)\s*(-?\d+(?:[.,]\d+)?)(?:\s+([A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*))?/i);
-  if (upperMatch && referenceMax === null) {
-    referenceMax = safeNumber(upperMatch[1]);
-    if (!unit && upperMatch[2]) {
-      unit = normalizeUnit(upperMatch[2]);
-    }
+  if (/\d/.test(line)) {
+    return null;
   }
 
-  const lowerMatch = rest.match(/(?:^|\s)(?:>|≥)\s*(-?\d+(?:[.,]\d+)?)(?:\s+([A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*))?/i);
-  if (lowerMatch && referenceMin === null) {
-    referenceMin = safeNumber(lowerMatch[1]);
-    if (!unit && lowerMatch[2]) {
-      unit = normalizeUnit(lowerMatch[2]);
-    }
+  const markerName = cleanMarkerName(line);
+  if (looksLikeNoiseMarker(markerName)) {
+    return null;
   }
 
-  if (!unit) {
-    const unitToken = rest
-      .split(" ")
-      .map((token) => token.trim())
-      .find((token) => isLikelyUnit(token));
-    if (unitToken) {
-      unit = normalizeUnit(unitToken);
-    }
+  const compactNext = cleanWhitespace(nextLine);
+  const normalizedNext = compactNext.replace(
+    /^(?:result(?:\s+(?:normal|high|low))?|normal|abnormal|in\s+range|out\s+of\s+range|value)\s+/i,
+    ""
+  );
+  const nextMatch = normalizedNext.match(
+    /^([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?))?\s*(.*)$/i
+  );
+  if (!nextMatch) {
+    return null;
+  }
+
+  const value = safeNumber(nextMatch[1]);
+  if (value === null) {
+    return null;
+  }
+
+  const trailing = STATUS_TOKEN_PATTERN.test(nextMatch[2] ?? "")
+    ? cleanWhitespace(nextMatch[3] ?? "")
+    : cleanWhitespace(`${nextMatch[2] ?? ""} ${nextMatch[3] ?? ""}`);
+  const parsedReference = extractReferenceAndUnit(trailing);
+
+  if (parsedReference.referenceMin === null && parsedReference.referenceMax === null && !parsedReference.unit) {
+    return null;
   }
 
   return {
     markerName,
     value,
-    unit,
-    referenceMin,
-    referenceMax,
-    confidence
+    unit: parsedReference.unit,
+    referenceMin: parsedReference.referenceMin,
+    referenceMax: parsedReference.referenceMax,
+    confidence: 0.62
   };
+};
+
+const parseLineRows = (text: string): ParsedFallbackRow[] => {
+  const lines = text
+    .split("\n")
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean);
+  const rows: ParsedFallbackRow[] = [];
+  const consumed = new Set<number>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (consumed.has(index)) {
+      continue;
+    }
+    const line = lines[index];
+    if (looksLikeNonResultLine(line)) {
+      continue;
+    }
+
+    const direct = parseSingleRow(line, 0.68);
+    if (direct && shouldKeepParsedRow(direct)) {
+      rows.push(direct);
+      continue;
+    }
+
+    const nextLine = lines[index + 1];
+    if (!nextLine) {
+      continue;
+    }
+
+    const twoLine = parseTwoLineRow(line, nextLine);
+    if (twoLine && shouldKeepParsedRow(twoLine)) {
+      rows.push(twoLine);
+      consumed.add(index + 1);
+    }
+  }
+
+  return rows;
 };
 
 const parseIndexedRows = (text: string): ParsedFallbackRow[] => {
@@ -658,11 +1001,15 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
 };
 
 const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
+  const lineRows = parseLineRows(text);
   const indexedRows = parseIndexedRows(text);
-  const looseRows = parseLooseRows(text);
+  const looseRows = lineRows.length < 5 ? parseLooseRows(text) : [];
   const huisartsRows = parseMijnGezondheidRows(text);
 
-  const combinedRows = indexedRows.length > 0 ? [...indexedRows, ...looseRows, ...huisartsRows] : [...looseRows, ...huisartsRows];
+  const combinedRows =
+    indexedRows.length > 0
+      ? [...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
+      : [...lineRows, ...looseRows, ...huisartsRows];
   const markers = dedupeRows(combinedRows);
 
   const confidence =
