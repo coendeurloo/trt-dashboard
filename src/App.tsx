@@ -5,13 +5,10 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import {
   CartesianGrid,
-  Cell,
   ComposedChart,
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ReferenceArea,
   ResponsiveContainer,
   Tooltip,
@@ -72,14 +69,11 @@ import {
 import { buildCsv } from "./csvExport";
 import { CARDIO_PRIORITY_MARKERS, FEEDBACK_EMAIL, PRIMARY_MARKERS, PROTOCOL_MARKER_CATEGORIES, TAB_ITEMS } from "./constants";
 import AlertTrendMiniChart from "./components/AlertTrendMiniChart";
-import ComparisonChart from "./components/ComparisonChart";
 import DoseProjectionChart from "./components/DoseProjectionChart";
 import ExtractionReviewTable from "./components/ExtractionReviewTable";
-import MarkerChartCard from "./components/MarkerChartCard";
 import MarkerInfoBadge from "./components/MarkerInfoBadge";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
-import WelcomeHero from "./components/WelcomeHero";
 import { getDemoReports } from "./demoData";
 import {
   abnormalStatusLabel,
@@ -1104,318 +1098,38 @@ const App = () => {
           </AnimatePresence>
 
           {activeTab === "dashboard" ? (
-            <DashboardView>
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {timeRangeOptions.map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                        appData.settings.timeRange === value
-                          ? "bg-cyan-500/20 text-cyan-200"
-                          : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                      }`}
-                      onClick={() => updateSettings({ timeRange: value })}
-                    >
-                      {label}
-                    </button>
-                  ))}
-
-                  {appData.settings.timeRange === "custom" ? (
-                    <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-2">
-                      <input
-                        type="date"
-                        className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
-                        value={appData.settings.customRangeStart}
-                        onChange={(event) => updateSettings({ customRangeStart: event.target.value })}
-                      />
-                      <input
-                        type="date"
-                        className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
-                        value={appData.settings.customRangeEnd}
-                        onChange={(event) => updateSettings({ customRangeEnd: event.target.value })}
-                      />
-                    </div>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    className={`ml-auto rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                      comparisonMode ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300"
-                    }`}
-                    onClick={() => setComparisonMode((prev) => !prev)}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      <SlidersHorizontal className="h-4 w-4" /> {isNl ? "Multi-marker modus" : "Multi-marker mode"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
-                    onClick={() => updateSettings({ unitSystem: appData.settings.unitSystem === "eu" ? "us" : "eu" })}
-                  >
-                    {isNl ? "Eenheden" : "Units"}: {appData.settings.unitSystem.toUpperCase()}
-                  </button>
-                </div>
-
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.showReferenceRanges}
-                      onChange={(event) => updateSettings({ showReferenceRanges: event.target.checked })}
-                    />
-                    {isNl ? "Referentiebereiken" : "Reference ranges"}
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.showAbnormalHighlights}
-                      onChange={(event) => updateSettings({ showAbnormalHighlights: event.target.checked })}
-                    />
-                    {isNl ? "Afwijkende waarden markeren" : "Abnormal highlights"}
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.showAnnotations}
-                      onChange={(event) => updateSettings({ showAnnotations: event.target.checked })}
-                    />
-                    {isNl ? "Dosisfase-overlay" : "Dose-phase overlays"}
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.showTrtTargetZone}
-                      onChange={(event) => updateSettings({ showTrtTargetZone: event.target.checked })}
-                    />
-                    {isNl ? "TRT-doelzone" : "TRT optimal zone"}
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.showLongevityTargetZone}
-                      onChange={(event) => updateSettings({ showLongevityTargetZone: event.target.checked })}
-                    />
-                    {isNl ? "Longevity-doelzone" : "Longevity zone"}
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={appData.settings.yAxisMode === "data"}
-                      onChange={(event) => updateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
-                    />
-                    {isNl ? "Gebruik data-bereik Y-as" : "Use data-range Y-axis"}
-                  </label>
-                </div>
-
-                {samplingControlsEnabled ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                      {isNl ? "Meetmoment-filter" : "Sampling filter"}
-                    </span>
-                    {samplingOptions.map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                          appData.settings.samplingFilter === value
-                            ? "bg-cyan-500/20 text-cyan-200"
-                            : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                        }`}
-                        onClick={() => updateSettings({ samplingFilter: value })}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                    <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                      <input
-                        type="checkbox"
-                        checked={appData.settings.compareToBaseline}
-                        onChange={(event) => updateSettings({ compareToBaseline: event.target.checked })}
-                      />
-                      {isNl ? "Vergelijk met baseline" : "Compare to baseline"}
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-
-              {comparisonMode ? (
-                <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <select
-                      className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                      value={leftCompareMarker}
-                      onChange={(event) => setLeftCompareMarker(event.target.value)}
-                    >
-                      {allMarkers.map((marker) => (
-                        <option key={marker} value={marker}>
-                          {getMarkerDisplayName(marker, appData.settings.language)}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                      value={rightCompareMarker}
-                      onChange={(event) => setRightCompareMarker(event.target.value)}
-                    >
-                      {allMarkers.map((marker) => (
-                        <option key={marker} value={marker}>
-                          {getMarkerDisplayName(marker, appData.settings.language)}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-3 py-2 text-xs text-slate-300 sm:text-sm">
-                      <input
-                        type="checkbox"
-                        checked={appData.settings.comparisonScale === "normalized"}
-                        onChange={(event) =>
-                          updateSettings({
-                            comparisonScale: event.target.checked ? "normalized" : "absolute"
-                          })
-                        }
-                      />
-                      {appData.settings.language === "nl" ? "Genormaliseerde schaal (0-100%)" : "Normalized scale (0-100%)"}
-                    </label>
-                  </div>
-
-                  <ComparisonChart
-                    leftMarker={leftCompareMarker}
-                    rightMarker={rightCompareMarker}
-                    reports={visibleReports}
-                    settings={appData.settings}
-                    language={appData.settings.language}
-                  />
-                </div>
-              ) : null}
-
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-                <div className="mb-3 flex gap-2">
-                  <button
-                    type="button"
-                    className={`rounded-md px-3 py-1.5 text-sm ${
-                      dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-                    }`}
-                    onClick={() => setDashboardView("primary")}
-                  >
-                    {isNl ? "Primaire markers" : "Primary markers"}
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-md px-3 py-1.5 text-sm ${
-                      dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-                    }`}
-                    onClick={() => setDashboardView("all")}
-                  >
-                    {isNl ? "Alle markers" : "All markers"}
-                  </button>
-                </div>
-
-                {dashboardView === "primary" ? (
-                  <div className="mb-1" />
-                ) : null}
-
-                {reports.length === 0 && !isShareMode ? (
-                  <WelcomeHero
-                    language={appData.settings.language}
-                    onLoadDemo={loadDemoData}
-                    onUploadClick={scrollToUploadPanel}
-                  />
-                ) : visibleReports.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">
-                    <p className="text-base font-semibold text-slate-200">{isNl ? "Geen data in huidige filter" : "No data in current filter"}</p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {isNl
-                        ? samplingControlsEnabled
-                          ? "Pas tijdsbereik of meetmoment-filter aan om data te tonen."
-                          : "Pas het tijdsbereik aan om data te tonen."
-                        : samplingControlsEnabled
-                          ? "Change time range or sampling filter to show data."
-                          : "Change time range to show data."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {(dashboardView === "primary" ? primaryMarkers : allMarkers).map((marker, index) => {
-                      const points = chartPointsForMarker(marker);
-                      return (
-                        <MarkerChartCard
-                          key={marker}
-                          marker={marker}
-                          points={points}
-                          colorIndex={index}
-                          settings={appData.settings}
-                          language={appData.settings.language}
-                          phaseBlocks={dosePhaseBlocks}
-                          alertCount={alertsByMarker[marker]?.length ?? 0}
-                          trendSummary={trendByMarker[marker] ?? null}
-                          percentChange={markerPercentChange(marker)}
-                          baselineDelta={markerBaselineDelta(marker)}
-                          isCalculatedMarker={points.length > 0 && points.every((point) => point.isCalculated)}
-                          onOpenLarge={() => setExpandedMarker(marker)}
-                          onRenameMarker={openRenameDialog}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-
-                {dashboardView === "primary" ? (
-                  <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
-                    <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
-                      <div className="relative mx-auto h-28 w-28">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: "score", value: trtStability.score ?? 0 },
-                                { name: "rest", value: 100 - (trtStability.score ?? 0) }
-                              ]}
-                              dataKey="value"
-                              innerRadius={34}
-                              outerRadius={48}
-                              stroke="none"
-                              startAngle={90}
-                              endAngle={-270}
-                            >
-                              <Cell fill={stabilityColor(trtStability.score)} />
-                              <Cell fill="#334155" />
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                          <span className="text-xl font-semibold text-slate-100">{trtStability.score === null ? "-" : trtStability.score}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-100">TRT Stability Index</p>
-                          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
-                            {trtStability.score === null ? "-" : `${trtStability.score}`}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-300">
-                          {isNl
-                            ? "Dit is een rust-score van je kern TRT-markers over tijd (Testosteron, Estradiol, Hematocriet, SHBG)."
-                            : "This is a steadiness score of your core TRT markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {isNl
-                            ? "Belangrijk: het zegt niets over ‘goed’ of ‘slecht’, alleen hoe stabiel je patroon is."
-                            : "Important: it does not mean 'good' or 'bad'; it only reflects how stable your pattern is."}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {isNl
-                            ? "Snelle interpretatie: 80-100 = vrij stabiel, 60-79 = matig stabiel, <60 = duidelijk wisselend."
-                            : "Quick interpretation: 80-100 = fairly stable, 60-79 = moderately stable, <60 = clearly variable."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </DashboardView>
+            <DashboardView
+              reports={reports}
+              visibleReports={visibleReports}
+              allMarkers={allMarkers}
+              primaryMarkers={primaryMarkers}
+              dosePhaseBlocks={dosePhaseBlocks}
+              trendByMarker={trendByMarker}
+              alertsByMarker={alertsByMarker}
+              trtStability={trtStability}
+              settings={appData.settings}
+              language={appData.settings.language}
+              isShareMode={isShareMode}
+              samplingControlsEnabled={samplingControlsEnabled}
+              dashboardView={dashboardView}
+              comparisonMode={comparisonMode}
+              leftCompareMarker={leftCompareMarker}
+              rightCompareMarker={rightCompareMarker}
+              timeRangeOptions={timeRangeOptions}
+              samplingOptions={samplingOptions}
+              onUpdateSettings={updateSettings}
+              onDashboardViewChange={setDashboardView}
+              onComparisonModeChange={setComparisonMode}
+              onLeftCompareMarkerChange={setLeftCompareMarker}
+              onRightCompareMarkerChange={setRightCompareMarker}
+              onExpandMarker={setExpandedMarker}
+              onRenameMarker={openRenameDialog}
+              chartPointsForMarker={chartPointsForMarker}
+              markerPercentChange={markerPercentChange}
+              markerBaselineDelta={markerBaselineDelta}
+              onLoadDemo={loadDemoData}
+              onUploadClick={scrollToUploadPanel}
+            />
           ) : null}
 
           {activeTab === "alerts" ? (
