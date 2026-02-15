@@ -27,7 +27,7 @@ export const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "dark",
+  theme: "light",
   unitSystem: "eu",
   language: "en",
   tooltipDetailMode: "compact",
