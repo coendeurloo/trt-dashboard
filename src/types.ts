@@ -24,6 +24,7 @@ export interface MarkerValue {
   abnormal: "low" | "high" | "normal" | "unknown";
   confidence: number;
   isCalculated?: boolean;
+  source?: "measured" | "calculated";
 }
 
 export interface ReportAnnotations {
@@ -55,7 +56,9 @@ export interface AppSettings {
   theme: ThemeMode;
   unitSystem: UnitSystem;
   language: AppLanguage;
+  tooltipDetailMode: "compact" | "full";
   enableSamplingControls: boolean;
+  enableCalculatedFreeTestosterone: boolean;
   showReferenceRanges: boolean;
   showAbnormalHighlights: boolean;
   showAnnotations: boolean;

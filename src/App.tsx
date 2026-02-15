@@ -1,4 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { addDays, format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDropzone } from "react-dropzone";
@@ -66,7 +67,6 @@ import {
   calculatePercentVsBaseline,
   classifyMarkerTrend,
   computeTrtStabilityIndex,
-  enrichReportWithCalculatedMarkers,
   enrichReportsWithCalculatedMarkers,
   estimateDoseResponse,
   filterReportsBySampling,
@@ -76,6 +76,7 @@ import { analyzeLabDataWithClaude } from "./aiAnalysis";
 import { buildCsv } from "./csvExport";
 import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import { getMarkerDisplayName, getMarkerMeta, getTabLabel, t } from "./i18n";
+import trtLogo from "./assets/trt-logo.png";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
@@ -184,11 +185,18 @@ const normalizeAnalysisTextForDisplay = (raw: string): string => {
     .trim();
 };
 
-const MARKERS_EXPECTED_TO_MOVE_WITH_TESTOSTERONE_DOSE = new Set([
-  "Testosterone",
-  "Free Testosterone",
-  "Free Androgen Index"
-]);
+const compactTooltipText = (value: string, maxLength = 64): string => {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "-";
+  }
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(1, maxLength - 1))}\u2026`;
+};
+
+const clampNumber = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
 
 const stabilityColor = (score: number | null): string => {
   if (score === null) {
@@ -208,54 +216,6 @@ const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
   Lipids: ["LDL Cholesterol", "HDL Cholesterol", "Cholesterol", "Triglyceriden", "Apolipoprotein B", "Non-HDL Cholesterol"],
   Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
   Inflammation: ["CRP"]
-};
-
-const estimateFromScenarios = (
-  scenarios: Array<{ dose: number; estimatedValue: number }>,
-  dose: number
-): number | null => {
-  if (scenarios.length === 0 || !Number.isFinite(dose)) {
-    return null;
-  }
-  const ordered = [...scenarios].sort((left, right) => left.dose - right.dose);
-  if (ordered.length === 1) {
-    return ordered[0].estimatedValue;
-  }
-
-  if (dose <= ordered[0].dose) {
-    const left = ordered[0];
-    const right = ordered[1];
-    const span = right.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return left.estimatedValue;
-    }
-    return left.estimatedValue + ((dose - left.dose) / span) * (right.estimatedValue - left.estimatedValue);
-  }
-
-  const last = ordered[ordered.length - 1];
-  if (dose >= last.dose) {
-    const left = ordered[ordered.length - 2];
-    const span = last.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return last.estimatedValue;
-    }
-    return left.estimatedValue + ((dose - left.dose) / span) * (last.estimatedValue - left.estimatedValue);
-  }
-
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const left = ordered[index];
-    const right = ordered[index + 1];
-    if (dose < left.dose || dose > right.dose) {
-      continue;
-    }
-    const span = right.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return left.estimatedValue;
-    }
-    return left.estimatedValue + ((dose - left.dose) / span) * (right.estimatedValue - left.estimatedValue);
-  }
-
-  return last.estimatedValue;
 };
 
 const normalizeMarkerKey = (value: string): string =>
@@ -891,28 +851,84 @@ interface MarkerInfoBadgeProps {
 
 const MarkerInfoBadge = ({ marker, language }: MarkerInfoBadgeProps) => {
   const meta = getMarkerMeta(marker, language);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    const TOOLTIP_WIDTH = 288;
+    const TOOLTIP_HEIGHT_ESTIMATE = 230;
+    const GAP = 10;
+    const EDGE_PADDING = 10;
+
+    const updatePosition = () => {
+      if (!triggerRef.current) {
+        return;
+      }
+      const rect = triggerRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const maxLeft = Math.max(EDGE_PADDING, viewportWidth - TOOLTIP_WIDTH - EDGE_PADDING);
+      const left = clampNumber(rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2, EDGE_PADDING, maxLeft);
+      const placeBelow = rect.bottom + GAP + TOOLTIP_HEIGHT_ESTIMATE <= viewportHeight - EDGE_PADDING;
+      const top = placeBelow
+        ? rect.bottom + GAP
+        : Math.max(EDGE_PADDING, rect.top - TOOLTIP_HEIGHT_ESTIMATE - GAP);
+
+      setTooltipPosition({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
+  const tooltip = isOpen && tooltipPosition && typeof document !== "undefined"
+    ? createPortal(
+        <div
+          className="marker-info-tooltip pointer-events-none fixed z-[120] w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-left text-xs text-slate-200 shadow-xl"
+          style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+        >
+          <p className="font-semibold text-slate-100">{meta.title}</p>
+          <p className="mt-1">{meta.what}</p>
+          <p className="mt-1 text-slate-300">
+            <strong>{language === "nl" ? "Waarom meten:" : "Why measured:"}</strong> {meta.why}
+          </p>
+          <p className="mt-1 text-slate-300">
+            <strong>{language === "nl" ? "Bij tekort/laag:" : "If low:"}</strong> {meta.low}
+          </p>
+          <p className="mt-1 text-slate-300">
+            <strong>{language === "nl" ? "Bij teveel/hoog:" : "If high:"}</strong> {meta.high}
+          </p>
+        </div>,
+        document.body
+      )
+    : null;
+
   return (
-    <div className="group relative inline-flex">
+    <div className="inline-flex">
       <button
         type="button"
+        ref={triggerRef}
         className="rounded-full p-0.5 text-slate-400 transition hover:text-cyan-200"
         aria-label={meta.title}
+        aria-expanded={isOpen}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setIsOpen(false)}
       >
         <Info className="h-3.5 w-3.5" />
       </button>
-      <div className="marker-info-tooltip pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-72 -translate-x-1/2 rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-left text-xs text-slate-200 shadow-xl group-hover:block">
-        <p className="font-semibold text-slate-100">{meta.title}</p>
-        <p className="mt-1">{meta.what}</p>
-        <p className="mt-1 text-slate-300">
-          <strong>{language === "nl" ? "Waarom meten:" : "Why measured:"}</strong> {meta.why}
-        </p>
-        <p className="mt-1 text-slate-300">
-          <strong>{language === "nl" ? "Bij tekort/laag:" : "If low:"}</strong> {meta.low}
-        </p>
-        <p className="mt-1 text-slate-300">
-          <strong>{language === "nl" ? "Bij teveel/hoog:" : "If high:"}</strong> {meta.high}
-        </p>
-      </div>
+      {tooltip}
     </div>
   );
 };
@@ -935,6 +951,7 @@ const MarkerTrendChart = ({
   const yAxisCandidates = points.map((point) => point.value);
   const yDomain = buildYAxisDomain(yAxisCandidates, settings.yAxisMode);
   const availableKeys = new Set(points.map((point) => point.key));
+  const compactTooltip = settings.tooltipDetailMode === "compact";
   const phaseBlocksForSeries = phaseBlocks.filter(
     (block) => availableKeys.has(block.fromKey) || availableKeys.has(block.toKey)
   );
@@ -995,22 +1012,38 @@ const MarkerTrendChart = ({
           domain={yDomain ?? ["auto", "auto"]}
         />
         <Tooltip
+          offset={18}
+          allowEscapeViewBox={{ x: true, y: true }}
+          wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
+          cursor={{ stroke: "#334155", strokeDasharray: "4 3", strokeWidth: 1 }}
           content={({ active, payload }) => {
             const point = payload?.[0]?.payload as MarkerSeriesPoint | undefined;
             if (!active || !point) {
               return null;
             }
+            const protocolText = compactTooltipText(point.context.protocol, 54);
             return (
-              <div className="chart-tooltip min-w-[220px] rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-xl">
+              <div
+                className={`chart-tooltip rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-xs text-slate-200 shadow-xl ${
+                  compactTooltip ? "w-[210px]" : "w-[300px]"
+                }`}
+              >
                 <p className="font-semibold text-slate-100">{formatDate(point.date)}</p>
                 <p className="mt-1 text-sm text-cyan-200">
                   {markerLabel}: <strong>{formatAxisTick(point.value)}</strong> {point.unit}
                 </p>
-                <div className="mt-2 space-y-1 text-slate-300">
+                <div className="mt-1.5 space-y-1 text-slate-300">
                   <p>{language === "nl" ? "Dosis" : "Dose"}: {point.context.dosageMgPerWeek === null ? "-" : `${point.context.dosageMgPerWeek} mg/week`}</p>
-                  <p>Protocol: {point.context.protocol || "-"}</p>
-                  <p>{language === "nl" ? "Supplementen" : "Supplements"}: {point.context.supplements || "-"}</p>
-                  <p>{language === "nl" ? "Symptomen" : "Symptoms"}: {point.context.symptoms || "-"}</p>
+                  {compactTooltip ? (
+                    <p>Protocol: {protocolText}</p>
+                  ) : (
+                    <>
+                      <p>Protocol: {point.context.protocol || "-"}</p>
+                      <p>{language === "nl" ? "Supplementen" : "Supplements"}: {point.context.supplements || "-"}</p>
+                      <p>{language === "nl" ? "Symptomen" : "Symptoms"}: {point.context.symptoms || "-"}</p>
+                      <p>{language === "nl" ? "Notities" : "Notes"}: {point.context.notes || "-"}</p>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -1709,8 +1742,14 @@ const App = () => {
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const reports = useMemo(
-    () => sortReportsChronological(enrichReportsWithCalculatedMarkers(appData.reports)),
-    [appData.reports]
+    () =>
+      sortReportsChronological(
+        enrichReportsWithCalculatedMarkers(appData.reports, {
+          enableCalculatedFreeTestosterone: appData.settings.enableCalculatedFreeTestosterone,
+          logCalculatedFreeTestosteroneDebug: appData.settings.enableCalculatedFreeTestosterone
+        })
+      ),
+    [appData.reports, appData.settings.enableCalculatedFreeTestosterone]
   );
 
   const rangeFilteredReports = useMemo(
@@ -1785,7 +1824,7 @@ const App = () => {
     if (!base.includes(selectedCardioMarker)) {
       base.push(selectedCardioMarker);
     }
-    return base;
+    return Array.from(new Set(base));
   }, [allMarkers]);
 
   const baselineReport = useMemo(() => reports.find((report) => report.isBaseline) ?? null, [reports]);
@@ -2162,13 +2201,12 @@ const App = () => {
           },
       extraction: draft.extraction
     };
-    const enrichedReport = enrichReportWithCalculatedMarkers(report);
-    const incomingCanonicalMarkers = Array.from(new Set(enrichedReport.markers.map((marker) => marker.canonicalMarker)));
+    const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));
     const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
     setAppData((prev) => ({
       ...prev,
-      reports: sortReportsChronological([...prev.reports, enrichedReport])
+      reports: sortReportsChronological([...prev.reports, report])
     }));
     if (suggestions.length > 0) {
       setMarkerSuggestions((current) => {
@@ -2297,7 +2335,7 @@ const App = () => {
 
   const applyImportedData = (incomingRaw: unknown, mode: "merge" | "replace") => {
     const incoming = coerceStoredAppData(incomingRaw as Record<string, unknown>);
-    const importedReports = sortReportsChronological(enrichReportsWithCalculatedMarkers(incoming.reports));
+    const importedReports = sortReportsChronological(incoming.reports);
     const incomingCanonicalMarkers = Array.from(
       new Set(importedReports.flatMap((report) => report.markers.map((marker) => marker.canonicalMarker)))
     );
@@ -2404,7 +2442,20 @@ const App = () => {
   };
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify(appData, null, 2)], { type: "application/json" });
+    const reportsForExport = reports.map((report) => ({
+      ...report,
+      markers: report.markers
+        .filter((marker) => appData.settings.enableCalculatedFreeTestosterone || !marker.isCalculated)
+        .map((marker) => ({
+          ...marker,
+          source: marker.isCalculated ? "calculated" : "measured"
+        }))
+    }));
+    const exportPayload = {
+      ...appData,
+      reports: reportsForExport
+    };
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -2625,9 +2676,8 @@ const App = () => {
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
         <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
           <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
-            <p className="brand-kicker text-xs uppercase tracking-[0.14em] text-cyan-200">TRT Lab Tracker</p>
-            <h1 className="brand-title mt-1 text-xl font-bold text-white">Blood Work Timeline</h1>
-            <p className="brand-subtitle mt-1 text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
+            <img src={trtLogo} alt="TRT Lab Tracker" className="brand-logo mx-auto w-full max-w-[230px]" />
+            <p className="brand-subtitle mt-2 text-center text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
           </div>
 
           <nav className="space-y-1.5">
@@ -2715,7 +2765,7 @@ const App = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-300">{t(appData.settings.language, "trtStabilityShort")}</span>
-                <span className="font-semibold text-cyan-200">{trtStability.score === null ? "-" : `${trtStability.score}/100`}</span>
+                <span className="font-semibold text-cyan-200">{trtStability.score === null ? "-" : `${trtStability.score}`}</span>
               </div>
             </div>
           </div>
@@ -3045,7 +3095,7 @@ const App = () => {
                 {dashboardView === "primary" ? (
                   <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
                     <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
-                      <div className="mx-auto h-28 w-28">
+                      <div className="relative mx-auto h-28 w-28">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
@@ -3065,12 +3115,15 @@ const App = () => {
                             </Pie>
                           </PieChart>
                         </ResponsiveContainer>
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <span className="text-xl font-semibold text-slate-100">{trtStability.score === null ? "-" : trtStability.score}</span>
+                        </div>
                       </div>
                       <div>
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-slate-100">TRT Stability Index</p>
                           <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
-                            {trtStability.score === null ? "-" : `${trtStability.score}/100`}
+                            {trtStability.score === null ? "-" : `${trtStability.score}`}
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-300">
@@ -3495,32 +3548,20 @@ const App = () => {
                   </p>
                 ) : (
                   <ul className="mt-3 space-y-2 text-sm">
-                    {dosePredictions.slice(0, 10).map((prediction) => {
+                    {dosePredictions.map((prediction) => {
                       const markerLabel = getMarkerDisplayName(prediction.marker, appData.settings.language);
                       const targetDose = hasCustomDose && customDoseValue !== null ? customDoseValue : prediction.suggestedDose;
-                      const scenarioEstimate = estimateFromScenarios(prediction.scenarios, targetDose);
-                      let targetEstimate = Number.isFinite(scenarioEstimate ?? NaN)
-                        ? (scenarioEstimate as number)
-                        : prediction.suggestedEstimate;
-                      if (MARKERS_EXPECTED_TO_MOVE_WITH_TESTOSTERONE_DOSE.has(prediction.marker)) {
-                        // Force directional consistency for androgen markers.
-                        if (prediction.currentDose > 0 && targetDose < prediction.currentDose) {
-                          const ratioEstimate = prediction.currentEstimate * (targetDose / prediction.currentDose);
-                          targetEstimate = Math.min(targetEstimate, ratioEstimate);
-                          if (targetEstimate >= prediction.currentEstimate) {
-                            targetEstimate = prediction.currentEstimate - Math.max(Math.abs(prediction.currentEstimate) * 0.01, 0.05);
-                          }
-                        } else if (prediction.currentDose > 0 && targetDose > prediction.currentDose) {
-                          const ratioEstimate = prediction.currentEstimate * (targetDose / prediction.currentDose);
-                          targetEstimate = Math.max(targetEstimate, ratioEstimate);
-                          if (targetEstimate <= prediction.currentEstimate) {
-                            targetEstimate = prediction.currentEstimate + Math.max(Math.abs(prediction.currentEstimate) * 0.01, 0.05);
-                          }
-                        }
-                      }
-                      const targetPercentChange = calculatePercentChange(targetEstimate, prediction.currentEstimate);
+                      const canPredict = prediction.status === "clear";
+                      const targetEstimate =
+                        canPredict
+                          ? Math.max(0, prediction.intercept + prediction.slopePerMg * targetDose)
+                          : null;
+                      const targetPercentChange =
+                        canPredict && targetEstimate !== null
+                          ? calculatePercentChange(targetEstimate, prediction.currentEstimate)
+                          : null;
                       const currentEstimate = `${formatAxisTick(prediction.currentEstimate)} ${prediction.unit}`;
-                      const projectedEstimate = `${formatAxisTick(targetEstimate)} ${prediction.unit}`;
+                      const projectedEstimate = targetEstimate === null ? "-" : `${formatAxisTick(targetEstimate)} ${prediction.unit}`;
                       const pctText =
                         targetPercentChange === null
                           ? isNl
@@ -3539,28 +3580,78 @@ const App = () => {
                             : isNl
                               ? "daling"
                               : "decrease";
+                      const correlationText =
+                        prediction.correlationR === null
+                          ? isNl
+                            ? "n.v.t."
+                            : "n/a"
+                          : `${prediction.correlationR > 0 ? "+" : ""}${formatAxisTick(prediction.correlationR)}`;
+                      const usedDatesText =
+                        prediction.usedReportDates.length === 0
+                          ? "-"
+                          : prediction.usedReportDates.join(", ");
+                      const excludedSummary =
+                        prediction.excludedPoints.length === 0
+                          ? null
+                          : prediction.excludedPoints
+                              .slice(0, 3)
+                              .map((item) => `${item.date}: ${item.reason}`)
+                              .join(" | ");
                       return (
                         <li key={prediction.marker} className="rounded-lg bg-slate-800/70 px-3 py-2 text-slate-200">
                           <p className="font-medium">{markerLabel}</p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-200">
-                            {isNl
-                              ? `Als je dosis rond ${formatAxisTick(targetDose)} mg/week ligt, verwacht dit model dat ${markerLabel} ongeveer ${projectedEstimate} wordt. Ter vergelijking: bij ongeveer ${formatAxisTick(prediction.currentDose)} mg/week is de modelwaarde nu ${currentEstimate}. Dat is waarschijnlijk een ${directionText} van ${pctText}.`
-                              : `If your dose is around ${formatAxisTick(targetDose)} mg/week, this model expects ${markerLabel} to be about ${projectedEstimate}. For reference, at around ${formatAxisTick(prediction.currentDose)} mg/week the current model value is ${currentEstimate}. That is likely a ${directionText} of ${pctText}.`}
+                          {canPredict ? (
+                            <p className="mt-1 text-xs leading-relaxed text-slate-200">
+                              {isNl
+                                ? `Als je dosis rond ${formatAxisTick(targetDose)} mg/week ligt, verwacht dit model dat ${markerLabel} ongeveer ${projectedEstimate} wordt. Ter vergelijking: bij ongeveer ${formatAxisTick(prediction.currentDose)} mg/week is de modelwaarde nu ${currentEstimate}. Dat is waarschijnlijk een ${directionText} van ${pctText}.`
+                                : `If your dose is around ${formatAxisTick(targetDose)} mg/week, this model expects ${markerLabel} to be about ${projectedEstimate}. For reference, at around ${formatAxisTick(prediction.currentDose)} mg/week the current model value is ${currentEstimate}. That is likely a ${directionText} of ${pctText}.`}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-xs leading-relaxed text-amber-200">
+                              {isNl
+                                ? `Nog geen betrouwbare dosis-schatting voor ${markerLabel}. ${prediction.statusReason}`
+                                : `No reliable dose estimate yet for ${markerLabel}. ${prediction.statusReason}`}
+                            </p>
+                          )}
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            {isNl ? "Betrouwbaarheid van deze inschatting" : "Confidence of this estimate"}: {confidenceLabel(prediction.confidence)}{" "}
+                            (n={prediction.sampleCount}, r={correlationText}, R²={formatAxisTick(prediction.rSquared)}, {prediction.modelType})
                           </p>
                           <p className="mt-1 text-[11px] text-slate-400">
-                            {isNl ? "Betrouwbaarheid van deze inschatting" : "Confidence of this estimate"}: {confidenceLabel(prediction.confidence)} (R²=
-                            {formatAxisTick(prediction.rSquared)})
+                            {isNl ? "Debug (gebruikte data)" : "Debug (used data)"}:{" "}
+                            {isNl ? "helling" : "slope"}={formatAxisTick(prediction.slopePerMg)},{" "}
+                            {isNl ? "intercept" : "intercept"}={formatAxisTick(prediction.intercept)},{" "}
+                            {isNl ? "data-datums" : "dates"}={usedDatesText}
                           </p>
-                          <div className="mt-2">
-                            <DoseProjectionChart
-                              prediction={prediction}
-                              reports={visibleReports}
-                              settings={appData.settings}
-                              language={appData.settings.language}
-                              targetDose={targetDose}
-                              targetEstimate={targetEstimate}
-                            />
-                          </div>
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            {isNl ? "Samplingbasis" : "Sampling basis"}:{" "}
+                            {prediction.samplingMode === "trough"
+                              ? isNl
+                                ? "Trough-only"
+                                : "Trough-only"
+                              : isNl
+                                ? "Alle timings"
+                                : "All timings"}
+                            {prediction.samplingWarning ? ` • ${prediction.samplingWarning}` : ""}
+                          </p>
+                          {excludedSummary ? (
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {isNl ? "Uitgesloten punten" : "Excluded points"}: {excludedSummary}
+                              {prediction.excludedPoints.length > 3 ? ` +${prediction.excludedPoints.length - 3}` : ""}
+                            </p>
+                          ) : null}
+                          {canPredict && targetEstimate !== null ? (
+                            <div className="mt-2">
+                              <DoseProjectionChart
+                                prediction={prediction}
+                                reports={visibleReports}
+                                settings={appData.settings}
+                                language={appData.settings.language}
+                                targetDose={targetDose}
+                                targetEstimate={targetEstimate}
+                              />
+                            </div>
+                          ) : null}
                         </li>
                       );
                     })}
@@ -3913,7 +4004,8 @@ const App = () => {
                     </div>
                   )}
 
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-slate-700">
+                  <div className="mt-3 overflow-visible rounded-lg border border-slate-700">
+                    <div className="overflow-x-auto overflow-y-visible">
                     <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
                       <thead className="bg-slate-900/70 text-slate-300">
                         <tr>
@@ -4000,6 +4092,7 @@ const App = () => {
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                   </>
                   ) : null}
@@ -4213,6 +4306,22 @@ const App = () => {
                     </select>
                   </label>
 
+                  <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
+                    <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Tooltip-detail", "Tooltip detail")}</span>
+                    <select
+                      className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+                      value={appData.settings.tooltipDetailMode}
+                      onChange={(event) =>
+                        updateSettings({
+                          tooltipDetailMode: event.target.value as AppSettings["tooltipDetailMode"]
+                        })
+                      }
+                    >
+                      <option value="compact">{tr("Compact (snel overzicht)", "Compact (quick overview)")}</option>
+                      <option value="full">{tr("Uitgebreid (alle context)", "Extended (full context)")}</option>
+                    </select>
+                  </label>
+
                   <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
                     <span className="block text-xs uppercase tracking-wide text-slate-400">
                       {tr("Geavanceerde meetmoment-filters", "Advanced sampling filters")}
@@ -4229,6 +4338,26 @@ const App = () => {
                       {tr(
                         "Standaard uit. Als uitgeschakeld worden trough/peak- en baseline-opties verborgen.",
                         "Off by default. When disabled, trough/peak and baseline options are hidden."
+                      )}
+                    </p>
+                  </label>
+
+                  <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
+                    <span className="block text-xs uppercase tracking-wide text-slate-400">
+                      {tr("Afgeleide marker", "Derived marker")}
+                    </span>
+                    <div className="mt-2 flex items-center gap-2 text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={appData.settings.enableCalculatedFreeTestosterone}
+                        onChange={(event) => updateSettings({ enableCalculatedFreeTestosterone: event.target.checked })}
+                      />
+                      <span>{tr("Bereken Vrij Testosteron (afgeleid)", "Enable calculated Free Testosterone (derived)")}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {tr(
+                        "Berekend uit totaal testosteron + SHBG (+ albumine). Vervangt gemeten vrij testosteron nooit en vult alleen ontbrekende punten aan.",
+                        "Computed from Total T + SHBG (+ Albumin). Never replaces measured Free T; it only fills missing points."
                       )}
                     </p>
                   </label>

@@ -22,7 +22,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   unitSystem: "eu",
   language: "en",
+  tooltipDetailMode: "compact",
   enableSamplingControls: false,
+  enableCalculatedFreeTestosterone: false,
   showReferenceRanges: true,
   showAbnormalHighlights: true,
   showAnnotations: true,
@@ -57,7 +59,12 @@ const RAW_ALIASES: Record<string, string[]> = {
     "testosterone, free",
     "free test",
     "free t",
-    "testosterone free calculated"
+    "testosterone free calculated",
+    "free testosterone calculated",
+    "calculated free testosterone",
+    "free testosterone (calculated)",
+    "vrij testosteron berekend",
+    "vrij testosteron (berekend)"
   ],
   Estradiol: ["estradiol", "e2", "oestradiol", "oestrodiol"],
   Hematocrit: ["hematocrit", "hematokriet", "hematocriet", "hct"],
