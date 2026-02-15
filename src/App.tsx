@@ -79,6 +79,7 @@ import MarkerChartCard from "./components/MarkerChartCard";
 import MarkerInfoBadge from "./components/MarkerInfoBadge";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
+import WelcomeHero from "./components/WelcomeHero";
 import { getDemoReports } from "./demoData";
 import {
   abnormalStatusLabel,
@@ -1542,21 +1543,23 @@ const App = () => {
                   <div className="mb-1" />
                 ) : null}
 
-                {visibleReports.length === 0 ? (
+                {reports.length === 0 && !isShareMode ? (
+                  <WelcomeHero
+                    language={appData.settings.language}
+                    onLoadDemo={loadDemoData}
+                    onUploadClick={scrollToUploadPanel}
+                  />
+                ) : visibleReports.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">
                     <p className="text-base font-semibold text-slate-200">{isNl ? "Geen data in huidige filter" : "No data in current filter"}</p>
                     <p className="mt-1 text-sm text-slate-400">
-                      {reports.length === 0
-                        ? isNl
-                          ? "Upload je eerste PDF om TRT-bloedwaardetrends te volgen."
-                          : "Upload your first PDF to start tracking TRT blood work trends."
-                        : isNl
-                          ? samplingControlsEnabled
-                            ? "Pas tijdsbereik of meetmoment-filter aan om data te tonen."
-                            : "Pas het tijdsbereik aan om data te tonen."
-                          : samplingControlsEnabled
-                            ? "Change time range or sampling filter to show data."
-                            : "Change time range to show data."}
+                      {isNl
+                        ? samplingControlsEnabled
+                          ? "Pas tijdsbereik of meetmoment-filter aan om data te tonen."
+                          : "Pas het tijdsbereik aan om data te tonen."
+                        : samplingControlsEnabled
+                          ? "Change time range or sampling filter to show data."
+                          : "Change time range to show data."}
                     </p>
                   </div>
                 ) : (
