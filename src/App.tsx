@@ -193,6 +193,17 @@ const App = () => {
   });
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
+  const isDarkTheme = appData.settings.theme === "dark";
+  const demoBannerClassName = isDarkTheme
+    ? "rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4"
+    : "rounded-2xl border border-cyan-200 bg-cyan-50 p-3 sm:p-4";
+  const demoBannerTextClassName = isDarkTheme ? "flex items-start gap-2 text-sm text-cyan-100" : "flex items-start gap-2 text-sm text-cyan-900";
+  const clearDemoButtonClassName = isDarkTheme
+    ? "rounded-md border border-cyan-500/50 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
+    : "rounded-md border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-900 hover:border-cyan-400 hover:bg-cyan-100";
+  const uploadOwnPdfButtonClassName = isDarkTheme
+    ? "rounded-md border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+    : "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-cyan-400 hover:text-cyan-900";
 
   const {
     isAnalyzingLabs,
@@ -759,10 +770,10 @@ const App = () => {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4"
+                className={demoBannerClassName}
               >
                 <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-start gap-2 text-sm text-cyan-100">
+                  <div className={demoBannerTextClassName}>
                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
                     <p>
                       {isDemoMode
@@ -779,7 +790,7 @@ const App = () => {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded-md border border-cyan-500/50 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
+                      className={clearDemoButtonClassName}
                       onClick={clearDemoData}
                     >
                       {tr("Wis demo & begin opnieuw", "Clear demo & start fresh")}
@@ -787,7 +798,7 @@ const App = () => {
                     {isDemoMode ? (
                       <button
                         type="button"
-                        className="rounded-md border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+                        className={uploadOwnPdfButtonClassName}
                         onClick={clearDemoAndUpload}
                       >
                         {tr("Upload je eigen PDF", "Upload your own PDF")}
