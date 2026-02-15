@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { RequestType, checkRateLimit } from "./rateLimit";
+import { checkRateLimit } from "./rateLimit";
 
 interface ClaudeMessagePayload {
   model: string;
@@ -103,7 +103,7 @@ const getClientIp = (req: IncomingMessage): string => {
   return req.socket.remoteAddress ?? "unknown";
 };
 
-const inferRequestType = (body: ProxyRequestBody): RequestType => {
+const inferRequestType = (body: ProxyRequestBody): "analysis" | "extraction" => {
   if (body.requestType === "analysis" || body.requestType === "extraction") {
     return body.requestType;
   }
