@@ -70,7 +70,7 @@ import {
   getTargetZone
 } from "./analytics";
 import { buildCsv } from "./csvExport";
-import { CARDIO_PRIORITY_MARKERS, FEEDBACK_EMAIL, PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
+import { CARDIO_PRIORITY_MARKERS, FEEDBACK_EMAIL, PRIMARY_MARKERS, PROTOCOL_MARKER_CATEGORIES, TAB_ITEMS } from "./constants";
 import AlertTrendMiniChart from "./components/AlertTrendMiniChart";
 import ComparisonChart from "./components/ComparisonChart";
 import DoseProjectionChart from "./components/DoseProjectionChart";
@@ -84,9 +84,7 @@ import { getDemoReports } from "./demoData";
 import {
   abnormalStatusLabel,
   blankAnnotations,
-  dedupeMarkersInReport,
   formatAxisTick,
-  markerSimilarity,
   normalizeAnalysisTextForDisplay,
   stabilityColor
 } from "./chartHelpers";
@@ -95,10 +93,9 @@ import trtLogo from "./assets/trt-logo.png";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
-import { coerceStoredAppData } from "./storage";
 import { canonicalizeMarker, convertBySystem, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
-import useAppData from "./hooks/useAppData";
+import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
 import useDerivedData from "./hooks/useDerivedData";
 import AlertsView from "./views/AlertsView";
 import AnalysisView from "./views/AnalysisView";
@@ -122,69 +119,8 @@ import {
   deriveAbnormalFlag,
   formatDate,
   safeNumber,
-  sortReportsChronological,
   withinRange
 } from "./utils";
-
-interface MarkerMergeSuggestion {
-  sourceCanonical: string;
-  targetCanonical: string;
-  score: number;
-}
-
-const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
-  Hormones: ["Testosterone", "Free Testosterone", "Estradiol", "SHBG", "Free Androgen Index", "Dihydrotestosteron (DHT)"],
-  Lipids: ["LDL Cholesterol", "HDL Cholesterol", "Cholesterol", "Triglyceriden", "Apolipoprotein B", "Non-HDL Cholesterol"],
-  Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
-  Inflammation: ["CRP"]
-};
-
-const detectMarkerMergeSuggestions = (
-  incomingCanonicalMarkers: string[],
-  existingCanonicalMarkers: string[]
-): MarkerMergeSuggestion[] => {
-  const existingSet = new Set(existingCanonicalMarkers);
-  const suggestions = incomingCanonicalMarkers
-    .map((source) => {
-      if (existingSet.has(source) || source === "Unknown Marker") {
-        return null;
-      }
-      let bestTarget = "";
-      let bestScore = 0;
-      for (const candidate of existingCanonicalMarkers) {
-        if (candidate === source) {
-          continue;
-        }
-        const score = markerSimilarity(source, candidate);
-        if (score > bestScore) {
-          bestScore = score;
-          bestTarget = candidate;
-        }
-      }
-      if (!bestTarget || bestScore < 0.82) {
-        return null;
-      }
-      return {
-        sourceCanonical: source,
-        targetCanonical: bestTarget,
-        score: Number(bestScore.toFixed(2))
-      } satisfies MarkerMergeSuggestion;
-    })
-    .filter((item): item is MarkerMergeSuggestion => item !== null);
-
-  return Array.from(
-    suggestions
-      .reduce((map, suggestion) => {
-        const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
-        const existing = map.get(key);
-        if (!existing || suggestion.score > existing.score) {
-          map.set(key, suggestion);
-        }
-        return map;
-      }, new Map<string, MarkerMergeSuggestion>())
-      .values()
-  );
-};
 
 const App = () => {
   const [sharedSnapshot] = useState(() => {
@@ -206,7 +142,21 @@ const App = () => {
   });
   const [shareLink, setShareLink] = useState("");
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
-  const { appData, setAppData, updateSettings, isNl, samplingControlsEnabled } = useAppData({
+  const {
+    appData,
+    setAppData,
+    updateSettings,
+    isNl,
+    samplingControlsEnabled,
+    addReport,
+    deleteReport: deleteReportFromData,
+    deleteReports: deleteReportsFromData,
+    updateReportAnnotations,
+    setBaseline,
+    remapMarker,
+    importData,
+    exportJson
+  } = useAppData({
     sharedData: sharedSnapshot ? sharedSnapshot.data : null,
     isShareMode
   });
@@ -432,42 +382,7 @@ const App = () => {
   }, [samplingControlsEnabled, appData.settings.samplingFilter, appData.settings.compareToBaseline]);
 
   const remapMarkerAcrossReports = (sourceCanonical: string, targetLabel: string) => {
-    const cleanLabel = targetLabel.trim();
-    if (!cleanLabel) {
-      return;
-    }
-    const targetCanonical = canonicalizeMarker(cleanLabel);
-    setAppData((prev) => ({
-      ...prev,
-      reports: prev.reports.map((report) => {
-        const rewritten = report.markers.map((marker) => {
-          if (marker.canonicalMarker !== sourceCanonical || marker.isCalculated) {
-            return marker;
-          }
-          const normalized = normalizeMarkerMeasurement({
-            canonicalMarker: targetCanonical,
-            value: marker.value,
-            unit: marker.unit,
-            referenceMin: marker.referenceMin,
-            referenceMax: marker.referenceMax
-          });
-          return {
-            ...marker,
-            marker: cleanLabel,
-            canonicalMarker: targetCanonical,
-            value: normalized.value,
-            unit: normalized.unit,
-            referenceMin: normalized.referenceMin,
-            referenceMax: normalized.referenceMax,
-            abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
-          };
-        });
-        return {
-          ...report,
-          markers: dedupeMarkersInReport(rewritten)
-        };
-      })
-    }));
+    remapMarker(sourceCanonical, targetLabel);
     setMarkerSuggestions((current) =>
       current.filter(
         (item) => item.sourceCanonical !== sourceCanonical && item.targetCanonical !== sourceCanonical
@@ -625,10 +540,7 @@ const App = () => {
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));
     const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
-    setAppData((prev) => ({
-      ...prev,
-      reports: sortReportsChronological([...prev.reports, report])
-    }));
+    addReport(report);
     if (suggestions.length > 0) {
       setMarkerSuggestions((current) => {
         const merged = [...current, ...suggestions];
@@ -653,13 +565,7 @@ const App = () => {
   };
 
   const deleteReport = (reportId: string) => {
-    if (isShareMode) {
-      return;
-    }
-    setAppData((prev) => ({
-      ...prev,
-      reports: prev.reports.filter((report) => report.id !== reportId)
-    }));
+    deleteReportFromData(reportId);
     setSelectedReports((prev) => prev.filter((id) => id !== reportId));
     if (editingReportId === reportId) {
       setEditingReportId(null);
@@ -684,157 +590,21 @@ const App = () => {
     if (!editingReportId) {
       return;
     }
-    if (isShareMode) {
-      return;
-    }
-
-    setAppData((prev) => ({
-      ...prev,
-      reports: prev.reports.map((report) =>
-        report.id === editingReportId
-          ? {
-              ...report,
-              annotations: samplingControlsEnabled
-                ? editingAnnotations
-                : {
-                    ...editingAnnotations,
-                    samplingTiming: "trough"
-                  }
-            }
-          : report
-      )
-    }));
+    updateReportAnnotations(editingReportId, editingAnnotations);
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
   };
 
   const setBaselineReport = (reportId: string) => {
-    if (isShareMode) {
-      return;
-    }
-    setAppData((prev) => ({
-      ...prev,
-      reports: prev.reports.map((report) => ({
-        ...report,
-        isBaseline: report.id === reportId
-      }))
-    }));
+    setBaseline(reportId);
   };
 
   const deleteSelectedReports = () => {
     if (selectedReports.length === 0) {
       return;
     }
-    if (isShareMode) {
-      return;
-    }
-
-    const selected = new Set(selectedReports);
-    setAppData((prev) => ({
-      ...prev,
-      reports: prev.reports.filter((report) => !selected.has(report.id))
-    }));
+    deleteReportsFromData(selectedReports);
     setSelectedReports([]);
-  };
-
-  const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] => {
-    let baselineSeen = false;
-    return reportsToNormalize.map((report) => {
-      if (!report.isBaseline) {
-        return report;
-      }
-      if (!baselineSeen) {
-        baselineSeen = true;
-        return report;
-      }
-      return {
-        ...report,
-        isBaseline: false
-      };
-    });
-  };
-
-  const applyImportedData = (incomingRaw: unknown, mode: "merge" | "replace") => {
-    const incoming = coerceStoredAppData(incomingRaw as Record<string, unknown>);
-    const importedReports = sortReportsChronological(incoming.reports);
-    const incomingCanonicalMarkers = Array.from(
-      new Set(importedReports.flatMap((report) => report.markers.map((marker) => marker.canonicalMarker)))
-    );
-
-    if (mode === "replace") {
-      const replaceConfirmed =
-        typeof window === "undefined"
-          ? true
-          : window.confirm(
-              tr(
-                "Dit vervangt al je huidige data. Weet je het zeker?",
-                "This will replace your current data. Are you sure?"
-              )
-            );
-      if (!replaceConfirmed) {
-        return;
-      }
-
-      setAppData((prev) => ({
-        ...incoming,
-        settings: {
-          ...incoming.settings
-        },
-        reports: normalizeBaselineFlags(importedReports)
-      }));
-      setSelectedReports([]);
-      setEditingReportId(null);
-      setEditingAnnotations(blankAnnotations());
-      setImportStatus({
-        type: "success",
-        message: tr(
-          `Backup hersteld: ${importedReports.length} rapporten geladen.`,
-          `Backup restored: ${importedReports.length} reports loaded.`
-        )
-      });
-      return;
-    }
-
-    const mergeSuggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
-
-    setAppData((prev) => {
-      const byId = new Map<string, LabReport>();
-      prev.reports.forEach((report) => {
-        byId.set(report.id, report);
-      });
-      importedReports.forEach((report) => {
-        byId.set(report.id, report);
-      });
-      const merged = normalizeBaselineFlags(sortReportsChronological(Array.from(byId.values())));
-      return {
-        ...prev,
-        reports: merged
-      };
-    });
-    setImportStatus({
-      type: "success",
-      message: tr(
-        `Backup samengevoegd: ${importedReports.length} rapporten verwerkt.`,
-        `Backup merged: processed ${importedReports.length} reports.`
-      )
-    });
-    if (mergeSuggestions.length > 0) {
-      setMarkerSuggestions((current) => {
-        const merged = [...current, ...mergeSuggestions];
-        return Array.from(
-          merged
-            .reduce((map, suggestion) => {
-              const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
-              const existing = map.get(key);
-              if (!existing || suggestion.score > existing.score) {
-                map.set(key, suggestion);
-              }
-              return map;
-            }, new Map<string, MarkerMergeSuggestion>())
-            .values()
-        );
-      });
-    }
   };
 
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -846,7 +616,33 @@ const App = () => {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
-      applyImportedData(parsed, importMode);
+      const result = importData(parsed, importMode);
+      setImportStatus({
+        type: result.success ? "success" : "error",
+        message: result.message
+      });
+      if (result.success) {
+        setSelectedReports([]);
+        setEditingReportId(null);
+        setEditingAnnotations(blankAnnotations());
+      }
+      if (result.mergeSuggestions.length > 0) {
+        setMarkerSuggestions((current) => {
+          const merged = [...current, ...result.mergeSuggestions];
+          return Array.from(
+            merged
+              .reduce((map, suggestion) => {
+                const key = `${suggestion.sourceCanonical}|${suggestion.targetCanonical}`;
+                const existing = map.get(key);
+                if (!existing || suggestion.score > existing.score) {
+                  map.set(key, suggestion);
+                }
+                return map;
+              }, new Map<string, MarkerMergeSuggestion>())
+              .values()
+          );
+        });
+      }
     } catch {
       setImportStatus({
         type: "error",
@@ -858,29 +654,6 @@ const App = () => {
     } finally {
       event.target.value = "";
     }
-  };
-
-  const exportJson = () => {
-    const reportsForExport = reports.map((report) => ({
-      ...report,
-      markers: report.markers
-        .filter((marker) => appData.settings.enableCalculatedFreeTestosterone || !marker.isCalculated)
-        .map((marker) => ({
-          ...marker,
-          source: marker.isCalculated ? "calculated" : "measured"
-        }))
-    }));
-    const exportPayload = {
-      ...appData,
-      reports: reportsForExport
-    };
-    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `trt-lab-data-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   };
 
   const exportCsv = () => {

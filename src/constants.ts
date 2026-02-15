@@ -19,6 +19,13 @@ export const CARDIO_PRIORITY_MARKERS = [
   "Cholesterol"
 ] as const;
 
+export const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
+  Hormones: ["Testosterone", "Free Testosterone", "Estradiol", "SHBG", "Free Androgen Index", "Dihydrotestosteron (DHT)"],
+  Lipids: ["LDL Cholesterol", "HDL Cholesterol", "Cholesterol", "Triglyceriden", "Apolipoprotein B", "Non-HDL Cholesterol"],
+  Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
+  Inflammation: ["CRP"]
+};
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   unitSystem: "eu",
