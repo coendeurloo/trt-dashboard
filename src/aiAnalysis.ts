@@ -32,24 +32,21 @@ interface AnalyzeLabDataOptions {
 }
 
 interface AnalysisMarkerRow {
-  marker: string;
-  value: number;
-  unit: string;
-  referenceMin: number | null;
-  referenceMax: number | null;
-  abnormal: "low" | "high" | "normal" | "unknown";
+  m: string;
+  v: number;
+  u: string;
+  ref: [number | null, number | null];
 }
 
 interface AnalysisReportRow {
-  testDate: string;
-  sourceFileName: string;
-  annotations: {
-    dosageMgPerWeek: number | null;
+  date: string;
+  ann: {
+    dose: number | null;
     protocol: string;
-    supplements: string;
+    supps: string;
     symptoms: string;
     notes: string;
-    samplingTiming: "unknown" | "trough" | "mid" | "peak";
+    timing: "unknown" | "trough" | "mid" | "peak";
   };
   markers: AnalysisMarkerRow[];
 }
@@ -63,8 +60,8 @@ interface LatestComparisonRow {
   latestValue: number;
   delta: number;
   percentChange: number | null;
-  previousAbnormal: AnalysisMarkerRow["abnormal"];
-  latestAbnormal: AnalysisMarkerRow["abnormal"];
+  previousAbnormal: "low" | "high" | "normal" | "unknown";
+  latestAbnormal: "low" | "high" | "normal" | "unknown";
 }
 
 const ANALYSIS_MODEL_CANDIDATES = [
@@ -73,6 +70,7 @@ const ANALYSIS_MODEL_CANDIDATES = [
   "claude-3-7-sonnet-latest",
   "claude-3-5-sonnet-latest"
 ] as const;
+
 const SIGNAL_MARKERS = [
   "Testosterone",
   "Free Testosterone",
@@ -86,6 +84,39 @@ const SIGNAL_MARKERS = [
   "Triglyceriden",
   "Hemoglobin"
 ] as const;
+
+const FORMAT_RULES = (outputLanguage: string): string[] => [
+  "FORMAT: No markdown tables, no pipes, no HTML. Use headings, bullets, and short paragraphs.",
+  `Language: ${outputLanguage}.`
+];
+
+const ANALYSIS_RULES: string[] = [
+  "Use only data from the JSON block.",
+  "Cite concrete data (date + marker + value + unit) for each key claim.",
+  "Interpret timeline order, sampling timing (trough/peak), protocol, supplements, and symptoms together.",
+  "State uncertainties and confounders explicitly.",
+  "Action-neutral: no prescriptions or medical directives."
+];
+
+const SUPPLEMENT_SECTION_TEMPLATE: string[] = [
+  "Required section: '## Supplement Advice (for doctor discussion)'.",
+  "For each supplement, use '### [Name]' with these bullets:",
+  "- **Current dose:** [dose or 'not currently used']",
+  "- **Suggested change:** [Keep/Increase/Decrease/Stop/Consider adding]",
+  "- **Why:** [brief data-based rationale]",
+  "- **Expected effect:** [expected direction]",
+  "- **Evidence note:** [Author, year, study type, 1-line relevance]",
+  "- **Confidence:** [High/Medium/Low]",
+  "- **Doctor discussion point:** [1 specific question]",
+  "Consider potential new additions if data warrants.",
+  "If iron status appears low, include an iron discussion point with monitoring markers.",
+  "If markers conflict, state uncertainty clearly and avoid definitive claims."
+];
+
+const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or medical advice.";
+
+const KEY_LEGEND =
+  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, supps=supplements, timing=samplingTiming.";
 
 const toRounded = (value: number): number => {
   if (Math.abs(value) >= 100) {
@@ -113,18 +144,34 @@ const computeStdDev = (values: number[]): number => {
   return Math.sqrt(variance);
 };
 
+const deriveAbnormalFromReference = (
+  value: number,
+  ref: [number | null, number | null]
+): "low" | "high" | "normal" | "unknown" => {
+  const [min, max] = ref;
+  if (min !== null && value < min) {
+    return "low";
+  }
+  if (max !== null && value > max) {
+    return "high";
+  }
+  if (min === null && max === null) {
+    return "unknown";
+  }
+  return "normal";
+};
+
 const buildPayload = (reports: LabReport[], unitSystem: UnitSystem): AnalysisReportRow[] => {
   const sorted = sortReportsChronological(reports);
   return sorted.map((report) => ({
-    testDate: report.testDate,
-    sourceFileName: report.sourceFileName,
-    annotations: {
-      dosageMgPerWeek: report.annotations.dosageMgPerWeek,
+    date: report.testDate,
+    ann: {
+      dose: report.annotations.dosageMgPerWeek,
       protocol: report.annotations.protocol,
-      supplements: report.annotations.supplements,
+      supps: report.annotations.supplements,
       symptoms: report.annotations.symptoms,
       notes: report.annotations.notes,
-      samplingTiming: report.annotations.samplingTiming
+      timing: report.annotations.samplingTiming
     },
     markers: report.markers.map((marker) => {
       const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
@@ -138,12 +185,13 @@ const buildPayload = (reports: LabReport[], unitSystem: UnitSystem): AnalysisRep
           : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
 
       return {
-        marker: marker.canonicalMarker,
-        value: toRounded(converted.value),
-        unit: converted.unit,
-        referenceMin: convertedMin === null ? null : toRounded(convertedMin),
-        referenceMax: convertedMax === null ? null : toRounded(convertedMax),
-        abnormal: marker.abnormal
+        m: marker.canonicalMarker,
+        v: toRounded(converted.value),
+        u: converted.unit,
+        ref: [
+          convertedMin === null ? null : toRounded(convertedMin),
+          convertedMax === null ? null : toRounded(convertedMax)
+        ]
       };
     })
   }));
@@ -226,58 +274,57 @@ const buildLatestVsPrevious = (reports: AnalysisReportRow[]) => {
 
   const latest = reports[reports.length - 1];
   const previous = reports[reports.length - 2];
-  const previousByMarker = new Map(previous.markers.map((marker) => [marker.marker, marker] as const));
-  const latestByMarker = new Map(latest.markers.map((marker) => [marker.marker, marker] as const));
+  const previousByMarker = new Map(previous.markers.map((marker) => [marker.m, marker] as const));
+  const latestByMarker = new Map(latest.markers.map((marker) => [marker.m, marker] as const));
 
   const overlapping: LatestComparisonRow[] = latest.markers
     .map((latestMarker) => {
-      const previousMarker = previousByMarker.get(latestMarker.marker);
+      const previousMarker = previousByMarker.get(latestMarker.m);
       if (!previousMarker) {
         return null;
       }
-      const delta = latestMarker.value - previousMarker.value;
-      const percentChange =
-        Math.abs(previousMarker.value) < 0.000001 ? null : ((latestMarker.value - previousMarker.value) / previousMarker.value) * 100;
+      const delta = latestMarker.v - previousMarker.v;
+      const percentChange = Math.abs(previousMarker.v) < 0.000001 ? null : ((latestMarker.v - previousMarker.v) / previousMarker.v) * 100;
 
       return {
-        marker: latestMarker.marker,
-        unit: latestMarker.unit,
-        previousDate: previous.testDate,
-        latestDate: latest.testDate,
-        previousValue: toRounded(previousMarker.value),
-        latestValue: toRounded(latestMarker.value),
+        marker: latestMarker.m,
+        unit: latestMarker.u,
+        previousDate: previous.date,
+        latestDate: latest.date,
+        previousValue: toRounded(previousMarker.v),
+        latestValue: toRounded(latestMarker.v),
         delta: toRounded(delta),
         percentChange: percentChange === null ? null : toRounded(percentChange),
-        previousAbnormal: previousMarker.abnormal,
-        latestAbnormal: latestMarker.abnormal
+        previousAbnormal: deriveAbnormalFromReference(previousMarker.v, previousMarker.ref),
+        latestAbnormal: deriveAbnormalFromReference(latestMarker.v, latestMarker.ref)
       };
     })
     .filter((row): row is LatestComparisonRow => row !== null)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   const newInLatest = latest.markers
-    .filter((marker) => !previousByMarker.has(marker.marker))
+    .filter((marker) => !previousByMarker.has(marker.m))
     .map((marker) => ({
-      marker: marker.marker,
-      value: marker.value,
-      unit: marker.unit,
-      abnormal: marker.abnormal
+      marker: marker.m,
+      value: marker.v,
+      unit: marker.u,
+      abnormal: deriveAbnormalFromReference(marker.v, marker.ref)
     }));
 
   const missingInLatest = previous.markers
-    .filter((marker) => !latestByMarker.has(marker.marker))
+    .filter((marker) => !latestByMarker.has(marker.m))
     .map((marker) => ({
-      marker: marker.marker,
-      value: marker.value,
-      unit: marker.unit,
-      abnormal: marker.abnormal
+      marker: marker.m,
+      value: marker.v,
+      unit: marker.u,
+      abnormal: deriveAbnormalFromReference(marker.v, marker.ref)
     }));
 
   return {
-    previousDate: previous.testDate,
-    latestDate: latest.testDate,
-    previousAnnotations: previous.annotations,
-    latestAnnotations: latest.annotations,
+    previousDate: previous.date,
+    latestDate: latest.date,
+    previousAnnotations: previous.ann,
+    latestAnnotations: latest.ann,
     overlapping,
     newInLatest,
     missingInLatest
@@ -287,19 +334,19 @@ const buildLatestVsPrevious = (reports: AnalysisReportRow[]) => {
 const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
   const markerSeries = new Map<
     string,
-    Array<{ date: string; value: number; abnormal: AnalysisMarkerRow["abnormal"]; unit: string }>
+    Array<{ date: string; value: number; abnormal: "low" | "high" | "normal" | "unknown"; unit: string }>
   >();
 
   for (const report of reports) {
     for (const marker of report.markers) {
-      const points = markerSeries.get(marker.marker) ?? [];
+      const points = markerSeries.get(marker.m) ?? [];
       points.push({
-        date: report.testDate,
-        value: marker.value,
-        abnormal: marker.abnormal,
-        unit: marker.unit
+        date: report.date,
+        value: marker.v,
+        abnormal: deriveAbnormalFromReference(marker.v, marker.ref),
+        unit: marker.u
       });
-      markerSeries.set(marker.marker, points);
+      markerSeries.set(marker.m, points);
     }
   }
 
@@ -342,12 +389,12 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
     .sort((a, b) => a.marker.localeCompare(b.marker));
 
   const protocolTimeline = reports.map((report) => ({
-    date: report.testDate,
-    dosageMgPerWeek: report.annotations.dosageMgPerWeek,
-    protocol: report.annotations.protocol,
-    supplements: report.annotations.supplements,
-    symptoms: report.annotations.symptoms,
-    notes: report.annotations.notes
+    date: report.date,
+    dosageMgPerWeek: report.ann.dose,
+    protocol: report.ann.protocol,
+    supplements: report.ann.supps,
+    symptoms: report.ann.symptoms,
+    notes: report.ann.notes
   }));
 
   const protocolChangeEvents: Array<{
@@ -413,14 +460,14 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
   const markersPresent = new Set(markerSummaries.map((summary) => summary.marker));
   const sparseMarkers = markerSummaries.filter((summary) => summary.measurements < 2).map((summary) => summary.marker);
   const missingSignalMarkers = SIGNAL_MARKERS.filter((marker) => !markersPresent.has(marker));
-  const reportsWithNotes = reports.filter((report) => report.annotations.notes.trim().length > 0).length;
-  const reportsWithSymptoms = reports.filter((report) => report.annotations.symptoms.trim().length > 0).length;
+  const reportsWithNotes = reports.filter((report) => report.ann.notes.trim().length > 0).length;
+  const reportsWithSymptoms = reports.filter((report) => report.ann.symptoms.trim().length > 0).length;
 
   return {
     period: {
       reportCount: reports.length,
-      firstDate: reports[0]?.testDate ?? null,
-      lastDate: reports[reports.length - 1]?.testDate ?? null
+      firstDate: reports[0]?.date ?? null,
+      lastDate: reports[reports.length - 1]?.date ?? null
     },
     markerSummaries,
     protocolChangeEvents,
@@ -432,6 +479,28 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
     }
   };
 };
+
+const buildSignals = (
+  derivedSignals: ReturnType<typeof buildDerivedSignals>,
+  context: AnalyzeLabDataOptions["context"]
+) => ({
+  period: derivedSignals.period,
+  markerTrends: derivedSignals.markerSummaries,
+  protocolChanges: derivedSignals.protocolChangeEvents,
+  stability: context?.trtStability ?? null,
+  alerts:
+    context?.alerts
+      ?.filter((alert) => alert.severity === "high" || alert.severity === "medium")
+      ?.map((alert) => ({
+        marker: alert.marker,
+        type: alert.type,
+        severity: alert.severity,
+        message: alert.message
+      })) ?? [],
+  dosePredictions: context?.dosePredictions ?? [],
+  gaps: derivedSignals.contextCompleteness,
+  samplingFilter: context?.samplingFilter ?? "all"
+});
 
 export const analyzeLabDataWithClaude = async ({
   reports,
@@ -450,118 +519,65 @@ export const analyzeLabDataWithClaude = async ({
   const today = new Date().toISOString().slice(0, 10);
   const payload = buildPayload(reports, unitSystem);
   const derivedSignals = buildDerivedSignals(payload);
+  const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);
   const preferredOutputLanguage = language === "en" ? "English" : "Nederlands";
 
   const fullPrompt = [
-    "Je bent een senior klinische data-analist voor TRT-monitoring en gedeelde besluitvorming met een behandelend arts.",
-    `Vandaag is ${today}. Geef een actuele, evidence-informed analyse op basis van alle data hieronder.`,
-    "Doel: slimme patroonherkenning, protocol-correlaties en bespreekopties voor arts/patient, zonder medische directieven.",
-    "BELANGRIJK FORMAT:",
-    "- Gebruik GEEN markdown-tabellen.",
-    "- Gebruik GEEN pipes ('|'), HTML of complexe opmaak.",
-    "- Gebruik alleen markdown-koppen, bullets en korte paragrafen.",
-    "- Gebruik duidelijke regelafbreking (geen alles-op-een-regel output).",
-    `- Schrijf de volledige output in: ${preferredOutputLanguage}.`,
-    "Randvoorwaarden:",
-    "- Gebruik uitsluitend data uit het JSON-blok.",
-    "- Verwijs bij elke kernclaim naar concrete data (datum + marker + waarde + unit).",
-    "- Interpreteer tijdsvolgorde, sampling timing (trough/peak), protocoltekst, supplementen en symptomen samen.",
-    "- Benoem onzekerheden en confounders expliciet.",
-    "- Schrijf action-neutral; geen voorschriften of medische opdrachten.",
-    "Structuur:",
-    "- Gebruik een natuurlijke, duidelijke opbouw met koppen waar nuttig.",
-    "- GEEN vaste verplichte sectievolgorde.",
-    "- GEEN verplichte bullets-per-sectie of verplichte confidence-labels per sectie.",
-    "- Gebruik de meegeleverde computed context (protocol impact, trends, alerts, predictions) waar relevant.",
-    "Vereiste extra sectie:",
-    "- Voeg altijd een aparte sectie toe met kop: '## Supplement Advice (for doctor discussion)'.",
-    "- Maak daarna subkoppen per supplement met '### [Supplementnaam]'.",
-    "- Gebruik per supplement exact deze velden als bullets met vetgedrukte labels:",
-    "  - **Current dose:** [huidige dosis of 'not currently used']",
-    "  - **Suggested change:** [Keep / Increase / Decrease / Stop / Consider adding]",
-    "  - **Why:** [korte uitleg op basis van concrete labdata + trend/context]",
-    "  - **Expected effect:** [verwachte richting en wat je hoopt te verbeteren]",
-    "  - **Evidence note:** [Auteur, jaar, type studie, 1 regel relevantie]",
-    "  - **Confidence:** [High/Medium/Low]",
-    "  - **Doctor discussion point:** [1 concrete vraag om te bespreken]",
-    "- Neem expliciet mee of huidige dosis/protocol lijkt te passen bij de trends.",
-    "- Overweeg naast huidige supplementen ook potentiële NIEUWE toevoegingen als data daar aanleiding toe geven.",
-    "- Als ijzerstatus laag lijkt (bijv. Ferritine laag en/of Transferrine Saturatie laag, met passend bloedbeeld): neem expliciet een 'Consider adding iron' bespreekpunt op.",
-    "- Bij zo'n ijzer-suggestie: noem triggerwaarden, verwachte richting, belangrijke kanttekeningen, en monitoring (Ferritine, Transferrine Saturatie, Hemoglobine, Hematocriet).",
-    "- Doe géén stellige toevoegingsclaim als markers elkaar tegenspreken; benoem onzekerheid duidelijk.",
-    "- Gebruik betrouwbare studies; bij voorkeur recent (2020+ waar mogelijk).",
-    "- Als exacte studiegegevens onzeker zijn: benoem die onzekerheid expliciet en doe geen stellige claim.",
-    "- Gebruik nette markdown-opmaak met duidelijke koppen, bullets en vetgedrukte labels; geen tabellen.",
-    "Sluit af met een korte veiligheidsnoot dat dit geen diagnose of medisch advies is.",
+    `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
+    "Goal: pattern recognition, protocol correlations, and discussion options for doctor/patient.",
+    ...FORMAT_RULES(preferredOutputLanguage),
+    ...ANALYSIS_RULES,
+    "Use a natural structure with headings. No fixed section order or required bullet counts.",
+    ...SUPPLEMENT_SECTION_TEMPLATE,
+    SAFETY_NOTE,
+    KEY_LEGEND,
     "DATA START",
-    JSON.stringify(
-      {
-        analysisType,
-        unitSystem,
-        reports: payload,
-        derivedSignals,
-        context
-      },
-      null,
-      2
-    ),
+    JSON.stringify({
+      type: "full",
+      units: unitSystem,
+      reports: payload,
+      signals
+    }),
     "DATA END"
   ].join("\n");
 
-  const latestComparisonPrompt = [
-    "Je bent een senior klinische data-analist voor TRT-monitoring en gedeelde besluitvorming met een behandelend arts.",
-    `Vandaag is ${today}. Analyseer specifiek het laatste rapport versus het direct voorgaande rapport.`,
-    "BELANGRIJK FORMAT:",
-    "- Gebruik GEEN markdown-tabellen.",
-    "- Gebruik GEEN pipes ('|'), HTML of complexe opmaak.",
-    "- Gebruik markdown-koppen, bullets en korte paragrafen met duidelijke regelafbreking.",
-    `- Schrijf de volledige output in: ${preferredOutputLanguage}.`,
-    "Randvoorwaarden:",
-    "- Gebruik uitsluitend data uit het JSON-blok.",
-    "- Verwijs altijd naar beide datums en concrete waarden.",
-    "- Schrijf action-neutral; geen medische directieven.",
-    "Structuur:",
-    "- Gebruik een natuurlijke, duidelijke opbouw met koppen waar nuttig.",
-    "- GEEN vaste verplichte secties of sectievolgorde.",
-    "- GEEN verplichte bullets-per-sectie of verplichte confidence-labels per sectie.",
-    "- Leg de nadruk op concrete verschillen tussen laatste en vorige rapport.",
-    "- Gebruik computed context (protocol impact, trends, alerts, predictions) waar relevant.",
-    "Vereiste extra sectie:",
-    "- Voeg altijd een aparte sectie toe met kop: '## Supplement Advice (for doctor discussion)'.",
-    "- Maak daarna subkoppen per supplement met '### [Supplementnaam]'.",
-    "- Gebruik per supplement exact deze velden als bullets met vetgedrukte labels:",
-    "  - **Current dose:** [huidige dosis of 'not currently used']",
-    "  - **Suggested change:** [Keep / Increase / Decrease / Stop / Consider adding]",
-    "  - **Why:** [korte uitleg op basis van verschil laatste vs vorige rapport + context]",
-    "  - **Expected effect:** [verwachte richting voor komende periode]",
-    "  - **Evidence note:** [Auteur, jaar, type studie, 1 regel relevantie]",
-    "  - **Confidence:** [High/Medium/Low]",
-    "  - **Doctor discussion point:** [1 concrete vraag om te bespreken]",
-    "- Vergelijk expliciet of huidig supplementen- en dose/protocolbeleid nog passend lijkt t.o.v. het vorige rapport.",
-    "- Overweeg naast huidige supplementen ook potentiële NIEUWE toevoegingen als data daar aanleiding toe geven.",
-    "- Als ijzerstatus laag lijkt (bijv. Ferritine laag en/of Transferrine Saturatie laag, met passend bloedbeeld): neem expliciet een 'Consider adding iron' bespreekpunt op.",
-    "- Bij zo'n ijzer-suggestie: noem triggerwaarden, verwachte richting, belangrijke kanttekeningen, en monitoring (Ferritine, Transferrine Saturatie, Hemoglobine, Hematocriet).",
-    "- Doe géén stellige toevoegingsclaim als markers elkaar tegenspreken; benoem onzekerheid duidelijk.",
-    "- Gebruik betrouwbare studies; bij voorkeur recent (2020+ waar mogelijk).",
-    "- Als exacte studiegegevens onzeker zijn: benoem die onzekerheid expliciet en doe geen stellige claim.",
-    "- Gebruik nette markdown-opmaak met duidelijke koppen, bullets en vetgedrukte labels; geen tabellen.",
-    "Sluit af met een korte veiligheidsnoot dat dit geen diagnose of medisch advies is.",
-    "DATA START",
-    JSON.stringify(
-      {
-        analysisType,
-        unitSystem,
-        latestComparison,
-        reports: payload,
-        derivedSignals,
-        context
-      },
-      null,
-      2
-    ),
-    "DATA END"
-  ].join("\n");
+  const latestComparisonPrompt = (() => {
+    const relevantPayload = payload.slice(-2);
+    const relevantComparison = buildLatestVsPrevious(relevantPayload);
+    const relevantMarkers = new Set(relevantPayload.flatMap((report) => report.markers.map((marker) => marker.m)));
+    const startDate = relevantPayload[0]?.date ?? null;
+    const endDate = relevantPayload[1]?.date ?? null;
+
+    const comparisonSignals = {
+      ...signals,
+      markerTrends: signals.markerTrends.filter((trend) => relevantMarkers.has(trend.marker)),
+      protocolChanges:
+        startDate && endDate
+          ? signals.protocolChanges.filter((event) => event.date >= startDate && event.date <= endDate)
+          : signals.protocolChanges
+    };
+
+    return [
+      `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
+      "Analyze only the latest report versus the immediately previous report.",
+      ...FORMAT_RULES(preferredOutputLanguage),
+      ...ANALYSIS_RULES,
+      "Focus on concrete differences between latest and previous report.",
+      ...SUPPLEMENT_SECTION_TEMPLATE,
+      SAFETY_NOTE,
+      KEY_LEGEND,
+      "DATA START",
+      JSON.stringify({
+        type: "latestComparison",
+        units: unitSystem,
+        latestComparison: relevantComparison ?? latestComparison,
+        reports: relevantPayload,
+        signals: comparisonSignals
+      }),
+      "DATA END"
+    ].join("\n");
+  })();
 
   const prompt = analysisType === "latestComparison" ? latestComparisonPrompt : fullPrompt;
 
