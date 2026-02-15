@@ -70,6 +70,14 @@ export const canonicalizeMarker = (input: string): string => {
     return "Unknown Marker";
   }
 
+  if (
+    /\b(testosterone|testosteron)\b/.test(normalized) &&
+    /\b(free|vrij|vrije)\b/.test(normalized) &&
+    /\b(calculated|berekend|derived)\b/.test(normalized)
+  ) {
+    return "Free Testosterone";
+  }
+
   // Prefer the explicit "free + testosterone" pattern before generic testosterone aliases.
   if (
     /\b(testosterone|testosteron)\b/.test(normalized) &&

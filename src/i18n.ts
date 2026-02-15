@@ -130,6 +130,7 @@ const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
   "Lymphocytes Abs.": { nl: "Lymfocyten abs.", en: "Lymphocytes Abs." },
   "Eosinophils Abs.": { nl: "Eosinofielen abs.", en: "Eosinophils Abs." },
   "Neutrophils Abs.": { nl: "Neutrofielen abs.", en: "Neutrophils Abs." },
+  "Free Testosterone (calculated)": { nl: "Vrij Testosteron (berekend)", en: "Free Testosterone (calculated)" },
   Leukocyten: { nl: "Leukocyten", en: "Leukocytes" }
 };
 
@@ -170,6 +171,25 @@ const MARKER_META: Record<string, MarkerMeta> = {
     high: {
       nl: "Hoog: kan wijzen op een hoge actieve androgenenbelasting met meer kans op bijwerkingen.",
       en: "High: may indicate a high active androgen load with higher side-effect risk."
+    }
+  },
+  "Free Testosterone (calculated)": {
+    name: { nl: "Vrij Testosteron (berekend)", en: "Free Testosterone (calculated)" },
+    what: {
+      nl: "Afgeleide schatting van vrije testosteron op basis van totaal testosteron, SHBG en albumine.",
+      en: "Derived free testosterone estimate based on Total Testosterone, SHBG, and Albumin."
+    },
+    why: {
+      nl: "Geeft extra context naast gemeten vrij testosteron en vervangt die gemeten waarde niet.",
+      en: "Adds context next to measured free testosterone and does not replace measured values."
+    },
+    low: {
+      nl: "Laag: kan passen bij lagere vrije androgenenbelasting; beoordeel samen met klachten en gemeten waarden.",
+      en: "Low: may fit lower free androgen exposure; interpret with symptoms and measured values."
+    },
+    high: {
+      nl: "Hoog: kan passen bij hogere vrije androgenenbelasting; beoordeel naast hematocriet, estradiol en klachten.",
+      en: "High: may fit higher free androgen exposure; interpret alongside hematocrit, estradiol, and symptoms."
     }
   },
   Estradiol: {

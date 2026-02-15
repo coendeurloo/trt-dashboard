@@ -1,4 +1,6 @@
-# TRT Lab Results Tracker
+# TRT Lab Tracker
+
+![TRT Lab Tracker Logo](./src/assets/trt-logo.png)
 
 A modern React + TypeScript web app to upload blood test PDFs, review extracted results, track TRT-related markers, and visualize trends over time.
 

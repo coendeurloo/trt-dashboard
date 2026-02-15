@@ -1,4 +1,3 @@
-import { enrichReportWithCalculatedMarkers } from "./analytics";
 import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_SETTINGS } from "./constants";
 import { AppSettings, LabReport, MarkerValue, ReportAnnotations, StoredAppData } from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
@@ -75,7 +74,8 @@ const sanitizeMarker = (marker: Partial<MarkerValue>): MarkerValue | null => {
     abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
     confidence:
       typeof marker.confidence === "number" && Number.isFinite(marker.confidence) ? marker.confidence : marker.isCalculated ? 1 : 0.8,
-    isCalculated: Boolean(marker.isCalculated)
+    isCalculated: Boolean(marker.isCalculated),
+    source: marker.isCalculated ? "calculated" : "measured"
   };
 };
 
@@ -102,7 +102,8 @@ const dedupeMarkers = (markers: MarkerValue[]): MarkerValue[] =>
 
 const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
   const markers = Array.isArray(report.markers) ? report.markers.map(sanitizeMarker).filter((item): item is MarkerValue => item !== null) : [];
-  if (markers.length === 0) {
+  const rawMarkers = dedupeMarkers(markers).filter((marker) => !marker.isCalculated);
+  if (rawMarkers.length === 0) {
     return null;
   }
 
@@ -111,7 +112,7 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
     sourceFileName: String(report.sourceFileName ?? "Imported report"),
     testDate: typeof report.testDate === "string" && report.testDate ? report.testDate : new Date().toISOString().slice(0, 10),
     createdAt: typeof report.createdAt === "string" && report.createdAt ? report.createdAt : new Date().toISOString(),
-    markers: dedupeMarkers(markers),
+    markers: rawMarkers,
     annotations: normalizeAnnotations(report.annotations),
     isBaseline: Boolean(report.isBaseline),
     extraction: {
@@ -125,7 +126,7 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
     }
   };
 
-  return enrichReportWithCalculatedMarkers(normalizedReport);
+  return normalizedReport;
 };
 
 const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => ({

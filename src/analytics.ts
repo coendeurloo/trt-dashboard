@@ -128,12 +128,21 @@ export interface DosePrediction {
   slopePerMg: number;
   intercept: number;
   rSquared: number;
+  correlationR: number | null;
+  sampleCount: number;
   currentDose: number;
   suggestedDose: number;
   currentEstimate: number;
   suggestedEstimate: number;
   suggestedPercentChange: number | null;
   confidence: "High" | "Medium" | "Low";
+  status: "clear" | "unclear" | "insufficient";
+  statusReason: string;
+  samplingMode: "trough" | "all";
+  samplingWarning: string | null;
+  usedReportDates: string[];
+  excludedPoints: Array<{ date: string; reason: string }>;
+  modelType: "linear" | "theil-sen";
   scenarios: Array<{ dose: number; estimatedValue: number }>;
 }
 
@@ -145,7 +154,7 @@ interface TargetZone {
 
 const ROUND_2 = (value: number): number => Number(value.toFixed(2));
 const ROUND_3 = (value: number): number => Number(value.toFixed(3));
-const DOSE_MONOTONIC_MARKERS = new Set(["Testosterone", "Free Testosterone", "Free Androgen Index"]);
+const DOSE_EXPECTED_POSITIVE_MARKERS = new Set(["Testosterone", "Free Testosterone", "Free Androgen Index"]);
 
 const normalizeProtocolText = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -343,11 +352,261 @@ const buildCalculatedMarker = (
     referenceMax,
     abnormal: deriveAbnormalFlag(rounded, referenceMin, referenceMax),
     confidence: 1,
-    isCalculated: true
+    isCalculated: true,
+    source: "calculated"
   };
 };
 
-export const deriveCalculatedMarkers = (report: LabReport): MarkerValue[] => {
+interface DerivedMarkerOptions {
+  enableCalculatedFreeTestosterone?: boolean;
+  logCalculatedFreeTestosteroneDebug?: boolean;
+}
+
+const normalizeAlbuminToGramsPerLiter = (value: number, unit: string): number | null => {
+  const normalized = unit.trim().toLowerCase().replace(/\s+/g, "");
+  const extracted =
+    normalized.match(/g\/dl|gdl|g\/l|gl/)?.[0] ??
+    normalized;
+  const unitToken = extracted.replace(/\s+/g, "");
+  if (["g/l", "gl"].includes(unitToken)) {
+    return value;
+  }
+  if (["g/dl", "gdl"].includes(unitToken)) {
+    return value * 10;
+  }
+  return null;
+};
+
+const normalizeLooseMarkerText = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractCoreUnitToken = (unit: string): string => {
+  const normalized = unit.trim().toLowerCase().replace(/\s+/g, "");
+  const token =
+    normalized.match(/ng\/ml|ngml|ng\/dl|ngdl|nmol\/l|nmoll|pmol\/l|pmoll|pg\/ml|pgml|g\/l|gl|g\/dl|gdl/)?.[0] ??
+    normalized;
+  if (["ngml", "ng/ml"].includes(token)) {
+    return "ng/mL";
+  }
+  if (["ngdl", "ng/dl"].includes(token)) {
+    return "ng/dL";
+  }
+  if (["nmoll", "nmol/l"].includes(token)) {
+    return "nmol/L";
+  }
+  if (["pmoll", "pmol/l"].includes(token)) {
+    return "pmol/L";
+  }
+  if (["pgml", "pg/ml"].includes(token)) {
+    return "pg/mL";
+  }
+  if (["gl", "g/l"].includes(token)) {
+    return "g/L";
+  }
+  if (["gdl", "g/dl"].includes(token)) {
+    return "g/dL";
+  }
+  return unit;
+};
+
+const findRequiredInputMarker = (
+  rawMarkers: MarkerValue[],
+  matcher: (marker: MarkerValue, normalizedCanonical: string, normalizedLabel: string) => boolean
+): MarkerValue | null => {
+  const scored = rawMarkers
+    .map((marker) => {
+      const normalizedCanonical = normalizeLooseMarkerText(marker.canonicalMarker);
+      const normalizedLabel = normalizeLooseMarkerText(marker.marker);
+      const matches = matcher(marker, normalizedCanonical, normalizedLabel);
+      if (!matches) {
+        return null;
+      }
+      return {
+        marker,
+        score: marker.confidence
+      };
+    })
+    .filter((item): item is { marker: MarkerValue; score: number } => item !== null)
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0]?.marker ?? null;
+};
+
+const normalizeForCalc = (
+  marker: MarkerValue,
+  expectedCanonical: "Testosterone" | "SHBG"
+): { value: number; unit: string } | null => {
+  const coreUnit = extractCoreUnitToken(marker.unit);
+  const converted = convertBySystem(expectedCanonical, marker.value, coreUnit, "eu");
+  if (!Number.isFinite(converted.value)) {
+    return null;
+  }
+  if (expectedCanonical === "Testosterone" && converted.unit !== "nmol/L") {
+    return null;
+  }
+  if (expectedCanonical === "SHBG" && converted.unit !== "nmol/L") {
+    return null;
+  }
+  return {
+    value: converted.value,
+    unit: converted.unit
+  };
+};
+
+interface FreeTestosteroneCalcInput {
+  totalT_nmolL: number;
+  shbg_nmolL: number;
+  albumin_gL: number;
+}
+
+/**
+ * Calculated Free Testosterone using a deterministic mass-action model
+ * (commonly referred to as Vermeulen/Sodergard approach).
+ *
+ * Reference note:
+ * - Vermeulen et al. J Clin Endocrinol Metab. 1999;84(10):3666-3672.
+ */
+const calcFreeTestosterone = (input: FreeTestosteroneCalcInput): number | null => {
+  const { totalT_nmolL, shbg_nmolL, albumin_gL } = input;
+  if (
+    !Number.isFinite(totalT_nmolL) ||
+    !Number.isFinite(shbg_nmolL) ||
+    !Number.isFinite(albumin_gL) ||
+    totalT_nmolL <= 0 ||
+    shbg_nmolL <= 0 ||
+    albumin_gL <= 0
+  ) {
+    return null;
+  }
+
+  const totalT = totalT_nmolL * 1e-9; // mol/L
+  const shbg = shbg_nmolL * 1e-9; // mol/L
+  const albumin = albumin_gL / 66500; // mol/L, albumin MW ~66.5 kDa
+  const K_ALB = 3.6e4; // L/mol (albumin-testosterone association constant)
+  const K_SHBG = 1e9; // L/mol (SHBG-testosterone association constant)
+
+  const nonSpecificBinding = 1 + K_ALB * albumin;
+  const a = K_SHBG * nonSpecificBinding;
+  const b = nonSpecificBinding + K_SHBG * shbg - K_SHBG * totalT;
+  const c = -totalT;
+  if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c) || Math.abs(a) <= 1e-20) {
+    return null;
+  }
+
+  const discriminant = b * b - 4 * a * c;
+  if (!Number.isFinite(discriminant) || discriminant < 0) {
+    return null;
+  }
+
+  const sqrtTerm = Math.sqrt(discriminant);
+  const rootOne = (-b + sqrtTerm) / (2 * a);
+  const rootTwo = (-b - sqrtTerm) / (2 * a);
+  const freeTmolL = [rootOne, rootTwo]
+    .filter((candidate) => Number.isFinite(candidate) && candidate >= 0)
+    .sort((left, right) => left - right)[0];
+  if (freeTmolL === undefined || !Number.isFinite(freeTmolL)) {
+    return null;
+  }
+
+  const freeTnmolL = freeTmolL * 1e9;
+  if (!Number.isFinite(freeTnmolL) || freeTnmolL < 0) {
+    return null;
+  }
+  return freeTnmolL;
+};
+
+const computeCalculatedFreeTestosteroneMarker = (
+  report: LabReport,
+  rawMarkers: MarkerValue[],
+  shouldLogDebug: boolean
+): MarkerValue | null => {
+  const debugPrefix = `[Calculated Free T] ${report.testDate} (${report.sourceFileName})`;
+  const logSkip = (reason: string): null => {
+    if (shouldLogDebug) {
+      console.debug(`${debugPrefix} skipped: ${reason}`);
+    }
+    return null;
+  };
+
+  const testosteroneMarker =
+    findRequiredInputMarker(rawMarkers, (marker, canonical, label) => {
+      if (canonical === "testosterone") {
+        return true;
+      }
+      if (label.includes("testosterone") || label.includes("testosteron")) {
+        return !label.includes("free") && !label.includes("vrij");
+      }
+      return false;
+    }) ?? null;
+  if (!testosteroneMarker) {
+    return logSkip("missing Total Testosterone");
+  }
+  const testosterone = normalizeForCalc(testosteroneMarker, "Testosterone");
+  if (!testosterone) {
+    return logSkip(`unsupported Total Testosterone unit: ${testosteroneMarker.unit}`);
+  }
+
+  const shbgMarker =
+    findRequiredInputMarker(rawMarkers, (_marker, canonical, label) => {
+      return canonical === "shbg" || label.includes("shbg") || label.includes("sex hormone binding");
+    }) ?? null;
+  if (!shbgMarker) {
+    return logSkip("missing SHBG");
+  }
+  const shbg = normalizeForCalc(shbgMarker, "SHBG");
+  if (!shbg) {
+    return logSkip(`unsupported SHBG unit: ${shbgMarker.unit}`);
+  }
+
+  const albuminMarker =
+    findRequiredInputMarker(rawMarkers, (_marker, canonical, label) => {
+      const hasAlbumin = canonical.includes("albumin") || label.includes("albumin") || label.includes("albumine");
+      const urineContext = canonical.includes("urine") || label.includes("urine") || label.includes("acr");
+      return hasAlbumin && !urineContext;
+    }) ?? null;
+  if (!albuminMarker) {
+    return logSkip("missing Albumin");
+  }
+  const albuminCoreUnit = extractCoreUnitToken(albuminMarker.unit);
+  const albuminGL = normalizeAlbuminToGramsPerLiter(albuminMarker.value, albuminCoreUnit);
+  if (albuminGL === null) {
+    return logSkip(`unsupported Albumin unit: ${albuminMarker.unit}`);
+  }
+
+  const calculated = calcFreeTestosterone({
+    totalT_nmolL: testosterone.value,
+    shbg_nmolL: shbg.value,
+    albumin_gL: albuminGL
+  });
+  if (calculated === null) {
+    return logSkip("numerical solver failed");
+  }
+
+  if (shouldLogDebug) {
+    console.debug(
+      `${debugPrefix} computed`,
+      {
+        totalT_nmolL: ROUND_3(testosterone.value),
+        shbg_nmolL: ROUND_3(shbg.value),
+        albumin_gL: ROUND_3(albuminGL),
+        freeT_nmolL: ROUND_3(calculated)
+      }
+    );
+  }
+
+  // Integrate calculated values into the existing Free Testosterone series.
+  // `addDerived` already prevents overwriting measured Free Testosterone in the same report.
+  return buildCalculatedMarker("Free Testosterone", calculated, "nmol/L");
+};
+
+export const deriveCalculatedMarkers = (
+  report: LabReport,
+  options: DerivedMarkerOptions = {}
+): MarkerValue[] => {
   const rawMarkers = report.markers.filter((marker) => !marker.isCalculated);
   const rawByCanonical = new Set(rawMarkers.map((marker) => marker.canonicalMarker));
   const derived: MarkerValue[] = [];
@@ -399,20 +658,36 @@ export const deriveCalculatedMarkers = (report: LabReport): MarkerValue[] => {
     }
   }
 
+  if (options.enableCalculatedFreeTestosterone) {
+    const calculatedFreeT = computeCalculatedFreeTestosteroneMarker(
+      report,
+      rawMarkers,
+      Boolean(options.logCalculatedFreeTestosteroneDebug)
+    );
+    if (calculatedFreeT) {
+      addDerived(calculatedFreeT);
+    }
+  }
+
   return derived;
 };
 
-export const enrichReportWithCalculatedMarkers = (report: LabReport): LabReport => {
+export const enrichReportWithCalculatedMarkers = (
+  report: LabReport,
+  options: DerivedMarkerOptions = {}
+): LabReport => {
   const rawMarkers = report.markers.filter((marker) => !marker.isCalculated);
-  const calculated = deriveCalculatedMarkers({ ...report, markers: rawMarkers });
+  const calculated = deriveCalculatedMarkers({ ...report, markers: rawMarkers }, options);
   return {
     ...report,
     markers: [...rawMarkers, ...calculated]
   };
 };
 
-export const enrichReportsWithCalculatedMarkers = (reports: LabReport[]): LabReport[] =>
-  reports.map((report) => enrichReportWithCalculatedMarkers(report));
+export const enrichReportsWithCalculatedMarkers = (
+  reports: LabReport[],
+  options: DerivedMarkerOptions = {}
+): LabReport[] => reports.map((report) => enrichReportWithCalculatedMarkers(report, options));
 
 export const filterReportsBySampling = (
   reports: LabReport[],
@@ -1661,6 +1936,15 @@ interface DoseModel {
   rSquared: number;
 }
 
+interface DoseSample {
+  reportId: string;
+  date: string;
+  dose: number;
+  value: number;
+  unit: string;
+  samplingTiming: SamplingTiming;
+}
+
 const calculateRSquared = (actual: number[], predicted: number[]): number => {
   if (actual.length === 0 || predicted.length !== actual.length) {
     return 0;
@@ -1674,88 +1958,44 @@ const calculateRSquared = (actual: number[], predicted: number[]): number => {
   return clip(1 - ssResidual / ssTotal, 0, 1);
 };
 
-const isotonicNonDecreasing = (values: number[], weights: number[]): number[] => {
-  const blocks = values.map((value, index) => ({
-    start: index,
-    end: index,
-    weight: Math.max(1, weights[index] ?? 1),
-    mean: value
-  }));
-
-  for (let index = 0; index < blocks.length - 1; ) {
-    if (blocks[index].mean <= blocks[index + 1].mean) {
-      index += 1;
-      continue;
-    }
-    const left = blocks[index];
-    const right = blocks[index + 1];
-    const mergedWeight = left.weight + right.weight;
-    const mergedMean = (left.mean * left.weight + right.mean * right.weight) / mergedWeight;
-    blocks.splice(index, 2, {
-      start: left.start,
-      end: right.end,
-      weight: mergedWeight,
-      mean: mergedMean
-    });
-    if (index > 0) {
-      index -= 1;
-    }
-  }
-
-  const fitted = new Array(values.length).fill(0);
-  blocks.forEach((block) => {
-    for (let index = block.start; index <= block.end; index += 1) {
-      fitted[index] = block.mean;
-    }
-  });
-  return fitted;
-};
-
-const interpolateDose = (
-  points: Array<{ dose: number; value: number }>,
-  dose: number
-): number => {
-  if (points.length === 0) {
+const median = (values: number[]): number => {
+  if (values.length === 0) {
     return 0;
   }
-  if (points.length === 1) {
-    return points[0].value;
+  const sorted = [...values].sort((left, right) => left - right);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const uniqueDoseCount = (samples: Array<{ dose: number }>): number => new Set(samples.map((sample) => ROUND_2(sample.dose))).size;
+
+const filterOutliersByMad = (
+  samples: DoseSample[]
+): { kept: DoseSample[]; excluded: DoseSample[]; threshold: number | null } => {
+  if (samples.length < 4) {
+    return { kept: samples, excluded: [], threshold: null };
+  }
+  const values = samples.map((sample) => sample.value);
+  const sampleMedian = median(values);
+  const deviations = values.map((value) => Math.abs(value - sampleMedian));
+  const mad = median(deviations);
+  if (mad <= 0.000001) {
+    return { kept: samples, excluded: [], threshold: null };
   }
 
-  if (dose <= points[0].dose) {
-    const left = points[0];
-    const right = points[1];
-    const span = right.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return left.value;
-    }
-    return left.value + ((dose - left.dose) / span) * (right.value - left.value);
-  }
+  // 1.4826 scales MAD to a normal-distribution sigma estimate.
+  const robustSigma = 1.4826 * mad;
+  const threshold = 3 * robustSigma;
+  const excluded = samples.filter((sample) => Math.abs(sample.value - sampleMedian) > threshold);
+  const kept = samples.filter((sample) => Math.abs(sample.value - sampleMedian) <= threshold);
 
-  const last = points[points.length - 1];
-  if (dose >= last.dose) {
-    const left = points[points.length - 2];
-    const span = last.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return last.value;
-    }
-    return left.value + ((dose - left.dose) / span) * (last.value - left.value);
+  if (excluded.length === 0 || kept.length < 3 || uniqueDoseCount(kept) < 2) {
+    return { kept: samples, excluded: [], threshold };
   }
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const left = points[index];
-    const right = points[index + 1];
-    if (dose < left.dose || dose > right.dose) {
-      continue;
-    }
-    const span = right.dose - left.dose;
-    if (Math.abs(span) <= 0.000001) {
-      return left.value;
-    }
-    return left.value + ((dose - left.dose) / span) * (right.value - left.value);
-  }
-
-  return last.value;
+  return { kept, excluded, threshold };
 };
 
 const buildLinearDoseModel = (samples: Array<{ dose: number; value: number }>): DoseModel | null => {
@@ -1771,49 +2011,102 @@ const buildLinearDoseModel = (samples: Array<{ dose: number; value: number }>): 
   };
 };
 
-const buildMonotonicDoseModel = (samples: Array<{ dose: number; value: number }>): DoseModel | null => {
-  const grouped = Array.from(
-    samples.reduce((map, sample) => {
-      const doseKey = ROUND_2(sample.dose);
-      const existing = map.get(doseKey) ?? [];
-      existing.push(sample.value);
-      map.set(doseKey, existing);
-      return map;
-    }, new Map<number, number[]>())
-  )
-    .map(([dose, values]) => ({
-      dose,
-      values,
-      avg: mean(values)
-    }))
-    .sort((left, right) => left.dose - right.dose);
-
-  if (grouped.length < 2) {
+const buildTheilSenDoseModel = (samples: Array<{ dose: number; value: number }>): DoseModel | null => {
+  if (samples.length < 2) {
     return null;
   }
 
-  const fitted = isotonicNonDecreasing(
-    grouped.map((item) => item.avg),
-    grouped.map((item) => item.values.length)
-  );
-  const points = grouped.map((item, index) => ({
-    dose: item.dose,
-    value: fitted[index]
-  }));
+  const slopes: number[] = [];
+  for (let left = 0; left < samples.length - 1; left += 1) {
+    for (let right = left + 1; right < samples.length; right += 1) {
+      const deltaDose = samples[right].dose - samples[left].dose;
+      if (Math.abs(deltaDose) <= 0.000001) {
+        continue;
+      }
+      slopes.push((samples[right].value - samples[left].value) / deltaDose);
+    }
+  }
+  if (slopes.length === 0) {
+    return null;
+  }
 
-  const estimateAtDose = (dose: number) => interpolateDose(points, dose);
+  const slopePerMg = median(slopes);
+  const intercept = median(samples.map((sample) => sample.value - slopePerMg * sample.dose));
+  const estimateAtDose = (dose: number) => intercept + slopePerMg * dose;
   const predicted = samples.map((sample) => estimateAtDose(sample.dose));
-  const rSquared = calculateRSquared(samples.map((sample) => sample.value), predicted);
-  const minDose = points[0].dose;
-  const maxDose = points[points.length - 1].dose;
-  const doseSpan = Math.max(maxDose - minDose, 1);
-  const slopePerMg = (estimateAtDose(maxDose) - estimateAtDose(minDose)) / doseSpan;
+  const rSquared = calculateRSquared(
+    samples.map((sample) => sample.value),
+    predicted
+  );
 
   return {
     estimateAtDose,
     slopePerMg,
-    intercept: estimateAtDose(0),
+    intercept,
     rSquared
+  };
+};
+
+const confidenceFromDoseStats = (sampleCount: number, correlationR: number | null): DosePrediction["confidence"] => {
+  const absR = Math.abs(correlationR ?? 0);
+  if (sampleCount >= 6 && absR >= 0.6) {
+    return "High";
+  }
+  if (sampleCount >= 4 && absR >= 0.35) {
+    return "Medium";
+  }
+  return "Low";
+};
+
+const evaluateDoseRelationship = (
+  marker: string,
+  samples: DoseSample[],
+  slopePerMg: number,
+  correlationR: number | null
+): { status: DosePrediction["status"]; reason: string } => {
+  if (samples.length < 4) {
+    return {
+      status: "insufficient",
+      reason: `Insufficient dose-linked points (n=${samples.length}; need >=4).`
+    };
+  }
+  if (uniqueDoseCount(samples) < 2) {
+    return {
+      status: "insufficient",
+      reason: "Insufficient unique dose values to fit a dose relationship."
+    };
+  }
+  if (correlationR === null) {
+    return {
+      status: "insufficient",
+      reason: "Correlation cannot be computed with current points."
+    };
+  }
+
+  const doses = samples.map((sample) => sample.dose);
+  const values = samples.map((sample) => sample.value);
+  const doseSpan = Math.max(...doses) - Math.min(...doses);
+  const meanAbsValue = Math.max(Math.abs(mean(values)), 0.000001);
+  const relativeEffectAcrossRange = (Math.abs(slopePerMg) * Math.max(doseSpan, 1)) / meanAbsValue;
+  const absR = Math.abs(correlationR);
+
+  if (DOSE_EXPECTED_POSITIVE_MARKERS.has(marker) && slopePerMg < -0.000001) {
+    return {
+      status: "unclear",
+      reason: `Inverse slope for an androgen marker (${ROUND_3(slopePerMg)} per mg/week); flagged as unclear.`
+    };
+  }
+
+  if (absR < 0.2 || relativeEffectAcrossRange < 0.03) {
+    return {
+      status: "unclear",
+      reason: `No clear dose relationship (|r|=${ROUND_3(absR)}, relative effect=${ROUND_3(relativeEffectAcrossRange)}).`
+    };
+  }
+
+  return {
+    status: "clear",
+    reason: `Dose relationship detected (n=${samples.length}, r=${ROUND_3(correlationR)}).`
   };
 };
 
@@ -1825,76 +2118,230 @@ export const estimateDoseResponse = (
   const predictions: DosePrediction[] = [];
   const sorted = sortReportsChronological(reports);
 
+  const pushInsufficientPrediction = (
+    marker: string,
+    samples: DoseSample[],
+    excludedPoints: Array<{ date: string; reason: string }>,
+    reason: string,
+    unitFallback?: string
+  ) => {
+    if (samples.length === 0) {
+      return;
+    }
+    const ordered = [...samples].sort((left, right) => parseDateSafe(left.date) - parseDateSafe(right.date));
+    const latest = ordered[ordered.length - 1];
+    if (!latest) {
+      return;
+    }
+    predictions.push({
+      marker,
+      unit: unitFallback ?? latest.unit,
+      slopePerMg: 0,
+      intercept: latest.value,
+      rSquared: 0,
+      correlationR: null,
+      sampleCount: ordered.length,
+      currentDose: ROUND_2(latest.dose),
+      suggestedDose: ROUND_2(latest.dose),
+      currentEstimate: ROUND_2(latest.value),
+      suggestedEstimate: ROUND_2(latest.value),
+      suggestedPercentChange: null,
+      confidence: "Low",
+      status: "insufficient",
+      statusReason: reason,
+      samplingMode: "all",
+      samplingWarning: "Dose-response estimate hidden: not enough dose-linked points yet.",
+      usedReportDates: ordered.map((sample) => sample.date),
+      excludedPoints,
+      modelType: "linear",
+      scenarios: []
+    });
+  };
+
   for (const marker of markerNames) {
-    const samples = sorted
+    const pointByReportId = new Map(buildMarkerSeries(sorted, marker, unitSystem).map((point) => [point.reportId, point]));
+    const rawSamples = sorted
       .map((report) => {
         const dose = report.annotations.dosageMgPerWeek;
         if (dose === null || !Number.isFinite(dose)) {
           return null;
         }
-        const point = buildMarkerSeries([report], marker, unitSystem)[0];
-        if (!point) {
+        const point = pointByReportId.get(report.id);
+        if (!point || !Number.isFinite(point.value)) {
           return null;
         }
         return {
+          reportId: report.id,
+          date: report.testDate,
           dose,
           value: point.value,
-          unit: point.unit
-        };
+          unit: point.unit,
+          samplingTiming: report.annotations.samplingTiming
+        } satisfies DoseSample;
       })
-      .filter((item): item is { dose: number; value: number; unit: string } => item !== null);
+      .filter((item): item is DoseSample => item !== null);
 
-    if (samples.length < 4) {
+    if (rawSamples.length === 0) {
       continue;
     }
 
-    const uniqueDoseCount = new Set(samples.map((sample) => ROUND_2(sample.dose))).size;
-    if (uniqueDoseCount < 2) {
+    const excludedPoints: Array<{ date: string; reason: string }> = [];
+    const unitCounts = rawSamples.reduce((map, sample) => {
+      map.set(sample.unit, (map.get(sample.unit) ?? 0) + 1);
+      return map;
+    }, new Map<string, number>());
+    const latestUnit = rawSamples[rawSamples.length - 1]?.unit ?? rawSamples[0].unit;
+    const preferredUnit = Array.from(unitCounts.entries()).sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+      if (left[0] === latestUnit) {
+        return -1;
+      }
+      if (right[0] === latestUnit) {
+        return 1;
+      }
+      return left[0].localeCompare(right[0]);
+    })[0]?.[0];
+    if (!preferredUnit) {
+      pushInsufficientPrediction(
+        marker,
+        rawSamples,
+        excludedPoints,
+        "Insufficient dose-linked points (n=1). Add more reports at different doses."
+      );
       continue;
     }
 
-    const useMonotonicModel = DOSE_MONOTONIC_MARKERS.has(marker);
-    const model = useMonotonicModel ? buildMonotonicDoseModel(samples) : buildLinearDoseModel(samples);
-    if (!model) {
+    const unitFiltered = rawSamples.filter((sample) => sample.unit === preferredUnit);
+    rawSamples
+      .filter((sample) => sample.unit !== preferredUnit)
+      .forEach((sample) => {
+        excludedPoints.push({
+          date: sample.date,
+          reason: `Excluded due to unit mismatch (${sample.unit} vs ${preferredUnit}).`
+        });
+      });
+    if (unitFiltered.length < 2) {
+      pushInsufficientPrediction(
+        marker,
+        unitFiltered.length > 0 ? unitFiltered : rawSamples,
+        excludedPoints,
+        `Insufficient dose-linked points (n=${unitFiltered.length}). Add more reports at different doses.`,
+        preferredUnit
+      );
+      continue;
+    }
+    if (uniqueDoseCount(unitFiltered) < 2) {
+      pushInsufficientPrediction(
+        marker,
+        unitFiltered,
+        excludedPoints,
+        "Only one dose value available so dose-response cannot be estimated yet.",
+        preferredUnit
+      );
       continue;
     }
 
-    const latestDoseSample = [...samples].reverse().find((sample) => Number.isFinite(sample.dose));
+    const troughSamples = unitFiltered.filter((sample) => sample.samplingTiming === "trough");
+    const useTrough = troughSamples.length >= 3 && uniqueDoseCount(troughSamples) >= 2;
+    const samplingMode: DosePrediction["samplingMode"] = useTrough ? "trough" : "all";
+    const samplingWarning =
+      useTrough
+        ? null
+        : troughSamples.length > 0
+          ? "Trough-only points were insufficient; using all sampling timings."
+          : unitFiltered.some((sample) => sample.samplingTiming !== "unknown")
+            ? "Mixed sampling timings; interpretation may be timing-sensitive."
+            : "Sampling timing is mostly unknown; interpretation may be timing-sensitive.";
+
+    const samplingFiltered = useTrough ? troughSamples : unitFiltered;
+    const outlierResult = filterOutliersByMad(samplingFiltered);
+    outlierResult.excluded.forEach((sample) => {
+      excludedPoints.push({
+        date: sample.date,
+        reason:
+          outlierResult.threshold === null
+            ? "Excluded as outlier."
+            : `Excluded as outlier (>3 MAD; threshold=${ROUND_3(outlierResult.threshold)} ${preferredUnit}).`
+      });
+    });
+
+    const modelSamples = [...outlierResult.kept].sort((left, right) => parseDateSafe(left.date) - parseDateSafe(right.date));
+    if (modelSamples.length < 2 || uniqueDoseCount(modelSamples) < 2) {
+      pushInsufficientPrediction(
+        marker,
+        modelSamples.length > 0 ? modelSamples : unitFiltered,
+        excludedPoints,
+        "After quality filters there are too few valid points for dose-response.",
+        preferredUnit
+      );
+      continue;
+    }
+
+    const linearModel = buildLinearDoseModel(modelSamples);
+    if (!linearModel) {
+      pushInsufficientPrediction(
+        marker,
+        modelSamples,
+        excludedPoints,
+        "Linear fit failed for current points; collect more measurements.",
+        preferredUnit
+      );
+      continue;
+    }
+    const robustModel = buildTheilSenDoseModel(modelSamples);
+    let model = linearModel;
+    let modelType: DosePrediction["modelType"] = "linear";
+    let modelNote = "";
+    if (robustModel) {
+      const linearSign = Math.sign(linearModel.slopePerMg);
+      const robustSign = Math.sign(robustModel.slopePerMg);
+      if (linearSign !== 0 && robustSign !== 0 && linearSign !== robustSign) {
+        model = robustModel;
+        modelType = "theil-sen";
+        modelNote = " Used robust Theil-Sen fallback because linear slope direction conflicted.";
+      }
+    }
+
+    const orderedSampling = [...samplingFiltered].sort((left, right) => parseDateSafe(left.date) - parseDateSafe(right.date));
+    const latestDoseSample = orderedSampling[orderedSampling.length - 1];
     if (!latestDoseSample) {
       continue;
     }
 
-    const observedDoseMin = Math.min(...samples.map((sample) => sample.dose));
-    const observedDoseMax = Math.max(...samples.map((sample) => sample.dose));
+    const correlationR = pearsonCorrelation(modelSamples.map((sample) => ({ x: sample.dose, y: sample.value })));
+    const relationship = evaluateDoseRelationship(marker, modelSamples, model.slopePerMg, correlationR);
+    const confidence = confidenceFromDoseStats(modelSamples.length, correlationR);
+
+    const observedDoseMin = Math.min(...modelSamples.map((sample) => sample.dose));
+    const observedDoseMax = Math.max(...modelSamples.map((sample) => sample.dose));
     const currentDose = latestDoseSample.dose;
     const suggestedDose = clip(currentDose - 20, Math.max(40, observedDoseMin - 20), observedDoseMax + 20);
-    const currentEstimate = model.estimateAtDose(currentDose);
-    let suggestedEstimate = model.estimateAtDose(suggestedDose);
+    const predictAtDose = (dose: number): number => Math.max(0, model.estimateAtDose(dose));
+    const currentEstimate = predictAtDose(currentDose);
+    const rawSuggestedEstimate = predictAtDose(suggestedDose);
 
-    if (useMonotonicModel && currentDose > 0 && suggestedDose !== currentDose) {
-      const ratioEstimate = currentEstimate * (suggestedDose / currentDose);
-      if (suggestedDose < currentDose) {
-        suggestedEstimate = Math.min(suggestedEstimate, ratioEstimate);
-        if (suggestedEstimate >= currentEstimate) {
-          suggestedEstimate = currentEstimate - Math.max(Math.abs(currentEstimate) * 0.01, 0.05);
-        }
-      } else {
-        suggestedEstimate = Math.max(suggestedEstimate, ratioEstimate);
-        if (suggestedEstimate <= currentEstimate) {
-          suggestedEstimate = currentEstimate + Math.max(Math.abs(currentEstimate) * 0.01, 0.05);
-        }
-      }
+    let suggestedEstimate = rawSuggestedEstimate;
+    if (relationship.status !== "clear") {
+      // Do not surface a directional numeric claim when the relationship is unclear.
+      suggestedEstimate = currentEstimate;
     }
-    suggestedEstimate = Math.max(0, suggestedEstimate);
 
-    const scenarioCandidates = [80, 100, 120, 140, 160, 180]
-      .filter((dose) => dose >= observedDoseMin - 20 && dose <= observedDoseMax + 30)
-      .map((dose) => ({
-        dose,
-        estimatedValue: ROUND_2(model.estimateAtDose(dose))
-      }));
+    const scenarioCandidates =
+      relationship.status === "clear"
+        ? [80, 100, 120, 140, 160, 180]
+            .filter((dose) => dose >= observedDoseMin - 20 && dose <= observedDoseMax + 30)
+            .map((dose) => ({
+              dose,
+              estimatedValue: ROUND_2(predictAtDose(dose))
+            }))
+        : [];
 
-    if (!scenarioCandidates.some((scenario) => scenario.dose === ROUND_2(suggestedDose))) {
+    if (
+      relationship.status === "clear" &&
+      !scenarioCandidates.some((scenario) => scenario.dose === ROUND_2(suggestedDose))
+    ) {
       scenarioCandidates.push({
         dose: ROUND_2(suggestedDose),
         estimatedValue: ROUND_2(suggestedEstimate)
@@ -1903,19 +2350,49 @@ export const estimateDoseResponse = (
 
     predictions.push({
       marker,
-      unit: samples[0].unit,
-      slopePerMg: ROUND_3(model.slopePerMg),
-      intercept: ROUND_3(model.intercept),
-      rSquared: ROUND_3(model.rSquared),
+      unit: preferredUnit,
+      slopePerMg: model.slopePerMg,
+      intercept: model.intercept,
+      rSquared: model.rSquared,
+      correlationR,
+      sampleCount: modelSamples.length,
       currentDose: ROUND_2(currentDose),
       suggestedDose: ROUND_2(suggestedDose),
       currentEstimate: ROUND_2(currentEstimate),
       suggestedEstimate: ROUND_2(suggestedEstimate),
-      suggestedPercentChange: calculatePercentChange(suggestedEstimate, currentEstimate),
-      confidence: model.rSquared >= 0.65 ? "High" : model.rSquared >= 0.35 ? "Medium" : "Low",
+      suggestedPercentChange: relationship.status === "clear" ? calculatePercentChange(suggestedEstimate, currentEstimate) : null,
+      confidence,
+      status: relationship.status,
+      statusReason: `${relationship.reason}${modelNote}`,
+      samplingMode,
+      samplingWarning,
+      usedReportDates: modelSamples.map((sample) => sample.date),
+      excludedPoints,
+      modelType,
       scenarios: scenarioCandidates.sort((left, right) => left.dose - right.dose)
     });
   }
 
-  return predictions.sort((left, right) => right.rSquared - left.rSquared);
+  const statusOrder: Record<DosePrediction["status"], number> = {
+    clear: 0,
+    unclear: 1,
+    insufficient: 2
+  };
+  const confidenceOrder: Record<DosePrediction["confidence"], number> = {
+    High: 0,
+    Medium: 1,
+    Low: 2
+  };
+
+  return predictions.sort((left, right) => {
+    const byStatus = statusOrder[left.status] - statusOrder[right.status];
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+    const byConfidence = confidenceOrder[left.confidence] - confidenceOrder[right.confidence];
+    if (byConfidence !== 0) {
+      return byConfidence;
+    }
+    return Math.abs(right.correlationR ?? 0) - Math.abs(left.correlationR ?? 0);
+  });
 };
