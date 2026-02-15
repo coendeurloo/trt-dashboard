@@ -79,9 +79,14 @@ npm run dev
 
 ## Claude API key
 
-Open **Settings** in the app and paste your Claude API key in the API field.
+This app now uses a server-side API key.
 
-Note: key storage here is browser-side for demo/prototype use.
+1. Copy `.env.example` to `.env`
+2. Set `CLAUDE_API_KEY=...` in `.env`
+3. Restart the dev server (`npm run dev`) or static server (`npm run app:start`)
+
+On Vercel, add the same project environment variable:
+- `CLAUDE_API_KEY`
 
 ## Tech stack
 

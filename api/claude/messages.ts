@@ -109,7 +109,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader("x-ratelimit-remaining", String(limit.remaining));
   res.setHeader("x-ratelimit-reset", String(limit.resetAt));
   if (!limit.allowed) {
-    sendJson(res, 429, { error: "Rate limit exceeded", retryAfter });
+    sendJson(res, 429, { error: "Rate limit exceeded", retryAfter, remaining: limit.remaining });
     return;
   }
 
