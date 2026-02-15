@@ -2,6 +2,9 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
+import { config } from "dotenv";
+
+config();
 
 const args = process.argv.slice(2);
 const portArgIndex = args.findIndex((arg) => arg === "--port");
@@ -121,11 +124,11 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await readJsonBody(req);
-      const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+      const apiKey = process.env.CLAUDE_API_KEY?.trim() ?? "";
       const payload = body.payload;
 
       if (!apiKey) {
-        sendJson(res, 400, { error: { message: "Missing apiKey" } });
+        sendJson(res, 401, { error: { message: "Missing CLAUDE_API_KEY on server" } });
         return;
       }
       if (!payload || typeof payload !== "object") {
@@ -160,6 +163,11 @@ const server = http.createServer(async (req, res) => {
         }
       });
     }
+    return;
+  }
+
+  if (pathname === "/api/health") {
+    sendJson(res, 200, { status: "ok" });
     return;
   }
 
