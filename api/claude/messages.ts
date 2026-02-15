@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { checkRateLimit } from "./rateLimit";
+import { checkRateLimit } from "./rateLimit.js";
 
 interface ClaudeMessagePayload {
   model: string;
