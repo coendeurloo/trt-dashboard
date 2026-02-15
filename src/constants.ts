@@ -36,8 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   comparisonScale: "absolute",
   timeRange: "12m",
   customRangeStart: "",
-  customRangeEnd: "",
-  claudeApiKey: ""
+  customRangeEnd: ""
 };
 
 const RAW_ALIASES: Record<string, string[]> = {

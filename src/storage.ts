@@ -129,10 +129,15 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
   return normalizedReport;
 };
 
-const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => ({
-  ...DEFAULT_SETTINGS,
-  ...(settings ?? {})
-});
+const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
+  const { claudeApiKey: _legacyClaudeApiKey, ...rest } = (settings ?? {}) as Partial<AppSettings> & {
+    claudeApiKey?: string;
+  };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...rest
+  };
+};
 
 export const coerceStoredAppData = (raw: PartialAppData | null | undefined): StoredAppData => {
   if (!raw || typeof raw !== "object") {

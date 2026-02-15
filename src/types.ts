@@ -71,7 +71,6 @@ export interface AppSettings {
   timeRange: TimeRangeKey;
   customRangeStart: string;
   customRangeEnd: string;
-  claudeApiKey: string;
 }
 
 export interface StoredAppData {

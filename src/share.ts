@@ -49,8 +49,7 @@ export const buildShareToken = (data: StoredAppData, options: ShareOptions): str
     reports: data.reports.map((report) => sanitizeReportForShare(report, options)),
     settings: {
       ...DEFAULT_SETTINGS,
-      ...data.settings,
-      claudeApiKey: ""
+      ...data.settings
     }
   };
 
@@ -80,7 +79,6 @@ export const parseShareToken = (
       hideSymptoms: Boolean(parsed.options?.hideSymptoms)
     };
     const data = coerceStoredAppData(parsed.data);
-    data.settings.claudeApiKey = "";
     return {
       data,
       generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : null,

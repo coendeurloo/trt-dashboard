@@ -49,7 +49,6 @@ export const useAnalysis = ({
 
     try {
       const result = await analyzeLabDataWithClaude({
-        apiKey: settings.claudeApiKey,
         reports: visibleReports,
         unitSystem: settings.unitSystem,
         language,

@@ -221,6 +221,11 @@ const App = () => {
 
     const code = error.message ?? "";
     if (scope === "ai") {
+      if (code.startsWith("AI_RATE_LIMITED:")) {
+        const seconds = Number(code.split(":")[1] ?? "0");
+        const minutes = Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 0) / 60));
+        return t(appData.settings.language, "aiRateLimited").replace("{minutes}", String(minutes));
+      }
       if (code === "AI_PROXY_UNREACHABLE") {
         return t(appData.settings.language, "aiProxyUnreachable");
       }
@@ -506,7 +511,7 @@ const App = () => {
     setUploadError("");
 
     try {
-      const extracted = await extractLabData(file, appData.settings.claudeApiKey);
+      const extracted = await extractLabData(file);
       setDraft(extracted);
       setDraftAnnotations(blankAnnotations());
       setActiveTab("dashboard");
@@ -725,10 +730,8 @@ const App = () => {
 
       setAppData((prev) => ({
         ...incoming,
-        // Keep current API key locally to avoid accidental key loss during restore.
         settings: {
-          ...incoming.settings,
-          claudeApiKey: prev.settings.claudeApiKey
+          ...incoming.settings
         },
         reports: normalizeBaselineFlags(importedReports)
       }));
@@ -946,7 +949,7 @@ const App = () => {
     if (typeof window === "undefined") {
       return;
     }
-    const token = buildShareToken({ ...appData, settings: { ...appData.settings, claudeApiKey: "" } }, shareOptions);
+    const token = buildShareToken(appData, shareOptions);
     if (!token) {
       return;
     }
@@ -2483,8 +2486,8 @@ const App = () => {
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {tr(
-                    "Deze analyse gebruikt alle opgeslagen rapporten en stuurt data naar Anthropic via je Claude API key.",
-                    "This analysis uses all saved reports and sends data to Anthropic through your Claude API key."
+                    "Deze analyse gebruikt alle opgeslagen rapporten en stuurt data naar Anthropic via de serverconfiguratie.",
+                    "This analysis uses all saved reports and sends data to Anthropic through server-side configuration."
                   )}
                 </p>
 
@@ -2493,7 +2496,7 @@ const App = () => {
                     type="button"
                     className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:opacity-50"
                     onClick={() => runAiAnalysis("full")}
-                    disabled={isAnalyzingLabs || visibleReports.length === 0 || !appData.settings.claudeApiKey.trim()}
+                    disabled={isAnalyzingLabs || visibleReports.length === 0}
                   >
                     {isAnalyzingLabs ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     {isAnalyzingLabs ? tr("Analyseren...", "Analyzing...") : tr("Volledige AI-analyse", "Full AI analysis")}
@@ -2502,7 +2505,7 @@ const App = () => {
                     type="button"
                     className="analysis-latest-btn inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200 disabled:opacity-50"
                     onClick={() => runAiAnalysis("latestComparison")}
-                    disabled={isAnalyzingLabs || visibleReports.length < 2 || !appData.settings.claudeApiKey.trim()}
+                    disabled={isAnalyzingLabs || visibleReports.length < 2}
                   >
                     <Sparkles className="h-4 w-4" />
                     {tr("Laatste vs vorige", "Latest vs previous")}
@@ -2515,15 +2518,6 @@ const App = () => {
                   >
                     <FileText className="h-4 w-4" /> {analysisCopied ? tr("Gekopieerd", "Copied") : tr("Kopieer analyse", "Copy analysis")}
                   </button>
-                  {!appData.settings.claudeApiKey.trim() ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
-                      onClick={() => setActiveTab("settings")}
-                    >
-                      <Cog className="h-4 w-4" /> {tr("Voeg Claude API key toe", "Add Claude API key")}
-                    </button>
-                  ) : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
@@ -2813,23 +2807,6 @@ const App = () => {
                     </tbody>
                   </table>
                 </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-                <h3 className="text-base font-semibold text-slate-100">Claude API</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {tr(
-                    "API key wordt in je browseropslag bewaard voor deze demo. Gebruik hier geen productiegeheimen.",
-                    "API key is stored in your browser storage for this demo. Do not use production secrets here."
-                  )}
-                </p>
-                <input
-                  type="password"
-                  className="mt-3 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                  placeholder="sk-ant-api03-..."
-                  value={appData.settings.claudeApiKey}
-                  onChange={(event) => updateSettings({ claudeApiKey: event.target.value })}
-                />
               </div>
 
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
