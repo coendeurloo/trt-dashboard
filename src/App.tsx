@@ -29,7 +29,8 @@ import UploadPanel from "./components/UploadPanel";
 import { getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
-import trtLogo from "./assets/trt-logo.png";
+import trtLogoLight from "./assets/trt-logo-light.png";
+import trtLogoDark from "./assets/trt-logo-dark.png";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
@@ -200,6 +201,8 @@ const App = () => {
     analysisGeneratedAt,
     analysisCopied,
     analysisKind,
+    betaRemaining,
+    betaLimits,
     runAiAnalysis,
     copyAnalysis
   } = useAnalysis({
@@ -586,7 +589,11 @@ const App = () => {
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
         <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
           <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
-            <img src={trtLogo} alt="TRT Lab Tracker" className="brand-logo mx-auto w-full max-w-[230px]" />
+            <img
+              src={appData.settings.theme === "dark" ? trtLogoDark : trtLogoLight}
+              alt="TRT Lab Tracker"
+              className="brand-logo mx-auto w-full max-w-[230px]"
+            />
             <p className="brand-subtitle mt-2 text-center text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
           </div>
 
@@ -902,6 +909,8 @@ const App = () => {
               visibleReports={visibleReports}
               samplingControlsEnabled={samplingControlsEnabled}
               allMarkersCount={allMarkers.length}
+              betaRemaining={betaRemaining}
+              betaLimits={betaLimits}
               settings={appData.settings}
               language={appData.settings.language}
               onRunAnalysis={runAiAnalysis}

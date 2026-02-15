@@ -71,6 +71,8 @@ const ANALYSIS_MODEL_CANDIDATES = [
   "claude-3-5-sonnet-latest"
 ] as const;
 
+const MAX_FULL_REPORTS = 4;
+
 const SIGNAL_MARKERS = [
   "Testosterone",
   "Free Testosterone",
@@ -521,22 +523,26 @@ export const analyzeLabDataWithClaude = async ({
   const derivedSignals = buildDerivedSignals(payload);
   const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);
-  const preferredOutputLanguage = language === "en" ? "English" : "Nederlands";
+  const preferredOutputLanguage = "English";
+  const recentPayload = payload.slice(-MAX_FULL_REPORTS);
+  const olderReportCount = Math.max(0, payload.length - MAX_FULL_REPORTS);
 
   const fullPrompt = [
     `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
     "Goal: pattern recognition, protocol correlations, and discussion options for doctor/patient.",
     ...FORMAT_RULES(preferredOutputLanguage),
     ...ANALYSIS_RULES,
+    "The 'recentReports' array contains the most recent reports in full detail. Older reports are summarized in 'signals.markerTrends' which covers the full history. Use both for your analysis.",
     "Use a natural structure with headings. No fixed section order or required bullet counts.",
     ...SUPPLEMENT_SECTION_TEMPLATE,
     SAFETY_NOTE,
     KEY_LEGEND,
     "DATA START",
     JSON.stringify({
-      type: "full",
+      type: analysisType,
       units: unitSystem,
-      reports: payload,
+      recentReports: recentPayload,
+      olderReportsSummarized: olderReportCount,
       signals
     }),
     "DATA END"

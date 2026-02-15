@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { analyzeLabDataWithClaude } from "../aiAnalysis";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
+import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, recordAnalysisUsage } from "../betaLimits";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 
 interface UseAnalysisOptions {
@@ -36,10 +37,19 @@ export const useAnalysis = ({
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
+  const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
     if (analysisType === "latestComparison" && visibleReports.length < 2) {
       setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
+      return;
+    }
+
+    setBetaRemaining(getRemainingAnalyses());
+    const betaCheck = checkBetaLimit();
+    if (!betaCheck.allowed) {
+      setAnalysisError(betaCheck.reason ?? "Usage limit reached.");
+      setBetaRemaining(getRemainingAnalyses());
       return;
     }
 
@@ -65,6 +75,8 @@ export const useAnalysis = ({
       setAnalysisResult(result);
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
+      recordAnalysisUsage();
+      setBetaRemaining(getRemainingAnalyses());
     } catch (error) {
       setAnalysisError(mapErrorToMessage(error, "ai"));
     } finally {
@@ -97,6 +109,8 @@ export const useAnalysis = ({
     analysisGeneratedAt,
     analysisCopied,
     analysisKind,
+    betaRemaining,
+    betaLimits: BETA_LIMITS,
     setAnalysisError,
     runAiAnalysis,
     copyAnalysis

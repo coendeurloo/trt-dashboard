@@ -15,6 +15,14 @@ interface AnalysisViewProps {
   visibleReports: LabReport[];
   samplingControlsEnabled: boolean;
   allMarkersCount: number;
+  betaRemaining: {
+    dailyRemaining: number;
+    monthlyRemaining: number;
+  };
+  betaLimits: {
+    maxAnalysesPerDay: number;
+    maxAnalysesPerMonth: number;
+  };
   settings: AppSettings;
   language: AppLanguage;
   onRunAnalysis: (mode: "full" | "latestComparison") => void;
@@ -32,6 +40,8 @@ const AnalysisView = ({
   visibleReports,
   samplingControlsEnabled,
   allMarkersCount,
+  betaRemaining,
+  betaLimits,
   settings,
   language,
   onRunAnalysis,
@@ -46,23 +56,30 @@ const AnalysisView = ({
         <h3 className="text-base font-semibold text-slate-100">{tr("AI Lab Analyse", "AI Lab Analysis")}</h3>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
-            "Laat AI al je labwaardes over tijd analyseren, inclusief protocol, supplementen, symptomen en notities.",
-            "Let AI analyze all your lab values over time, including protocol, supplements, symptoms, and notes."
+            "Laat AI je labwaardes analyseren, inclusief protocol, supplementen en symptomen. Gratis tijdens de beta.",
+            "Let AI analyze your lab values including protocol, supplements, and symptoms. Free during beta."
           )}
         </p>
-        <p className="mt-1 text-xs text-slate-500">
-          {tr(
-            "Deze analyse gebruikt alle opgeslagen rapporten en stuurt data naar Anthropic via de serverconfiguratie.",
-            "This analysis uses all saved reports and sends data to Anthropic through server-side configuration."
-          )}
-        </p>
+
+        <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">
+          <span className="font-medium">Free beta</span>
+          {" - "}
+          {betaRemaining.dailyRemaining}/{betaLimits.maxAnalysesPerDay} analyses today
+          {" · "}
+          {betaRemaining.monthlyRemaining}/{betaLimits.maxAnalysesPerMonth} this month
+        </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:opacity-50"
             onClick={() => onRunAnalysis("full")}
-            disabled={isAnalyzingLabs || visibleReports.length === 0}
+            disabled={
+              isAnalyzingLabs ||
+              visibleReports.length === 0 ||
+              betaRemaining.dailyRemaining === 0 ||
+              betaRemaining.monthlyRemaining === 0
+            }
           >
             {isAnalyzingLabs ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {isAnalyzingLabs ? tr("Analyseren...", "Analyzing...") : tr("Volledige AI-analyse", "Full AI analysis")}
@@ -71,7 +88,12 @@ const AnalysisView = ({
             type="button"
             className="analysis-latest-btn inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200 disabled:opacity-50"
             onClick={() => onRunAnalysis("latestComparison")}
-            disabled={isAnalyzingLabs || visibleReports.length < 2}
+            disabled={
+              isAnalyzingLabs ||
+              visibleReports.length < 2 ||
+              betaRemaining.dailyRemaining === 0 ||
+              betaRemaining.monthlyRemaining === 0
+            }
           >
             <Sparkles className="h-4 w-4" />
             {tr("Laatste vs vorige", "Latest vs previous")}
@@ -87,7 +109,10 @@ const AnalysisView = ({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
-          <span>{tr("Rapporten in scope", "Reports in scope")}: {visibleReports.length}</span>
+          <span>
+            {tr("Rapporten in scope", "Reports in scope")}: {visibleReports.length}
+            {visibleReports.length > 4 ? tr(" (laatste 4 volledig + trends)", " (latest 4 full + trends)") : ""}
+          </span>
           {samplingControlsEnabled ? <span>{tr("Meetmoment-filter", "Sampling filter")}: {settings.samplingFilter}</span> : null}
           <span>{tr("Markers gevolgd", "Markers tracked")}: {allMarkersCount}</span>
           <span>{tr("Eenheden", "Unit system")}: {settings.unitSystem.toUpperCase()}</span>
