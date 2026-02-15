@@ -77,6 +77,34 @@ export const UI_TEXT = {
   unknownMarkerInfoHigh: {
     nl: "Een hoge waarde kan relevant zijn afhankelijk van context, klachten en referentiebereik.",
     en: "A high value can matter depending on context, symptoms, and reference range."
+  },
+  aiProxyUnreachable: {
+    nl: "Kon de lokale AI-proxy niet bereiken. Herstart de app-server en probeer opnieuw.",
+    en: "Could not reach the local AI proxy. Restart the app server and try again."
+  },
+  aiEmptyResponse: {
+    nl: "Claude gaf geen analyse-tekst terug.",
+    en: "Claude returned no analysis text."
+  },
+  aiRequestFailed: {
+    nl: "AI-analyse mislukt.",
+    en: "AI analysis failed."
+  },
+  pdfProxyUnreachable: {
+    nl: "Kon de lokale AI-proxy niet bereiken voor PDF-extractie. Herstart de app-server en probeer opnieuw.",
+    en: "Could not reach the local AI proxy for PDF extraction. Restart the app server and try again."
+  },
+  pdfEmptyResponse: {
+    nl: "Claude gaf geen bruikbare extractie-tekst terug.",
+    en: "Claude returned no usable extraction text."
+  },
+  pdfExtractionFailed: {
+    nl: "PDF-extractie via AI is mislukt.",
+    en: "AI PDF extraction failed."
+  },
+  pdfProcessFailed: {
+    nl: "Kon dit PDF-bestand niet verwerken.",
+    en: "Could not process this PDF file."
   }
 } as const;
 

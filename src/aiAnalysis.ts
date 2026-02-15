@@ -612,7 +612,7 @@ export const analyzeLabDataWithClaude = async ({
       result = await tryModel(model);
     } catch (error) {
       if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
-        throw new Error("Kon de lokale AI-proxy niet bereiken. Herstart de app-server en probeer opnieuw.");
+        throw new Error("AI_PROXY_UNREACHABLE");
       }
       throw error;
     }
@@ -621,7 +621,7 @@ export const analyzeLabDataWithClaude = async ({
     if (result.status >= 200 && result.status < 300) {
       const text = result.body.content?.find((item) => item.type === "text")?.text?.trim();
       if (!text) {
-        throw new Error("Claude gaf geen analyse-tekst terug.");
+        throw new Error("AI_EMPTY_RESPONSE");
       }
       return stripComplexFormatting(text);
     }
@@ -635,6 +635,5 @@ export const analyzeLabDataWithClaude = async ({
     break;
   }
 
-  const details = lastErrorMessage ? ` ${lastErrorMessage}` : "";
-  throw new Error(`AI-analyse mislukt (status ${lastStatus || "unknown"}).${details}`.trim());
+  throw new Error(`AI_REQUEST_FAILED:${lastStatus || "unknown"}:${lastErrorMessage || ""}`);
 };

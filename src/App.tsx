@@ -1702,6 +1702,47 @@ const App = () => {
   const isNl = appData.settings.language === "nl";
   const samplingControlsEnabled = appData.settings.enableSamplingControls;
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const mapServiceErrorToMessage = (
+    error: unknown,
+    scope: "ai" | "pdf"
+  ): string => {
+    if (!(error instanceof Error)) {
+      return scope === "ai"
+        ? tr("AI-analyse kon niet worden uitgevoerd.", "AI analysis could not be completed.")
+        : t(appData.settings.language, "pdfProcessFailed");
+    }
+
+    const code = error.message ?? "";
+    if (scope === "ai") {
+      if (code === "AI_PROXY_UNREACHABLE") {
+        return t(appData.settings.language, "aiProxyUnreachable");
+      }
+      if (code === "AI_EMPTY_RESPONSE") {
+        return t(appData.settings.language, "aiEmptyResponse");
+      }
+      if (code.startsWith("AI_REQUEST_FAILED:")) {
+        const [, status, ...rest] = code.split(":");
+        const details = rest.join(":").trim();
+        const suffix = details ? ` (${status || "unknown"}: ${details})` : ` (${status || "unknown"})`;
+        return `${t(appData.settings.language, "aiRequestFailed")}${suffix}`;
+      }
+      return error.message;
+    }
+
+    if (code === "PDF_PROXY_UNREACHABLE") {
+      return t(appData.settings.language, "pdfProxyUnreachable");
+    }
+    if (code === "PDF_EMPTY_RESPONSE") {
+      return t(appData.settings.language, "pdfEmptyResponse");
+    }
+    if (code.startsWith("PDF_EXTRACTION_FAILED:")) {
+      const [, status, ...rest] = code.split(":");
+      const details = rest.join(":").trim();
+      const suffix = details ? ` (${status || "unknown"}: ${details})` : ` (${status || "unknown"})`;
+      return `${t(appData.settings.language, "pdfExtractionFailed")}${suffix}`;
+    }
+    return t(appData.settings.language, "pdfProcessFailed");
+  };
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
@@ -2079,7 +2120,7 @@ const App = () => {
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
     } catch (error) {
-      setAnalysisError(error instanceof Error ? error.message : tr("AI-analyse kon niet worden uitgevoerd.", "AI analysis could not be completed."));
+      setAnalysisError(mapServiceErrorToMessage(error, "ai"));
     } finally {
       setIsAnalyzingLabs(false);
     }
@@ -2142,7 +2183,7 @@ const App = () => {
       setDraftAnnotations(blankAnnotations());
       setActiveTab("dashboard");
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : tr("Kon dit PDF-bestand niet verwerken.", "Could not process this PDF file."));
+      setUploadError(mapServiceErrorToMessage(error, "pdf"));
     } finally {
       setIsProcessing(false);
     }

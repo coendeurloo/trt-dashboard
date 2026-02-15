@@ -747,7 +747,7 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
       result = await tryModel(model);
     } catch (error) {
       if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
-        throw new Error("Claude extraction proxy unreachable");
+        throw new Error("PDF_PROXY_UNREACHABLE");
       }
       throw error;
     }
@@ -765,16 +765,16 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
     if (missingModel) {
       continue;
     }
-    throw new Error(`Claude extraction failed with status ${result.status}${errorMessage ? `: ${errorMessage}` : ""}`);
+    throw new Error(`PDF_EXTRACTION_FAILED:${result.status}:${errorMessage || ""}`);
   }
 
   if (!body) {
-    throw new Error(`Claude extraction failed with status ${lastStatus}${lastErrorMessage ? `: ${lastErrorMessage}` : ""}`);
+    throw new Error(`PDF_EXTRACTION_FAILED:${lastStatus}:${lastErrorMessage || ""}`);
   }
 
   const textContent = body.content?.find((block) => block.type === "text")?.text;
   if (!textContent) {
-    throw new Error("Claude response did not include text content");
+    throw new Error("PDF_EMPTY_RESPONSE");
   }
 
   const json = extractJsonBlock(textContent);
