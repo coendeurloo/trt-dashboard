@@ -1,5 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { PRIMARY_MARKERS } from "./constants";
 import { ExtractionDraft, MarkerValue } from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
@@ -682,7 +683,25 @@ const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
   };
 };
 
-const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: string): Promise<ExtractionDraft> => {
+const meetsQualityThreshold = (draft: ExtractionDraft): boolean => {
+  const hasEnoughMarkers = draft.markers.length >= 5;
+  const hasConfidence = draft.extraction.confidence >= 0.65;
+  const primaryMatches = new Set(
+    draft.markers
+      .map((marker) => marker.canonicalMarker)
+      .filter((canonical) => (PRIMARY_MARKERS as readonly string[]).includes(canonical))
+  ).size;
+  const hasPrimaryCoverage = primaryMatches >= 2;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const hasValidDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.testDate) && draft.testDate !== todayIso;
+  return hasEnoughMarkers && hasConfidence && hasPrimaryCoverage && hasValidDate;
+};
+
+const callClaudeExtraction = async (
+  pdfText: string,
+  fileName: string,
+  fallbackDraft: ExtractionDraft
+): Promise<ExtractionDraft> => {
   const prompt = [
     "Extract blood lab data from the text below.",
     "Return ONLY valid JSON in this exact shape:",
@@ -714,7 +733,7 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
           "content-type": "application/json"
         },
         body: JSON.stringify({
-          apiKey,
+          requestType: "extraction",
           payload: {
             model,
             max_tokens: 1800,
@@ -760,6 +779,11 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
     }
 
     const errorMessage = result.body.error?.message ?? "";
+    if (result.status === 429) {
+      const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
+      const retryAfter = typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
+      throw new Error(`PDF_RATE_LIMITED:${retryAfter}`);
+    }
     lastErrorMessage = errorMessage;
     const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
     if (missingModel) {
@@ -785,7 +809,6 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
   const parsed = JSON.parse(json) as ClaudeExtraction;
   const rawMarkers = Array.isArray(parsed.markers) ? parsed.markers : [];
   const claudeMarkers = rawMarkers.map(normalizeMarker).filter((row): row is MarkerValue => Boolean(row));
-  const fallbackDraft = fallbackExtract(pdfText, fileName);
   const markers = mergeMarkerSets(claudeMarkers, fallbackDraft.markers);
 
   const confidence =
@@ -809,16 +832,30 @@ const callClaudeExtraction = async (pdfText: string, apiKey: string, fileName: s
   };
 };
 
-export const extractLabData = async (file: File, apiKey: string): Promise<ExtractionDraft> => {
+export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
   const pdfText = await extractPdfText(file);
+  const fallbackDraft = fallbackExtract(pdfText, file.name);
 
-  if (!apiKey.trim()) {
-    return fallbackExtract(pdfText, file.name);
+  if (meetsQualityThreshold(fallbackDraft)) {
+    return {
+      ...fallbackDraft,
+      extraction: {
+        ...fallbackDraft.extraction,
+        provider: "fallback",
+        needsReview: true
+      }
+    };
   }
 
   try {
-    return await callClaudeExtraction(pdfText, apiKey.trim(), file.name);
-  } catch {
-    return fallbackExtract(pdfText, file.name);
+    return await callClaudeExtraction(pdfText, file.name, fallbackDraft);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("PDF_RATE_LIMITED")) {
+      const retryAfter = Number(error.message.split(":")[1] ?? "0");
+      const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0;
+      // Keep extraction resilient for users: when throttled, continue with local parser.
+      console.warn(`Claude extraction rate-limited; falling back to local parser${seconds ? ` for ~${seconds}s` : ""}.`);
+    }
+    return fallbackDraft;
   }
 };
