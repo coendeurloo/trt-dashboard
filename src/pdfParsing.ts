@@ -50,6 +50,14 @@ interface DateScore {
   firstIndex: number;
 }
 
+interface PdfTextExtractionResult {
+  text: string;
+  pageCount: number;
+  textItemCount: number;
+  lineCount: number;
+  nonWhitespaceChars: number;
+}
+
 type ParserProfileId = "adaptive";
 
 interface ParserProfile {
@@ -87,6 +95,9 @@ const REPORT_CONTEXT_HINT_PATTERN =
   /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
 const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
 const DASH_TOKEN_PATTERN = /^[-–]$/;
+const OCR_LANGS = "eng+nld";
+const OCR_MAX_PAGES = 8;
+const OCR_RENDER_SCALE = 2;
 const DEFAULT_PROFILE: ParserProfile = {
   id: "adaptive",
   requireUnit: true,
@@ -94,10 +105,11 @@ const DEFAULT_PROFILE: ParserProfile = {
   lineNoisePattern: /\b(?:patient details|requesting physician|clinical history|interpretation|notes?)\b/i
 };
 
-const extractPdfText = async (file: File): Promise<string> => {
-  const arrayBuffer = await file.arrayBuffer();
+const extractPdfText = async (arrayBuffer: ArrayBuffer): Promise<PdfTextExtractionResult> => {
   const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const chunks: string[] = [];
+  let textItemCount = 0;
+  let lineCount = 0;
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum += 1) {
     const page = await doc.getPage(pageNum);
@@ -110,6 +122,7 @@ const extractPdfText = async (file: File): Promise<string> => {
       if (!lineText) {
         continue;
       }
+      textItemCount += 1;
 
       const transform = Array.isArray(textItem.transform) ? textItem.transform : [];
       const x = typeof transform[4] === "number" ? transform[4] : 0;
@@ -148,10 +161,18 @@ const extractPdfText = async (file: File): Promise<string> => {
       })
       .filter(Boolean);
 
+    lineCount += pageLines.length;
     chunks.push(pageLines.join("\n"));
   }
 
-  return chunks.join("\n");
+  const mergedText = chunks.join("\n");
+  return {
+    text: mergedText,
+    pageCount: doc.numPages,
+    textItemCount,
+    lineCount,
+    nonWhitespaceChars: mergedText.replace(/\s+/g, "").length
+  };
 };
 
 const extractJsonBlock = (input: string): string | null => {
@@ -166,6 +187,103 @@ const extractJsonBlock = (input: string): string | null => {
     return null;
   }
   return input.slice(start, end + 1);
+};
+
+const isBrowserRuntime = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
+
+const shouldUseOcrFallback = (textResult: PdfTextExtractionResult, fallbackDraft: ExtractionDraft): boolean => {
+  if (fallbackDraft.markers.length >= 6 && fallbackDraft.extraction.confidence >= 0.72) {
+    return false;
+  }
+
+  const sparseTextLayer = textResult.textItemCount < Math.max(40, textResult.pageCount * 18);
+  const sparseCharacters = textResult.nonWhitespaceChars < Math.max(260, textResult.pageCount * 120);
+  const sparseLines = textResult.lineCount < Math.max(16, textResult.pageCount * 8);
+  return sparseTextLayer || (sparseCharacters && sparseLines);
+};
+
+const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionDraft): ExtractionDraft => {
+  const baseUnitCount = base.markers.filter((marker) => marker.unit).length;
+  const candidateUnitCount = candidate.markers.filter((marker) => marker.unit).length;
+
+  const baseScore = base.markers.length * 3 + baseUnitCount * 1.5 + base.extraction.confidence;
+  const candidateScore = candidate.markers.length * 3 + candidateUnitCount * 1.5 + candidate.extraction.confidence;
+
+  return candidateScore > baseScore ? candidate : base;
+};
+
+const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+  if (!isBrowserRuntime()) {
+    return "";
+  }
+
+  type TesseractModule = {
+    createWorker?: (...args: unknown[]) => Promise<{
+      recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string } }>;
+      setParameters?: (params: Record<string, string>) => Promise<unknown>;
+      terminate: () => Promise<unknown>;
+    }>;
+    default?: {
+      createWorker?: (...args: unknown[]) => Promise<{
+        recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string } }>;
+        setParameters?: (params: Record<string, string>) => Promise<unknown>;
+        terminate: () => Promise<unknown>;
+      }>;
+    };
+  };
+
+  let createWorker: TesseractModule["createWorker"];
+  try {
+    const module = (await import("tesseract.js")) as TesseractModule;
+    createWorker = module.createWorker ?? module.default?.createWorker;
+  } catch {
+    return "";
+  }
+
+  if (!createWorker) {
+    return "";
+  }
+
+  const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pageLimit = Math.min(doc.numPages, OCR_MAX_PAGES);
+  if (pageLimit === 0) {
+    return "";
+  }
+
+  const worker = await createWorker(OCR_LANGS, 1, {});
+  const chunks: string[] = [];
+
+  try {
+    await worker.setParameters?.({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: "6"
+    });
+
+    for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
+      const page = await doc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        continue;
+      }
+
+      await page.render({ canvasContext: context, viewport }).promise;
+      const recognized = await worker.recognize(canvas);
+      const ocrText = cleanWhitespace(recognized.data?.text ?? "");
+      if (ocrText) {
+        chunks.push(ocrText);
+      }
+    }
+  } catch (error) {
+    console.warn("PDF OCR fallback failed", error);
+  } finally {
+    await worker.terminate().catch(() => undefined);
+  }
+
+  return chunks.join("\n");
 };
 
 const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
@@ -1401,8 +1519,29 @@ const callClaudeExtraction = async (
 };
 
 export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
-  const pdfText = await extractPdfText(file);
-  const fallbackDraft = fallbackExtract(pdfText, file.name);
+  const arrayBuffer = await file.arrayBuffer();
+  const textResult = await extractPdfText(arrayBuffer);
+  let extractionText = textResult.text;
+  let fallbackDraft = fallbackExtract(extractionText, file.name);
+
+  if (shouldUseOcrFallback(textResult, fallbackDraft)) {
+    const ocrText = await extractPdfTextViaOcr(arrayBuffer);
+    if (ocrText) {
+      extractionText = `${extractionText}\n${ocrText}`.trim();
+      const ocrDraft = fallbackExtract(extractionText, file.name);
+      const selected = chooseBetterFallbackDraft(fallbackDraft, ocrDraft);
+      fallbackDraft =
+        selected === ocrDraft
+          ? {
+              ...selected,
+              extraction: {
+                ...selected.extraction,
+                model: `${selected.extraction.model}+ocr`
+              }
+            }
+          : fallbackDraft;
+    }
+  }
 
   if (meetsQualityThreshold(fallbackDraft)) {
     return {
@@ -1416,7 +1555,7 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
   }
 
   try {
-    return await callClaudeExtraction(pdfText, file.name, fallbackDraft);
+    return await callClaudeExtraction(extractionText, file.name, fallbackDraft);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PDF_RATE_LIMITED")) {
       const retryAfter = Number(error.message.split(":")[1] ?? "0");
@@ -1431,6 +1570,7 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
 export const __pdfParsingInternals = {
   detectParserProfile,
   extractDateCandidate,
+  shouldUseOcrFallback,
   parseSingleRow,
   parseTwoLineRow,
   parseLineRows,

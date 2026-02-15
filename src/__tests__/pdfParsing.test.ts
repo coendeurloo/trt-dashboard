@@ -81,4 +81,20 @@ describe("pdfParsing fallback layers", () => {
     expect(markerNames).toContain("Haemoglobin");
     expect(markerNames).not.toContain("Platelet Count");
   });
+
+  it("flags sparse text-layer PDFs for OCR fallback", () => {
+    const draft = __pdfParsingInternals.fallbackExtract("Testosterone 12 ng/mL", "sparse.pdf");
+    const shouldUseOcr = __pdfParsingInternals.shouldUseOcrFallback(
+      {
+        text: "Testosterone 12 ng/mL",
+        pageCount: 2,
+        textItemCount: 8,
+        lineCount: 2,
+        nonWhitespaceChars: 18
+      },
+      draft
+    );
+
+    expect(shouldUseOcr).toBe(true);
+  });
 });

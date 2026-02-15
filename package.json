@@ -27,7 +27,8 @@
     "react-dropzone": "^14.3.8",
     "react-markdown": "^10.1.0",
     "recharts": "^2.13.0",
-    "remark-breaks": "^4.0.0"
+    "remark-breaks": "^4.0.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
