@@ -1,8 +1,6 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { addDays, format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { useDropzone } from "react-dropzone";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import {
@@ -68,20 +66,45 @@ import {
   classifyMarkerTrend,
   computeTrtStabilityIndex,
   enrichReportsWithCalculatedMarkers,
-  estimateDoseResponse,
   filterReportsBySampling,
   getTargetZone
 } from "./analytics";
-import { analyzeLabDataWithClaude } from "./aiAnalysis";
 import { buildCsv } from "./csvExport";
 import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
+import AlertTrendMiniChart from "./components/AlertTrendMiniChart";
+import ComparisonChart from "./components/ComparisonChart";
+import DoseProjectionChart from "./components/DoseProjectionChart";
+import ExtractionReviewTable from "./components/ExtractionReviewTable";
+import MarkerChartCard from "./components/MarkerChartCard";
+import MarkerInfoBadge from "./components/MarkerInfoBadge";
+import MarkerTrendChart from "./components/MarkerTrendChart";
+import UploadPanel from "./components/UploadPanel";
+import {
+  abnormalStatusLabel,
+  blankAnnotations,
+  dedupeMarkersInReport,
+  formatAxisTick,
+  markerSimilarity,
+  normalizeAnalysisTextForDisplay,
+  stabilityColor
+} from "./chartHelpers";
 import { getMarkerDisplayName, getMarkerMeta, getTabLabel, t } from "./i18n";
 import trtLogo from "./assets/trt-logo.png";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
-import { coerceStoredAppData, loadAppData, saveAppData } from "./storage";
+import { coerceStoredAppData } from "./storage";
 import { canonicalizeMarker, convertBySystem, normalizeMarkerMeasurement } from "./unitConversion";
+import useAnalysis from "./hooks/useAnalysis";
+import useAppData from "./hooks/useAppData";
+import useDerivedData from "./hooks/useDerivedData";
+import AlertsView from "./views/AlertsView";
+import AnalysisView from "./views/AnalysisView";
+import DashboardView from "./views/DashboardView";
+import DoseResponseView from "./views/DoseResponseView";
+import ProtocolImpactView from "./views/ProtocolImpactView";
+import ReportsView from "./views/ReportsView";
+import SettingsView from "./views/SettingsView";
 import {
   AppSettings,
   ExtractionDraft,
@@ -101,115 +124,11 @@ import {
   withinRange
 } from "./utils";
 
-interface EditableCellProps {
-  value: string | number | null;
-  align?: "left" | "right";
-  placeholder?: string;
-  editLabel?: string;
-  onCommit: (value: string) => void;
-}
-
 interface MarkerMergeSuggestion {
   sourceCanonical: string;
   targetCanonical: string;
   score: number;
 }
-
-const markerColor = (index: number): string => {
-  const palette = ["#22d3ee", "#34d399", "#60a5fa", "#f59e0b", "#f472b6", "#facc15", "#a78bfa"];
-  return palette[index % palette.length];
-};
-
-const formatAxisTick = (value: number): string => {
-  const abs = Math.abs(value);
-  let decimals = 2;
-  if (abs >= 100) {
-    decimals = 0;
-  } else if (abs >= 10) {
-    decimals = 1;
-  } else if (abs < 1) {
-    decimals = 3;
-  }
-  return Number(value.toFixed(decimals)).toString();
-};
-
-const buildYAxisDomain = (
-  values: number[],
-  mode: AppSettings["yAxisMode"]
-): [number, number] | undefined => {
-  if (values.length === 0) {
-    return undefined;
-  }
-
-  const dataMin = Math.min(...values);
-  const dataMax = Math.max(...values);
-  if (!Number.isFinite(dataMin) || !Number.isFinite(dataMax)) {
-    return undefined;
-  }
-
-  const span = Math.abs(dataMax - dataMin);
-  const padding = span === 0 ? Math.max(Math.abs(dataMax) * 0.08, 1) : span * 0.08;
-
-  if (mode === "data") {
-    const min = dataMin - padding;
-    const max = dataMax + padding;
-    return max > min ? [min, max] : [dataMin - 1, dataMax + 1];
-  }
-
-  const min = dataMin < 0 ? dataMin - padding : 0;
-  const max = dataMax + padding;
-  return max > min ? [min, max] : [min, min + 1];
-};
-
-const blankAnnotations = (): ReportAnnotations => ({
-  dosageMgPerWeek: null,
-  protocol: "",
-  supplements: "",
-  symptoms: "",
-  notes: "",
-  samplingTiming: "trough"
-});
-
-const normalizeAnalysisTextForDisplay = (raw: string): string => {
-  if (!raw.trim()) {
-    return "";
-  }
-
-  return raw
-    .replace(/\r\n/g, "\n")
-    .replace(
-      /([^\n])\s+(?=(Supplement:|Advies:|Huidige status|Optie:|Waarom nu|Verwachte impact:|Mogelijke nadelen:|Mogelijke nadelen\/barrières:|Praktische dosering|Praktische uitvoering|Wat monitoren|Evidentie uit betrouwbare studies:|Evidentie \(auteur\/jaar\/studietype\):|Leefstijlactie:|Confidence:))/g,
-      "$1\n"
-    )
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
-
-const compactTooltipText = (value: string, maxLength = 64): string => {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  if (!normalized) {
-    return "-";
-  }
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(1, maxLength - 1))}\u2026`;
-};
-
-const clampNumber = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
-
-const stabilityColor = (score: number | null): string => {
-  if (score === null) {
-    return "#64748b";
-  }
-  if (score >= 80) {
-    return "#22c55e";
-  }
-  if (score >= 60) {
-    return "#f59e0b";
-  }
-  return "#fb7185";
-};
 
 const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
   Hormones: ["Testosterone", "Free Testosterone", "Estradiol", "SHBG", "Free Androgen Index", "Dihydrotestosteron (DHT)"],
@@ -217,60 +136,6 @@ const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
   Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
   Inflammation: ["CRP"]
 };
-
-const normalizeMarkerKey = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const markerSimilarity = (left: string, right: string): number => {
-  const a = normalizeMarkerKey(left);
-  const b = normalizeMarkerKey(right);
-  if (!a || !b) {
-    return 0;
-  }
-  if (a === b) {
-    return 1;
-  }
-  if (a.includes(b) || b.includes(a)) {
-    return 0.9;
-  }
-
-  const aTokens = new Set(a.split(" "));
-  const bTokens = new Set(b.split(" "));
-  const sharedTokens = Array.from(aTokens).filter((token) => bTokens.has(token)).length;
-  const tokenScore = (2 * sharedTokens) / (aTokens.size + bTokens.size);
-
-  const aBigrams = new Set(Array.from({ length: Math.max(0, a.length - 1) }, (_, i) => a.slice(i, i + 2)));
-  const bBigrams = new Set(Array.from({ length: Math.max(0, b.length - 1) }, (_, i) => b.slice(i, i + 2)));
-  const sharedBigrams = Array.from(aBigrams).filter((token) => bBigrams.has(token)).length;
-  const bigramScore = aBigrams.size === 0 || bBigrams.size === 0 ? 0 : (2 * sharedBigrams) / (aBigrams.size + bBigrams.size);
-
-  return tokenScore * 0.65 + bigramScore * 0.35;
-};
-
-const dedupeMarkersInReport = (markers: MarkerValue[]): MarkerValue[] =>
-  Array.from(
-    markers
-      .reduce((map, marker) => {
-        const key = [
-          marker.canonicalMarker,
-          marker.value,
-          marker.unit,
-          marker.referenceMin ?? "",
-          marker.referenceMax ?? "",
-          marker.isCalculated ? "calc" : "raw"
-        ].join("|");
-        const existing = map.get(key);
-        if (!existing || marker.confidence > existing.confidence) {
-          map.set(key, marker);
-        }
-        return map;
-      }, new Map<string, MarkerValue>())
-      .values()
-  );
 
 const detectMarkerMergeSuggestions = (
   incomingCanonicalMarkers: string[],
@@ -319,1365 +184,6 @@ const detectMarkerMergeSuggestions = (
   );
 };
 
-const EditableCell = ({ value, align = "left", placeholder = "", editLabel = "Edit value", onCommit }: EditableCellProps) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(value === null ? "" : String(value));
-
-  useEffect(() => {
-    setDraft(value === null ? "" : String(value));
-  }, [value]);
-
-  if (isEditing) {
-    return (
-      <input
-        autoFocus
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          onCommit(draft);
-          setIsEditing(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            onCommit(draft);
-            setIsEditing(false);
-          }
-          if (event.key === "Escape") {
-            setDraft(value === null ? "" : String(value));
-            setIsEditing(false);
-          }
-        }}
-        placeholder={placeholder}
-        className={`w-full rounded-md border border-cyan-500/40 bg-slate-900/80 px-2 py-1 text-sm text-slate-100 focus:outline-none ${
-          align === "right" ? "text-right" : "text-left"
-        }`}
-      />
-    );
-  }
-
-  return (
-    <div className={`group relative min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
-      <span className="pr-6 text-sm text-slate-200">{value === null || value === "" ? "-" : String(value)}</span>
-      <button
-        type="button"
-        className="absolute right-0 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-cyan-300"
-        onClick={() => setIsEditing(true)}
-        aria-label={editLabel}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-};
-
-interface UploadPanelProps {
-  isProcessing: boolean;
-  onFileSelected: (file: File) => void;
-  language: AppLanguage;
-}
-
-const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProps) => {
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      "application/pdf": [".pdf"]
-    },
-    maxFiles: 1,
-    disabled: isProcessing,
-    onDrop: (files) => {
-      const file = files[0];
-      if (!file) {
-        return;
-      }
-      onFileSelected(file);
-    }
-  });
-
-  return (
-    <motion.div
-      layout
-      className={`upload-panel-shell rounded-2xl border border-dashed p-5 transition ${
-        isDragActive
-          ? "border-cyan-400 bg-cyan-500/10"
-          : "border-slate-600/50 bg-slate-900/30 hover:border-cyan-500/50"
-      }`}
-    >
-      <div
-        {...getRootProps()}
-        className="upload-panel-dropzone flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl px-4 py-9 text-center"
-      >
-        <input {...getInputProps()} />
-        {isProcessing ? (
-          <>
-            <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
-            <p className="text-sm text-slate-200">
-              {language === "nl" ? "PDF wordt verwerkt en labwaarden worden uitgelezen..." : "Processing PDF and extracting lab values..."}
-            </p>
-          </>
-        ) : (
-          <>
-            <UploadCloud className="h-9 w-9 text-cyan-300" />
-            <div>
-              <p className="text-base font-semibold text-slate-100">
-                {language === "nl" ? "Sleep je lab-PDF hierheen" : "Drag and drop your lab PDF here"}
-              </p>
-              <p className="mt-1 text-sm text-slate-300">{language === "nl" ? "of klik om te bladeren" : "or click to browse files"}</p>
-            </div>
-          </>
-        )}
-      </div>
-    </motion.div>
-  );
-};
-
-interface ExtractionReviewProps {
-  draft: ExtractionDraft;
-  annotations: ReportAnnotations;
-  language: AppLanguage;
-  showSamplingTiming: boolean;
-  onDraftChange: (draft: ExtractionDraft) => void;
-  onAnnotationsChange: (annotations: ReportAnnotations) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}
-
-const ExtractionReview = ({
-  draft,
-  annotations,
-  language,
-  showSamplingTiming,
-  onDraftChange,
-  onAnnotationsChange,
-  onSave,
-  onCancel
-}: ExtractionReviewProps) => {
-  const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
-  const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
-    if (value === "high") {
-      return tr("Hoog", "High");
-    }
-    if (value === "low") {
-      return tr("Laag", "Low");
-    }
-    if (value === "normal") {
-      return tr("Normaal", "Normal");
-    }
-    return tr("Onbekend", "Unknown");
-  };
-
-  const updateRow = (rowId: string, updater: (row: MarkerValue) => MarkerValue) => {
-    onDraftChange({
-      ...draft,
-      markers: draft.markers.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-        const next = updater(row);
-        const normalized = normalizeMarkerMeasurement({
-          canonicalMarker: next.canonicalMarker,
-          value: next.value,
-          unit: next.unit,
-          referenceMin: next.referenceMin,
-          referenceMax: next.referenceMax
-        });
-        return {
-          ...next,
-          value: normalized.value,
-          unit: normalized.unit,
-          referenceMin: normalized.referenceMin,
-          referenceMax: normalized.referenceMax,
-          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
-        };
-      })
-    });
-  };
-
-  const addRow = () => {
-    onDraftChange({
-      ...draft,
-      markers: [
-        ...draft.markers,
-        {
-          id: createId(),
-          marker: "",
-          canonicalMarker: "Unknown Marker",
-          value: 0,
-          unit: "",
-          referenceMin: null,
-          referenceMax: null,
-          abnormal: "unknown",
-          confidence: 0.4
-        }
-      ]
-    });
-  };
-
-  const removeRow = (rowId: string) => {
-    onDraftChange({
-      ...draft,
-      markers: draft.markers.filter((row) => row.id !== rowId)
-    });
-  };
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-4 shadow-soft"
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-100">{tr("Controleer geëxtraheerde data", "Review extracted data")}</h2>
-          <p className="text-sm text-slate-300">
-            {draft.sourceFileName} | {draft.extraction.provider.toUpperCase()} {tr("betrouwbaarheid", "confidence")}{" "}
-            <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {draft.extraction.needsReview ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
-              <AlertTriangle className="h-3.5 w-3.5" /> {tr("Controleren", "Needs review")}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-400"
-            onClick={onCancel}
-          >
-            <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-900 hover:bg-cyan-400"
-            onClick={onSave}
-          >
-            <Save className="h-4 w-4" /> {tr("Rapport opslaan", "Save report")}
-          </button>
-        </div>
-      </div>
-
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
-          <input
-            type="date"
-            value={draft.testDate}
-            onChange={(event) => onDraftChange({ ...draft, testDate: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Dosis (mg/week)", "Dose (mg/week)")}</label>
-          <input
-            type="number"
-            value={annotations.dosageMgPerWeek ?? ""}
-            onChange={(event) =>
-              onAnnotationsChange({
-                ...annotations,
-                dosageMgPerWeek: safeNumber(event.target.value)
-              })
-            }
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("bijv. 120", "e.g. 120")}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Protocol</label>
-          <input
-            value={annotations.protocol}
-            onChange={(event) => onAnnotationsChange({ ...annotations, protocol: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="2x per week SubQ"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Supplementen", "Supplements")}</label>
-          <input
-            value={annotations.supplements}
-            onChange={(event) => onAnnotationsChange({ ...annotations, supplements: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="Vitamin D, Omega-3"
-          />
-        </div>
-        {showSamplingTiming ? (
-          <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Meetmoment", "Sampling timing")}</label>
-            <select
-              value={annotations.samplingTiming}
-              onChange={(event) =>
-                onAnnotationsChange({
-                  ...annotations,
-                  samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
-                })
-              }
-              className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="unknown">{tr("Onbekend", "Unknown")}</option>
-              <option value="trough">Trough</option>
-              <option value="mid">{tr("Midden", "Mid")}</option>
-              <option value="peak">Peak</option>
-            </select>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Symptomen", "Symptoms")}</label>
-          <textarea
-            value={annotations.symptoms}
-            onChange={(event) => onAnnotationsChange({ ...annotations, symptoms: event.target.value })}
-            className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Energie, libido, stemming, slaap", "Energy, libido, mood, sleep")}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Notities", "Notes")}</label>
-          <textarea
-            value={annotations.notes}
-            onChange={(event) => onAnnotationsChange({ ...annotations, notes: event.target.value })}
-            className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Aanvullende observaties", "Additional observations")}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700">
-        <table className="min-w-full divide-y divide-slate-700 text-sm">
-          <thead className="bg-slate-900/80 text-left text-slate-300">
-            <tr>
-              <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
-              <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
-              <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
-              <th className="px-3 py-2 text-right">{tr("Ref min", "Ref min")}</th>
-              <th className="px-3 py-2 text-right">{tr("Ref max", "Ref max")}</th>
-              <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/80">
-            {draft.markers.map((row) => (
-              <tr key={row.id} className="bg-slate-900/35">
-                <td className="px-3 py-2">
-                  <EditableCell
-                    value={row.marker}
-                    onCommit={(value) =>
-                      updateRow(row.id, (current) => ({
-                        ...current,
-                        marker: value,
-                        canonicalMarker: canonicalizeMarker(value)
-                      }))
-                    }
-                    placeholder={tr("Markernaam", "Marker name")}
-                    editLabel={tr("Waarde bewerken", "Edit value")}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <EditableCell
-                    value={row.value}
-                    align="right"
-                    editLabel={tr("Waarde bewerken", "Edit value")}
-                    onCommit={(value) =>
-                      updateRow(row.id, (current) => ({
-                        ...current,
-                        value: safeNumber(value) ?? current.value
-                      }))
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <EditableCell
-                    value={row.unit}
-                    editLabel={tr("Waarde bewerken", "Edit value")}
-                    onCommit={(value) => updateRow(row.id, (current) => ({ ...current, unit: value }))}
-                    placeholder={tr("Eenheid", "Unit")}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <EditableCell
-                    value={row.referenceMin}
-                    align="right"
-                    editLabel={tr("Waarde bewerken", "Edit value")}
-                    onCommit={(value) =>
-                      updateRow(row.id, (current) => ({
-                        ...current,
-                        referenceMin: value.trim() ? safeNumber(value) : null
-                      }))
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <EditableCell
-                    value={row.referenceMax}
-                    align="right"
-                    editLabel={tr("Waarde bewerken", "Edit value")}
-                    onCommit={(value) =>
-                      updateRow(row.id, (current) => ({
-                        ...current,
-                        referenceMax: value.trim() ? safeNumber(value) : null
-                      }))
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      row.abnormal === "high"
-                        ? "bg-rose-500/20 text-rose-300"
-                        : row.abnormal === "low"
-                          ? "bg-amber-500/20 text-amber-300"
-                          : "bg-emerald-500/20 text-emerald-300"
-                    }`}
-                  >
-                    {abnormalLabel(row.abnormal)}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <button
-                    type="button"
-                    className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
-                    onClick={() => removeRow(row.id)}
-                    aria-label={tr("Rij verwijderen", "Remove row")}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <button
-        type="button"
-        className="mt-3 inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-        onClick={addRow}
-      >
-        <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
-      </button>
-    </motion.div>
-  );
-};
-
-interface MarkerChartCardProps {
-  marker: string;
-  points: MarkerSeriesPoint[];
-  colorIndex: number;
-  settings: AppSettings;
-  language: AppLanguage;
-  phaseBlocks: ReturnType<typeof buildDosePhaseBlocks>;
-  alertCount: number;
-  trendSummary: MarkerTrendSummary | null;
-  percentChange: number | null;
-  baselineDelta: number | null;
-  isCalculatedMarker: boolean;
-  onOpenLarge: () => void;
-  onRenameMarker: (marker: string) => void;
-}
-
-interface MarkerTrendChartProps {
-  marker: string;
-  points: MarkerSeriesPoint[];
-  colorIndex: number;
-  settings: AppSettings;
-  language: AppLanguage;
-  phaseBlocks: ReturnType<typeof buildDosePhaseBlocks>;
-  height: number;
-  showYearHints?: boolean;
-}
-
-interface AlertTrendMiniChartProps {
-  marker: string;
-  points: MarkerSeriesPoint[];
-  highlightDate?: string;
-  language: AppLanguage;
-  height?: number;
-}
-
-const trendVisual = (direction: MarkerTrendSummary["direction"] | null): { icon: JSX.Element; text: string } => {
-  if (direction === "rising") {
-    return { icon: <ArrowUp className="h-3.5 w-3.5 text-emerald-300" />, text: "Rising" };
-  }
-  if (direction === "falling") {
-    return { icon: <ArrowDown className="h-3.5 w-3.5 text-amber-300" />, text: "Falling" };
-  }
-  if (direction === "volatile") {
-    return { icon: <AlertTriangle className="h-3.5 w-3.5 text-rose-300" />, text: "Volatile" };
-  }
-  return { icon: <ArrowRight className="h-3.5 w-3.5 text-slate-300" />, text: "Stable" };
-};
-
-const markerCardAccentClass = (alertCount: number, latestAbnormal: MarkerValue["abnormal"] | null): string => {
-  if (alertCount > 0 || latestAbnormal === "high") {
-    return "border-l-4 border-l-rose-400";
-  }
-  if (latestAbnormal === "low") {
-    return "border-l-4 border-l-amber-400";
-  }
-  return "border-l-4 border-l-emerald-400";
-};
-
-const phaseColor = (dose: number | null, index: number): string => {
-  if (dose !== null && dose >= 160) {
-    return "#f59e0b";
-  }
-  if (dose !== null && dose >= 120) {
-    return "#22d3ee";
-  }
-  if (dose !== null && dose < 120) {
-    return "#34d399";
-  }
-  return index % 2 === 0 ? "#334155" : "#1e293b";
-};
-
-const abnormalStatusLabel = (value: MarkerValue["abnormal"], language: AppLanguage): string => {
-  if (value === "high") {
-    return language === "nl" ? "Hoog" : "High";
-  }
-  if (value === "low") {
-    return language === "nl" ? "Laag" : "Low";
-  }
-  if (value === "normal") {
-    return language === "nl" ? "Normaal" : "Normal";
-  }
-  return language === "nl" ? "Onbekend" : "Unknown";
-};
-
-interface MarkerInfoBadgeProps {
-  marker: string;
-  language: AppLanguage;
-}
-
-const MarkerInfoBadge = ({ marker, language }: MarkerInfoBadgeProps) => {
-  const meta = getMarkerMeta(marker, language);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
-
-  useEffect(() => {
-    if (!isOpen || !triggerRef.current || typeof window === "undefined") {
-      return;
-    }
-
-    const TOOLTIP_WIDTH = 288;
-    const TOOLTIP_HEIGHT_ESTIMATE = 230;
-    const GAP = 10;
-    const EDGE_PADDING = 10;
-
-    const updatePosition = () => {
-      if (!triggerRef.current) {
-        return;
-      }
-      const rect = triggerRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const maxLeft = Math.max(EDGE_PADDING, viewportWidth - TOOLTIP_WIDTH - EDGE_PADDING);
-      const left = clampNumber(rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2, EDGE_PADDING, maxLeft);
-      const placeBelow = rect.bottom + GAP + TOOLTIP_HEIGHT_ESTIMATE <= viewportHeight - EDGE_PADDING;
-      const top = placeBelow
-        ? rect.bottom + GAP
-        : Math.max(EDGE_PADDING, rect.top - TOOLTIP_HEIGHT_ESTIMATE - GAP);
-
-      setTooltipPosition({ top, left });
-    };
-
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [isOpen]);
-
-  const tooltip = isOpen && tooltipPosition && typeof document !== "undefined"
-    ? createPortal(
-        <div
-          className="marker-info-tooltip pointer-events-none fixed z-[120] w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-3 text-left text-xs text-slate-200 shadow-xl"
-          style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
-        >
-          <p className="font-semibold text-slate-100">{meta.title}</p>
-          <p className="mt-1">{meta.what}</p>
-          <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Waarom meten:" : "Why measured:"}</strong> {meta.why}
-          </p>
-          <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Bij tekort/laag:" : "If low:"}</strong> {meta.low}
-          </p>
-          <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Bij teveel/hoog:" : "If high:"}</strong> {meta.high}
-          </p>
-        </div>,
-        document.body
-      )
-    : null;
-
-  return (
-    <div className="inline-flex">
-      <button
-        type="button"
-        ref={triggerRef}
-        className="rounded-full p-0.5 text-slate-400 transition hover:text-cyan-200"
-        aria-label={meta.title}
-        aria-expanded={isOpen}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-        onFocus={() => setIsOpen(true)}
-        onBlur={() => setIsOpen(false)}
-      >
-        <Info className="h-3.5 w-3.5" />
-      </button>
-      {tooltip}
-    </div>
-  );
-};
-
-const MarkerTrendChart = ({
-  marker,
-  points,
-  colorIndex,
-  settings,
-  language,
-  phaseBlocks,
-  height,
-  showYearHints = false
-}: MarkerTrendChartProps) => {
-  const markerLabel = getMarkerDisplayName(marker, language);
-  const mins = points.map((point) => point.referenceMin).filter((value): value is number => value !== null);
-  const maxs = points.map((point) => point.referenceMax).filter((value): value is number => value !== null);
-  const rangeMin = mins.length > 0 ? Math.min(...mins) : undefined;
-  const rangeMax = maxs.length > 0 ? Math.max(...maxs) : undefined;
-  const yAxisCandidates = points.map((point) => point.value);
-  const yDomain = buildYAxisDomain(yAxisCandidates, settings.yAxisMode);
-  const availableKeys = new Set(points.map((point) => point.key));
-  const compactTooltip = settings.tooltipDetailMode === "compact";
-  const phaseBlocksForSeries = phaseBlocks.filter(
-    (block) => availableKeys.has(block.fromKey) || availableKeys.has(block.toKey)
-  );
-
-  if (points.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-400"
-        style={{ height }}
-      >
-        {language === "nl" ? "Geen data in dit bereik" : "No data in selected range"}
-      </div>
-    );
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis
-          dataKey="key"
-          tickFormatter={(value: string, index) => {
-            try {
-              const dateString = String(value).split("__")[0];
-              const currentDate = parseISO(dateString);
-              if (!showYearHints) {
-                return format(currentDate, "dd MMM");
-              }
-
-              if (index === 0) {
-                return format(currentDate, "dd MMM yyyy");
-              }
-
-              const previousPoint = points[index - 1];
-              if (!previousPoint) {
-                return format(currentDate, "dd MMM yyyy");
-              }
-
-              const previousDate = parseISO(previousPoint.date);
-              if (previousDate.getFullYear() !== currentDate.getFullYear()) {
-                return format(currentDate, "dd MMM yyyy");
-              }
-
-              return format(currentDate, "dd MMM");
-            } catch {
-              return value;
-            }
-          }}
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
-          stroke="#334155"
-          minTickGap={18}
-        />
-        <YAxis
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
-          tickFormatter={(value) => formatAxisTick(Number(value))}
-          stroke="#334155"
-          width={44}
-          domain={yDomain ?? ["auto", "auto"]}
-        />
-        <Tooltip
-          offset={18}
-          allowEscapeViewBox={{ x: true, y: true }}
-          wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
-          cursor={{ stroke: "#334155", strokeDasharray: "4 3", strokeWidth: 1 }}
-          content={({ active, payload }) => {
-            const point = payload?.[0]?.payload as MarkerSeriesPoint | undefined;
-            if (!active || !point) {
-              return null;
-            }
-            const protocolText = compactTooltipText(point.context.protocol, 54);
-            return (
-              <div
-                className={`chart-tooltip rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-xs text-slate-200 shadow-xl ${
-                  compactTooltip ? "w-[210px]" : "w-[300px]"
-                }`}
-              >
-                <p className="font-semibold text-slate-100">{formatDate(point.date)}</p>
-                <p className="mt-1 text-sm text-cyan-200">
-                  {markerLabel}: <strong>{formatAxisTick(point.value)}</strong> {point.unit}
-                </p>
-                <div className="mt-1.5 space-y-1 text-slate-300">
-                  <p>{language === "nl" ? "Dosis" : "Dose"}: {point.context.dosageMgPerWeek === null ? "-" : `${point.context.dosageMgPerWeek} mg/week`}</p>
-                  {compactTooltip ? (
-                    <p>Protocol: {protocolText}</p>
-                  ) : (
-                    <>
-                      <p>Protocol: {point.context.protocol || "-"}</p>
-                      <p>{language === "nl" ? "Supplementen" : "Supplements"}: {point.context.supplements || "-"}</p>
-                      <p>{language === "nl" ? "Symptomen" : "Symptoms"}: {point.context.symptoms || "-"}</p>
-                      <p>{language === "nl" ? "Notities" : "Notes"}: {point.context.notes || "-"}</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          }}
-        />
-
-        {settings.showAnnotations
-          ? phaseBlocksForSeries.map((block, index) => (
-              <ReferenceArea
-                key={`${marker}-phase-${block.id}`}
-                x1={block.fromKey}
-                x2={block.toKey}
-                y1="dataMin"
-                y2="dataMax"
-                fill={phaseColor(block.dosageMgPerWeek, index)}
-                fillOpacity={0.08}
-                strokeOpacity={0}
-              />
-            ))
-          : null}
-
-        {settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? (
-          <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.12} strokeOpacity={0} />
-        ) : null}
-
-        {settings.showTrtTargetZone
-          ? (() => {
-              const zone = getTargetZone(marker, "trt", settings.unitSystem);
-              if (!zone || zone.min >= zone.max) {
-                return null;
-              }
-              return <ReferenceArea y1={zone.min} y2={zone.max} fill="#0ea5e9" fillOpacity={0.09} strokeOpacity={0} />;
-            })()
-          : null}
-
-        {settings.showLongevityTargetZone
-          ? (() => {
-              const zone = getTargetZone(marker, "longevity", settings.unitSystem);
-              if (!zone || zone.min >= zone.max) {
-                return null;
-              }
-              return <ReferenceArea y1={zone.min} y2={zone.max} fill="#a855f7" fillOpacity={0.06} strokeOpacity={0} />;
-            })()
-          : null}
-
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={markerColor(colorIndex)}
-          strokeWidth={2.6}
-          dot={(props) => {
-            const payload = props.payload as MarkerSeriesPoint;
-            let fill = markerColor(colorIndex);
-            if (settings.showAbnormalHighlights) {
-              if (payload.abnormal === "high") {
-                fill = "#fb7185";
-              }
-              if (payload.abnormal === "low") {
-                fill = "#f59e0b";
-              }
-            }
-            return <circle cx={props.cx} cy={props.cy} r={4} stroke="#0f172a" strokeWidth={1.5} fill={fill} />;
-          }}
-          activeDot={{ r: 6 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-};
-
-const AlertTrendMiniChart = ({ marker, points, highlightDate, language, height = 110 }: AlertTrendMiniChartProps) => {
-  if (points.length === 0) {
-    return (
-      <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500" style={{ height }}>
-        {language === "nl" ? "Geen trenddata" : "No trend data"}
-      </div>
-    );
-  }
-
-  const markerLabel = getMarkerDisplayName(marker, language);
-  const yDomain = buildYAxisDomain(
-    points.map((point) => point.value),
-    "data"
-  );
-
-  return (
-    <div className="rounded-lg border border-slate-700/80 bg-slate-950/40 p-1.5" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ left: 0, right: 0, top: 6, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis
-            dataKey="key"
-            tickFormatter={(value: string) => {
-              const dateString = String(value).split("__")[0];
-              try {
-                return format(parseISO(dateString), "dd MMM yy");
-              } catch {
-                return dateString;
-              }
-            }}
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
-            stroke="#334155"
-            minTickGap={16}
-          />
-          <YAxis hide domain={yDomain ?? ["auto", "auto"]} />
-          <Tooltip
-            content={({ active, payload }) => {
-              const point = payload?.[0]?.payload as MarkerSeriesPoint | undefined;
-              if (!active || !point) {
-                return null;
-              }
-              return (
-                <div className="chart-tooltip-mini rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
-                  <p className="font-medium text-slate-100">{formatDate(point.date)}</p>
-                  <p className="mt-1 text-cyan-200">
-                    {markerLabel}: {formatAxisTick(point.value)} {point.unit}
-                  </p>
-                </div>
-              );
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="#22d3ee"
-            strokeWidth={2.1}
-            dot={(props) => {
-              const payload = props.payload as MarkerSeriesPoint | undefined;
-              const isHighlighted = Boolean(highlightDate && payload?.date === highlightDate);
-              return (
-                <circle
-                  cx={props.cx}
-                  cy={props.cy}
-                  r={isHighlighted ? 4 : 2.5}
-                  fill={isHighlighted ? "#fb7185" : "#22d3ee"}
-                  stroke="#0f172a"
-                  strokeWidth={1.2}
-                />
-              );
-            }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
-const MarkerChartCard = ({
-  marker,
-  points,
-  colorIndex,
-  settings,
-  language,
-  phaseBlocks,
-  alertCount,
-  trendSummary,
-  percentChange,
-  baselineDelta,
-  isCalculatedMarker,
-  onOpenLarge,
-  onRenameMarker
-}: MarkerChartCardProps) => {
-  const latestPoint = points[points.length - 1] ?? null;
-  const trend = trendVisual(trendSummary?.direction ?? null);
-  const accent = markerCardAccentClass(alertCount, latestPoint?.abnormal ?? null);
-  const markerLabel = getMarkerDisplayName(marker, language);
-  const trendText =
-    language === "nl"
-      ? trend.text === "Rising"
-        ? "Stijgend"
-        : trend.text === "Falling"
-          ? "Dalend"
-          : trend.text === "Volatile"
-            ? "Volatiel"
-            : "Stabiel"
-      : trend.text;
-  const trendExplanation =
-    language === "nl"
-      ? trendSummary?.explanation
-          ?.replace("Volatile pattern: variability is high", "Volatiel patroon: variabiliteit is hoog")
-          .replace("Rising trend based on positive linear regression slope.", "Stijgende trend op basis van positieve regressie-helling.")
-          .replace("Falling trend based on negative linear regression slope.", "Dalende trend op basis van negatieve regressie-helling.")
-          .replace("Stable trend: slope remains close to zero.", "Stabiele trend: helling blijft dicht bij nul.")
-          .replace("Insufficient points for trend classification.", "Onvoldoende meetpunten voor trendclassificatie.")
-      : trendSummary?.explanation;
-  return (
-    <motion.div
-      layout
-      className={`rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 shadow-soft ${accent}`}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-100">{markerLabel}</h3>
-          <MarkerInfoBadge marker={marker} language={language} />
-          {!isCalculatedMarker ? (
-            <button
-              type="button"
-              className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
-              onClick={() => onRenameMarker(marker)}
-              aria-label={language === "nl" ? "Marker hernoemen" : "Rename marker"}
-              title={language === "nl" ? "Marker hernoemen" : "Rename marker"}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-          {isCalculatedMarker ? (
-            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">fx</span>
-          ) : null}
-          {alertCount > 0 ? (
-            <span className="rounded-full border border-rose-400/50 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-200">
-              {alertCount} {language === "nl" ? "alert" : `alert${alertCount > 1 ? "s" : ""}`}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">{points[0]?.unit ?? ""}</span>
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-            onClick={onOpenLarge}
-          >
-            {language === "nl" ? "Vergroot" : "Enlarge"}
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-        <span className="inline-flex items-center gap-1" title={trendExplanation}>
-          {trend.icon}
-          {trendText}
-        </span>
-        <span>
-          {language === "nl" ? "Sinds vorige test" : "Since last test"}:{" "}
-          <strong className={percentChange === null ? "text-slate-300" : percentChange >= 0 ? "text-emerald-300" : "text-amber-300"}>
-            {percentChange === null ? "-" : `${percentChange > 0 ? "+" : ""}${percentChange}%`}
-          </strong>
-        </span>
-        {settings.compareToBaseline ? (
-          <span>
-            {language === "nl" ? "t.o.v. baseline" : "vs baseline"}:{" "}
-            <strong className={baselineDelta === null ? "text-slate-300" : baselineDelta >= 0 ? "text-emerald-300" : "text-amber-300"}>
-              {baselineDelta === null ? "-" : `${baselineDelta > 0 ? "+" : ""}${baselineDelta}%`}
-            </strong>
-          </span>
-        ) : null}
-      </div>
-
-      <button
-        type="button"
-        className="block w-full cursor-zoom-in text-left"
-        onClick={onOpenLarge}
-        aria-label={language === "nl" ? `Open grotere grafiek voor ${markerLabel}` : `Open larger chart for ${markerLabel}`}
-      >
-        <MarkerTrendChart
-          marker={marker}
-          points={points}
-          colorIndex={colorIndex}
-          settings={settings}
-          language={language}
-          phaseBlocks={phaseBlocks}
-          height={230}
-        />
-      </button>
-    </motion.div>
-  );
-};
-
-interface ComparisonChartProps {
-  leftMarker: string;
-  rightMarker: string;
-  reports: LabReport[];
-  settings: AppSettings;
-  language: AppLanguage;
-}
-
-interface DoseProjectionChartProps {
-  prediction: DosePrediction;
-  reports: LabReport[];
-  settings: AppSettings;
-  language: AppLanguage;
-  targetDose?: number;
-  targetEstimate?: number;
-}
-
-const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language }: ComparisonChartProps) => {
-  const leftLabel = getMarkerDisplayName(leftMarker, language);
-  const rightLabel = getMarkerDisplayName(rightMarker, language);
-  const data = useMemo(() => {
-    const selectMarkerValue = (report: LabReport, markerName: string): number | null => {
-      const matches = report.markers.filter((marker) => marker.canonicalMarker === markerName);
-      if (matches.length === 0) {
-        return null;
-      }
-
-      // In case a report contains duplicate rows for the same canonical marker,
-      // prefer the highest-confidence extraction row.
-      const best = matches.reduce((current, next) => (next.confidence > current.confidence ? next : current));
-      return convertBySystem(best.canonicalMarker, best.value, best.unit, settings.unitSystem).value;
-    };
-
-    return reports
-      .map((report) => {
-        const left = selectMarkerValue(report, leftMarker);
-        const right = selectMarkerValue(report, rightMarker);
-        if (left === null && right === null) {
-          return null;
-        }
-
-        // Keep each report as a distinct point so measurements on the same day are not collapsed.
-        return {
-          x: `${report.testDate}__${report.id}`,
-          date: report.testDate,
-          createdAt: report.createdAt,
-          left,
-          right
-        };
-      })
-      .filter(
-        (
-          point
-        ): point is {
-          x: string;
-          date: string;
-          createdAt: string;
-          left: number | null;
-          right: number | null;
-        } => point !== null
-      )
-      .sort((a, b) => {
-        const byDate = parseISO(a.date).getTime() - parseISO(b.date).getTime();
-        if (byDate !== 0) {
-          return byDate;
-        }
-        return parseISO(a.createdAt).getTime() - parseISO(b.createdAt).getTime();
-      });
-  }, [leftMarker, rightMarker, reports, settings.unitSystem]);
-
-  const normalizedData = useMemo(() => {
-    if (settings.comparisonScale !== "normalized") {
-      return data;
-    }
-
-    const leftValues = data.map((point) => point.left).filter((value): value is number => value !== null);
-    const rightValues = data.map((point) => point.right).filter((value): value is number => value !== null);
-    const leftMin = leftValues.length > 0 ? Math.min(...leftValues) : null;
-    const leftMax = leftValues.length > 0 ? Math.max(...leftValues) : null;
-    const rightMin = rightValues.length > 0 ? Math.min(...rightValues) : null;
-    const rightMax = rightValues.length > 0 ? Math.max(...rightValues) : null;
-
-    const normalize = (value: number | null, min: number | null, max: number | null): number | null => {
-      if (value === null || min === null || max === null) {
-        return null;
-      }
-      if (Math.abs(max - min) < 0.000001) {
-        return 50;
-      }
-      return ((value - min) / (max - min)) * 100;
-    };
-
-    return data.map((point) => ({
-      ...point,
-      leftNorm: normalize(point.left, leftMin, leftMax),
-      rightNorm: normalize(point.right, rightMin, rightMax)
-    }));
-  }, [data, settings.comparisonScale]);
-
-  const leftDomain = useMemo(() => {
-    if (settings.comparisonScale === "normalized") {
-      return [0, 100] as [number, number];
-    }
-    return buildYAxisDomain(
-      data.map((point) => point.left).filter((value): value is number => value !== null),
-      settings.yAxisMode
-    );
-  }, [data, settings.yAxisMode, settings.comparisonScale]);
-
-  const rightDomain = useMemo(() => {
-    if (settings.comparisonScale === "normalized") {
-      return [0, 100] as [number, number];
-    }
-    return buildYAxisDomain(
-      data.map((point) => point.right).filter((value): value is number => value !== null),
-      settings.yAxisMode
-    );
-  }, [data, settings.yAxisMode, settings.comparisonScale]);
-
-  if (data.length === 0) {
-    return (
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/50 p-4">
-        <h3 className="text-sm font-semibold text-slate-100">{language === "nl" ? "Vergelijkingsmodus" : "Comparison mode"}</h3>
-        <p className="mt-2 text-sm text-slate-400">
-          {language === "nl" ? "Geen overlappende data in gekozen bereik." : "No overlapping data in selected range."}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      layout
-      className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 shadow-soft"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <h3 className="mb-2 text-sm font-semibold text-slate-100">
-        {language === "nl" ? "Vergelijkingsmodus" : "Comparison mode"}{" "}
-        {settings.comparisonScale === "normalized" ? (language === "nl" ? "(genormaliseerd 0-100%)" : "(normalized 0-100%)") : ""}
-      </h3>
-      <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={normalizedData} margin={{ left: 2, right: 8, top: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis
-            dataKey="x"
-            tickFormatter={(value) => {
-              const date = String(value).split("__")[0];
-              return formatDate(date);
-            }}
-            tick={{ fill: "#94a3b8", fontSize: 11 }}
-            stroke="#334155"
-            minTickGap={18}
-          />
-          <YAxis
-            yAxisId="left"
-            tick={{ fill: "#94a3b8", fontSize: 11 }}
-            tickFormatter={(value) => formatAxisTick(Number(value))}
-            stroke="#334155"
-            width={45}
-            domain={leftDomain ?? ["auto", "auto"]}
-          />
-          {settings.comparisonScale === "normalized" ? null : (
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tick={{ fill: "#94a3b8", fontSize: 11 }}
-              tickFormatter={(value) => formatAxisTick(Number(value))}
-              stroke="#334155"
-              width={45}
-              domain={rightDomain ?? ["auto", "auto"]}
-            />
-          )}
-          <Tooltip
-            contentStyle={{
-              background: "#0b1220",
-              border: "1px solid #334155",
-              borderRadius: "12px"
-            }}
-            labelFormatter={(value) => {
-              const date = String(value).split("__")[0];
-              return formatDate(date);
-            }}
-            formatter={(value, name, item) => {
-              const payload = item?.payload as { left: number | null; right: number | null } | undefined;
-              if (settings.comparisonScale === "normalized") {
-                const raw = name === leftLabel ? payload?.left : payload?.right;
-                const rawSuffix = raw === null || raw === undefined ? "-" : ` | raw ${formatAxisTick(raw)}`;
-                return [`${formatAxisTick(Number(value))}%${rawSuffix}`, name];
-              }
-              return [formatAxisTick(Number(value)), name];
-            }}
-          />
-          <Legend />
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey={settings.comparisonScale === "normalized" ? "leftNorm" : "left"}
-            name={leftLabel}
-            stroke="#22d3ee"
-            strokeWidth={2.4}
-          />
-          <Line
-            yAxisId={settings.comparisonScale === "normalized" ? "left" : "right"}
-            type="monotone"
-            dataKey={settings.comparisonScale === "normalized" ? "rightNorm" : "right"}
-            name={rightLabel}
-            stroke="#f472b6"
-            strokeWidth={2.4}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </motion.div>
-  );
-};
-
-const DoseProjectionChart = ({ prediction, reports, settings, language, targetDose, targetEstimate }: DoseProjectionChartProps) => {
-  const markerLabel = getMarkerDisplayName(prediction.marker, language);
-  const projectedDose = typeof targetDose === "number" && Number.isFinite(targetDose) ? targetDose : prediction.suggestedDose;
-  const projectedEstimate =
-    typeof targetEstimate === "number" && Number.isFinite(targetEstimate) ? targetEstimate : prediction.suggestedEstimate;
-  const historical = useMemo(
-    () => buildMarkerSeries(reports, prediction.marker, settings.unitSystem),
-    [reports, prediction.marker, settings.unitSystem]
-  );
-
-  if (historical.length === 0) {
-    return null;
-  }
-
-  const recentHistorical = historical.slice(-3);
-  const latest = recentHistorical[recentHistorical.length - 1];
-  if (!latest) {
-    return null;
-  }
-
-  const projectionSpacingDays =
-    recentHistorical.length >= 2
-      ? (() => {
-          const previous = recentHistorical[recentHistorical.length - 2];
-          if (!previous) {
-            return 42;
-          }
-          const days = Math.round((Date.parse(`${latest.date}T00:00:00Z`) - Date.parse(`${previous.date}T00:00:00Z`)) / 86400000);
-          return Number.isFinite(days) && days > 0 ? Math.min(Math.max(days, 21), 120) : 42;
-        })()
-      : 42;
-
-  const projectionDateIso = format(addDays(parseISO(latest.date), projectionSpacingDays), "yyyy-MM-dd");
-  const projectionKey = `${projectionDateIso}__projection`;
-
-  const chartData: Array<{ x: string; date: string; actual: number | null; projected: number | null }> = recentHistorical.map((point, index) => ({
-    x: point.key,
-    date: point.date,
-    actual: point.value,
-    projected: index === recentHistorical.length - 1 ? point.value : null
-  }));
-
-  chartData.push({
-    x: projectionKey,
-    date: projectionDateIso,
-    actual: null,
-    projected: projectedEstimate
-  });
-
-  const yDomain = buildYAxisDomain(
-    [
-      ...recentHistorical.map((point) => point.value),
-      projectedEstimate
-    ].filter((value): value is number => Number.isFinite(value)),
-    "data"
-  );
-
-  return (
-    <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
-      <p className="mb-1 text-[11px] text-slate-300">
-        {language === "nl"
-          ? "Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario."
-          : "Solid line = measured. Dotted line = model estimate for this dose scenario."}
-      </p>
-      <ResponsiveContainer width="100%" height={140}>
-        <LineChart data={chartData} margin={{ left: 2, right: 6, top: 6, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis
-            dataKey="x"
-            tickFormatter={(value) => {
-              const date = String(value).split("__")[0];
-              try {
-                return format(parseISO(date), "dd MMM yy");
-              } catch {
-                return date;
-              }
-            }}
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
-            stroke="#334155"
-            minTickGap={16}
-          />
-          <YAxis
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
-            tickFormatter={(value) => formatAxisTick(Number(value))}
-            stroke="#334155"
-            width={40}
-            domain={yDomain ?? ["auto", "auto"]}
-          />
-          <Tooltip
-            content={({ active, payload }) => {
-              const point = payload?.[0]?.payload as { date: string; actual: number | null; projected: number | null } | undefined;
-              if (!active || !point) {
-                return null;
-              }
-              const isProjectionPoint = point.actual === null && point.projected !== null;
-              const value = isProjectionPoint ? point.projected : point.actual ?? point.projected;
-              return (
-                <div className="chart-tooltip-mini rounded-lg border border-slate-600 bg-slate-950/95 px-2.5 py-2 text-[11px] text-slate-200 shadow-lg">
-                  <p className="font-medium text-slate-100">{formatDate(point.date)}</p>
-                  <p className="mt-1 text-cyan-200">
-                    {markerLabel}: {value === null ? "-" : `${formatAxisTick(value)} ${prediction.unit}`}
-                  </p>
-                  {isProjectionPoint ? (
-                    <p className="mt-1 text-[10px] text-amber-200">
-                      {language === "nl"
-                        ? `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`
-                        : `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey="actual"
-            stroke="#22d3ee"
-            strokeWidth={2.2}
-            dot={{ r: 2.8, fill: "#22d3ee", stroke: "#0f172a", strokeWidth: 1.1 }}
-            connectNulls={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="projected"
-            stroke="#f59e0b"
-            strokeWidth={2}
-            strokeDasharray="5 4"
-            dot={(props) => {
-              const payload = props.payload as { x: string } | undefined;
-              const isProjectionPoint = payload?.x === projectionKey;
-              return (
-                <circle
-                  cx={props.cx}
-                  cy={props.cy}
-                  r={isProjectionPoint ? 4 : 0}
-                  fill={isProjectionPoint ? "#fb7185" : "transparent"}
-                  stroke="#0f172a"
-                  strokeWidth={1.3}
-                />
-              );
-            }}
-            connectNulls
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
 const App = () => {
   const [sharedSnapshot] = useState(() => {
     if (typeof window === "undefined") {
@@ -1698,9 +204,10 @@ const App = () => {
   });
   const [shareLink, setShareLink] = useState("");
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
-  const [appData, setAppData] = useState(() => (sharedSnapshot ? sharedSnapshot.data : loadAppData()));
-  const isNl = appData.settings.language === "nl";
-  const samplingControlsEnabled = appData.settings.enableSamplingControls;
+  const { appData, setAppData, updateSettings, isNl, samplingControlsEnabled } = useAppData({
+    sharedData: sharedSnapshot ? sharedSnapshot.data : null,
+    isShareMode
+  });
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
   const mapServiceErrorToMessage = (
     error: unknown,
@@ -1763,12 +270,6 @@ const App = () => {
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
-  const [isAnalyzingLabs, setIsAnalyzingLabs] = useState(false);
-  const [analysisError, setAnalysisError] = useState("");
-  const [analysisResult, setAnalysisResult] = useState("");
-  const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
-  const [analysisCopied, setAnalysisCopied] = useState(false);
-  const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
   const [protocolWindowSize, setProtocolWindowSize] = useState(2);
   const [protocolMarkerSearch, setProtocolMarkerSearch] = useState("");
   const [protocolCategoryFilter, setProtocolCategoryFilter] = useState<"all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation">("all");
@@ -1782,169 +283,60 @@ const App = () => {
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const reports = useMemo(
-    () =>
-      sortReportsChronological(
-        enrichReportsWithCalculatedMarkers(appData.reports, {
-          enableCalculatedFreeTestosterone: appData.settings.enableCalculatedFreeTestosterone,
-          logCalculatedFreeTestosteroneDebug: appData.settings.enableCalculatedFreeTestosterone
-        })
-      ),
-    [appData.reports, appData.settings.enableCalculatedFreeTestosterone]
-  );
+  const {
+    reports,
+    rangeFilteredReports,
+    visibleReports,
+    allMarkers,
+    editableMarkers,
+    markerUsage,
+    primaryMarkers,
+    baselineReport,
+    dosePhaseBlocks,
+    trendByMarker,
+    alerts,
+    actionableAlerts,
+    positiveAlerts,
+    alertsByMarker,
+    alertSeriesByMarker,
+    trtStability,
+    trtStabilitySeries,
+    protocolImpactSummary,
+    protocolDoseEvents,
+    protocolDoseOverview,
+    dosePredictions,
+    customDoseValue,
+    hasCustomDose
+  } = useDerivedData({
+    appData,
+    samplingControlsEnabled,
+    protocolWindowSize,
+    doseResponseInput
+  });
 
-  const rangeFilteredReports = useMemo(
-    () =>
-      reports.filter((report) =>
-        withinRange(
-          report.testDate,
-          appData.settings.timeRange,
-          appData.settings.customRangeStart,
-          appData.settings.customRangeEnd
-        )
-      ),
-    [reports, appData.settings.timeRange, appData.settings.customRangeStart, appData.settings.customRangeEnd]
-  );
-
-  const visibleReports = useMemo(() => {
-    if (!samplingControlsEnabled) {
-      return rangeFilteredReports;
-    }
-    return filterReportsBySampling(rangeFilteredReports, appData.settings.samplingFilter);
-  }, [rangeFilteredReports, samplingControlsEnabled, appData.settings.samplingFilter]);
-
-  const allMarkers = useMemo(() => {
-    const set = new Set<string>();
-    reports.forEach((report) => {
-      report.markers.forEach((marker) => set.add(marker.canonicalMarker));
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [reports]);
-  const editableMarkers = useMemo(
-    () =>
-      allMarkers.filter((marker) =>
-        reports.some((report) => report.markers.some((entry) => entry.canonicalMarker === marker && !entry.isCalculated))
-      ),
-    [allMarkers, reports]
-  );
-  const markerUsage = useMemo(() => {
-    const byMarker = new Map<
-      string,
-      {
-        marker: string;
-        valueCount: number;
-        reportCount: number;
-      }
-    >();
-
-    reports.forEach((report) => {
-      const seenInReport = new Set<string>();
-      report.markers.forEach((entry) => {
-        if (entry.isCalculated) {
-          return;
-        }
-        const current = byMarker.get(entry.canonicalMarker) ?? {
-          marker: entry.canonicalMarker,
-          valueCount: 0,
-          reportCount: 0
-        };
-        current.valueCount += 1;
-        if (!seenInReport.has(entry.canonicalMarker)) {
-          current.reportCount += 1;
-          seenInReport.add(entry.canonicalMarker);
-        }
-        byMarker.set(entry.canonicalMarker, current);
-      });
-    });
-
-    return Array.from(byMarker.values()).sort((a, b) => b.valueCount - a.valueCount || a.marker.localeCompare(b.marker));
-  }, [reports]);
-  const primaryMarkers = useMemo(() => {
-    const base: string[] = [...PRIMARY_MARKERS];
-    const selectedCardioMarker = CARDIO_PRIORITY_MARKERS.find((marker) => allMarkers.includes(marker)) ?? "LDL Cholesterol";
-    if (!base.includes(selectedCardioMarker)) {
-      base.push(selectedCardioMarker);
-    }
-    return Array.from(new Set(base));
-  }, [allMarkers]);
-
-  const baselineReport = useMemo(() => reports.find((report) => report.isBaseline) ?? null, [reports]);
-  const dosePhaseBlocks = useMemo(() => buildDosePhaseBlocks(visibleReports), [visibleReports]);
-
-  const trendByMarker = useMemo(() => {
-    return allMarkers.reduce(
-      (acc, marker) => {
-        const series = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem);
-        acc[marker] = classifyMarkerTrend(series, marker);
-        return acc;
-      },
-      {} as Record<string, MarkerTrendSummary>
-    );
-  }, [allMarkers, visibleReports, appData.settings.unitSystem]);
-
-  const alerts = useMemo(
-    () => buildAlerts(visibleReports, allMarkers, appData.settings.unitSystem, appData.settings.language),
-    [visibleReports, allMarkers, appData.settings.unitSystem, appData.settings.language]
-  );
-  const actionableAlerts = useMemo(() => alerts.filter((alert) => alert.actionNeeded), [alerts]);
-  const positiveAlerts = useMemo(() => alerts.filter((alert) => !alert.actionNeeded), [alerts]);
-  const alertsByMarker = useMemo(() => buildAlertsByMarker(actionableAlerts), [actionableAlerts]);
-  const alertSeriesByMarker = useMemo(() => {
-    const markerSet = new Set<string>(alerts.map((alert) => alert.marker));
-    return Array.from(markerSet).reduce(
-      (acc, marker) => {
-        acc[marker] = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem);
-        return acc;
-      },
-      {} as Record<string, MarkerSeriesPoint[]>
-    );
-  }, [alerts, visibleReports, appData.settings.unitSystem]);
-
-  const trtStability = useMemo(
-    () => computeTrtStabilityIndex(visibleReports, appData.settings.unitSystem),
-    [visibleReports, appData.settings.unitSystem]
-  );
-  const trtStabilitySeries = useMemo(
-    () => buildTrtStabilitySeries(visibleReports, appData.settings.unitSystem),
-    [visibleReports, appData.settings.unitSystem]
-  );
-
-  const protocolImpactSummary = useMemo(
-    () => buildProtocolImpactSummary(visibleReports, appData.settings.unitSystem),
-    [visibleReports, appData.settings.unitSystem]
-  );
-  const protocolDoseEvents = useMemo(
-    () => buildProtocolImpactDoseEvents(visibleReports, appData.settings.unitSystem, protocolWindowSize),
-    [visibleReports, appData.settings.unitSystem, protocolWindowSize]
-  );
-  const protocolDoseOverview = useMemo(
-    () => buildDoseCorrelationInsights(visibleReports, allMarkers, appData.settings.unitSystem),
-    [visibleReports, allMarkers, appData.settings.unitSystem]
-  );
-
-  useEffect(() => {
-    setCollapsedProtocolEvents((current) => {
-      const available = new Set(protocolDoseEvents.map((event) => event.id));
-      const retained = current.filter((id) => available.has(id));
-      if (retained.length > 0) {
-        return retained;
-      }
-      return protocolDoseEvents.map((event) => event.id);
-    });
-  }, [protocolDoseEvents]);
-  const dosePredictions = useMemo(
-    () => estimateDoseResponse(visibleReports, allMarkers, appData.settings.unitSystem),
-    [visibleReports, allMarkers, appData.settings.unitSystem]
-  );
-  const customDoseValue = useMemo(() => safeNumber(doseResponseInput), [doseResponseInput]);
-  const hasCustomDose = customDoseValue !== null && customDoseValue >= 0;
-
-  useEffect(() => {
-    if (isShareMode) {
-      return;
-    }
-    saveAppData(appData);
-  }, [appData, isShareMode]);
+  const {
+    isAnalyzingLabs,
+    analysisError,
+    analysisResult,
+    analysisGeneratedAt,
+    analysisCopied,
+    analysisKind,
+    setAnalysisError,
+    runAiAnalysis,
+    copyAnalysis
+  } = useAnalysis({
+    settings: appData.settings,
+    language: appData.settings.language,
+    visibleReports,
+    samplingControlsEnabled,
+    protocolImpactSummary,
+    alerts,
+    trendByMarker,
+    trtStability,
+    dosePredictions,
+    mapErrorToMessage: mapServiceErrorToMessage,
+    tr
+  });
 
   useEffect(() => {
     if (isShareMode && activeTab !== "dashboard") {
@@ -2029,16 +421,6 @@ const App = () => {
     }
   }, [samplingControlsEnabled, appData.settings.samplingFilter, appData.settings.compareToBaseline]);
 
-  const updateSettings = (patch: Partial<AppSettings>) => {
-    setAppData((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        ...patch
-      }
-    }));
-  };
-
   const remapMarkerAcrossReports = (sourceCanonical: string, targetLabel: string) => {
     const cleanLabel = targetLabel.trim();
     if (!cleanLabel) {
@@ -2088,60 +470,6 @@ const App = () => {
       sourceCanonical,
       draftName: sourceCanonical
     });
-  };
-
-  const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
-    if (analysisType === "latestComparison" && visibleReports.length < 2) {
-      setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
-      return;
-    }
-
-    setIsAnalyzingLabs(true);
-    setAnalysisError("");
-    setAnalysisCopied(false);
-
-    try {
-      const result = await analyzeLabDataWithClaude({
-        apiKey: appData.settings.claudeApiKey,
-        reports: visibleReports,
-        unitSystem: appData.settings.unitSystem,
-        language: appData.settings.language,
-        analysisType,
-        context: {
-          samplingFilter: samplingControlsEnabled ? appData.settings.samplingFilter : "all",
-          protocolImpact: protocolImpactSummary,
-          alerts,
-          trendByMarker,
-          trtStability,
-          dosePredictions
-        }
-      });
-      setAnalysisResult(result);
-      setAnalysisGeneratedAt(new Date().toISOString());
-      setAnalysisKind(analysisType);
-    } catch (error) {
-      setAnalysisError(mapServiceErrorToMessage(error, "ai"));
-    } finally {
-      setIsAnalyzingLabs(false);
-    }
-  };
-
-  const copyAnalysis = async () => {
-    if (!analysisResult) {
-      return;
-    }
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      setAnalysisError(tr("Kopiëren wordt niet ondersteund in deze browser.", "Copying is not supported in this browser."));
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(analysisResult);
-      setAnalysisCopied(true);
-      setTimeout(() => setAnalysisCopied(false), 1800);
-    } catch {
-      setAnalysisError(tr("Kon analyse niet kopiëren naar klembord.", "Could not copy analysis to clipboard."));
-    }
   };
 
   const startManualEntry = () => {
@@ -2863,7 +1191,7 @@ const App = () => {
 
           <AnimatePresence mode="wait">
             {draft && !isShareMode ? (
-              <ExtractionReview
+              <ExtractionReviewTable
                 key="draft"
                 draft={draft}
                 annotations={draftAnnotations}
@@ -2878,7 +1206,7 @@ const App = () => {
           </AnimatePresence>
 
           {activeTab === "dashboard" ? (
-            <section className="space-y-3 fade-in">
+            <DashboardView>
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {timeRangeOptions.map(([value, label]) => (
@@ -3187,11 +1515,11 @@ const App = () => {
                   </div>
                 ) : null}
               </div>
-            </section>
+            </DashboardView>
           ) : null}
 
           {activeTab === "alerts" ? (
-            <section className="space-y-4 fade-in">
+            <AlertsView>
               <div className="alerts-hero rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -3340,11 +1668,11 @@ const App = () => {
                   </div>
                 )}
               </div>
-            </section>
+            </AlertsView>
           ) : null}
 
           {activeTab === "protocolImpact" ? (
-            <section className="space-y-3 fade-in">
+            <ProtocolImpactView>
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{isNl ? "Protocol-impact" : "Protocol Impact"}</h3>
                 <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
@@ -3531,11 +1859,11 @@ const App = () => {
                   </div>
                 )}
               </div>
-            </section>
+            </ProtocolImpactView>
           ) : null}
 
           {activeTab === "doseResponse" ? (
-            <section className="space-y-3 fade-in">
+            <DoseResponseView>
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{isNl ? "Dosis-respons schattingen" : "Dose-response Estimates"}</h3>
                 <p className="mt-1 text-sm text-slate-400">
@@ -3699,11 +2027,11 @@ const App = () => {
                   </ul>
                 )}
               </div>
-            </section>
+            </DoseResponseView>
           ) : null}
 
           {activeTab === "reports" ? (
-            <section className="space-y-3 fade-in">
+            <ReportsView>
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
                 <div className="text-sm text-slate-300">
                   <span className="font-semibold text-slate-100">{reports.length}</span>{" "}
@@ -4140,11 +2468,11 @@ const App = () => {
                 </motion.article>
                 );
               })}
-            </section>
+            </ReportsView>
           ) : null}
 
           {activeTab === "analysis" ? (
-            <section className="space-y-3 fade-in">
+            <AnalysisView>
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{tr("AI Lab Analyse", "AI Lab Analysis")}</h3>
                 <p className="mt-1 text-sm text-slate-400">
@@ -4283,11 +2611,11 @@ const App = () => {
                   </div>
                 </article>
               ) : null}
-            </section>
+            </AnalysisView>
           ) : null}
 
           {activeTab === "settings" ? (
-            <section className="space-y-3 fade-in">
+            <SettingsView>
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
                 <h3 className="text-base font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h3>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -4702,7 +3030,7 @@ const App = () => {
                   )}
                 </p>
               </div>
-            </section>
+            </SettingsView>
           ) : null}
         </main>
       </div>
