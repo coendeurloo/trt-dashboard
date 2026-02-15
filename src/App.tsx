@@ -5,7 +5,6 @@ import {
   BarChart3,
   ClipboardList,
   Cog,
-  Download,
   Gauge,
   Info,
   Moon,
@@ -212,6 +211,7 @@ const App = () => {
     analysisGeneratedAt,
     analysisCopied,
     analysisKind,
+    analyzingKind,
     betaRemaining,
     betaLimits,
     runAiAnalysis,
@@ -735,15 +735,6 @@ const App = () => {
                     {t(appData.settings.language, "theme")}
                   </span>
                 </button>
-                {isShareMode ? null : (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200 hover:border-cyan-500/50"
-                    onClick={exportJson}
-                  >
-                    <Download className="h-4 w-4" /> JSON
-                  </button>
-                )}
               </div>
             </div>
           </header>
@@ -917,6 +908,7 @@ const App = () => {
               analysisGeneratedAt={analysisGeneratedAt}
               analysisCopied={analysisCopied}
               analysisKind={analysisKind}
+              analyzingKind={analyzingKind}
               visibleReports={visibleReports}
               samplingControlsEnabled={samplingControlsEnabled}
               allMarkersCount={allMarkers.length}

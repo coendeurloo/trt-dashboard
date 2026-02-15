@@ -37,6 +37,7 @@ export const useAnalysis = ({
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
+  const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
   const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
@@ -54,6 +55,7 @@ export const useAnalysis = ({
     }
 
     setIsAnalyzingLabs(true);
+    setAnalyzingKind(analysisType);
     setAnalysisError("");
     setAnalysisCopied(false);
 
@@ -81,6 +83,7 @@ export const useAnalysis = ({
       setAnalysisError(mapErrorToMessage(error, "ai"));
     } finally {
       setIsAnalyzingLabs(false);
+      setAnalyzingKind(null);
     }
   };
 
@@ -109,6 +112,7 @@ export const useAnalysis = ({
     analysisGeneratedAt,
     analysisCopied,
     analysisKind,
+    analyzingKind,
     betaRemaining,
     betaLimits: BETA_LIMITS,
     setAnalysisError,
