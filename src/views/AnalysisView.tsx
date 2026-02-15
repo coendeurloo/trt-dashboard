@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ReactNode } from "react";
-import { AlertTriangle, FileText, LineChart, Loader2, Pill, Shield, Sparkles, Stethoscope } from "lucide-react";
+import { FileText, Loader2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { AppLanguage, AppSettings, LabReport } from "../types";
@@ -86,29 +86,47 @@ const AnalysisView = ({
     return "";
   };
 
-  const getHeadingIcon = (headingText: string) => {
+  const getHeadingEmoji = (headingText: string): string => {
     const text = headingText.toLowerCase();
     if (text.includes("supplement")) {
-      return { Icon: Pill, emoji: "💊" };
+      return "💊";
     }
     if (text.includes("safety") || text.includes("veilig")) {
-      return { Icon: Shield, emoji: "🛡️" };
+      return "🛡️";
     }
     if (text.includes("alert") || text.includes("risk") || text.includes("waarschu")) {
-      return { Icon: AlertTriangle, emoji: "⚠️" };
+      return "🚨";
+    }
+    if (text.includes("protocol") || text.includes("dose") || text.includes("dos")) {
+      return "🧬";
+    }
+    if (text.includes("symptom")) {
+      return "🤒";
+    }
+    if (text.includes("lipid") || text.includes("cholesterol") || text.includes("cardio")) {
+      return "❤️";
+    }
+    if (text.includes("compare") || text.includes("comparison") || text.includes("vs")) {
+      return "🆚";
     }
     if (text.includes("trend") || text.includes("pattern") || text.includes("verloop") || text.includes("timeline")) {
-      return { Icon: LineChart, emoji: "📈" };
+      return "📈";
+    }
+    if (text.includes("action") || text.includes("next step") || text.includes("advies") || text.includes("recommend")) {
+      return "✅";
     }
     if (text.includes("summary") || text.includes("samenvatting") || text.includes("conclusion") || text.includes("conclusie")) {
-      return { Icon: Sparkles, emoji: "✨" };
+      return "🧠";
     }
-    return { Icon: Stethoscope, emoji: "🧪" };
+    if (text.includes("lab") || text.includes("blood") || text.includes("hormone")) {
+      return "🩸";
+    }
+    return "📋";
   };
 
   const renderHeading = (level: "h1" | "h2" | "h3" | "h4", children: ReactNode) => {
     const text = extractText(children);
-    const { Icon, emoji } = getHeadingIcon(text);
+    const emoji = getHeadingEmoji(text);
     const wrapClass =
       level === "h1"
         ? "mt-5 border-b pb-2"
@@ -118,9 +136,6 @@ const AnalysisView = ({
             ? "mt-4"
             : "mt-3";
     const borderClass = isDarkTheme ? "border-slate-700/70" : "border-slate-200";
-    const iconChipClass = isDarkTheme
-      ? "inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
-      : "inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-300 bg-cyan-50 text-cyan-800";
     const textClass =
       level === "h1"
         ? isDarkTheme
@@ -141,15 +156,12 @@ const AnalysisView = ({
 
     return (
       <div className={`${wrapClass} ${borderClass}`}>
-        <div className="flex items-center gap-2">
-          <span className={iconChipClass}>
-            <Icon className="h-4 w-4" />
+        <HeadingTag className={textClass}>
+          <span className="mr-2" aria-hidden="true">
+            {emoji}
           </span>
-          <HeadingTag className={textClass}>
-            <span className="mr-1">{emoji}</span>
-            {children}
-          </HeadingTag>
-        </div>
+          {children}
+        </HeadingTag>
       </div>
     );
   };
