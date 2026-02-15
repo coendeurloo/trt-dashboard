@@ -94,7 +94,9 @@ const DoseResponseView = ({
 
         {dosePredictions.length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">
-            {isNl ? "Nog te weinig dose-gekoppelde meetpunten voor schattingen." : "Not enough dose-linked data points yet for estimates."}
+            {isNl
+              ? "We hebben nog wat extra meetmomenten met bekende weekdosis nodig voordat we hier betrouwbare schattingen kunnen tonen."
+              : "We need a few more test results with a known weekly dose before we can show reliable estimates here."}
           </p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm">

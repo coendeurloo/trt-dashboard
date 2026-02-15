@@ -614,7 +614,13 @@ export const analyzeLabDataWithClaude = async ({
     try {
       body = text ? (JSON.parse(text) as ClaudeResponse) : {};
     } catch {
-      body = {};
+      body = text
+        ? {
+            error: {
+              message: text.slice(0, 280)
+            }
+          }
+        : {};
     }
     return { status: response.status, body };
   };

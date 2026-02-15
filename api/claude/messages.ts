@@ -24,12 +24,21 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
 
 const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
   new Promise((resolve, reject) => {
+    if (req.readableEnded) {
+      resolve({});
+      return;
+    }
+
     const chunks: Buffer[] = [];
     let total = 0;
+    const timeout = setTimeout(() => reject(new Error("Request body timeout")), 12000);
+
+    const cleanup = () => clearTimeout(timeout);
 
     req.on("data", (chunk: Buffer) => {
       total += chunk.length;
       if (total > MAX_JSON_BYTES) {
+        cleanup();
         reject(new Error("Request body too large"));
         req.destroy();
         return;
@@ -38,6 +47,7 @@ const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
     });
 
     req.on("end", () => {
+      cleanup();
       const raw = Buffer.concat(chunks).toString("utf8");
       if (!raw) {
         resolve({});
@@ -50,8 +60,36 @@ const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
       }
     });
 
-    req.on("error", (error) => reject(error));
+    req.on("error", (error) => {
+      cleanup();
+      reject(error);
+    });
   });
+
+const readParsedBody = (req: IncomingMessage): ProxyRequestBody | null => {
+  const possibleBody = (req as IncomingMessage & { body?: unknown }).body;
+  if (possibleBody === undefined || possibleBody === null) {
+    return null;
+  }
+  if (typeof possibleBody === "string") {
+    try {
+      return JSON.parse(possibleBody) as ProxyRequestBody;
+    } catch {
+      return null;
+    }
+  }
+  if (Buffer.isBuffer(possibleBody)) {
+    try {
+      return JSON.parse(possibleBody.toString("utf8")) as ProxyRequestBody;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof possibleBody === "object") {
+    return possibleBody as ProxyRequestBody;
+  }
+  return null;
+};
 
 const getClientIp = (req: IncomingMessage): string => {
   const forwarded = req.headers["x-forwarded-for"];
@@ -78,58 +116,73 @@ const inferRequestType = (body: ProxyRequestBody): RequestType => {
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  if (req.method !== "POST") {
-    sendJson(res, 405, { error: { message: "Method not allowed" } });
-    return;
-  }
-
-  const apiKey = process.env.CLAUDE_API_KEY?.trim() ?? "";
-  if (!apiKey) {
-    sendJson(res, 401, { error: { message: "Missing CLAUDE_API_KEY on server" } });
-    return;
-  }
-
-  let body: ProxyRequestBody;
   try {
-    body = await readJsonBody(req);
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: { message: "Method not allowed" } });
+      return;
+    }
+
+    const apiKey = process.env.CLAUDE_API_KEY?.trim() ?? "";
+    if (!apiKey) {
+      sendJson(res, 401, { error: { message: "Missing CLAUDE_API_KEY on server" } });
+      return;
+    }
+
+    let body: ProxyRequestBody;
+    const preParsedBody = readParsedBody(req);
+    if (preParsedBody) {
+      body = preParsedBody;
+    } else {
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        sendJson(res, 400, { error: { message: error instanceof Error ? error.message : "Invalid request body" } });
+        return;
+      }
+    }
+
+    if (!body.payload || typeof body.payload !== "object") {
+      sendJson(res, 400, { error: { message: "Missing payload" } });
+      return;
+    }
+
+    const requestType = inferRequestType(body);
+    const ip = getClientIp(req);
+    const limit = checkRateLimit(ip, requestType);
+    const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+    res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+    res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+    if (!limit.allowed) {
+      sendJson(res, 429, { error: "Rate limit exceeded", retryAfter, remaining: limit.remaining });
+      return;
+    }
+
+    try {
+      const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify(body.payload)
+      });
+
+      const responseText = await anthropicResponse.text();
+      res.statusCode = anthropicResponse.status;
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      res.end(responseText);
+    } catch {
+      sendJson(res, 502, { error: { message: "Anthropic API unreachable" } });
+    }
   } catch (error) {
-    sendJson(res, 400, { error: { message: error instanceof Error ? error.message : "Invalid request body" } });
-    return;
-  }
-
-  if (!body.payload || typeof body.payload !== "object") {
-    sendJson(res, 400, { error: { message: "Missing payload" } });
-    return;
-  }
-
-  const requestType = inferRequestType(body);
-  const ip = getClientIp(req);
-  const limit = checkRateLimit(ip, requestType);
-  const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
-  res.setHeader("x-ratelimit-remaining", String(limit.remaining));
-  res.setHeader("x-ratelimit-reset", String(limit.resetAt));
-  if (!limit.allowed) {
-    sendJson(res, 429, { error: "Rate limit exceeded", retryAfter, remaining: limit.remaining });
-    return;
-  }
-
-  try {
-    const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify(body.payload)
-    });
-
-    const responseText = await anthropicResponse.text();
-    res.statusCode = anthropicResponse.status;
-    res.setHeader("content-type", "application/json; charset=utf-8");
-    res.setHeader("cache-control", "no-store");
-    res.end(responseText);
-  } catch {
-    sendJson(res, 502, { error: { message: "Anthropic API unreachable" } });
+    if (!res.writableEnded) {
+      sendJson(res, 500, {
+        error: {
+          message: error instanceof Error ? error.message : "Unexpected server error"
+        }
+      });
+    }
   }
 }

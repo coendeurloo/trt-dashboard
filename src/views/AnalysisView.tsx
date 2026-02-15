@@ -49,6 +49,10 @@ const AnalysisView = ({
 }: AnalysisViewProps) => {
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const betaBannerClassName =
+    settings.theme === "dark"
+      ? "mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80"
+      : "mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900";
 
   return (
     <section className="space-y-3 fade-in">
@@ -61,7 +65,7 @@ const AnalysisView = ({
           )}
         </p>
 
-        <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">
+        <div className={betaBannerClassName}>
           <span className="font-medium">Free beta</span>
           {" - "}
           {betaRemaining.dailyRemaining}/{betaLimits.maxAnalysesPerDay} analyses today

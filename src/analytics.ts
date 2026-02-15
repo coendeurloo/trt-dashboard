@@ -2067,19 +2067,19 @@ const evaluateDoseRelationship = (
   if (samples.length < 4) {
     return {
       status: "insufficient",
-      reason: `Insufficient dose-linked points (n=${samples.length}; need >=4).`
+      reason: `We need at least 4 results with a recorded weekly dose. Right now there are ${samples.length}.`
     };
   }
   if (uniqueDoseCount(samples) < 2) {
     return {
       status: "insufficient",
-      reason: "Insufficient unique dose values to fit a dose relationship."
+      reason: "We only have one dose level so far, so we cannot estimate dose-response yet."
     };
   }
   if (correlationR === null) {
     return {
       status: "insufficient",
-      reason: "Correlation cannot be computed with current points."
+      reason: "There is not enough consistent data yet to calculate a reliable relationship."
     };
   }
 
@@ -2093,20 +2093,20 @@ const evaluateDoseRelationship = (
   if (DOSE_EXPECTED_POSITIVE_MARKERS.has(marker) && slopePerMg < -0.000001) {
     return {
       status: "unclear",
-      reason: `Inverse slope for an androgen marker (${ROUND_3(slopePerMg)} per mg/week); flagged as unclear.`
+      reason: `The current pattern moves in the opposite direction than expected for this marker (${ROUND_3(slopePerMg)} per mg/week), so the estimate is marked as unclear.`
     };
   }
 
   if (absR < 0.2 || relativeEffectAcrossRange < 0.03) {
     return {
       status: "unclear",
-      reason: `No clear dose relationship (|r|=${ROUND_3(absR)}, relative effect=${ROUND_3(relativeEffectAcrossRange)}).`
+      reason: `The link between dose and this marker is weak right now (r=${ROUND_3(absR)}), so this estimate is uncertain.`
     };
   }
 
   return {
     status: "clear",
-    reason: `Dose relationship detected (n=${samples.length}, r=${ROUND_3(correlationR)}).`
+    reason: `A usable dose-response pattern was found from ${samples.length} data points (r=${ROUND_3(correlationR)}).`
   };
 };
 
@@ -2150,7 +2150,7 @@ export const estimateDoseResponse = (
       status: "insufficient",
       statusReason: reason,
       samplingMode: "all",
-      samplingWarning: "Dose-response estimate hidden: not enough dose-linked points yet.",
+      samplingWarning: "Estimate hidden until we have enough dose-linked results.",
       usedReportDates: ordered.map((sample) => sample.date),
       excludedPoints,
       modelType: "linear",
@@ -2208,7 +2208,7 @@ export const estimateDoseResponse = (
         marker,
         rawSamples,
         excludedPoints,
-        "Insufficient dose-linked points (n=1). Add more reports at different doses."
+        "We need more dose-linked results before we can estimate this marker."
       );
       continue;
     }
@@ -2227,7 +2227,7 @@ export const estimateDoseResponse = (
         marker,
         unitFiltered.length > 0 ? unitFiltered : rawSamples,
         excludedPoints,
-        `Insufficient dose-linked points (n=${unitFiltered.length}). Add more reports at different doses.`,
+        `Not enough usable results yet (${unitFiltered.length}). Add more reports with recorded weekly dose.`,
         preferredUnit
       );
       continue;
@@ -2237,7 +2237,7 @@ export const estimateDoseResponse = (
         marker,
         unitFiltered,
         excludedPoints,
-        "Only one dose value available so dose-response cannot be estimated yet.",
+        "We only have one dose level so far, so dose-response cannot be estimated yet.",
         preferredUnit
       );
       continue;
@@ -2250,10 +2250,10 @@ export const estimateDoseResponse = (
       useTrough
         ? null
         : troughSamples.length > 0
-          ? "Trough-only points were insufficient; using all sampling timings."
+          ? "There were too few trough-only points, so this estimate uses all sampling timings."
           : unitFiltered.some((sample) => sample.samplingTiming !== "unknown")
-            ? "Mixed sampling timings; interpretation may be timing-sensitive."
-            : "Sampling timing is mostly unknown; interpretation may be timing-sensitive.";
+            ? "Sampling times are mixed, so interpret this estimate with extra caution."
+            : "Sampling timing is mostly unknown, so this estimate may be less reliable.";
 
     const samplingFiltered = useTrough ? troughSamples : unitFiltered;
     const outlierResult = filterOutliersByMad(samplingFiltered);
@@ -2273,7 +2273,7 @@ export const estimateDoseResponse = (
         marker,
         modelSamples.length > 0 ? modelSamples : unitFiltered,
         excludedPoints,
-        "After quality filters there are too few valid points for dose-response.",
+        "After data-quality checks, too few valid points remain to estimate dose-response.",
         preferredUnit
       );
       continue;
@@ -2285,7 +2285,7 @@ export const estimateDoseResponse = (
         marker,
         modelSamples,
         excludedPoints,
-        "Linear fit failed for current points; collect more measurements.",
+        "The current data does not fit a stable model yet. Add a few more measurements.",
         preferredUnit
       );
       continue;
