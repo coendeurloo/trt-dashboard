@@ -50,16 +50,12 @@ interface DateScore {
   firstIndex: number;
 }
 
-type ParserProfileId =
-  | "generic"
-  | "dutch_hormone"
-  | "uk_results"
-  | "quest_hormone"
-  | "mijn_gezondheid";
+type ParserProfileId = "adaptive";
 
 interface ParserProfile {
   id: ParserProfileId;
   requireUnit: boolean;
+  enableKeywordRangeParser: boolean;
   lineNoisePattern?: RegExp;
 }
 
@@ -91,47 +87,11 @@ const REPORT_CONTEXT_HINT_PATTERN =
   /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
 const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
 const DASH_TOKEN_PATTERN = /^[-–]$/;
-
-const PROFILE_RULES: Array<{ id: ParserProfileId; detect: RegExp; profile: ParserProfile }> = [
-  {
-    id: "mijn_gezondheid",
-    detect: /\bUw metingen\b/i,
-    profile: {
-      id: "mijn_gezondheid",
-      requireUnit: false
-    }
-  },
-  {
-    id: "dutch_hormone",
-    detect: /\bPrecision Analytical\b|\bCollection Times\b|\bDried Urine\b/i,
-    profile: {
-      id: "dutch_hormone",
-      requireUnit: true,
-      lineNoisePattern: /\b(?:daily free cortisol pattern|metabolite ratios|patient details|reference ranges)\b/i
-    }
-  },
-  {
-    id: "uk_results",
-    detect: /\bResults for your Doctor\b|\bLondon Medical Laboratory\b|\bResult Normal\b/i,
-    profile: {
-      id: "uk_results",
-      requireUnit: true,
-      lineNoisePattern: /\b(?:comment|clinical history|interpretation|notes?)\b/i
-    }
-  },
-  {
-    id: "quest_hormone",
-    detect: /\bTestosterone,\s*Total,\s*LC\/MS\/MS\b|\bCollected:\b/i,
-    profile: {
-      id: "quest_hormone",
-      requireUnit: true
-    }
-  }
-];
-
-const GENERIC_PROFILE: ParserProfile = {
-  id: "generic",
-  requireUnit: true
+const DEFAULT_PROFILE: ParserProfile = {
+  id: "adaptive",
+  requireUnit: true,
+  enableKeywordRangeParser: false,
+  lineNoisePattern: /\b(?:patient details|requesting physician|clinical history|interpretation|notes?)\b/i
 };
 
 const extractPdfText = async (file: File): Promise<string> => {
@@ -417,13 +377,21 @@ const extractDateByPattern = (text: string, pattern: RegExp): string | null => {
 };
 
 const detectParserProfile = (text: string, fileName: string): ParserProfile => {
-  const haystack = `${fileName}\n${text.slice(0, 4000)}`;
-  for (const rule of PROFILE_RULES) {
-    if (rule.detect.test(haystack)) {
-      return rule.profile;
-    }
-  }
-  return GENERIC_PROFILE;
+  const haystack = `${fileName}\n${text.slice(0, 10000)}`;
+  const keywordStyleHits = Array.from(
+    haystack.matchAll(/\b(?:uw|your)\s+waarde:\s*[<>]?\s*\d+(?:[.,]\d+)?/gi)
+  ).length;
+  const normalRangeHits = Array.from(
+    haystack.matchAll(/\b(?:normale\s+waarde|normal\s+range|reference\s+range)\s*:/gi)
+  ).length;
+  const keywordRangeStyle = keywordStyleHits > 0 && normalRangeHits > 0;
+
+  return {
+    id: "adaptive",
+    requireUnit: !keywordRangeStyle,
+    enableKeywordRangeParser: keywordRangeStyle,
+    lineNoisePattern: /\b(?:patient details|requesting physician|clinical history|interpretation|notes?|daily free cortisol pattern)\b/i
+  };
 };
 
 const isPlausibleLabDate = (iso: string): boolean => {
@@ -592,7 +560,7 @@ const extractDateCandidate = (text: string): string => {
   return new Date().toISOString().slice(0, 10);
 };
 
-const parseMijnGezondheidRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
   const normalized = cleanWhitespace(text);
   if (!/\bUw metingen\b/i.test(normalized)) {
     return [];
@@ -612,7 +580,7 @@ const parseMijnGezondheidRows = (text: string, profile: ParserProfile): ParsedFa
     /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,140}?)\s+Uw waarde:\s*([<>]?\d+(?:[.,]\d+)?)\s+Normale waarde:\s*((?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?(?:\s*-\s*(?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?)?)/gi;
 
   for (const match of section.matchAll(pattern)) {
-    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]), profile);
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]));
     if (looksLikeNoiseMarker(markerName)) {
       continue;
     }
@@ -720,16 +688,11 @@ const cleanMarkerName = (rawMarker: string): string => {
   return marker.replace(/[.,;:]+$/, "").trim();
 };
 
-const applyProfileMarkerFixes = (markerName: string, profile: ParserProfile): string => {
+const applyProfileMarkerFixes = (markerName: string): string => {
   let marker = markerName;
 
-  if (profile.id === "uk_results") {
-    marker = marker.replace(/^Result\s+/i, "");
-  }
-
-  if (profile.id === "dutch_hormone") {
-    marker = marker.replace(/\bT otal\b/g, "Total");
-  }
+  marker = marker.replace(/^Result\s+/i, "");
+  marker = marker.replace(/\bT otal\b/g, "Total");
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
   marker = marker.replace(/\s{2,}/g, " ").trim();
@@ -858,7 +821,7 @@ const parseRowByRightAnchoredUnit = (
     return null;
   }
 
-  const markerName = applyProfileMarkerFixes(cleanMarkerName(tokens.slice(0, valueIndex).join(" ")), profile);
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(tokens.slice(0, valueIndex).join(" ")));
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -886,7 +849,7 @@ const parseRowByRightAnchoredUnit = (
 const parseSingleRow = (
   rawRow: string,
   confidence: number,
-  profile: ParserProfile = GENERIC_PROFILE
+  profile: ParserProfile = DEFAULT_PROFILE
 ): ParsedFallbackRow | null => {
   const rightAnchored = parseRowByRightAnchoredUnit(rawRow, confidence + 0.04, profile);
   if (rightAnchored) {
@@ -903,7 +866,7 @@ const parseSingleRow = (
     return null;
   }
 
-  const markerName = applyProfileMarkerFixes(cleanMarkerName(baseMatch[1]), profile);
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(baseMatch[1]));
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -948,7 +911,7 @@ const looksLikeNonResultLine = (line: string): boolean => {
   return false;
 };
 
-const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = GENERIC_PROFILE): boolean => {
+const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DEFAULT_PROFILE): boolean => {
   if (
     /\b(?:report|sample|date|patient|doctor|laboratory|result|normal|range|collection|precision analytical|daily free cortisol pattern|described|section|comment|defines|followed by|levels below)\b/i.test(
       row.markerName
@@ -983,7 +946,7 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
       /(?:\d+\s*[-–]\s*$)/.test(markerAndValue[1]);
 
     if (!probablyRangeTail) {
-      const markerName = applyProfileMarkerFixes(cleanMarkerName(markerAndValue[1]), profile);
+      const markerName = applyProfileMarkerFixes(cleanMarkerName(markerAndValue[1]));
       const value = safeNumber(markerAndValue[2]);
       if (value !== null && !looksLikeNoiseMarker(markerName)) {
         const parsedReference = extractReferenceAndUnit(nextLine);
@@ -1005,7 +968,7 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
     return null;
   }
 
-  const markerName = applyProfileMarkerFixes(cleanMarkerName(line), profile);
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(line));
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -1138,7 +1101,7 @@ const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow
     /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,120}?)\s+(?:[A-Z]{2,8}\s+)?(?:[ñò↑↓]\s+)?([<>]?\d+(?:[.,]\d+)?)\s+([A-Za-z%µμ/][A-Za-z%µμ/0-9.\-²]*)\s+(?:-\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)|([<>≤≥])\s*(\d+(?:[.,]\d+)?))/g;
 
   for (const match of normalized.matchAll(rowPattern)) {
-    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]), profile);
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]));
     if (looksLikeNoiseMarker(markerName)) {
       continue;
     }
@@ -1262,7 +1225,7 @@ const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
   const lineRows = parseLineRows(text, profile);
   const indexedRows = parseIndexedRows(text, profile);
   const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
-  const huisartsRows = profile.id === "mijn_gezondheid" ? parseMijnGezondheidRows(text, profile) : [];
+  const huisartsRows = profile.enableKeywordRangeParser ? parseMijnGezondheidRows(text) : [];
 
   const combinedRows =
     indexedRows.length > 0

@@ -4,14 +4,20 @@ import { __pdfParsingInternals } from "../pdfParsing";
 const genericProfile = __pdfParsingInternals.detectParserProfile("", "random-report.pdf");
 
 describe("pdfParsing fallback layers", () => {
-  it("detects parser profile for known report families", () => {
-    const dutch = __pdfParsingInternals.detectParserProfile("Precision Analytical Collection Times", "x.pdf");
-    const uk = __pdfParsingInternals.detectParserProfile("Results for your Doctor", "x.pdf");
-    const huisarts = __pdfParsingInternals.detectParserProfile("Uw metingen", "x.pdf");
+  it("uses one adaptive profile and toggles behavior from text signals", () => {
+    const defaultProfile = __pdfParsingInternals.detectParserProfile("Results for your Doctor", "x.pdf");
+    const keywordRangeProfile = __pdfParsingInternals.detectParserProfile(
+      "Uw waarde: 5.1 Normale waarde: Hoger dan 3.5",
+      "x.pdf"
+    );
 
-    expect(dutch.id).toBe("dutch_hormone");
-    expect(uk.id).toBe("uk_results");
-    expect(huisarts.id).toBe("mijn_gezondheid");
+    expect(defaultProfile.id).toBe("adaptive");
+    expect(defaultProfile.requireUnit).toBe(true);
+    expect(defaultProfile.enableKeywordRangeParser).toBe(false);
+
+    expect(keywordRangeProfile.id).toBe("adaptive");
+    expect(keywordRangeProfile.requireUnit).toBe(false);
+    expect(keywordRangeProfile.enableKeywordRangeParser).toBe(true);
   });
 
   it("parses right-anchored rows where range is before unit", () => {
