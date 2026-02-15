@@ -2,6 +2,7 @@ import { AppSettings } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
 export const APP_SCHEMA_VERSION = 2;
+export const FEEDBACK_EMAIL = "trtlabtracker@gmail.com";
 
 export const PRIMARY_MARKERS = [
   "Testosterone",

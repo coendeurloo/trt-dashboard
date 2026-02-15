@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
 import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage } from "../types";
+import { FEEDBACK_EMAIL } from "../constants";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import EditableCell from "./EditableCell";
@@ -40,6 +41,27 @@ const ExtractionReviewTable = ({
     }
     return tr("Onbekend", "Unknown");
   };
+  const parsingFeedbackMailto = (() => {
+    const subject = `PDF Parsing Feedback - ${draft.sourceFileName}`;
+    const body = [
+      "Hi,",
+      "",
+      "I uploaded a lab PDF and the extraction didn't work correctly.",
+      "",
+      `File: ${draft.sourceFileName}`,
+      `Extraction method: ${draft.extraction.provider}`,
+      `Confidence: ${draft.extraction.confidence}`,
+      `Markers extracted: ${draft.markers.length}`,
+      "",
+      "Lab / country: [user fills in]",
+      "What went wrong: [user fills in]",
+      "",
+      "---",
+      "Please do NOT attach your PDF as it contains personal medical data.",
+      "Describe which markers were missing or incorrectly extracted instead."
+    ].join("\n");
+    return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  })();
 
   const updateRow = (rowId: string, updater: (row: MarkerValue) => MarkerValue) => {
     onDraftChange({
@@ -325,13 +347,22 @@ const ExtractionReviewTable = ({
         </table>
       </div>
 
-      <button
-        type="button"
-        className="mt-3 inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-        onClick={addRow}
-      >
-        <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+          onClick={addRow}
+        >
+          <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
+        </button>
+        <a
+          href={parsingFeedbackMailto}
+          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300"
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
+        </a>
+      </div>
     </motion.div>
   );
 };

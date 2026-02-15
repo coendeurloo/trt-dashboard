@@ -70,7 +70,7 @@ import {
   getTargetZone
 } from "./analytics";
 import { buildCsv } from "./csvExport";
-import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
+import { CARDIO_PRIORITY_MARKERS, FEEDBACK_EMAIL, PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AlertTrendMiniChart from "./components/AlertTrendMiniChart";
 import ComparisonChart from "./components/ComparisonChart";
 import DoseProjectionChart from "./components/DoseProjectionChart";
@@ -1088,6 +1088,35 @@ const App = () => {
     }
     return isNl ? "Trend" : "Trend";
   };
+  const settingsFeedbackMailto = useMemo(() => {
+    const subject = isNl ? "Feedback PDF-verwerking" : "PDF Parsing Feedback";
+    const body = isNl
+      ? [
+          "Hoi,",
+          "",
+          "Ik loop tegen problemen aan met het verwerken van lab-PDF's.",
+          "",
+          "Lab / land: [vul in]",
+          "Wat ging er mis: [vul in]",
+          "",
+          "---",
+          "Stuur bij voorkeur geen PDF mee vanwege medische privacy.",
+          "Omschrijf liever welke markers ontbraken of verkeerd waren."
+        ].join("\n")
+      : [
+          "Hi,",
+          "",
+          "I'm having trouble with lab PDF parsing.",
+          "",
+          "Lab / country: [fill in]",
+          "What went wrong: [fill in]",
+          "",
+          "---",
+          "Please avoid attaching medical PDFs for privacy.",
+          "Describe which markers were missing or incorrect."
+        ].join("\n");
+    return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [isNl]);
 
   return (
     <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
@@ -2817,6 +2846,23 @@ const App = () => {
                     </p>
                   </label>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">{tr("Feedback", "Feedback")}</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {tr(
+                    "Problemen met het verwerken van PDF's? Laat ons weten welke labformaten niet werken.",
+                    "Having trouble with PDF parsing? Let us know which lab formats don't work."
+                  )}
+                </p>
+                <a
+                  href={settingsFeedbackMailto}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
+                </a>
               </div>
 
               <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
