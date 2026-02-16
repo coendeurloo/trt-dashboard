@@ -38,6 +38,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo TRT Lab Tracker draait op http://127.0.0.1:4173
+echo LabTracker draait op http://127.0.0.1:4173
 echo Je kunt dit venster sluiten.
 exit /b 0

@@ -1,8 +1,8 @@
-# TRT Lab Tracker
+# LabTracker
 
-![TRT Lab Tracker Logo](./src/assets/trt-logo-light.png)
+![LabTracker Logo](./src/assets/labtracker-logo-light.svg)
 
-TRT Lab Tracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
+LabTracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
 
 ## Features implemented
 
@@ -41,10 +41,10 @@ TRT Lab Tracker is a privacy-first web app for men on TRT to turn messy lab PDFs
 ### Windows (easiest)
 
 1. Install Node.js LTS from [https://nodejs.org](https://nodejs.org)
-2. Double-click `Start TRT Lab Tracker.bat`
+2. Double-click `Start LabTracker.bat`
 3. The app opens at `http://127.0.0.1:4173`
 
-Stop it with `Stop TRT Lab Tracker.bat`.
+Stop it with `Stop LabTracker.bat`.
 
 ### macOS / Linux
 
@@ -57,8 +57,8 @@ npm run server:start:open
 If you start via Finder/shortcut: the shell wrappers now auto-detect Node from common installs (`/opt/homebrew`, `/usr/local`, `nvm`, `volta`, `fnm`).
 
 You can also double-click:
-- `Start TRT Lab Tracker.command`
-- `Stop TRT Lab Tracker.command`
+- `Start LabTracker.command`
+- `Stop LabTracker.command`
 
 Stop server:
 

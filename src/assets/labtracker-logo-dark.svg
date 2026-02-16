@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" role="img" aria-label="LabTracker logo dark">
+  <defs>
+    <linearGradient id="flaskBlueDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7be0ff" />
+      <stop offset="100%" stop-color="#2ea8ff" />
+    </linearGradient>
+    <linearGradient id="liquidWarmDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffbf66" />
+      <stop offset="100%" stop-color="#ff6f91" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(26 34)">
+    <circle cx="116" cy="26" r="10" fill="#74d5ff" />
+    <circle cx="152" cy="8" r="8" fill="#ffe27a" />
+    <circle cx="172" cy="38" r="8" fill="#7cf0ba" />
+
+    <path d="M124 18 L124 84 C124 92 126 98 131 104 L188 180 C203 200 188 228 164 228 L64 228 C40 228 25 200 40 180 L97 104 C102 98 104 92 104 84 L104 18 Z"
+      fill="url(#flaskBlueDark)" opacity="0.95" stroke="#8bd8ff" stroke-width="7" stroke-linejoin="round"/>
+
+    <path d="M55 183 C76 167 103 175 128 160 C149 148 168 155 186 171 L186 198 C186 214 173 228 157 228 L75 228 C59 228 46 214 46 198 Z"
+      fill="url(#liquidWarmDark)" opacity="0.98" />
+
+    <circle cx="82" cy="188" r="4" fill="#fff5e6" />
+    <circle cx="142" cy="185" r="5" fill="#fff0d1" />
+    <circle cx="166" cy="205" r="3.6" fill="#fff0d1" />
+  </g>
+
+  <g transform="translate(254 102)">
+    <text x="0" y="0" font-size="72" font-family="'Avenir Next','Segoe UI',sans-serif" font-weight="700" fill="#e6f4ff">LabTracker</text>
+    <text x="0" y="44" font-size="24" font-family="'Avenir Next','Segoe UI',sans-serif" fill="#bcd8ee">Track markers, protocol context, and trends.</text>
+  </g>
+</svg>

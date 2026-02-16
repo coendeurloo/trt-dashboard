@@ -17,5 +17,5 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo TRT Lab Tracker is gestopt.
+echo LabTracker is gestopt.
 exit /b 0

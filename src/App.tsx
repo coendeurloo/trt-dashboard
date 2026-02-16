@@ -28,8 +28,8 @@ import UploadPanel from "./components/UploadPanel";
 import { getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
-import trtLogoLight from "./assets/trt-logo-light.png";
-import trtLogoDark from "./assets/trt-logo-dark.png";
+import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
+import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
@@ -485,7 +485,7 @@ const App = () => {
     if (!root) {
       return;
     }
-    await exportElementToPdf(root, `trt-dashboard-${new Date().toISOString().slice(0, 10)}.pdf`);
+    await exportElementToPdf(root, `labtracker-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const chartPointsForMarker = (markerName: string): MarkerSeriesPoint[] =>
@@ -601,8 +601,8 @@ const App = () => {
         <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
           <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
             <img
-              src={appData.settings.theme === "dark" ? trtLogoDark : trtLogoLight}
-              alt="TRT Lab Tracker"
+              src={appData.settings.theme === "dark" ? labtrackerLogoDark : labtrackerLogoLight}
+              alt="LabTracker"
               className="brand-logo mx-auto w-full max-w-[230px]"
             />
             <p className="brand-subtitle mt-2 text-center text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
