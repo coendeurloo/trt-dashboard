@@ -1,8 +1,15 @@
 # LabTracker
 
-![LabTracker Logo](./src/assets/labtracker-logo-light.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./src/assets/labtracker-logo-dark.png" />
+    <img src="./src/assets/labtracker-logo-light.png" alt="LabTracker logo" width="560" />
+  </picture>
+</p>
 
 LabTracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
+
+Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.app)
 
 ## Features implemented
 

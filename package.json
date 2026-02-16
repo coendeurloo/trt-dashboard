@@ -1,5 +1,11 @@
 {
   "name": "labtracker",
+  "description": "Privacy-first bloodwork tracking with PDF parsing, trend charts, and AI-powered lab analysis.",
+  "homepage": "https://labtracker-dashboard.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coendeurloo/labtracker.git"
+  },
   "private": true,
   "version": "0.1.0",
   "type": "module",
