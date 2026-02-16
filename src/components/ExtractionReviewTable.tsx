@@ -55,6 +55,9 @@ const ExtractionReviewTable = ({
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
   const [compoundInput, setCompoundInput] = useState("");
   const [compoundDoseInput, setCompoundDoseInput] = useState("");
+  const [compoundFrequencyInput, setCompoundFrequencyInput] = useState(
+    normalizeInjectionFrequency(annotations.injectionFrequency)
+  );
   const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
@@ -154,12 +157,17 @@ const ExtractionReviewTable = ({
     });
   };
 
-  const updateCompounds = (nextCompounds: string[]) => {
+  const updateCompounds = (
+    nextCompounds: string[],
+    metadata?: { dosageMgPerWeek?: number | null; injectionFrequency?: string }
+  ) => {
     const normalizedCompounds = canonicalizeCompoundList(nextCompounds);
     onAnnotationsChange({
       ...annotations,
       compounds: normalizedCompounds,
-      compound: normalizedCompounds[0] ?? ""
+      compound: normalizedCompounds[0] ?? "",
+      dosageMgPerWeek: metadata?.dosageMgPerWeek ?? annotations.dosageMgPerWeek,
+      injectionFrequency: metadata?.injectionFrequency ?? annotations.injectionFrequency
     });
   };
 
@@ -168,8 +176,23 @@ const ExtractionReviewTable = ({
     if (!name) {
       return;
     }
-    const dose = compoundDoseInput.trim();
-    updateCompounds([...compounds, dose ? `${name} (${dose})` : name]);
+    const doseRaw = compoundDoseInput.trim();
+    const doseNumber = safeNumber(doseRaw);
+    const normalizedFrequency = normalizeInjectionFrequency(compoundFrequencyInput);
+    const frequencyOption = INJECTION_FREQUENCY_OPTIONS.find((option) => option.value === normalizedFrequency);
+    const frequencyLabel = frequencyOption ? (isNl ? frequencyOption.label.nl : frequencyOption.label.en) : "";
+    const details: string[] = [];
+    if (doseRaw) {
+      details.push(doseRaw.toLowerCase().includes("mg") ? doseRaw : `${doseRaw} mg/week`);
+    }
+    if (normalizedFrequency !== "unknown" && frequencyLabel) {
+      details.push(frequencyLabel);
+    }
+    const compoundLabel = details.length > 0 ? `${name} (${details.join(", ")})` : name;
+    updateCompounds([...compounds, compoundLabel], {
+      dosageMgPerWeek: doseNumber,
+      injectionFrequency: normalizedFrequency
+    });
     setCompoundInput("");
     setCompoundDoseInput("");
     setShowCompoundSuggestions(false);
@@ -243,7 +266,7 @@ const ExtractionReviewTable = ({
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
+      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
           <input
@@ -252,40 +275,6 @@ const ExtractionReviewTable = ({
             onChange={(event) => onDraftChange({ ...draft, testDate: event.target.value })}
             className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Dosis (mg/week)", "Dose (mg/week)")}</label>
-          <input
-            type="number"
-            value={annotations.dosageMgPerWeek ?? ""}
-            onChange={(event) =>
-              onAnnotationsChange({
-                ...annotations,
-                dosageMgPerWeek: safeNumber(event.target.value)
-              })
-            }
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("bijv. 120", "e.g. 120")}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Injectiefrequentie", "Injection frequency")}</label>
-          <select
-            value={normalizeInjectionFrequency(annotations.injectionFrequency)}
-            onChange={(event) =>
-              onAnnotationsChange({
-                ...annotations,
-                injectionFrequency: event.target.value
-              })
-            }
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-          >
-            {INJECTION_FREQUENCY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {isNl ? option.label.nl : option.label.en}
-              </option>
-            ))}
-          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
@@ -323,7 +312,7 @@ const ExtractionReviewTable = ({
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
           <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+          <div className="space-y-2">
             <div className="relative">
               <input
                 value={compoundInput}
@@ -361,25 +350,38 @@ const ExtractionReviewTable = ({
                 </div>
               ) : null}
             </div>
-            <input
-              value={compoundDoseInput}
-              onChange={(event) => setCompoundDoseInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addCompound();
-                }
-              }}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr("Dosis (bv 75 mg/week)", "Dose (e.g. 75 mg/week)")}
-            />
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
-              onClick={addCompound}
-            >
-              <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-            </button>
+            <div className="grid gap-2 sm:grid-cols-[170px_minmax(0,1fr)_auto]">
+              <input
+                value={compoundDoseInput}
+                onChange={(event) => setCompoundDoseInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCompound();
+                  }
+                }}
+                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                placeholder={tr("Dosis (bv 75 mg/week)", "Dose (e.g. 75 mg/week)")}
+              />
+              <select
+                value={compoundFrequencyInput}
+                onChange={(event) => setCompoundFrequencyInput(event.target.value)}
+                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              >
+                {INJECTION_FREQUENCY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {isNl ? option.label.nl : option.label.en}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
+                onClick={addCompound}
+              >
+                <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
             {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
