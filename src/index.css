@@ -285,6 +285,79 @@ body.light .chart-tooltip-mini .text-amber-200 {
   color: #92400e !important;
 }
 
+.review-context-card {
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.14);
+}
+
+.review-context-input {
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.review-context-input:focus {
+  outline: none;
+  border-color: rgba(6, 182, 212, 0.62) !important;
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.14);
+}
+
+.review-suggestion-menu {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid rgba(100, 116, 139, 0.7);
+  background: rgba(15, 23, 42, 0.97);
+  box-shadow: 0 14px 30px -18px rgba(2, 6, 23, 0.6);
+}
+
+.review-suggestion-item {
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.75);
+}
+
+.review-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.review-suggestion-item:hover {
+  background: rgba(8, 145, 178, 0.22);
+  color: #ecfeff;
+}
+
+body.light .review-context-card {
+  background: linear-gradient(180deg, rgba(243, 250, 255, 0.92) 0%, rgba(235, 245, 252, 0.88) 100%) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 10px 20px -18px rgba(15, 23, 42, 0.35);
+}
+
+body.light .review-context-input {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(148, 163, 184, 0.55) !important;
+  color: #0f172a !important;
+}
+
+body.light .review-context-input::placeholder {
+  color: #64748b;
+}
+
+body.light .review-suggestion-menu {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 30px -22px rgba(15, 23, 42, 0.45);
+}
+
+body.light .review-suggestion-item {
+  color: #0f172a;
+  border-bottom-color: rgba(203, 213, 225, 0.75);
+}
+
+body.light .review-suggestion-item:hover {
+  background: rgba(186, 230, 253, 0.6);
+  color: #0c4a6e;
+}
+
 #root {
   min-height: 100vh;
 }

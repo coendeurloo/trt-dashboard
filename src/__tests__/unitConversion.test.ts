@@ -7,6 +7,7 @@ describe("unitConversion", () => {
     expect(canonicalizeMarker("Hemoglobin")).toBe("Hemoglobin");
     expect(canonicalizeMarker("glucose nuchter")).toBe("Glucose Nuchter");
     expect(canonicalizeMarker("testosteron, vrij (volgens ISSAM)")).toBe("Free Testosterone");
+    expect(canonicalizeMarker("Bioavailable Testosterone")).toBe("Bioavailable Testosterone");
   });
 
   it("convertBySystem converts key markers EU<->US", () => {

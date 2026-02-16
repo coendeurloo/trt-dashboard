@@ -46,8 +46,20 @@ const ReportsView = ({
   onSetBaseline,
   onRenameMarker
 }: ReportsViewProps) => {
-  const compoundDatalistId = "report-compound-autocomplete-options";
-  const supplementDatalistId = "report-supplement-autocomplete-options";
+  const AUTOCOMPLETE_MIN_CHARS = 2;
+  const AUTOCOMPLETE_MAX_OPTIONS = 8;
+  const buildSuggestions = (value: string, options: string[]): string[] => {
+    const query = value.trim().toLocaleLowerCase();
+    if (query.length < AUTOCOMPLETE_MIN_CHARS) {
+      return [];
+    }
+    const startsWith = options.filter((option) => option.toLocaleLowerCase().startsWith(query));
+    const includes = options.filter(
+      (option) => !option.toLocaleLowerCase().startsWith(query) && option.toLocaleLowerCase().includes(query)
+    );
+    return [...startsWith, ...includes].slice(0, AUTOCOMPLETE_MAX_OPTIONS);
+  };
+
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
 
@@ -58,8 +70,11 @@ const ReportsView = ({
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [editingCompoundInput, setEditingCompoundInput] = useState("");
+  const [editingCompoundDoseInput, setEditingCompoundDoseInput] = useState("");
+  const [showEditingCompoundSuggestions, setShowEditingCompoundSuggestions] = useState(false);
   const [editingSupplementNameInput, setEditingSupplementNameInput] = useState("");
   const [editingSupplementDoseInput, setEditingSupplementDoseInput] = useState("");
+  const [showEditingSupplementSuggestions, setShowEditingSupplementSuggestions] = useState(false);
 
   useEffect(() => {
     const ids = new Set(reports.map((report) => report.id));
@@ -129,6 +144,7 @@ const ReportsView = ({
       supplements: normalizedSupplements.supplements
     });
     setEditingCompoundInput("");
+    setEditingCompoundDoseInput("");
     setEditingSupplementNameInput("");
     setEditingSupplementDoseInput("");
   };
@@ -137,6 +153,7 @@ const ReportsView = ({
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
     setEditingCompoundInput("");
+    setEditingCompoundDoseInput("");
     setEditingSupplementNameInput("");
     setEditingSupplementDoseInput("");
   };
@@ -149,6 +166,7 @@ const ReportsView = ({
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
     setEditingCompoundInput("");
+    setEditingCompoundDoseInput("");
     setEditingSupplementNameInput("");
     setEditingSupplementDoseInput("");
   };
@@ -180,6 +198,11 @@ const ReportsView = ({
   const frequencyLabel = (value: string): string => injectionFrequencyLabel(value, language);
   const editingCompounds = Array.isArray(editingAnnotations.compounds) ? editingAnnotations.compounds : [];
   const editingSupplements = Array.isArray(editingAnnotations.supplementEntries) ? editingAnnotations.supplementEntries : [];
+  const editingCompoundSuggestions = useMemo(() => buildSuggestions(editingCompoundInput, COMPOUND_OPTIONS), [editingCompoundInput]);
+  const editingSupplementSuggestions = useMemo(
+    () => buildSuggestions(editingSupplementNameInput, SUPPLEMENT_OPTIONS),
+    [editingSupplementNameInput]
+  );
 
   const updateEditingCompounds = (nextCompounds: string[]) => {
     const normalizedCompounds = canonicalizeCompoundList(nextCompounds);
@@ -191,12 +214,15 @@ const ReportsView = ({
   };
 
   const addEditingCompound = () => {
-    const next = editingCompoundInput.trim();
-    if (!next) {
+    const name = editingCompoundInput.trim();
+    if (!name) {
       return;
     }
-    updateEditingCompounds([...editingCompounds, next]);
+    const dose = editingCompoundDoseInput.trim();
+    updateEditingCompounds([...editingCompounds, dose ? `${name} (${dose})` : name]);
     setEditingCompoundInput("");
+    setEditingCompoundDoseInput("");
+    setShowEditingCompoundSuggestions(false);
   };
 
   const removeEditingCompound = (value: string) => {
@@ -226,6 +252,7 @@ const ReportsView = ({
     ]);
     setEditingSupplementNameInput("");
     setEditingSupplementDoseInput("");
+    setShowEditingSupplementSuggestions(false);
   };
 
   return (
@@ -552,134 +579,201 @@ const ReportsView = ({
                       ) : null}
                     </div>
 
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Compounds" : "Compounds"}</span>
-                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-                        <input
-                          list={compoundDatalistId}
-                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                          value={editingCompoundInput}
-                          onChange={(event) => setEditingCompoundInput(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              addEditingCompound();
-                            }
-                          }}
-                          placeholder={tr("Zoek of typ compound", "Search or type compound")}
-                        />
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
-                          onClick={addEditingCompound}
-                        >
-                          <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-                        </button>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {editingCompounds.length === 0 ? (
-                          <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
-                        ) : (
-                          editingCompounds.map((compound) => (
-                            <button
-                              key={compound}
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
-                              onClick={() => removeEditingCompound(compound)}
-                            >
-                              {compound}
-                              <X className="h-3 w-3" />
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Supplementen (met dosis)" : "Supplements (with dose)"}</span>
-                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_190px_auto]">
-                        <input
-                          list={supplementDatalistId}
-                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                          value={editingSupplementNameInput}
-                          onChange={(event) => setEditingSupplementNameInput(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              addEditingSupplement();
-                            }
-                          }}
-                          placeholder={tr("Supplement", "Supplement")}
-                        />
-                        <input
-                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                          value={editingSupplementDoseInput}
-                          onChange={(event) => setEditingSupplementDoseInput(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              addEditingSupplement();
-                            }
-                          }}
-                          placeholder={tr("Dosis", "Dose")}
-                        />
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-                          onClick={addEditingSupplement}
-                        >
-                          <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-                        </button>
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {editingSupplements.length === 0 ? (
-                          <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
-                        ) : (
-                          editingSupplements.map((entry, index) => (
-                            <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_190px_auto]">
-                              <input
-                                list={supplementDatalistId}
-                                className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                                value={entry.name}
-                                onChange={(event) =>
-                                  updateEditingSupplements(
-                                    editingSupplements.map((row, rowIndex) =>
-                                      rowIndex === index
-                                        ? {
-                                            ...row,
-                                            name: event.target.value
-                                          }
-                                        : row
-                                    )
-                                  )
+                    <div className="grid gap-2 lg:grid-cols-2">
+                      <div className="review-context-card rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="mb-1 block text-slate-400">{isNl ? "Compounds" : "Compounds"}</span>
+                        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+                          <div className="relative">
+                            <input
+                              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                              value={editingCompoundInput}
+                              onChange={(event) => {
+                                setEditingCompoundInput(event.target.value);
+                                setShowEditingCompoundSuggestions(true);
+                              }}
+                              onFocus={() => setShowEditingCompoundSuggestions(true)}
+                              onBlur={() => window.setTimeout(() => setShowEditingCompoundSuggestions(false), 120)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  addEditingCompound();
                                 }
-                              />
-                              <input
-                                className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                                value={entry.dose}
-                                onChange={(event) =>
-                                  updateEditingSupplements(
-                                    editingSupplements.map((row, rowIndex) =>
-                                      rowIndex === index
-                                        ? {
-                                            ...row,
-                                            dose: event.target.value
-                                          }
-                                        : row
-                                    )
-                                  )
-                                }
-                              />
+                              }}
+                              placeholder={tr("Zoek of typ compound", "Search or type compound")}
+                            />
+                            {showEditingCompoundSuggestions && editingCompoundSuggestions.length > 0 ? (
+                              <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
+                                {editingCompoundSuggestions.map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    className="review-suggestion-item block w-full px-2 py-1.5 text-left text-sm"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setEditingCompoundInput(option);
+                                      setShowEditingCompoundSuggestions(false);
+                                    }}
+                                  >
+                                    {option}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <input
+                            className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                            value={editingCompoundDoseInput}
+                            onChange={(event) => setEditingCompoundDoseInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addEditingCompound();
+                              }
+                            }}
+                            placeholder={tr("Dosis (bv 75 mg/week)", "Dose (e.g. 75 mg/week)")}
+                          />
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                            onClick={addEditingCompound}
+                          >
+                            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {editingCompounds.length === 0 ? (
+                            <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
+                          ) : (
+                            editingCompounds.map((compound) => (
                               <button
+                                key={compound}
                                 type="button"
-                                className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200"
-                                onClick={() => updateEditingSupplements(editingSupplements.filter((_, rowIndex) => rowIndex !== index))}
+                                className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
+                                onClick={() => removeEditingCompound(compound)}
                               >
-                                {tr("Verwijderen", "Remove")}
+                                {compound}
+                                <X className="h-3 w-3" />
                               </button>
-                            </div>
-                          ))
-                        )}
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="review-context-card rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="mb-1 block text-slate-400">{isNl ? "Supplementen (met dosis)" : "Supplements (with dose)"}</span>
+                        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+                          <div className="relative">
+                            <input
+                              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                              value={editingSupplementNameInput}
+                              onChange={(event) => {
+                                setEditingSupplementNameInput(event.target.value);
+                                setShowEditingSupplementSuggestions(true);
+                              }}
+                              onFocus={() => setShowEditingSupplementSuggestions(true)}
+                              onBlur={() => window.setTimeout(() => setShowEditingSupplementSuggestions(false), 120)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  addEditingSupplement();
+                                }
+                              }}
+                              placeholder={tr("Supplement", "Supplement")}
+                            />
+                            {showEditingSupplementSuggestions && editingSupplementSuggestions.length > 0 ? (
+                              <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
+                                {editingSupplementSuggestions.map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    className="review-suggestion-item block w-full px-2 py-1.5 text-left text-sm"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setEditingSupplementNameInput(option);
+                                      setShowEditingSupplementSuggestions(false);
+                                    }}
+                                  >
+                                    {option}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <input
+                            className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                            value={editingSupplementDoseInput}
+                            onChange={(event) => setEditingSupplementDoseInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addEditingSupplement();
+                              }
+                            }}
+                            placeholder={tr("Dosis", "Dose")}
+                          />
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+                            onClick={addEditingSupplement}
+                          >
+                            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {editingSupplements.length === 0 ? (
+                            <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
+                          ) : (
+                            editingSupplements.map((entry, index) => (
+                              <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+                                <input
+                                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                                  value={entry.name}
+                                  onChange={(event) =>
+                                    updateEditingSupplements(
+                                      editingSupplements.map((row, rowIndex) =>
+                                        rowIndex === index
+                                          ? {
+                                              ...row,
+                                              name: event.target.value
+                                            }
+                                          : row
+                                      )
+                                    )
+                                  }
+                                />
+                                <input
+                                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                                  value={entry.dose}
+                                  onChange={(event) =>
+                                    updateEditingSupplements(
+                                      editingSupplements.map((row, rowIndex) =>
+                                        rowIndex === index
+                                          ? {
+                                              ...row,
+                                              dose: event.target.value
+                                            }
+                                          : row
+                                      )
+                                    )
+                                  }
+                                />
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200"
+                                  onClick={() => updateEditingSupplements(editingSupplements.filter((_, rowIndex) => rowIndex !== index))}
+                                >
+                                  {tr("Verwijderen", "Remove")}
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -808,16 +902,6 @@ const ReportsView = ({
           </motion.article>
         );
       })}
-      <datalist id={compoundDatalistId}>
-        {COMPOUND_OPTIONS.map((compound) => (
-          <option key={compound} value={compound} />
-        ))}
-      </datalist>
-      <datalist id={supplementDatalistId}>
-        {SUPPLEMENT_OPTIONS.map((supplement) => (
-          <option key={supplement} value={supplement} />
-        ))}
-      </datalist>
     </section>
   );
 };

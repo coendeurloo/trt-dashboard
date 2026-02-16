@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
 import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage, SupplementEntry } from "../types";
@@ -37,15 +37,35 @@ const ExtractionReviewTable = ({
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
-  const compoundDatalistId = "compound-autocomplete-options";
-  const supplementDatalistId = "supplement-autocomplete-options";
+  const AUTOCOMPLETE_MIN_CHARS = 2;
+  const AUTOCOMPLETE_MAX_OPTIONS = 8;
+  const buildSuggestions = (value: string, options: string[]): string[] => {
+    const query = value.trim().toLocaleLowerCase();
+    if (query.length < AUTOCOMPLETE_MIN_CHARS) {
+      return [];
+    }
+    const startsWith = options.filter((option) => option.toLocaleLowerCase().startsWith(query));
+    const includes = options.filter(
+      (option) => !option.toLocaleLowerCase().startsWith(query) && option.toLocaleLowerCase().includes(query)
+    );
+    return [...startsWith, ...includes].slice(0, AUTOCOMPLETE_MAX_OPTIONS);
+  };
+
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
   const [compoundInput, setCompoundInput] = useState("");
+  const [compoundDoseInput, setCompoundDoseInput] = useState("");
+  const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
+  const [showSupplementSuggestions, setShowSupplementSuggestions] = useState(false);
   const compounds = Array.isArray(annotations.compounds) ? annotations.compounds : [];
   const supplementEntries = Array.isArray(annotations.supplementEntries) ? annotations.supplementEntries : [];
+  const compoundSuggestions = useMemo(() => buildSuggestions(compoundInput, COMPOUND_OPTIONS), [compoundInput]);
+  const supplementSuggestions = useMemo(
+    () => buildSuggestions(supplementNameInput, SUPPLEMENT_OPTIONS),
+    [supplementNameInput]
+  );
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
     if (value === "high") {
       return tr("Hoog", "High");
@@ -144,12 +164,15 @@ const ExtractionReviewTable = ({
   };
 
   const addCompound = () => {
-    const next = compoundInput.trim();
-    if (!next) {
+    const name = compoundInput.trim();
+    if (!name) {
       return;
     }
-    updateCompounds([...compounds, next]);
+    const dose = compoundDoseInput.trim();
+    updateCompounds([...compounds, dose ? `${name} (${dose})` : name]);
     setCompoundInput("");
+    setCompoundDoseInput("");
+    setShowCompoundSuggestions(false);
   };
 
   const removeCompound = (compoundToRemove: string) => {
@@ -179,6 +202,7 @@ const ExtractionReviewTable = ({
     ]);
     setSupplementNameInput("");
     setSupplementDoseInput("");
+    setShowSupplementSuggestions(false);
   };
 
   return (
@@ -296,137 +320,204 @@ const ExtractionReviewTable = ({
         ) : null}
       </div>
 
-      <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
-        <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          <input
-            list={compoundDatalistId}
-            value={compoundInput}
-            onChange={(event) => setCompoundInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addCompound();
-              }
-            }}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Zoek of typ een compound en druk Enter", "Search or type a compound and press Enter")}
-          />
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
-            onClick={addCompound}
-          >
-            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-          </button>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {compounds.length === 0 ? (
-            <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
-          ) : (
-            compounds.map((compound) => (
-              <button
-                key={compound}
-                type="button"
-                className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100"
-                onClick={() => removeCompound(compound)}
-                title={tr("Verwijderen", "Remove")}
-              >
-                {compound}
-                <X className="h-3 w-3" />
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
-        <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">
-          {tr("Supplementen (met dosis)", "Supplements (with dose)")}
-        </label>
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_auto]">
-          <input
-            list={supplementDatalistId}
-            value={supplementNameInput}
-            onChange={(event) => setSupplementNameInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addSupplement();
-              }
-            }}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
-          />
-          <input
-            value={supplementDoseInput}
-            onChange={(event) => setSupplementDoseInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addSupplement();
-              }
-            }}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Dosis (bv 4000 IU)", "Dose (e.g. 4000 IU)")}
-          />
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400/60 hover:text-emerald-100"
-            onClick={addSupplement}
-          >
-            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-          </button>
-        </div>
-        <div className="mt-2 space-y-2">
-          {supplementEntries.length === 0 ? (
-            <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
-          ) : (
-            supplementEntries.map((entry, index) => (
-              <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_auto]">
-                <input
-                  list={supplementDatalistId}
-                  value={entry.name}
-                  onChange={(event) =>
-                    updateSupplementList(
-                      supplementEntries.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              name: event.target.value
-                            }
-                          : row
-                      )
-                    )
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+          <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+            <div className="relative">
+              <input
+                value={compoundInput}
+                onChange={(event) => {
+                  setCompoundInput(event.target.value);
+                  setShowCompoundSuggestions(true);
+                }}
+                onFocus={() => setShowCompoundSuggestions(true)}
+                onBlur={() => window.setTimeout(() => setShowCompoundSuggestions(false), 120)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCompound();
                   }
-                  className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                />
-                <input
-                  value={entry.dose}
-                  onChange={(event) =>
-                    updateSupplementList(
-                      supplementEntries.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              dose: event.target.value
-                            }
-                          : row
-                      )
-                    )
-                  }
-                  className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                />
+                }}
+                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                placeholder={tr("Zoek of typ compound", "Search or type compound")}
+              />
+              {showCompoundSuggestions && compoundSuggestions.length > 0 ? (
+                <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
+                  {compoundSuggestions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setCompoundInput(option);
+                        setShowCompoundSuggestions(false);
+                      }}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <input
+              value={compoundDoseInput}
+              onChange={(event) => setCompoundDoseInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addCompound();
+                }
+              }}
+              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              placeholder={tr("Dosis (bv 75 mg/week)", "Dose (e.g. 75 mg/week)")}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
+              onClick={addCompound}
+            >
+              <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {compounds.length === 0 ? (
+              <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
+            ) : (
+              compounds.map((compound) => (
                 <button
+                  key={compound}
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 hover:border-rose-400/60 hover:text-rose-100"
-                  onClick={() => updateSupplementList(supplementEntries.filter((_, rowIndex) => rowIndex !== index))}
+                  className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100"
+                  onClick={() => removeCompound(compound)}
+                  title={tr("Verwijderen", "Remove")}
                 >
-                  {tr("Verwijderen", "Remove")}
+                  {compound}
+                  <X className="h-3 w-3" />
                 </button>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+          <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">
+            {tr("Supplementen (met dosis)", "Supplements (with dose)")}
+          </label>
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+            <div className="relative">
+              <input
+                value={supplementNameInput}
+                onChange={(event) => {
+                  setSupplementNameInput(event.target.value);
+                  setShowSupplementSuggestions(true);
+                }}
+                onFocus={() => setShowSupplementSuggestions(true)}
+                onBlur={() => window.setTimeout(() => setShowSupplementSuggestions(false), 120)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addSupplement();
+                  }
+                }}
+                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+              />
+              {showSupplementSuggestions && supplementSuggestions.length > 0 ? (
+                <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
+                  {supplementSuggestions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setSupplementNameInput(option);
+                        setShowSupplementSuggestions(false);
+                      }}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <input
+              value={supplementDoseInput}
+              onChange={(event) => setSupplementDoseInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addSupplement();
+                }
+              }}
+              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              placeholder={tr("Dosis (bv 4000 IU)", "Dose (e.g. 4000 IU)")}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400/60 hover:text-emerald-100"
+              onClick={addSupplement}
+            >
+              <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
+          </p>
+          <div className="mt-2 space-y-2">
+            {supplementEntries.length === 0 ? (
+              <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
+            ) : (
+              supplementEntries.map((entry, index) => (
+                <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+                  <input
+                    value={entry.name}
+                    onChange={(event) =>
+                      updateSupplementList(
+                        supplementEntries.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? {
+                                ...row,
+                                name: event.target.value
+                              }
+                            : row
+                        )
+                      )
+                    }
+                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  />
+                  <input
+                    value={entry.dose}
+                    onChange={(event) =>
+                      updateSupplementList(
+                        supplementEntries.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? {
+                                ...row,
+                                dose: event.target.value
+                              }
+                            : row
+                        )
+                      )
+                    }
+                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 hover:border-rose-400/60 hover:text-rose-100"
+                    onClick={() => updateSupplementList(supplementEntries.filter((_, rowIndex) => rowIndex !== index))}
+                  >
+                    {tr("Verwijderen", "Remove")}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -450,17 +541,6 @@ const ExtractionReviewTable = ({
           />
         </div>
       </div>
-      <datalist id={compoundDatalistId}>
-        {COMPOUND_OPTIONS.map((compound) => (
-          <option key={compound} value={compound} />
-        ))}
-      </datalist>
-      <datalist id={supplementDatalistId}>
-        {SUPPLEMENT_OPTIONS.map((supplement) => (
-          <option key={supplement} value={supplement} />
-        ))}
-      </datalist>
-
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">

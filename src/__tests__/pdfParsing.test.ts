@@ -90,11 +90,176 @@ describe("pdfParsing fallback layers", () => {
         pageCount: 2,
         textItemCount: 8,
         lineCount: 2,
-        nonWhitespaceChars: 18
+        nonWhitespaceChars: 18,
+        spatialRows: []
       },
       draft
     );
 
     expect(shouldUseOcr).toBe(true);
+  });
+
+  it("does not force OCR when text layer is dense, even with low primary coverage", () => {
+    const shouldUseOcr = __pdfParsingInternals.shouldUseOcrFallback(
+      {
+        text: "Testosterone follow-up with mixed history tables and calculator rows",
+        pageCount: 1,
+        textItemCount: 160,
+        lineCount: 72,
+        nonWhitespaceChars: 1600,
+        spatialRows: []
+      },
+      {
+        sourceFileName: "history-table.pdf",
+        testDate: "2022-01-12",
+        markers: [
+          {
+            id: "m-1",
+            marker: "Baseline value",
+            canonicalMarker: "Baseline Value",
+            value: 1,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.7
+          },
+          {
+            id: "m-2",
+            marker: "Protocol note",
+            canonicalMarker: "Protocol Note",
+            value: 2,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.7
+          },
+          {
+            id: "m-3",
+            marker: "Balance My Hormones",
+            canonicalMarker: "Balance My Hormones",
+            value: 3,
+            unit: "ng/dL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.7
+          },
+          {
+            id: "m-4",
+            marker: "Some calc row",
+            canonicalMarker: "Some Calc Row",
+            value: 4,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.7
+          },
+          {
+            id: "m-5",
+            marker: "Another calc row",
+            canonicalMarker: "Another Calc Row",
+            value: 5,
+            unit: "ng/dL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.7
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.78,
+          needsReview: false
+        }
+      }
+    );
+
+    expect(shouldUseOcr).toBe(false);
+  });
+
+  it("parses split marker/value cells from spatial x/y rows", () => {
+    const rows = __pdfParsingInternals.parseSpatialRows(
+      [
+        {
+          page: 1,
+          y: 410,
+          items: [
+            { x: 90, text: "Testosterone (Total)" },
+            { x: 320, text: "38.1" },
+            { x: 360, text: "nmol/L" },
+            { x: 430, text: "6.7 - 26.0" }
+          ]
+        }
+      ],
+      genericProfile
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    const best = rows.find((row) => row.markerName === "Testosterone (Total)" && row.value === 38.1);
+    expect(best).toBeDefined();
+    expect(best?.unit).toBe("nmol/L");
+  });
+
+  it("extracts current-column marker rows in history-sheet layout", () => {
+    const rows = __pdfParsingInternals.parseHistoryCurrentColumnRows(
+      [
+        {
+          page: 1,
+          y: 120,
+          items: [
+            { x: 120, text: "Testosterone (Total)" },
+            { x: 220, text: "Free Testosterone - Blood Test" },
+            { x: 410, text: "SHBG" }
+          ]
+        },
+        {
+          page: 1,
+          y: 640,
+          items: [
+            { x: 130, text: "38.1 = 1098 ng/dL" },
+            { x: 220, text: "1108 pmol/L = 319 pg/mL" },
+            { x: 420, text: "26 nmol/L" }
+          ]
+        }
+      ],
+      "Baseline 02-Jan-20 Per Week 12-Jan-22 Free Testosterone - Calculated",
+      genericProfile
+    );
+
+    const totalT = rows.find((row) => row.markerName === "Testosterone (Total)");
+    const freeT = rows.find((row) => row.markerName === "Free Testosterone");
+    const shbg = rows.find((row) => row.markerName === "SHBG");
+
+    expect(totalT).toBeDefined();
+    expect(totalT?.value).toBeCloseTo(38.1, 2);
+    expect(totalT?.unit).toBe("nmol/L");
+
+    expect(freeT).toBeDefined();
+    expect(freeT?.value).toBeCloseTo(1108, 0);
+    expect(freeT?.unit).toBe("pmol/L");
+
+    expect(shbg).toBeDefined();
+    expect(shbg?.value).toBe(26);
+    expect(shbg?.unit).toBe("nmol/L");
+  });
+
+  it("drops calculator and url noise rows while keeping real lab markers", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "Balance My Hormones 7.11 ng/dL = 2.01 %",
+        "https://tru-t.org/ 1.43 nmol/L",
+        "Testosterone (Total) 38.1 nmol/L 6.7 - 26.0"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const markerNames = rows.map((row) => row.markerName);
+    expect(markerNames).not.toContain("Balance My Hormones");
+    expect(markerNames).not.toContain("https://tru-t.org/");
+    expect(markerNames).toContain("Testosterone (Total)");
   });
 });

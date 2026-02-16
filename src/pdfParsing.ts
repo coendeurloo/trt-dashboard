@@ -50,12 +50,24 @@ interface DateScore {
   firstIndex: number;
 }
 
+interface PdfSpatialItem {
+  x: number;
+  text: string;
+}
+
+interface PdfSpatialRow {
+  page: number;
+  y: number;
+  items: PdfSpatialItem[];
+}
+
 interface PdfTextExtractionResult {
   text: string;
   pageCount: number;
   textItemCount: number;
   lineCount: number;
   nonWhitespaceChars: number;
+  spatialRows: PdfSpatialRow[];
 }
 
 type ParserProfileId = "adaptive";
@@ -95,9 +107,18 @@ const REPORT_CONTEXT_HINT_PATTERN =
   /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
 const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
 const DASH_TOKEN_PATTERN = /^[-–]$/;
+const HORMONE_SIGNAL_PATTERN =
+  /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
+const HISTORY_CALCULATOR_NOISE_PATTERN =
+  /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay)\b|https?:\/\/|www\./i;
+const SPATIAL_PRIORITY_MARKER_PATTERN =
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|dht|dihydrotestosterone|prolactin|psa)\b/i;
 const OCR_LANGS = "eng+nld";
 const OCR_MAX_PAGES = 8;
 const OCR_RENDER_SCALE = 2;
+const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
+const SPATIAL_CLUSTER_GAP = 42;
+const SPATIAL_COLUMN_BAND_WIDTH = 120;
 const DEFAULT_PROFILE: ParserProfile = {
   id: "adaptive",
   requireUnit: true,
@@ -108,6 +129,7 @@ const DEFAULT_PROFILE: ParserProfile = {
 const extractPdfText = async (arrayBuffer: ArrayBuffer): Promise<PdfTextExtractionResult> => {
   const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const chunks: string[] = [];
+  const spatialRows: PdfSpatialRow[] = [];
   let textItemCount = 0;
   let lineCount = 0;
 
@@ -128,7 +150,7 @@ const extractPdfText = async (arrayBuffer: ArrayBuffer): Promise<PdfTextExtracti
       const x = typeof transform[4] === "number" ? transform[4] : 0;
       const y = typeof transform[5] === "number" ? transform[5] : 0;
 
-      const existing = rows.find((row) => Math.abs(row.y - y) <= 2);
+      const existing = rows.find((row) => Math.abs(row.y - y) <= SPATIAL_ROW_Y_GROUP_TOLERANCE);
       if (existing) {
         existing.items.push({ x, text: lineText });
       } else {
@@ -138,13 +160,18 @@ const extractPdfText = async (arrayBuffer: ArrayBuffer): Promise<PdfTextExtracti
 
     const pageLines = rows
       .sort((a, b) => {
-        if (Math.abs(b.y - a.y) > 2) {
+        if (Math.abs(b.y - a.y) > SPATIAL_ROW_Y_GROUP_TOLERANCE) {
           return b.y - a.y;
         }
         return (a.items[0]?.x ?? 0) - (b.items[0]?.x ?? 0);
       })
       .map((row) => {
-        const orderedItems = row.items.sort((a, b) => a.x - b.x);
+        const orderedItems = [...row.items].sort((a, b) => a.x - b.x);
+        spatialRows.push({
+          page: pageNum,
+          y: row.y,
+          items: orderedItems.map((item) => ({ x: item.x, text: item.text }))
+        });
         let output = "";
         let previousX: number | null = null;
         for (const part of orderedItems) {
@@ -171,7 +198,8 @@ const extractPdfText = async (arrayBuffer: ArrayBuffer): Promise<PdfTextExtracti
     pageCount: doc.numPages,
     textItemCount,
     lineCount,
-    nonWhitespaceChars: mergedText.replace(/\s+/g, "").length
+    nonWhitespaceChars: mergedText.replace(/\s+/g, "").length,
+    spatialRows
   };
 };
 
@@ -192,22 +220,36 @@ const extractJsonBlock = (input: string): string | null => {
 const isBrowserRuntime = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 const shouldUseOcrFallback = (textResult: PdfTextExtractionResult, fallbackDraft: ExtractionDraft): boolean => {
-  if (fallbackDraft.markers.length >= 6 && fallbackDraft.extraction.confidence >= 0.72) {
+  const importantCoverage = new Set(
+    fallbackDraft.markers
+      .map((marker) => marker.canonicalMarker)
+      .filter((canonical) => IMPORTANT_MARKERS.has(canonical))
+  ).size;
+  const broadButLowCoverage = fallbackDraft.markers.length >= 5 && importantCoverage < 2;
+  if (fallbackDraft.markers.length >= 6 && fallbackDraft.extraction.confidence >= 0.72 && !broadButLowCoverage) {
     return false;
   }
 
   const sparseTextLayer = textResult.textItemCount < Math.max(40, textResult.pageCount * 18);
   const sparseCharacters = textResult.nonWhitespaceChars < Math.max(260, textResult.pageCount * 120);
   const sparseLines = textResult.lineCount < Math.max(16, textResult.pageCount * 8);
+
   return sparseTextLayer || (sparseCharacters && sparseLines);
 };
 
-const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionDraft): ExtractionDraft => {
-  const baseUnitCount = base.markers.filter((marker) => marker.unit).length;
-  const candidateUnitCount = candidate.markers.filter((marker) => marker.unit).length;
+const countImportantCoverage = (markers: MarkerValue[]): number =>
+  new Set(markers.map((marker) => marker.canonicalMarker).filter((canonical) => IMPORTANT_MARKERS.has(canonical))).size;
 
-  const baseScore = base.markers.length * 3 + baseUnitCount * 1.5 + base.extraction.confidence;
-  const candidateScore = candidate.markers.length * 3 + candidateUnitCount * 1.5 + candidate.extraction.confidence;
+const scoreFallbackDraft = (draft: ExtractionDraft): number => {
+  const unitCount = draft.markers.filter((marker) => marker.unit).length;
+  const importantCoverage = countImportantCoverage(draft.markers);
+  const noisyPenalty = draft.markers.length >= 5 && importantCoverage === 0 ? 6 : 0;
+  return draft.markers.length * 2.5 + unitCount * 1.5 + importantCoverage * 4 + draft.extraction.confidence - noisyPenalty;
+};
+
+const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionDraft): ExtractionDraft => {
+  const baseScore = scoreFallbackDraft(base);
+  const candidateScore = scoreFallbackDraft(candidate);
 
   return candidateScore > baseScore ? candidate : base;
 };
@@ -835,6 +877,29 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
+  if (HISTORY_CALCULATOR_NOISE_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (/\b(?:per\s+week|baseline|various\s+protocols?|roche\s*(?:cobas\s*)?assay)\b/i.test(marker)) {
+    return true;
+  }
+
+  if (
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(marker) &&
+    /\d/.test(marker)
+  ) {
+    return true;
+  }
+
+  if (/^(?:[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s+){2,}/.test(marker)) {
+    return true;
+  }
+
+  if (/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*[<>]?$/.test(marker)) {
+    return true;
+  }
+
   return /^(?:testing report|first name|arrival date|request complete|resultaat nummer|rapport|pagina|receiver|email|phone|fax|validated|end of report|sample date|collection times?|patient|doctor|laboratory|specimen|requesting physician|units?|result normal|age reference range|daily free cortisol pattern|precision analytical|report date|date of birth|dob|sample material|requested test|request within|low limit high limit|that values below|this is a laboratory calculation|lower ground|muster|to|over|years?|www\.)\b/i.test(
     marker
   );
@@ -1009,6 +1074,10 @@ const parseSingleRow = (
 
 const looksLikeNonResultLine = (line: string): boolean => {
   if (!line || line.length < 3) {
+    return true;
+  }
+
+  if (HISTORY_CALCULATOR_NOISE_PATTERN.test(line)) {
     return true;
   }
 
@@ -1196,6 +1265,467 @@ const parseColumnRows = (text: string, profile: ParserProfile): ParsedFallbackRo
   return rows;
 };
 
+interface SpatialCluster {
+  xStart: number;
+  xEnd: number;
+  text: string;
+}
+
+interface HistoryMarkerConfig {
+  canonicalMarker: "Testosterone" | "Free Testosterone" | "SHBG";
+  markerName: string;
+  headingPattern: RegExp;
+  rejectHeadingPattern?: RegExp;
+  valueRejectPattern?: RegExp;
+  allowedUnits: string[];
+  xTolerance: number;
+}
+
+const getSpatialBand = (x: number): number => Math.max(0, Math.floor(x / SPATIAL_COLUMN_BAND_WIDTH));
+
+const clusterSpatialRowItems = (items: PdfSpatialItem[]): SpatialCluster[] => {
+  const ordered = [...items].sort((a, b) => a.x - b.x);
+  const clusters: SpatialCluster[] = [];
+
+  for (const item of ordered) {
+    const text = cleanWhitespace(item.text);
+    if (!text) {
+      continue;
+    }
+
+    const current = clusters[clusters.length - 1];
+    if (!current || item.x - current.xEnd > SPATIAL_CLUSTER_GAP) {
+      clusters.push({
+        xStart: item.x,
+        xEnd: item.x,
+        text
+      });
+      continue;
+    }
+
+    current.text = cleanWhitespace(`${current.text} ${text}`);
+    current.xEnd = item.x;
+  }
+
+  return clusters;
+};
+
+const looksLikeMarkerLabelSegment = (rawText: string): boolean => {
+  const text = cleanWhitespace(rawText);
+  if (!text || looksLikeNoiseMarker(text) || looksLikeNonResultLine(text)) {
+    return false;
+  }
+  if (!/[A-Za-zÀ-ž]/.test(text)) {
+    return false;
+  }
+  if (/^(?:=|<|>|≤|≥)?\s*-?\d+(?:[.,]\d+)?(?:\s+[A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*)?$/i.test(text)) {
+    return false;
+  }
+  if (text.split(" ").length > 9) {
+    return false;
+  }
+
+  const numericTokenCount = text
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => isNumericToken(part)).length;
+
+  return numericTokenCount <= 1;
+};
+
+const looksLikeResultSegment = (rawText: string): boolean => {
+  const text = cleanWhitespace(rawText);
+  if (!text || looksLikeNonResultLine(text)) {
+    return false;
+  }
+  if (!/\d/.test(text)) {
+    return false;
+  }
+  if (/^\d{1,2}\s*[-/]\s*\d{1,2}\s*[-/]\s*\d{2,4}$/.test(text)) {
+    return false;
+  }
+  return true;
+};
+
+const isPlausibleSpatialMeasurement = (canonicalMarker: string, unit: string, value: number): boolean => {
+  const normalizedUnit = normalizeUnit(unit);
+  if (!normalizedUnit) {
+    return false;
+  }
+
+  if (canonicalMarker === "Testosterone") {
+    if (normalizedUnit === "nmol/L") {
+      return value >= 0.5 && value <= 120;
+    }
+    if (normalizedUnit === "ng/dL") {
+      return value >= 20 && value <= 3500;
+    }
+    if (normalizedUnit === "ng/mL") {
+      return value >= 0.2 && value <= 35;
+    }
+    return false;
+  }
+  if (canonicalMarker === "Free Testosterone") {
+    if (normalizedUnit === "pmol/L") {
+      return value >= 10 && value <= 2000;
+    }
+    if (normalizedUnit === "pg/mL") {
+      return value >= 1 && value <= 600;
+    }
+    if (normalizedUnit === "ng/dL") {
+      return value >= 0.1 && value <= 60;
+    }
+    if (normalizedUnit === "nmol/L") {
+      return value >= 0.01 && value <= 5;
+    }
+    return false;
+  }
+  if (canonicalMarker === "Estradiol") {
+    if (normalizedUnit === "pmol/L") {
+      return value >= 5 && value <= 10000;
+    }
+    if (normalizedUnit === "pg/mL") {
+      return value >= 1 && value <= 3000;
+    }
+    return false;
+  }
+  if (canonicalMarker === "SHBG") {
+    return normalizedUnit === "nmol/L" && value >= 1 && value <= 300;
+  }
+  if (canonicalMarker === "Hematocrit") {
+    if (normalizedUnit === "%") {
+      return value >= 10 && value <= 70;
+    }
+    if (normalizedUnit === "L/L") {
+      return value >= 0.1 && value <= 0.7;
+    }
+    return false;
+  }
+
+  return value > 0 && value <= 5000;
+};
+
+const parseSpatialRows = (rows: PdfSpatialRow[], profile: ParserProfile): ParsedFallbackRow[] => {
+  const parsedRows: ParsedFallbackRow[] = [];
+  const activeMarkerByBand = new Map<number, string>();
+  const orderedRows = [...rows].sort((a, b) => {
+    if (a.page !== b.page) {
+      return a.page - b.page;
+    }
+    if (Math.abs(a.y - b.y) > SPATIAL_ROW_Y_GROUP_TOLERANCE) {
+      return b.y - a.y;
+    }
+    return (a.items[0]?.x ?? 0) - (b.items[0]?.x ?? 0);
+  });
+  const rowBundles = orderedRows
+    .map((row) => ({
+      row,
+      clusters: clusterSpatialRowItems(row.items)
+    }))
+    .filter((bundle) => bundle.clusters.length > 0);
+  const labelAnchors = rowBundles.flatMap((bundle) =>
+    bundle.clusters
+      .filter((cluster) => looksLikeMarkerLabelSegment(cluster.text))
+      .map((cluster) => ({
+        page: bundle.row.page,
+        y: bundle.row.y,
+        x: (cluster.xStart + cluster.xEnd) / 2,
+        band: getSpatialBand((cluster.xStart + cluster.xEnd) / 2),
+        marker: applyProfileMarkerFixes(cleanMarkerName(cluster.text))
+      }))
+      .filter((anchor) => !looksLikeNoiseMarker(anchor.marker))
+  );
+
+  const pushIfValid = (candidate: ParsedFallbackRow | null) => {
+    if (!candidate) {
+      return;
+    }
+    if (shouldKeepParsedRow(candidate, profile)) {
+      const canonicalMarker = canonicalizeMarker(candidate.markerName);
+      if (!IMPORTANT_MARKERS.has(canonicalMarker) && !SPATIAL_PRIORITY_MARKER_PATTERN.test(candidate.markerName)) {
+        return;
+      }
+      const markerTokens = candidate.markerName
+        .toLowerCase()
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter(Boolean);
+      if (markerTokens.length >= 4 && new Set(markerTokens).size <= 2) {
+        return;
+      }
+      if (!isPlausibleSpatialMeasurement(canonicalMarker, candidate.unit, candidate.value)) {
+        return;
+      }
+      if (candidate.value <= 0 || candidate.value > 10000) {
+        return;
+      }
+      parsedRows.push(candidate);
+    }
+  };
+
+  for (const bundle of rowBundles) {
+    const { row, clusters } = bundle;
+
+    for (const cluster of clusters) {
+      if (!looksLikeMarkerLabelSegment(cluster.text)) {
+        continue;
+      }
+      const marker = applyProfileMarkerFixes(cleanMarkerName(cluster.text));
+      if (looksLikeNoiseMarker(marker)) {
+        continue;
+      }
+      activeMarkerByBand.set(getSpatialBand((cluster.xStart + cluster.xEnd) / 2), marker);
+    }
+
+    for (let index = 0; index < clusters.length; index += 1) {
+      const cluster = clusters[index];
+      pushIfValid(parseSingleRow(cluster.text, 0.7, profile));
+
+      if (!looksLikeResultSegment(cluster.text)) {
+        continue;
+      }
+
+      const centerX = (cluster.xStart + cluster.xEnd) / 2;
+      const resultBand = getSpatialBand(centerX);
+
+      const leftMarkerCluster = [...clusters]
+        .slice(0, index)
+        .reverse()
+        .find(
+          (candidate) =>
+            looksLikeMarkerLabelSegment(candidate.text) && centerX - (candidate.xStart + candidate.xEnd) / 2 <= 260
+        );
+
+      const markerCandidates = new Set<string>();
+      if (leftMarkerCluster) {
+        markerCandidates.add(applyProfileMarkerFixes(cleanMarkerName(leftMarkerCluster.text)));
+      }
+      [resultBand, resultBand - 1, resultBand + 1].forEach((band) => {
+        const marker = activeMarkerByBand.get(band);
+        if (marker) {
+          markerCandidates.add(marker);
+        }
+      });
+      labelAnchors
+        .filter(
+          (anchor) =>
+            anchor.page === row.page && Math.abs(anchor.band - resultBand) <= 1 && Math.abs(anchor.y - row.y) <= 220
+        )
+        .sort((a, b) => {
+          const aDistance = Math.abs(a.y - row.y) + Math.abs(a.band - resultBand) * 50;
+          const bDistance = Math.abs(b.y - row.y) + Math.abs(b.band - resultBand) * 50;
+          return aDistance - bDistance;
+        })
+        .slice(0, 3)
+        .forEach((anchor) => markerCandidates.add(anchor.marker));
+      labelAnchors
+        .filter((anchor) => anchor.page === row.page && Math.abs(anchor.x - centerX) <= 62)
+        .sort((a, b) => {
+          const aDistance = Math.abs(a.x - centerX) + Math.abs(a.y - row.y) * 0.15;
+          const bDistance = Math.abs(b.x - centerX) + Math.abs(b.y - row.y) * 0.15;
+          return aDistance - bDistance;
+        })
+        .slice(0, 2)
+        .forEach((anchor) => markerCandidates.add(anchor.marker));
+
+      const trailing = clusters[index + 1];
+      for (const marker of markerCandidates) {
+        if (looksLikeNoiseMarker(marker)) {
+          continue;
+        }
+        const baseCandidate = parseSingleRow(`${marker} ${cluster.text}`, 0.78, profile);
+        pushIfValid(baseCandidate);
+
+        if (trailing && trailing.xStart - cluster.xEnd <= 120 && looksLikeResultSegment(trailing.text)) {
+          pushIfValid(parseSingleRow(`${marker} ${cluster.text} ${trailing.text}`, 0.79, profile));
+        }
+      }
+    }
+  }
+
+  return parsedRows;
+};
+
+const looksLikeHistorySheetLayout = (text: string): boolean => {
+  return (
+    /\bbaseline\b/i.test(text) &&
+    /\bper\s+week\b/i.test(text) &&
+    /\bfree\s+testosterone\s*-\s*calculated\b/i.test(text)
+  );
+};
+
+const HISTORY_MARKER_CONFIGS: HistoryMarkerConfig[] = [
+  {
+    canonicalMarker: "Testosterone",
+    markerName: "Testosterone (Total)",
+    headingPattern: /\btestosterone\b/i,
+    rejectHeadingPattern: /\b(?:free|calculated|bioavailable)\b/i,
+    valueRejectPattern: /\b(?:range|ref|baseline|per\s+week|assay|calculator|bioavailable|balance|https?:\/\/|www\.)\b/i,
+    allowedUnits: ["nmol/L", "ng/dL", "ng/mL"],
+    xTolerance: 95
+  },
+  {
+    canonicalMarker: "Free Testosterone",
+    markerName: "Free Testosterone",
+    headingPattern: /\bfree\s+testosterone\b/i,
+    rejectHeadingPattern: /\b(?:calculated|bioavailable)\b/i,
+    valueRejectPattern: /\b(?:range|ref|baseline|per\s+week|calculator|bioavailable|balance|https?:\/\/|www\.)\b/i,
+    allowedUnits: ["pmol/L", "ng/dL", "pg/mL", "nmol/L"],
+    xTolerance: 95
+  },
+  {
+    canonicalMarker: "SHBG",
+    markerName: "SHBG",
+    headingPattern: /\bshbg\b/i,
+    valueRejectPattern: /\b(?:range|ref|baseline|per\s+week|calculator|https?:\/\/|www\.)\b/i,
+    allowedUnits: ["nmol/L"],
+    xTolerance: 82
+  }
+];
+
+const unitPriorityScore = (unit: string, allowedUnits: string[]): number => {
+  const normalized = normalizeUnit(unit);
+  const rank = allowedUnits.findIndex((allowed) => normalizeUnit(allowed) === normalized);
+  return rank === -1 ? -40 : Math.max(0, (allowedUnits.length - rank) * 14);
+};
+
+const parseHistoryCurrentColumnRows = (rows: PdfSpatialRow[], text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  if (!looksLikeHistorySheetLayout(text) || rows.length === 0) {
+    return [];
+  }
+
+  const rowBundles = [...rows]
+    .sort((a, b) => {
+      if (a.page !== b.page) {
+        return a.page - b.page;
+      }
+      if (Math.abs(a.y - b.y) > SPATIAL_ROW_Y_GROUP_TOLERANCE) {
+        return b.y - a.y;
+      }
+      return (a.items[0]?.x ?? 0) - (b.items[0]?.x ?? 0);
+    })
+    .map((row) => ({
+      row,
+      clusters: clusterSpatialRowItems(row.items)
+    }))
+    .filter((bundle) => bundle.clusters.length > 0);
+
+  const parsedRows: ParsedFallbackRow[] = [];
+
+  for (const config of HISTORY_MARKER_CONFIGS) {
+    const headingXs: number[] = [];
+    for (const bundle of rowBundles) {
+      for (const cluster of bundle.clusters) {
+        const headingText = cleanWhitespace(cluster.text);
+        if (!headingText || /\d/.test(headingText)) {
+          continue;
+        }
+        if (!config.headingPattern.test(headingText)) {
+          continue;
+        }
+        if (config.rejectHeadingPattern?.test(headingText)) {
+          continue;
+        }
+        if (looksLikeNoiseMarker(headingText)) {
+          continue;
+        }
+        headingXs.push((cluster.xStart + cluster.xEnd) / 2);
+      }
+    }
+
+    if (headingXs.length === 0) {
+      continue;
+    }
+
+    headingXs.sort((a, b) => a - b);
+    const headingX = headingXs[Math.floor(headingXs.length / 2)];
+
+    let best: { row: ParsedFallbackRow; score: number } | null = null;
+    for (const bundle of rowBundles) {
+      for (const cluster of bundle.clusters) {
+        const textValue = cleanWhitespace(cluster.text);
+        if (!textValue || !/\d/.test(textValue)) {
+          continue;
+        }
+        if (config.valueRejectPattern?.test(textValue)) {
+          continue;
+        }
+
+        const centerX = (cluster.xStart + cluster.xEnd) / 2;
+        if (Math.abs(centerX - headingX) > config.xTolerance) {
+          continue;
+        }
+
+        // Special case for compact conversion notation like "38.1 = 1098 ng/dL".
+        if (config.canonicalMarker === "Testosterone") {
+          const eqMatch = textValue.match(/(-?\d+(?:[.,]\d+)?)\s*=\s*(-?\d+(?:[.,]\d+)?)\s*(ng\/dL)/i);
+          const left = safeNumber(eqMatch?.[1] ?? "");
+          const right = safeNumber(eqMatch?.[2] ?? "");
+          if (eqMatch && left !== null && right !== null && right !== 0) {
+            const converted = left * 28.84;
+            const ratioDelta = Math.abs(converted - right) / right;
+            if (ratioDelta < 0.08) {
+              const inferred: ParsedFallbackRow = {
+                markerName: config.markerName,
+                value: left,
+                unit: "nmol/L",
+                referenceMin: null,
+                referenceMax: null,
+                confidence: 0.9
+              };
+              const score = bundle.row.y + 45;
+              if (!best || score > best.score) {
+                best = { row: inferred, score };
+              }
+            }
+          }
+        }
+
+        const pairMatches = Array.from(
+          textValue.matchAll(/([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(nmol\/L|pmol\/L|ng\/dL|pg\/mL|ng\/mL|mIU\/mL|IU\/L|%|L\/L)/gi)
+        );
+        for (const match of pairMatches) {
+          const value = safeNumber(match[1].replace(/\s+/g, ""));
+          const unit = normalizeUnit(match[2]);
+          if (value === null) {
+            continue;
+          }
+          if (!config.allowedUnits.some((allowed) => normalizeUnit(allowed) === unit)) {
+            continue;
+          }
+          if (!isPlausibleSpatialMeasurement(config.canonicalMarker, unit, value)) {
+            continue;
+          }
+
+          const candidate: ParsedFallbackRow = {
+            markerName: config.markerName,
+            value,
+            unit,
+            referenceMin: null,
+            referenceMax: null,
+            confidence: 0.89
+          };
+          if (!shouldKeepParsedRow(candidate, profile)) {
+            continue;
+          }
+
+          const score = bundle.row.y + unitPriorityScore(unit, config.allowedUnits);
+          if (!best || score > best.score) {
+            best = { row: candidate, score };
+          }
+        }
+      }
+    }
+
+    if (best) {
+      parsedRows.push(best.row);
+    }
+  }
+
+  return parsedRows;
+};
+
 const parseIndexedRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   const normalized = cleanWhitespace(text);
   const rows: ParsedFallbackRow[] = [];
@@ -1337,23 +1867,34 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
   return Array.from(byKey.values());
 };
 
-const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
+const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft => {
   const profile = detectParserProfile(text, fileName);
+  const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
   const columnRows = parseColumnRows(text, profile);
   const lineRows = parseLineRows(text, profile);
   const indexedRows = parseIndexedRows(text, profile);
   const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
   const huisartsRows = profile.enableKeywordRangeParser ? parseMijnGezondheidRows(text) : [];
 
-  const combinedRows =
+  const nonSpatialRows =
     indexedRows.length > 0
       ? [...columnRows, ...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
       : [...columnRows, ...lineRows, ...looseRows, ...huisartsRows];
+  const nonSpatialMarkers = dedupeRows(nonSpatialRows);
+  const nonSpatialImportantCoverage = countImportantCoverage(nonSpatialMarkers);
+  const shouldApplySpatialBoost =
+    spatialRows.length > 0 &&
+    (nonSpatialImportantCoverage < 2 || nonSpatialMarkers.length < 8 || nonSpatialMarkers.length / Math.max(text.split("\n").length, 1) < 0.03);
+
+  const spatialParsedRows = shouldApplySpatialBoost ? parseSpatialRows(spatialRows, profile) : [];
+  const combinedRows = [...historyRows, ...nonSpatialRows, ...spatialParsedRows];
   const markers = dedupeRows(combinedRows);
 
   const averageConfidence =
     markers.length > 0 ? markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length : 0;
   const unitCoverage = markers.length > 0 ? markers.filter((marker) => marker.unit).length / markers.length : 0;
+  const importantCoverage = countImportantCoverage(markers);
+  const hormoneSignal = HORMONE_SIGNAL_PATTERN.test(text);
   const confidence = markers.length > 0 ? Math.min(0.9, averageConfidence * 0.8 + unitCoverage * 0.2) : 0.1;
 
   return {
@@ -1364,7 +1905,7 @@ const fallbackExtract = (text: string, fileName: string): ExtractionDraft => {
       provider: "fallback",
       model: `fallback-layered:${profile.id}`,
       confidence,
-      needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7
+      needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7 || (hormoneSignal && importantCoverage < 2)
     }
   };
 };
@@ -1522,13 +2063,13 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
   const arrayBuffer = await file.arrayBuffer();
   const textResult = await extractPdfText(arrayBuffer);
   let extractionText = textResult.text;
-  let fallbackDraft = fallbackExtract(extractionText, file.name);
+  let fallbackDraft = fallbackExtract(extractionText, file.name, textResult.spatialRows);
 
   if (shouldUseOcrFallback(textResult, fallbackDraft)) {
     const ocrText = await extractPdfTextViaOcr(arrayBuffer);
     if (ocrText) {
       extractionText = `${extractionText}\n${ocrText}`.trim();
-      const ocrDraft = fallbackExtract(extractionText, file.name);
+      const ocrDraft = fallbackExtract(extractionText, file.name, textResult.spatialRows);
       const selected = chooseBetterFallbackDraft(fallbackDraft, ocrDraft);
       fallbackDraft =
         selected === ocrDraft
@@ -1575,5 +2116,7 @@ export const __pdfParsingInternals = {
   parseTwoLineRow,
   parseLineRows,
   parseColumnRows,
+  parseSpatialRows,
+  parseHistoryCurrentColumnRows,
   fallbackExtract
 };

@@ -70,6 +70,10 @@ export const canonicalizeMarker = (input: string): string => {
     return "Unknown Marker";
   }
 
+  if (/\bbioavailable\b/.test(normalized) && /\b(?:testosterone|testosteron)\b/.test(normalized)) {
+    return "Bioavailable Testosterone";
+  }
+
   if (
     /\b(testosterone|testosteron)\b/.test(normalized) &&
     /\b(free|vrij|vrije)\b/.test(normalized) &&
