@@ -1,6 +1,6 @@
 # LabTracker
 
-![LabTracker Logo](./src/assets/labtracker-logo-light.svg)
+![LabTracker Logo](./src/assets/labtracker-logo-light.png)
 
 LabTracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
 
