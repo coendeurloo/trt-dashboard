@@ -29,6 +29,8 @@ export interface MarkerValue {
 
 export interface ReportAnnotations {
   dosageMgPerWeek: number | null;
+  compound: string;
+  injectionFrequency: string;
   protocol: string;
   supplements: string;
   symptoms: string;

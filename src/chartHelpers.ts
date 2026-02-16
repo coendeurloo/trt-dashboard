@@ -53,6 +53,8 @@ export const buildYAxisDomain = (
 
 export const blankAnnotations = (): ReportAnnotations => ({
   dosageMgPerWeek: null,
+  compound: "",
+  injectionFrequency: "unknown",
   protocol: "",
   supplements: "",
   symptoms: "",

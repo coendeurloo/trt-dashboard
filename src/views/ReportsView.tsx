@@ -5,6 +5,7 @@ import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName } from "../i18n";
+import { COMPOUND_OPTIONS, INJECTION_FREQUENCY_OPTIONS, injectionFrequencyLabel, normalizeInjectionFrequency } from "../protocolStandards";
 import { AppLanguage, AppSettings, LabReport, ReportAnnotations } from "../types";
 import { convertBySystem } from "../unitConversion";
 import { formatDate, safeNumber } from "../utils";
@@ -34,6 +35,7 @@ const ReportsView = ({
   onSetBaseline,
   onRenameMarker
 }: ReportsViewProps) => {
+  const compoundDatalistId = "report-compound-autocomplete-options";
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
 
@@ -138,6 +140,8 @@ const ReportsView = ({
     }
     return "Peak";
   };
+
+  const frequencyLabel = (value: string): string => injectionFrequencyLabel(value, language);
 
   return (
     <section className="space-y-3 fade-in">
@@ -382,7 +386,40 @@ const ReportsView = ({
                       />
                     </label>
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">Protocol</span>
+                      <span className="mb-1 block text-slate-400">{isNl ? "Compound" : "Compound"}</span>
+                      <input
+                        list={compoundDatalistId}
+                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                        value={editingAnnotations.compound}
+                        onChange={(event) =>
+                          setEditingAnnotations((current) => ({
+                            ...current,
+                            compound: event.target.value
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
+                      <select
+                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                        value={normalizeInjectionFrequency(editingAnnotations.injectionFrequency)}
+                        onChange={(event) =>
+                          setEditingAnnotations((current) => ({
+                            ...current,
+                            injectionFrequency: event.target.value
+                          }))
+                        }
+                      >
+                        {INJECTION_FREQUENCY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {isNl ? option.label.nl : option.label.en}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{isNl ? "Protocoldetails" : "Protocol details"}</span>
                       <input
                         className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
                         value={editingAnnotations.protocol}
@@ -392,6 +429,7 @@ const ReportsView = ({
                             protocol: event.target.value
                           }))
                         }
+                        placeholder={isNl ? "bijv. SubQ, injectieplek, timing" : "e.g. SubQ, injection site, timing"}
                       />
                     </label>
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
@@ -455,7 +493,7 @@ const ReportsView = ({
                     ) : null}
                   </div>
                 ) : (
-                  <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${samplingControlsEnabled ? "xl:grid-cols-6" : "xl:grid-cols-5"}`}>
+                  <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${samplingControlsEnabled ? "xl:grid-cols-8" : "xl:grid-cols-7"}`}>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{isNl ? "Dosis" : "Dose"}</span>
                       <strong className="text-sm text-slate-100">
@@ -463,7 +501,15 @@ const ReportsView = ({
                       </strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">Protocol</span>
+                      <span className="block text-slate-400">{isNl ? "Compound" : "Compound"}</span>
+                      <strong className="text-sm text-slate-100">{report.annotations.compound || "-"}</strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
+                      <strong className="text-sm text-slate-100">{frequencyLabel(report.annotations.injectionFrequency)}</strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="block text-slate-400">{isNl ? "Protocoldetails" : "Protocol details"}</span>
                       <strong className="text-sm text-slate-100">{report.annotations.protocol || "-"}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
@@ -565,6 +611,11 @@ const ReportsView = ({
           </motion.article>
         );
       })}
+      <datalist id={compoundDatalistId}>
+        {COMPOUND_OPTIONS.map((compound) => (
+          <option key={compound} value={compound} />
+        ))}
+      </datalist>
     </section>
   );
 };

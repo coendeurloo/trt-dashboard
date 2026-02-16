@@ -44,6 +44,8 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 
 const defaultAnnotations = (): ReportAnnotations => ({
   dosageMgPerWeek: null,
+  compound: "",
+  injectionFrequency: "unknown",
   protocol: "",
   supplements: "",
   symptoms: "",

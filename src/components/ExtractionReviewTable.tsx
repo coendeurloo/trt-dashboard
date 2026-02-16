@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
 import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage } from "../types";
 import { FEEDBACK_EMAIL } from "../constants";
+import { COMPOUND_OPTIONS, INJECTION_FREQUENCY_OPTIONS, normalizeInjectionFrequency } from "../protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import EditableCell from "./EditableCell";
@@ -27,6 +28,7 @@ const ExtractionReviewTable = ({
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
+  const compoundDatalistId = "compound-autocomplete-options";
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
@@ -155,7 +157,7 @@ const ExtractionReviewTable = ({
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
+      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
           <input
@@ -181,12 +183,43 @@ const ExtractionReviewTable = ({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Protocol</label>
+          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Compound", "Compound")}</label>
+          <input
+            list={compoundDatalistId}
+            value={annotations.compound}
+            onChange={(event) => onAnnotationsChange({ ...annotations, compound: event.target.value })}
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            placeholder={tr("bijv. Testosterone Enanthate", "e.g. Testosterone Enanthate")}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Injectiefrequentie", "Injection frequency")}</label>
+          <select
+            value={normalizeInjectionFrequency(annotations.injectionFrequency)}
+            onChange={(event) =>
+              onAnnotationsChange({
+                ...annotations,
+                injectionFrequency: event.target.value
+              })
+            }
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+          >
+            {INJECTION_FREQUENCY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {isNl ? option.label.nl : option.label.en}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+            {tr("Protocoldetails", "Protocol details")}
+          </label>
           <input
             value={annotations.protocol}
             onChange={(event) => onAnnotationsChange({ ...annotations, protocol: event.target.value })}
             className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="2x per week SubQ"
+            placeholder={tr("bijv. SubQ, split doses, opmerking", "e.g. SubQ, split doses, notes")}
           />
         </div>
         <div>
@@ -240,6 +273,11 @@ const ExtractionReviewTable = ({
           />
         </div>
       </div>
+      <datalist id={compoundDatalistId}>
+        {COMPOUND_OPTIONS.map((compound) => (
+          <option key={compound} value={compound} />
+        ))}
+      </datalist>
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">

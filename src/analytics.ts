@@ -1,4 +1,5 @@
 import { PRIMARY_MARKERS } from "./constants";
+import { frequencyPerWeekFromSelectionOrProtocol } from "./protocolStandards";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, SamplingTiming } from "./types";
 import { canonicalizeMarker, convertBySystem } from "./unitConversion";
 import { clip, createId, deriveAbnormalFlag, sortReportsChronological } from "./utils";
@@ -15,6 +16,8 @@ export interface MarkerSeriesPoint {
   abnormal: MarkerValue["abnormal"];
   context: {
     dosageMgPerWeek: number | null;
+    compound: string;
+    injectionFrequency: string;
     protocol: string;
     supplements: string;
     symptoms: string;
@@ -733,6 +736,8 @@ export const buildMarkerSeries = (
         abnormal: marker.abnormal,
         context: {
           dosageMgPerWeek: report.annotations.dosageMgPerWeek,
+          compound: report.annotations.compound,
+          injectionFrequency: report.annotations.injectionFrequency,
           protocol: report.annotations.protocol,
           supplements: report.annotations.supplements,
           symptoms: report.annotations.symptoms,
@@ -1389,44 +1394,8 @@ export const buildTrtStabilitySeries = (
   return points;
 };
 
-export const extractProtocolFrequencyPerWeek = (protocol: string): number | null => {
-  const normalized = normalizeProtocolText(protocol);
-  if (!normalized) {
-    return null;
-  }
-
-  if (/\b(daily|dagelijks|every day|ed)\b/.test(normalized)) {
-    return 7;
-  }
-  if (/\b(eod|every other day)\b/.test(normalized)) {
-    return 3.5;
-  }
-
-  const xPerWeek = normalized.match(/(\d+(?:[.,]\d+)?)\s*x\s*(?:per|\/)?\s*week/);
-  if (xPerWeek) {
-    const parsed = Number(xPerWeek[1].replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  const timesWeekly = normalized.match(/(\d+(?:[.,]\d+)?)\s*(?:times|keer)\s*(?:per|\/)?\s*week/);
-  if (timesWeekly) {
-    const parsed = Number(timesWeekly[1].replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  const everyXDays = normalized.match(/every\s*(\d+(?:[.,]\d+)?)\s*day/);
-  if (everyXDays) {
-    const days = Number(everyXDays[1].replace(",", "."));
-    return days > 0 ? 7 / days : null;
-  }
-  const elkeXDagen = normalized.match(/elke\s*(\d+(?:[.,]\d+)?)\s*dag/);
-  if (elkeXDagen) {
-    const days = Number(elkeXDagen[1].replace(",", "."));
-    return days > 0 ? 7 / days : null;
-  }
-
-  return null;
-};
+export const extractProtocolFrequencyPerWeek = (protocol: string, injectionFrequency = ""): number | null =>
+  frequencyPerWeekFromSelectionOrProtocol(injectionFrequency, protocol);
 
 const protocolConfidenceLabel = (pointsUsed: number, total: number): "High" | "Medium" | "Low" => {
   if (pointsUsed >= 4 && total >= 6) {
@@ -1466,13 +1435,14 @@ export const buildProtocolImpactSummary = (
 
     const previousDose = previous.annotations.dosageMgPerWeek;
     const currentDose = current.annotations.dosageMgPerWeek;
-    const frequencyFrom = extractProtocolFrequencyPerWeek(previous.annotations.protocol);
-    const frequencyTo = extractProtocolFrequencyPerWeek(current.annotations.protocol);
+    const frequencyFrom = extractProtocolFrequencyPerWeek(previous.annotations.protocol, previous.annotations.injectionFrequency);
+    const frequencyTo = extractProtocolFrequencyPerWeek(current.annotations.protocol, current.annotations.injectionFrequency);
+    const compoundChanged = normalizeProtocolText(previous.annotations.compound) !== normalizeProtocolText(current.annotations.compound);
     const protocolTextChanged = normalizeProtocolText(previous.annotations.protocol) !== normalizeProtocolText(current.annotations.protocol);
     const doseChanged = previousDose !== currentDose;
     const frequencyChanged = frequencyFrom !== null && frequencyTo !== null && Math.abs(frequencyFrom - frequencyTo) > 0.01;
 
-    if (!doseChanged && !frequencyChanged && !protocolTextChanged) {
+    if (!doseChanged && !frequencyChanged && !compoundChanged && !protocolTextChanged) {
       continue;
     }
 
@@ -1482,8 +1452,12 @@ export const buildProtocolImpactSummary = (
     }
     if (frequencyChanged) {
       triggerParts.push(`Frequency ${ROUND_2(frequencyFrom ?? 0)} -> ${ROUND_2(frequencyTo ?? 0)} /week`);
-    } else if (protocolTextChanged) {
-      triggerParts.push("Protocol text changed");
+    }
+    if (compoundChanged) {
+      triggerParts.push(`Compound ${previous.annotations.compound || "unknown"} -> ${current.annotations.compound || "unknown"}`);
+    }
+    if (protocolTextChanged) {
+      triggerParts.push("Protocol details changed");
     }
     const trigger = triggerParts.join("; ");
 

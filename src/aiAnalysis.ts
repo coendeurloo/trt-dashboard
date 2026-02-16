@@ -1,5 +1,6 @@
 import { sortReportsChronological } from "./utils";
 import { AppLanguage, LabReport, UnitSystem } from "./types";
+import { frequencyPerWeekFromSelectionOrProtocol, injectionFrequencyLabel } from "./protocolStandards";
 import { convertBySystem } from "./unitConversion";
 import {
   DosePrediction,
@@ -42,6 +43,9 @@ interface AnalysisReportRow {
   date: string;
   ann: {
     dose: number | null;
+    compound: string;
+    frequency: string;
+    frequencyPerWeek: number | null;
     protocol: string;
     supps: string;
     symptoms: string;
@@ -95,7 +99,7 @@ const FORMAT_RULES = (outputLanguage: string): string[] => [
 const ANALYSIS_RULES: string[] = [
   "Use only data from the JSON block.",
   "Cite concrete data (date + marker + value + unit) for each key claim.",
-  "Interpret timeline order, sampling timing (trough/peak), protocol, supplements, and symptoms together.",
+  "Interpret timeline order, sampling timing (trough/peak), compound, injection frequency, protocol details, supplements, and symptoms together.",
   "State uncertainties and confounders explicitly.",
   "Action-neutral: no prescriptions or medical directives."
 ];
@@ -118,7 +122,7 @@ const SUPPLEMENT_SECTION_TEMPLATE: string[] = [
 const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or medical advice.";
 
 const KEY_LEGEND =
-  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, supps=supplements, timing=samplingTiming.";
+  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming.";
 
 const toRounded = (value: number): number => {
   if (Math.abs(value) >= 100) {
@@ -169,6 +173,12 @@ const buildPayload = (reports: LabReport[], unitSystem: UnitSystem): AnalysisRep
     date: report.testDate,
     ann: {
       dose: report.annotations.dosageMgPerWeek,
+      compound: report.annotations.compound,
+      frequency: injectionFrequencyLabel(report.annotations.injectionFrequency, "en"),
+      frequencyPerWeek: frequencyPerWeekFromSelectionOrProtocol(
+        report.annotations.injectionFrequency,
+        report.annotations.protocol
+      ),
       protocol: report.annotations.protocol,
       supps: report.annotations.supplements,
       symptoms: report.annotations.symptoms,
@@ -393,6 +403,8 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
   const protocolTimeline = reports.map((report) => ({
     date: report.date,
     dosageMgPerWeek: report.ann.dose,
+    compound: report.ann.compound,
+    injectionFrequency: report.ann.frequency,
     protocol: report.ann.protocol,
     supplements: report.ann.supps,
     symptoms: report.ann.symptoms,
@@ -404,6 +416,8 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
     changes: string[];
     context: {
       dosageMgPerWeek: number | null;
+      compound: string;
+      injectionFrequency: string;
       protocol: string;
       supplements: string;
       symptoms: string;
@@ -419,6 +433,8 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
         changes: ["Baseline context"],
         context: {
           dosageMgPerWeek: current.dosageMgPerWeek,
+          compound: current.compound,
+          injectionFrequency: current.injectionFrequency,
           protocol: current.protocol,
           supplements: current.supplements,
           symptoms: current.symptoms,
@@ -434,8 +450,14 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
     if (current.dosageMgPerWeek !== previous.dosageMgPerWeek) {
       changes.push(`Dosage: ${previous.dosageMgPerWeek ?? "none"} -> ${current.dosageMgPerWeek ?? "none"} mg/week`);
     }
+    if (normalizeText(current.compound) !== normalizeText(previous.compound)) {
+      changes.push("Compound changed");
+    }
+    if (normalizeText(current.injectionFrequency) !== normalizeText(previous.injectionFrequency)) {
+      changes.push("Injection frequency changed");
+    }
     if (normalizeText(current.protocol) !== normalizeText(previous.protocol)) {
-      changes.push("Protocol changed");
+      changes.push("Protocol details changed");
     }
     if (normalizeText(current.supplements) !== normalizeText(previous.supplements)) {
       changes.push("Supplements changed");
@@ -450,6 +472,8 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
         changes,
         context: {
           dosageMgPerWeek: current.dosageMgPerWeek,
+          compound: current.compound,
+          injectionFrequency: current.injectionFrequency,
           protocol: current.protocol,
           supplements: current.supplements,
           symptoms: current.symptoms,

@@ -23,6 +23,8 @@ const mkReport = (id: string, date: string): LabReport => ({
   ],
   annotations: {
     dosageMgPerWeek: 120,
+    compound: "Testosterone Enanthate",
+    injectionFrequency: "2x_week",
     protocol: "2x/week",
     supplements: "",
     symptoms: "",

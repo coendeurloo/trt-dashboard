@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
+import { canonicalizeCompound, normalizeInjectionFrequency } from "../protocolStandards";
 import { AppSettings, LabReport, MarkerValue, ReportAnnotations, StoredAppData } from "../types";
 import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
@@ -154,6 +155,11 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
+      const normalizedAnnotations: ReportAnnotations = {
+        ...annotations,
+        compound: canonicalizeCompound(annotations.compound),
+        injectionFrequency: normalizeInjectionFrequency(annotations.injectionFrequency)
+      };
       setAppData((prev) => ({
         ...prev,
         reports: prev.reports.map((report) =>
@@ -161,9 +167,9 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
             ? {
                 ...report,
                 annotations: samplingControlsEnabled
-                  ? annotations
+                  ? normalizedAnnotations
                   : {
-                      ...annotations,
+                      ...normalizedAnnotations,
                       samplingTiming: "trough"
                     }
               }

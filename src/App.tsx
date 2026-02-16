@@ -28,6 +28,7 @@ import UploadPanel from "./components/UploadPanel";
 import { getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
+import { canonicalizeCompound, normalizeInjectionFrequency } from "./protocolStandards";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.png";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.png";
 import { exportElementToPdf } from "./pdfExport";
@@ -451,9 +452,15 @@ const App = () => {
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
       annotations: samplingControlsEnabled
-        ? draftAnnotations
+        ? {
+            ...draftAnnotations,
+            compound: canonicalizeCompound(draftAnnotations.compound),
+            injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency)
+          }
         : {
             ...draftAnnotations,
+            compound: canonicalizeCompound(draftAnnotations.compound),
+            injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency),
             samplingTiming: "trough"
           },
       extraction: draft.extraction
