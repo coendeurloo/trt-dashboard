@@ -2,9 +2,10 @@ import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_SETTINGS } from "./constan
 import { AppSettings, LabReport, MarkerValue, ReportAnnotations, StoredAppData } from "./types";
 import {
   canonicalizeCompound,
-  inferCompoundFromProtocol,
   inferInjectionFrequencyFromProtocol,
-  normalizeInjectionFrequency
+  normalizeCompounds,
+  normalizeInjectionFrequency,
+  normalizeSupplementContext
 } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag } from "./utils";
@@ -35,19 +36,29 @@ const createDefaultData = (): StoredAppData => ({
 
 const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
   const protocol = String(annotations?.protocol ?? "");
-  const hasCompound = Boolean(annotations && Object.prototype.hasOwnProperty.call(annotations, "compound"));
   const hasInjectionFrequency = Boolean(annotations && Object.prototype.hasOwnProperty.call(annotations, "injectionFrequency"));
   const normalizedFrequency = normalizeInjectionFrequency(String(annotations?.injectionFrequency ?? ""));
+  const normalizedCompounds = normalizeCompounds({
+    compounds: Array.isArray(annotations?.compounds) ? annotations?.compounds : undefined,
+    compound: String(annotations?.compound ?? ""),
+    protocolFallback: protocol
+  });
+  const normalizedSupplements = normalizeSupplementContext(
+    Array.isArray(annotations?.supplementEntries) ? annotations?.supplementEntries : undefined,
+    String(annotations?.supplements ?? "")
+  );
 
   return {
     dosageMgPerWeek:
       typeof annotations?.dosageMgPerWeek === "number" && Number.isFinite(annotations.dosageMgPerWeek)
         ? annotations.dosageMgPerWeek
         : null,
-    compound: canonicalizeCompound(hasCompound ? String(annotations?.compound ?? "") : inferCompoundFromProtocol(protocol)),
+    compounds: normalizedCompounds.compounds,
+    compound: canonicalizeCompound(normalizedCompounds.compound),
     injectionFrequency: hasInjectionFrequency ? normalizedFrequency : inferInjectionFrequencyFromProtocol(protocol),
     protocol,
-    supplements: String(annotations?.supplements ?? ""),
+    supplementEntries: normalizedSupplements.supplementEntries,
+    supplements: normalizedSupplements.supplements,
     symptoms: String(annotations?.symptoms ?? ""),
     notes: String(annotations?.notes ?? ""),
     samplingTiming:

@@ -173,7 +173,7 @@ const buildPayload = (reports: LabReport[], unitSystem: UnitSystem): AnalysisRep
     date: report.testDate,
     ann: {
       dose: report.annotations.dosageMgPerWeek,
-      compound: report.annotations.compound,
+      compound: report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound,
       frequency: injectionFrequencyLabel(report.annotations.injectionFrequency, "en"),
       frequencyPerWeek: frequencyPerWeekFromSelectionOrProtocol(
         report.annotations.injectionFrequency,

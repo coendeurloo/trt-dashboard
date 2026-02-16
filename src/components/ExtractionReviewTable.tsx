@@ -1,8 +1,17 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
-import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage } from "../types";
+import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage, SupplementEntry } from "../types";
 import { FEEDBACK_EMAIL } from "../constants";
-import { COMPOUND_OPTIONS, INJECTION_FREQUENCY_OPTIONS, normalizeInjectionFrequency } from "../protocolStandards";
+import {
+  canonicalizeCompoundList,
+  COMPOUND_OPTIONS,
+  INJECTION_FREQUENCY_OPTIONS,
+  normalizeInjectionFrequency,
+  normalizeSupplementEntries,
+  supplementEntriesToText,
+  SUPPLEMENT_OPTIONS
+} from "../protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import EditableCell from "./EditableCell";
@@ -29,8 +38,14 @@ const ExtractionReviewTable = ({
   onCancel
 }: ExtractionReviewTableProps) => {
   const compoundDatalistId = "compound-autocomplete-options";
+  const supplementDatalistId = "supplement-autocomplete-options";
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const [compoundInput, setCompoundInput] = useState("");
+  const [supplementNameInput, setSupplementNameInput] = useState("");
+  const [supplementDoseInput, setSupplementDoseInput] = useState("");
+  const compounds = Array.isArray(annotations.compounds) ? annotations.compounds : [];
+  const supplementEntries = Array.isArray(annotations.supplementEntries) ? annotations.supplementEntries : [];
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
     if (value === "high") {
       return tr("Hoog", "High");
@@ -119,6 +134,53 @@ const ExtractionReviewTable = ({
     });
   };
 
+  const updateCompounds = (nextCompounds: string[]) => {
+    const normalizedCompounds = canonicalizeCompoundList(nextCompounds);
+    onAnnotationsChange({
+      ...annotations,
+      compounds: normalizedCompounds,
+      compound: normalizedCompounds[0] ?? ""
+    });
+  };
+
+  const addCompound = () => {
+    const next = compoundInput.trim();
+    if (!next) {
+      return;
+    }
+    updateCompounds([...compounds, next]);
+    setCompoundInput("");
+  };
+
+  const removeCompound = (compoundToRemove: string) => {
+    updateCompounds(compounds.filter((entry) => entry !== compoundToRemove));
+  };
+
+  const updateSupplementList = (nextEntries: SupplementEntry[]) => {
+    const normalizedEntries = normalizeSupplementEntries(nextEntries, annotations.supplements);
+    onAnnotationsChange({
+      ...annotations,
+      supplementEntries: normalizedEntries,
+      supplements: supplementEntriesToText(normalizedEntries)
+    });
+  };
+
+  const addSupplement = () => {
+    const name = supplementNameInput.trim();
+    if (!name) {
+      return;
+    }
+    updateSupplementList([
+      ...supplementEntries,
+      {
+        name,
+        dose: supplementDoseInput.trim()
+      }
+    ]);
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+  };
+
   return (
     <motion.div
       layout
@@ -157,7 +219,7 @@ const ExtractionReviewTable = ({
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
+      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
           <input
@@ -180,16 +242,6 @@ const ExtractionReviewTable = ({
             }
             className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             placeholder={tr("bijv. 120", "e.g. 120")}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Compound", "Compound")}</label>
-          <input
-            list={compoundDatalistId}
-            value={annotations.compound}
-            onChange={(event) => onAnnotationsChange({ ...annotations, compound: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("bijv. Testosterone Enanthate", "e.g. Testosterone Enanthate")}
           />
         </div>
         <div>
@@ -222,15 +274,6 @@ const ExtractionReviewTable = ({
             placeholder={tr("bijv. SubQ, split doses, opmerking", "e.g. SubQ, split doses, notes")}
           />
         </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Supplementen", "Supplements")}</label>
-          <input
-            value={annotations.supplements}
-            onChange={(event) => onAnnotationsChange({ ...annotations, supplements: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="Vitamin D, Omega-3"
-          />
-        </div>
         {showSamplingTiming ? (
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Meetmoment", "Sampling timing")}</label>
@@ -251,6 +294,140 @@ const ExtractionReviewTable = ({
             </select>
           </div>
         ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+        <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+          <input
+            list={compoundDatalistId}
+            value={compoundInput}
+            onChange={(event) => setCompoundInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addCompound();
+              }
+            }}
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            placeholder={tr("Zoek of typ een compound en druk Enter", "Search or type a compound and press Enter")}
+          />
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
+            onClick={addCompound}
+          >
+            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {compounds.length === 0 ? (
+            <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
+          ) : (
+            compounds.map((compound) => (
+              <button
+                key={compound}
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100"
+                onClick={() => removeCompound(compound)}
+                title={tr("Verwijderen", "Remove")}
+              >
+                {compound}
+                <X className="h-3 w-3" />
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/40 p-3">
+        <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">
+          {tr("Supplementen (met dosis)", "Supplements (with dose)")}
+        </label>
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_auto]">
+          <input
+            list={supplementDatalistId}
+            value={supplementNameInput}
+            onChange={(event) => setSupplementNameInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addSupplement();
+              }
+            }}
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+          />
+          <input
+            value={supplementDoseInput}
+            onChange={(event) => setSupplementDoseInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addSupplement();
+              }
+            }}
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            placeholder={tr("Dosis (bv 4000 IU)", "Dose (e.g. 4000 IU)")}
+          />
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400/60 hover:text-emerald-100"
+            onClick={addSupplement}
+          >
+            <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+          </button>
+        </div>
+        <div className="mt-2 space-y-2">
+          {supplementEntries.length === 0 ? (
+            <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
+          ) : (
+            supplementEntries.map((entry, index) => (
+              <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_auto]">
+                <input
+                  list={supplementDatalistId}
+                  value={entry.name}
+                  onChange={(event) =>
+                    updateSupplementList(
+                      supplementEntries.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              name: event.target.value
+                            }
+                          : row
+                      )
+                    )
+                  }
+                  className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  value={entry.dose}
+                  onChange={(event) =>
+                    updateSupplementList(
+                      supplementEntries.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              dose: event.target.value
+                            }
+                          : row
+                      )
+                    )
+                  }
+                  className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 hover:border-rose-400/60 hover:text-rose-100"
+                  onClick={() => updateSupplementList(supplementEntries.filter((_, rowIndex) => rowIndex !== index))}
+                >
+                  {tr("Verwijderen", "Remove")}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -276,6 +453,11 @@ const ExtractionReviewTable = ({
       <datalist id={compoundDatalistId}>
         {COMPOUND_OPTIONS.map((compound) => (
           <option key={compound} value={compound} />
+        ))}
+      </datalist>
+      <datalist id={supplementDatalistId}>
+        {SUPPLEMENT_OPTIONS.map((supplement) => (
+          <option key={supplement} value={supplement} />
         ))}
       </datalist>
 
@@ -395,6 +577,8 @@ const ExtractionReviewTable = ({
         </button>
         <a
           href={parsingFeedbackMailto}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300"
         >
           <AlertTriangle className="h-3.5 w-3.5" />

@@ -1,6 +1,11 @@
-import { AppLanguage } from "./types";
+import { AppLanguage, SupplementEntry } from "./types";
 
 interface CompoundCatalogEntry {
+  name: string;
+  aliases?: string[];
+}
+
+interface SupplementCatalogEntry {
   name: string;
   aliases?: string[];
 }
@@ -31,6 +36,20 @@ const normalizeFrequencyText = (value: string): string =>
 
 const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const dedupeCaseInsensitive = (values: string[]): string[] => {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  values.forEach((value) => {
+    const normalized = normalizeKey(value);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    output.push(value);
+  });
+  return output;
+};
+
 const COMPOUND_CATALOG: CompoundCatalogEntry[] = [
   { name: "Testosterone" },
   { name: "Testosterone Enanthate", aliases: ["Test E", "Enanthate"] },
@@ -60,7 +79,7 @@ const COMPOUND_CATALOG: CompoundCatalogEntry[] = [
   { name: "Methasterone", aliases: ["Superdrol", "M-Drol"] },
   { name: "Fluoxymesterone", aliases: ["Halotestin", "Halo"] },
   { name: "Mesterolone", aliases: ["Proviron"] },
-  { name: "Clostebol", aliases: ["4-chloro testosterone"] },
+  { name: "Clostebol", aliases: ["4-Chloro Testosterone"] },
   { name: "Danazol" },
   { name: "Mibolerone", aliases: ["Cheque Drops"] },
   { name: "Norethandrolone" },
@@ -106,9 +125,122 @@ const COMPOUND_CATALOG: CompoundCatalogEntry[] = [
   { name: "T4", aliases: ["Levothyroxine"] }
 ];
 
+const SUPPLEMENT_CATALOG: SupplementCatalogEntry[] = [
+  { name: "Vitamin D3", aliases: ["Vitamin D", "D3", "Cholecalciferol"] },
+  { name: "Vitamin K2", aliases: ["MK-7", "Menaquinone"] },
+  { name: "Vitamin C", aliases: ["Ascorbic Acid"] },
+  { name: "Vitamin B12", aliases: ["Methylcobalamin", "Cobalamin"] },
+  { name: "Vitamin B Complex", aliases: ["B-Complex"] },
+  { name: "Folate", aliases: ["Methylfolate", "Folic Acid"] },
+  { name: "Niacin", aliases: ["Vitamin B3"] },
+  { name: "Magnesium Glycinate", aliases: ["Magnesium"] },
+  { name: "Magnesium Citrate" },
+  { name: "Magnesium Taurate" },
+  { name: "Zinc", aliases: ["Zinc Picolinate"] },
+  { name: "Copper" },
+  { name: "Selenium" },
+  { name: "Iodine" },
+  { name: "Boron" },
+  { name: "Potassium" },
+  { name: "Omega-3", aliases: ["Fish Oil", "EPA DHA"] },
+  { name: "Krill Oil" },
+  { name: "CoQ10", aliases: ["Ubiquinol", "Coenzyme Q10"] },
+  { name: "NAC", aliases: ["N-Acetylcysteine"] },
+  { name: "TUDCA" },
+  { name: "Milk Thistle", aliases: ["Silymarin"] },
+  { name: "Berberine" },
+  { name: "Citrus Bergamot", aliases: ["Bergamot"] },
+  { name: "Red Yeast Rice" },
+  { name: "Psyllium Husk", aliases: ["Psyllium"] },
+  { name: "Plant Sterols" },
+  { name: "Curcumin", aliases: ["Turmeric Extract"] },
+  { name: "Resveratrol" },
+  { name: "Quercetin" },
+  { name: "Glycine" },
+  { name: "Taurine" },
+  { name: "L-Tyrosine", aliases: ["Tyrosine"] },
+  { name: "L-Theanine", aliases: ["Theanine"] },
+  { name: "L-Citrulline", aliases: ["Citrulline Malate"] },
+  { name: "L-Arginine", aliases: ["Arginine"] },
+  { name: "L-Carnitine", aliases: ["Acetyl-L-Carnitine", "ALCAR"] },
+  { name: "Beta-Alanine" },
+  { name: "Betaine", aliases: ["TMG"] },
+  { name: "Creatine Monohydrate", aliases: ["Creatine"] },
+  { name: "Electrolytes" },
+  { name: "Collagen Peptides", aliases: ["Collagen"] },
+  { name: "Whey Protein", aliases: ["Protein Powder"] },
+  { name: "Casein Protein", aliases: ["Casein"] },
+  { name: "EAAs", aliases: ["Essential Amino Acids"] },
+  { name: "BCAAs" },
+  { name: "Glutamine", aliases: ["L-Glutamine"] },
+  { name: "Probiotics", aliases: ["Probiotic"] },
+  { name: "Digestive Enzymes" },
+  { name: "P5P", aliases: ["Vitamin B6 P5P"] },
+  { name: "Ashwagandha", aliases: ["KSM-66", "Sensoril"] },
+  { name: "Rhodiola Rosea", aliases: ["Rhodiola"] },
+  { name: "Tongkat Ali", aliases: ["Eurycoma Longifolia"] },
+  { name: "Fadogia Agrestis", aliases: ["Fadogia"] },
+  { name: "Shilajit" },
+  { name: "Maca Root", aliases: ["Maca"] },
+  { name: "Fenugreek" },
+  { name: "Saw Palmetto" },
+  { name: "Pygeum" },
+  { name: "DIM", aliases: ["Diindolylmethane"] },
+  { name: "Calcium D-Glucarate" },
+  { name: "Indole-3-Carbinol", aliases: ["I3C"] },
+  { name: "DHEA" },
+  { name: "Pregnenolone" },
+  { name: "Melatonin" },
+  { name: "5-HTP" },
+  { name: "GABA" },
+  { name: "Inositol" },
+  { name: "Apigenin" },
+  { name: "Lemon Balm" },
+  { name: "Valerian Root" },
+  { name: "KSM-66 Ashwagandha", aliases: ["KSM-66"] },
+  { name: "Beetroot Powder", aliases: ["Beetroot"] },
+  { name: "Garlic Extract", aliases: ["Aged Garlic"] },
+  { name: "Olive Leaf Extract" },
+  { name: "Hawthorn Berry" },
+  { name: "Cinnamon Extract", aliases: ["Ceylon Cinnamon"] },
+  { name: "Chromium Picolinate", aliases: ["Chromium"] },
+  { name: "Alpha-Lipoic Acid", aliases: ["ALA"] },
+  { name: "R-Alpha-Lipoic Acid", aliases: ["R-ALA"] },
+  { name: "Myo-Inositol" },
+  { name: "D-Chiro Inositol" },
+  { name: "PQQ", aliases: ["Pyrroloquinoline Quinone"] },
+  { name: "Astragalus" },
+  { name: "Cordyceps" },
+  { name: "Lion's Mane", aliases: ["Hericium"] },
+  { name: "Reishi" },
+  { name: "Chaga" },
+  { name: "Turkey Tail" },
+  { name: "EGCG", aliases: ["Green Tea Extract"] },
+  { name: "Boswellia" },
+  { name: "HMB", aliases: ["Beta-Hydroxy Beta-Methylbutyrate"] },
+  { name: "Ornithine" },
+  { name: "Cissus Quadrangularis", aliases: ["Cissus"] },
+  { name: "Glucosamine" },
+  { name: "Chondroitin" },
+  { name: "MSM", aliases: ["Methylsulfonylmethane"] },
+  { name: "Hydration Salts", aliases: ["ORS"] }
+];
+
 export const COMPOUND_OPTIONS: string[] = COMPOUND_CATALOG.map((entry) => entry.name);
+export const SUPPLEMENT_OPTIONS: string[] = SUPPLEMENT_CATALOG.map((entry) => entry.name);
 
 const compoundAliasMap = COMPOUND_CATALOG.reduce((map, entry) => {
+  const aliases = [entry.name, ...(entry.aliases ?? [])];
+  aliases.forEach((alias) => {
+    const key = normalizeKey(alias);
+    if (key) {
+      map.set(key, entry.name);
+    }
+  });
+  return map;
+}, new Map<string, string>());
+
+const supplementAliasMap = SUPPLEMENT_CATALOG.reduce((map, entry) => {
   const aliases = [entry.name, ...(entry.aliases ?? [])];
   aliases.forEach((alias) => {
     const key = normalizeKey(alias);
@@ -126,6 +258,42 @@ const compoundMatchers = Array.from(compoundAliasMap.entries())
     pattern: new RegExp(`(^|\\s)${escapeRegex(alias).replace(/\s+/g, "\\s+")}(\\s|$)`, "i")
   }));
 
+const parseSupplementChunk = (chunk: string): SupplementEntry | null => {
+  const trimmed = chunk.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parenMatch = trimmed.match(/^(.+?)\s*\((.+)\)$/);
+  if (parenMatch) {
+    return {
+      name: canonicalizeSupplement(parenMatch[1] ?? ""),
+      dose: String(parenMatch[2] ?? "").trim()
+    };
+  }
+
+  const dashMatch = trimmed.match(/^(.+?)\s*[-:]\s*(.+)$/);
+  if (dashMatch) {
+    return {
+      name: canonicalizeSupplement(dashMatch[1] ?? ""),
+      dose: String(dashMatch[2] ?? "").trim()
+    };
+  }
+
+  const firstDigitIndex = trimmed.search(/\d/);
+  if (firstDigitIndex > 0) {
+    return {
+      name: canonicalizeSupplement(trimmed.slice(0, firstDigitIndex).replace(/[-:]+$/, "").trim()),
+      dose: trimmed.slice(firstDigitIndex).trim()
+    };
+  }
+
+  return {
+    name: canonicalizeSupplement(trimmed),
+    dose: ""
+  };
+};
+
 export const canonicalizeCompound = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -135,6 +303,9 @@ export const canonicalizeCompound = (value: string): string => {
   return compoundAliasMap.get(normalized) ?? trimmed;
 };
 
+export const canonicalizeCompoundList = (values: string[]): string[] =>
+  dedupeCaseInsensitive(values.map((value) => canonicalizeCompound(value)).filter((value) => value.length > 0));
+
 export const inferCompoundFromProtocol = (protocol: string): string => {
   const normalized = normalizeKey(protocol);
   if (!normalized) {
@@ -142,6 +313,21 @@ export const inferCompoundFromProtocol = (protocol: string): string => {
   }
   const match = compoundMatchers.find((entry) => entry.pattern.test(normalized));
   return match?.name ?? "";
+};
+
+export const normalizeCompounds = (options: {
+  compounds?: string[];
+  compound?: string;
+  protocolFallback?: string;
+}): { compounds: string[]; compound: string } => {
+  const fromArray = Array.isArray(options.compounds) ? options.compounds : [];
+  const fromSingle = String(options.compound ?? "").trim();
+  const fromProtocol = inferCompoundFromProtocol(String(options.protocolFallback ?? ""));
+  const compounds = canonicalizeCompoundList([...fromArray, fromSingle, fromProtocol]);
+  return {
+    compounds,
+    compound: compounds[0] ?? ""
+  };
 };
 
 export const INJECTION_FREQUENCY_OPTIONS: InjectionFrequencyOption[] = [
@@ -329,4 +515,87 @@ export const injectionFrequencyLabel = (value: string, language: AppLanguage): s
     return language === "nl" ? "Onbekend" : "Unknown";
   }
   return language === "nl" ? option.label.nl : option.label.en;
+};
+
+export const canonicalizeSupplement = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const normalized = normalizeKey(trimmed);
+  return supplementAliasMap.get(normalized) ?? trimmed;
+};
+
+const normalizeSingleSupplementEntry = (entry: Partial<SupplementEntry>): SupplementEntry | null => {
+  const name = canonicalizeSupplement(String(entry.name ?? ""));
+  const dose = String(entry.dose ?? "").trim();
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    dose
+  };
+};
+
+const parseSupplementEntriesFromText = (supplements: string): SupplementEntry[] =>
+  dedupeCaseInsensitive(
+    supplements
+      .split(/[\n,;]+/)
+      .map((chunk) => parseSupplementChunk(chunk))
+      .filter((entry): entry is SupplementEntry => entry !== null)
+      .map((entry) => `${entry.name}|${entry.dose}`)
+  ).map((encoded) => {
+    const [name = "", dose = ""] = encoded.split("|");
+    return { name, dose };
+  });
+
+export const normalizeSupplementEntries = (
+  supplementEntries: unknown,
+  supplementsFallback = ""
+): SupplementEntry[] => {
+  const sourceEntries = Array.isArray(supplementEntries)
+    ? supplementEntries
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+          return normalizeSingleSupplementEntry(entry as Partial<SupplementEntry>);
+        })
+        .filter((entry): entry is SupplementEntry => entry !== null)
+    : [];
+
+  if (sourceEntries.length > 0) {
+    return dedupeCaseInsensitive(sourceEntries.map((entry) => `${entry.name}|${entry.dose}`)).map((encoded) => {
+      const [name = "", dose = ""] = encoded.split("|");
+      return { name, dose };
+    });
+  }
+
+  return parseSupplementEntriesFromText(supplementsFallback);
+};
+
+export const supplementEntriesToText = (supplementEntries: SupplementEntry[]): string =>
+  supplementEntries
+    .map((entry) => {
+      const name = canonicalizeSupplement(entry.name);
+      const dose = entry.dose.trim();
+      if (!name) {
+        return "";
+      }
+      return dose ? `${name} ${dose}` : name;
+    })
+    .filter((value) => value.length > 0)
+    .join(", ");
+
+export const normalizeSupplementContext = (
+  supplementEntriesInput: unknown,
+  supplementsFallback: string
+): { supplementEntries: SupplementEntry[]; supplements: string } => {
+  const supplementEntries = normalizeSupplementEntries(supplementEntriesInput, supplementsFallback);
+  const supplements = supplementEntriesToText(supplementEntries);
+  return {
+    supplementEntries,
+    supplements
+  };
 };

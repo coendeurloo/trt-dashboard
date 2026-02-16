@@ -37,6 +37,7 @@ const sanitizeReportForShare = (report: LabReport, options: ShareOptions): LabRe
   ...report,
   annotations: {
     ...report.annotations,
+    compounds: options.hideProtocol ? [] : report.annotations.compounds,
     compound: options.hideProtocol ? "" : report.annotations.compound,
     injectionFrequency: options.hideProtocol ? "unknown" : report.annotations.injectionFrequency,
     protocol: options.hideProtocol ? "" : report.annotations.protocol,

@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckSquare, ChevronDown, ClipboardList, Lock, Pencil, Save, Square, Trash2, X } from "lucide-react";
+import { CheckSquare, ChevronDown, ClipboardList, Lock, Pencil, Plus, Save, Square, Trash2, X } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName } from "../i18n";
-import { COMPOUND_OPTIONS, INJECTION_FREQUENCY_OPTIONS, injectionFrequencyLabel, normalizeInjectionFrequency } from "../protocolStandards";
-import { AppLanguage, AppSettings, LabReport, ReportAnnotations } from "../types";
+import {
+  canonicalizeCompoundList,
+  COMPOUND_OPTIONS,
+  INJECTION_FREQUENCY_OPTIONS,
+  injectionFrequencyLabel,
+  normalizeCompounds,
+  normalizeInjectionFrequency,
+  normalizeSupplementContext,
+  normalizeSupplementEntries,
+  supplementEntriesToText,
+  SUPPLEMENT_OPTIONS
+} from "../protocolStandards";
+import { AppLanguage, AppSettings, LabReport, ReportAnnotations, SupplementEntry } from "../types";
 import { convertBySystem } from "../unitConversion";
 import { formatDate, safeNumber } from "../utils";
 
@@ -36,6 +47,7 @@ const ReportsView = ({
   onRenameMarker
 }: ReportsViewProps) => {
   const compoundDatalistId = "report-compound-autocomplete-options";
+  const supplementDatalistId = "report-supplement-autocomplete-options";
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
 
@@ -45,6 +57,9 @@ const ReportsView = ({
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
+  const [editingCompoundInput, setEditingCompoundInput] = useState("");
+  const [editingSupplementNameInput, setEditingSupplementNameInput] = useState("");
+  const [editingSupplementDoseInput, setEditingSupplementDoseInput] = useState("");
 
   useEffect(() => {
     const ids = new Set(reports.map((report) => report.id));
@@ -99,13 +114,31 @@ const ReportsView = ({
     if (isShareMode) {
       return;
     }
+    const normalizedCompounds = normalizeCompounds({
+      compounds: report.annotations.compounds,
+      compound: report.annotations.compound,
+      protocolFallback: report.annotations.protocol
+    });
+    const normalizedSupplements = normalizeSupplementContext(report.annotations.supplementEntries, report.annotations.supplements);
     setEditingReportId(report.id);
-    setEditingAnnotations({ ...report.annotations });
+    setEditingAnnotations({
+      ...report.annotations,
+      compounds: normalizedCompounds.compounds,
+      compound: normalizedCompounds.compound,
+      supplementEntries: normalizedSupplements.supplementEntries,
+      supplements: normalizedSupplements.supplements
+    });
+    setEditingCompoundInput("");
+    setEditingSupplementNameInput("");
+    setEditingSupplementDoseInput("");
   };
 
   const cancelEditingReport = () => {
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
+    setEditingCompoundInput("");
+    setEditingSupplementNameInput("");
+    setEditingSupplementDoseInput("");
   };
 
   const saveEditedReport = () => {
@@ -115,6 +148,9 @@ const ReportsView = ({
     onUpdateReportAnnotations(editingReportId, editingAnnotations);
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
+    setEditingCompoundInput("");
+    setEditingSupplementNameInput("");
+    setEditingSupplementDoseInput("");
   };
 
   const deleteSelectedReports = () => {
@@ -142,6 +178,55 @@ const ReportsView = ({
   };
 
   const frequencyLabel = (value: string): string => injectionFrequencyLabel(value, language);
+  const editingCompounds = Array.isArray(editingAnnotations.compounds) ? editingAnnotations.compounds : [];
+  const editingSupplements = Array.isArray(editingAnnotations.supplementEntries) ? editingAnnotations.supplementEntries : [];
+
+  const updateEditingCompounds = (nextCompounds: string[]) => {
+    const normalizedCompounds = canonicalizeCompoundList(nextCompounds);
+    setEditingAnnotations((current) => ({
+      ...current,
+      compounds: normalizedCompounds,
+      compound: normalizedCompounds[0] ?? ""
+    }));
+  };
+
+  const addEditingCompound = () => {
+    const next = editingCompoundInput.trim();
+    if (!next) {
+      return;
+    }
+    updateEditingCompounds([...editingCompounds, next]);
+    setEditingCompoundInput("");
+  };
+
+  const removeEditingCompound = (value: string) => {
+    updateEditingCompounds(editingCompounds.filter((compound) => compound !== value));
+  };
+
+  const updateEditingSupplements = (nextEntries: SupplementEntry[]) => {
+    const normalizedEntries = normalizeSupplementEntries(nextEntries, editingAnnotations.supplements);
+    setEditingAnnotations((current) => ({
+      ...current,
+      supplementEntries: normalizedEntries,
+      supplements: supplementEntriesToText(normalizedEntries)
+    }));
+  };
+
+  const addEditingSupplement = () => {
+    const name = editingSupplementNameInput.trim();
+    if (!name) {
+      return;
+    }
+    updateEditingSupplements([
+      ...editingSupplements,
+      {
+        name,
+        dose: editingSupplementDoseInput.trim()
+      }
+    ]);
+    setEditingSupplementNameInput("");
+    setEditingSupplementDoseInput("");
+  };
 
   return (
     <section className="space-y-3 fade-in">
@@ -370,127 +455,233 @@ const ReportsView = ({
                 </div>
 
                 {isEditing ? (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Dosis (mg/week)" : "Dose (mg/week)"}</span>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.dosageMgPerWeek ?? ""}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            dosageMgPerWeek: safeNumber(event.target.value)
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Compound" : "Compound"}</span>
-                      <input
-                        list={compoundDatalistId}
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.compound}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            compound: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
-                      <select
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={normalizeInjectionFrequency(editingAnnotations.injectionFrequency)}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            injectionFrequency: event.target.value
-                          }))
-                        }
-                      >
-                        {INJECTION_FREQUENCY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {isNl ? option.label.nl : option.label.en}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Protocoldetails" : "Protocol details"}</span>
-                      <input
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.protocol}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            protocol: event.target.value
-                          }))
-                        }
-                        placeholder={isNl ? "bijv. SubQ, injectieplek, timing" : "e.g. SubQ, injection site, timing"}
-                      />
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Supplementen / vitaminen" : "Supplements / vitamins"}</span>
-                      <input
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.supplements}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            supplements: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Symptomen" : "Symptoms"}</span>
-                      <input
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.symptoms}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            symptoms: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2">
-                      <span className="mb-1 block text-slate-400">{tr("Notities", "Notes")}</span>
-                      <textarea
-                        className="h-20 w-full resize-none rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.notes}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            notes: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                    {samplingControlsEnabled ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="mb-1 block text-slate-400">{isNl ? "Meetmoment" : "Sampling timing"}</span>
-                        <select
+                        <span className="mb-1 block text-slate-400">{isNl ? "Dosis (mg/week)" : "Dose (mg/week)"}</span>
+                        <input
+                          type="number"
                           className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                          value={editingAnnotations.samplingTiming}
+                          value={editingAnnotations.dosageMgPerWeek ?? ""}
                           onChange={(event) =>
                             setEditingAnnotations((current) => ({
                               ...current,
-                              samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
+                              dosageMgPerWeek: safeNumber(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="mb-1 block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
+                        <select
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={normalizeInjectionFrequency(editingAnnotations.injectionFrequency)}
+                          onChange={(event) =>
+                            setEditingAnnotations((current) => ({
+                              ...current,
+                              injectionFrequency: event.target.value
                             }))
                           }
                         >
-                          <option value="unknown">{isNl ? "Onbekend" : "Unknown"}</option>
-                          <option value="trough">Trough</option>
-                          <option value="mid">{isNl ? "Midden" : "Mid"}</option>
-                          <option value="peak">Peak</option>
+                          {INJECTION_FREQUENCY_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {isNl ? option.label.nl : option.label.en}
+                            </option>
+                          ))}
                         </select>
                       </label>
-                    ) : null}
+                      <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="mb-1 block text-slate-400">{isNl ? "Protocoldetails" : "Protocol details"}</span>
+                        <input
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingAnnotations.protocol}
+                          onChange={(event) =>
+                            setEditingAnnotations((current) => ({
+                              ...current,
+                              protocol: event.target.value
+                            }))
+                          }
+                          placeholder={isNl ? "bijv. SubQ, injectieplek, timing" : "e.g. SubQ, injection site, timing"}
+                        />
+                      </label>
+                      <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="mb-1 block text-slate-400">{isNl ? "Symptomen" : "Symptoms"}</span>
+                        <input
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingAnnotations.symptoms}
+                          onChange={(event) =>
+                            setEditingAnnotations((current) => ({
+                              ...current,
+                              symptoms: event.target.value
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2">
+                        <span className="mb-1 block text-slate-400">{tr("Notities", "Notes")}</span>
+                        <textarea
+                          className="h-20 w-full resize-none rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingAnnotations.notes}
+                          onChange={(event) =>
+                            setEditingAnnotations((current) => ({
+                              ...current,
+                              notes: event.target.value
+                            }))
+                          }
+                        />
+                      </label>
+                      {samplingControlsEnabled ? (
+                        <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                          <span className="mb-1 block text-slate-400">{isNl ? "Meetmoment" : "Sampling timing"}</span>
+                          <select
+                            className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                            value={editingAnnotations.samplingTiming}
+                            onChange={(event) =>
+                              setEditingAnnotations((current) => ({
+                                ...current,
+                                samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
+                              }))
+                            }
+                          >
+                            <option value="unknown">{isNl ? "Onbekend" : "Unknown"}</option>
+                            <option value="trough">Trough</option>
+                            <option value="mid">{isNl ? "Midden" : "Mid"}</option>
+                            <option value="peak">Peak</option>
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{isNl ? "Compounds" : "Compounds"}</span>
+                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                        <input
+                          list={compoundDatalistId}
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingCompoundInput}
+                          onChange={(event) => setEditingCompoundInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              addEditingCompound();
+                            }
+                          }}
+                          placeholder={tr("Zoek of typ compound", "Search or type compound")}
+                        />
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                          onClick={addEditingCompound}
+                        >
+                          <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {editingCompounds.length === 0 ? (
+                          <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
+                        ) : (
+                          editingCompounds.map((compound) => (
+                            <button
+                              key={compound}
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
+                              onClick={() => removeEditingCompound(compound)}
+                            >
+                              {compound}
+                              <X className="h-3 w-3" />
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{isNl ? "Supplementen (met dosis)" : "Supplements (with dose)"}</span>
+                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_190px_auto]">
+                        <input
+                          list={supplementDatalistId}
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingSupplementNameInput}
+                          onChange={(event) => setEditingSupplementNameInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              addEditingSupplement();
+                            }
+                          }}
+                          placeholder={tr("Supplement", "Supplement")}
+                        />
+                        <input
+                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                          value={editingSupplementDoseInput}
+                          onChange={(event) => setEditingSupplementDoseInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              addEditingSupplement();
+                            }
+                          }}
+                          placeholder={tr("Dosis", "Dose")}
+                        />
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+                          onClick={addEditingSupplement}
+                        >
+                          <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+                        </button>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {editingSupplements.length === 0 ? (
+                          <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
+                        ) : (
+                          editingSupplements.map((entry, index) => (
+                            <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_190px_auto]">
+                              <input
+                                list={supplementDatalistId}
+                                className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                                value={entry.name}
+                                onChange={(event) =>
+                                  updateEditingSupplements(
+                                    editingSupplements.map((row, rowIndex) =>
+                                      rowIndex === index
+                                        ? {
+                                            ...row,
+                                            name: event.target.value
+                                          }
+                                        : row
+                                    )
+                                  )
+                                }
+                              />
+                              <input
+                                className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                                value={entry.dose}
+                                onChange={(event) =>
+                                  updateEditingSupplements(
+                                    editingSupplements.map((row, rowIndex) =>
+                                      rowIndex === index
+                                        ? {
+                                            ...row,
+                                            dose: event.target.value
+                                          }
+                                        : row
+                                    )
+                                  )
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200"
+                                onClick={() => updateEditingSupplements(editingSupplements.filter((_, rowIndex) => rowIndex !== index))}
+                              >
+                                {tr("Verwijderen", "Remove")}
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${samplingControlsEnabled ? "xl:grid-cols-8" : "xl:grid-cols-7"}`}>
@@ -502,7 +693,9 @@ const ReportsView = ({
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{isNl ? "Compound" : "Compound"}</span>
-                      <strong className="text-sm text-slate-100">{report.annotations.compound || "-"}</strong>
+                      <strong className="text-sm text-slate-100">
+                        {report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound || "-"}
+                      </strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
@@ -514,7 +707,11 @@ const ReportsView = ({
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{isNl ? "Supplementen" : "Supplements"}</span>
-                      <strong className="text-sm text-slate-100">{report.annotations.supplements || "-"}</strong>
+                      <strong className="text-sm text-slate-100">
+                        {report.annotations.supplementEntries.length > 0
+                          ? supplementEntriesToText(report.annotations.supplementEntries)
+                          : report.annotations.supplements || "-"}
+                      </strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{isNl ? "Symptomen" : "Symptoms"}</span>
@@ -614,6 +811,11 @@ const ReportsView = ({
       <datalist id={compoundDatalistId}>
         {COMPOUND_OPTIONS.map((compound) => (
           <option key={compound} value={compound} />
+        ))}
+      </datalist>
+      <datalist id={supplementDatalistId}>
+        {SUPPLEMENT_OPTIONS.map((supplement) => (
+          <option key={supplement} value={supplement} />
         ))}
       </datalist>
     </section>

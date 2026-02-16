@@ -13,6 +13,11 @@ export type TabKey =
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 
+export interface SupplementEntry {
+  name: string;
+  dose: string;
+}
+
 export interface MarkerValue {
   id: string;
   marker: string;
@@ -29,9 +34,11 @@ export interface MarkerValue {
 
 export interface ReportAnnotations {
   dosageMgPerWeek: number | null;
+  compounds: string[];
   compound: string;
   injectionFrequency: string;
   protocol: string;
+  supplementEntries: SupplementEntry[];
   supplements: string;
   symptoms: string;
   notes: string;

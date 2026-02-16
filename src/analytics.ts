@@ -736,7 +736,7 @@ export const buildMarkerSeries = (
         abnormal: marker.abnormal,
         context: {
           dosageMgPerWeek: report.annotations.dosageMgPerWeek,
-          compound: report.annotations.compound,
+          compound: report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound,
           injectionFrequency: report.annotations.injectionFrequency,
           protocol: report.annotations.protocol,
           supplements: report.annotations.supplements,
@@ -1437,7 +1437,9 @@ export const buildProtocolImpactSummary = (
     const currentDose = current.annotations.dosageMgPerWeek;
     const frequencyFrom = extractProtocolFrequencyPerWeek(previous.annotations.protocol, previous.annotations.injectionFrequency);
     const frequencyTo = extractProtocolFrequencyPerWeek(current.annotations.protocol, current.annotations.injectionFrequency);
-    const compoundChanged = normalizeProtocolText(previous.annotations.compound) !== normalizeProtocolText(current.annotations.compound);
+    const compoundFrom = previous.annotations.compounds.length > 0 ? previous.annotations.compounds.join(" + ") : previous.annotations.compound;
+    const compoundTo = current.annotations.compounds.length > 0 ? current.annotations.compounds.join(" + ") : current.annotations.compound;
+    const compoundChanged = normalizeProtocolText(compoundFrom) !== normalizeProtocolText(compoundTo);
     const protocolTextChanged = normalizeProtocolText(previous.annotations.protocol) !== normalizeProtocolText(current.annotations.protocol);
     const doseChanged = previousDose !== currentDose;
     const frequencyChanged = frequencyFrom !== null && frequencyTo !== null && Math.abs(frequencyFrom - frequencyTo) > 0.01;
@@ -1454,7 +1456,7 @@ export const buildProtocolImpactSummary = (
       triggerParts.push(`Frequency ${ROUND_2(frequencyFrom ?? 0)} -> ${ROUND_2(frequencyTo ?? 0)} /week`);
     }
     if (compoundChanged) {
-      triggerParts.push(`Compound ${previous.annotations.compound || "unknown"} -> ${current.annotations.compound || "unknown"}`);
+      triggerParts.push(`Compound ${compoundFrom || "unknown"} -> ${compoundTo || "unknown"}`);
     }
     if (protocolTextChanged) {
       triggerParts.push("Protocol details changed");

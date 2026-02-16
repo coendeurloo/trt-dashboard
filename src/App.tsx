@@ -28,7 +28,7 @@ import UploadPanel from "./components/UploadPanel";
 import { getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
-import { canonicalizeCompound, normalizeInjectionFrequency } from "./protocolStandards";
+import { normalizeCompounds, normalizeInjectionFrequency, normalizeSupplementContext } from "./protocolStandards";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.png";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.png";
 import { exportElementToPdf } from "./pdfExport";
@@ -451,18 +451,28 @@ const App = () => {
       testDate: draft.testDate,
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
-      annotations: samplingControlsEnabled
-        ? {
-            ...draftAnnotations,
-            compound: canonicalizeCompound(draftAnnotations.compound),
-            injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency)
-          }
-        : {
-            ...draftAnnotations,
-            compound: canonicalizeCompound(draftAnnotations.compound),
-            injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency),
-            samplingTiming: "trough"
-          },
+      annotations: (() => {
+        const compounds = normalizeCompounds({
+          compounds: draftAnnotations.compounds,
+          compound: draftAnnotations.compound,
+          protocolFallback: draftAnnotations.protocol
+        });
+        const supplements = normalizeSupplementContext(draftAnnotations.supplementEntries, draftAnnotations.supplements);
+        const normalizedDraft: ReportAnnotations = {
+          ...draftAnnotations,
+          compounds: compounds.compounds,
+          compound: compounds.compound,
+          injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency),
+          supplementEntries: supplements.supplementEntries,
+          supplements: supplements.supplements
+        };
+        return samplingControlsEnabled
+          ? normalizedDraft
+          : {
+              ...normalizedDraft,
+              samplingTiming: "trough"
+            };
+      })(),
       extraction: draft.extraction
     };
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));

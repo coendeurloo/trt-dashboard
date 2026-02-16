@@ -44,9 +44,11 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 
 const defaultAnnotations = (): ReportAnnotations => ({
   dosageMgPerWeek: null,
+  compounds: [],
   compound: "",
   injectionFrequency: "unknown",
   protocol: "",
+  supplementEntries: [],
   supplements: "",
   symptoms: "",
   notes: "",
@@ -109,7 +111,14 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 125,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 125mg/week",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3",
       samplingTiming: "trough"
     },
@@ -132,7 +141,14 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 140,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 140mg/week (temporary increase)",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3",
       symptoms: "More drive, occasional water retention",
       samplingTiming: "trough"
@@ -156,7 +172,15 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 115,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 115mg/week",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "200 mg" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
       symptoms: "More balanced mood after lowering dose",
       samplingTiming: "trough"
@@ -180,7 +204,15 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 100,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 100mg/week (lowered from 125mg)",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "200 mg" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
       symptoms: "Reduced dose due to high hematocrit",
       samplingTiming: "trough"
@@ -204,7 +236,15 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 90,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 90mg/week (short trial)",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "200 mg" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
       symptoms: "Slightly lower energy but better sleep",
       samplingTiming: "trough"
@@ -228,7 +268,15 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 100,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 100mg/week",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "200 mg" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
       notes: "Feeling great, energy levels stable",
       samplingTiming: "trough"
@@ -252,7 +300,15 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       dosageMgPerWeek: 110,
+      compounds: ["Testosterone Enanthate"],
+      compound: "Testosterone Enanthate",
+      injectionFrequency: "2x_week",
       protocol: "Testosterone Enanthate 110mg/week",
+      supplementEntries: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "200 mg" }
+      ],
       supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
       notes: "Fine-tuned dose for energy and recovery",
       samplingTiming: "trough"

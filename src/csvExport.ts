@@ -1,6 +1,6 @@
 import { convertBySystem } from "./unitConversion";
 import { LabReport, UnitSystem } from "./types";
-import { injectionFrequencyLabel } from "./protocolStandards";
+import { injectionFrequencyLabel, supplementEntriesToText } from "./protocolStandards";
 
 const escapeCsv = (value: string | number | null): string => {
   if (value === null || value === undefined) {
@@ -64,10 +64,14 @@ export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSy
           escapeCsv(convertedMin === null ? null : Number(convertedMin.toFixed(3))),
           escapeCsv(convertedMax === null ? null : Number(convertedMax.toFixed(3))),
           escapeCsv(report.annotations.dosageMgPerWeek),
-          escapeCsv(report.annotations.compound),
+          escapeCsv(report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound),
           escapeCsv(injectionFrequencyLabel(report.annotations.injectionFrequency, "en")),
           escapeCsv(report.annotations.protocol),
-          escapeCsv(report.annotations.supplements),
+          escapeCsv(
+            report.annotations.supplementEntries.length > 0
+              ? supplementEntriesToText(report.annotations.supplementEntries)
+              : report.annotations.supplements
+          ),
           escapeCsv(report.annotations.symptoms),
           escapeCsv(report.annotations.notes)
         ].join(",")

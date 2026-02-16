@@ -19,9 +19,11 @@ describe("storage.coerceStoredAppData", () => {
           isBaseline: true,
           annotations: {
             dosageMgPerWeek: null,
+            compounds: [],
             compound: "",
             injectionFrequency: "unknown",
             protocol: "",
+            supplementEntries: [],
             supplements: "",
             symptoms: "",
             notes: "",
@@ -61,9 +63,11 @@ describe("storage.coerceStoredAppData", () => {
           isBaseline: true,
           annotations: {
             dosageMgPerWeek: null,
+            compounds: [],
             compound: "",
             injectionFrequency: "unknown",
             protocol: "",
+            supplementEntries: [],
             supplements: "",
             symptoms: "",
             notes: "",

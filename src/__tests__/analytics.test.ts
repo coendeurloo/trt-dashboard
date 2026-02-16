@@ -21,9 +21,11 @@ const mkReport = (id: string, date: string, dose: number, markers: Array<{ marke
   })),
   annotations: {
     dosageMgPerWeek: dose,
+    compounds: ["Testosterone Enanthate"],
     compound: "Testosterone Enanthate",
     injectionFrequency: "2x_week",
     protocol: "2x/week",
+    supplementEntries: [],
     supplements: "",
     symptoms: "",
     notes: "",

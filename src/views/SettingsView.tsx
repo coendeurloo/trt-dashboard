@@ -261,7 +261,12 @@ const SettingsView = ({
             "Having trouble with PDF parsing? Let us know which lab formats don't work."
           )}
         </p>
-        <a href={settingsFeedbackMailto} className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100">
+        <a
+          href={settingsFeedbackMailto}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
+        >
           <AlertTriangle className="h-4 w-4" />
           {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
         </a>
