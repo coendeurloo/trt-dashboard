@@ -53,7 +53,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
       className="welcome-hero rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-6"
     >
       <div className="max-w-3xl">
-        <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">{tr("Volg je TRT-bloedwaarden", "Track Your TRT Blood Work")}</h3>
+        <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">{tr("Volg je bloedwaarden", "Track Your Blood Work")}</h3>
         <p className="mt-2 text-sm text-slate-300 sm:text-base">
           {tr(
             "Upload lab-PDF's, ontdek trends en optimaliseer je protocol — alle data blijft in je browser.",
@@ -86,17 +86,17 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
       <div className="mt-5 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={onLoadDemo}
+          onClick={onUploadClick}
           className="inline-flex items-center justify-center rounded-md bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-900 hover:bg-cyan-400"
         >
-          {tr("Probeer met demodata", "Try with demo data")}
+          {tr("Upload je eerste PDF", "Upload your first PDF")}
         </button>
         <button
           type="button"
-          onClick={onUploadClick}
+          onClick={onLoadDemo}
           className="inline-flex items-center justify-center rounded-md border border-slate-600 px-3.5 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
         >
-          {tr("Upload je eerste PDF", "Upload your first PDF")}
+          {tr("Probeer met demodata", "Try with demo data")}
         </button>
       </div>
 

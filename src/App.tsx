@@ -598,6 +598,14 @@ const App = () => {
   };
 
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
+  const activeTabSubtitle =
+    activeTab === "dashboard"
+      ? reports.length > 0
+        ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.")
+        : null
+      : isShareMode
+        ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
+        : tr("Professionele bloedwaardetracking met bewerkbare extractie en trendvisualisatie.", "Professional blood work tracking with editable extraction and visual trends.");
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
   const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
   const requestTabChange = (nextTab: TabKey) => {
@@ -718,7 +726,7 @@ const App = () => {
                 <p className="mt-1 text-cyan-200/80">{isNl ? "Gegenereerd" : "Generated"}: {formatDate(sharedSnapshot.generatedAt)}</p>
               ) : null}
             </div>
-          ) : (
+          ) : reports.length > 0 ? (
             <div ref={uploadPanelRef} className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
               <UploadPanel isProcessing={isProcessing} onFileSelected={handleUpload} language={appData.settings.language} />
@@ -735,7 +743,7 @@ const App = () => {
                 </div>
               ) : null}
             </div>
-          )}
+          ) : null}
 
           <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">{appData.settings.language === "nl" ? "Snel overzicht" : "Quick stats"}</p>
@@ -763,18 +771,10 @@ const App = () => {
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
           <header className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-2.5 sm:p-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
-                  <p className="text-sm text-slate-400">
-                    {isShareMode
-                      ? isNl
-                        ? "Gedeelde read-only snapshot van tijdlijntrends en markercontext."
-                        : "Shared read-only snapshot of timeline trends and marker context."
-                      : isNl
-                        ? "Professionele bloedwaardetracking met bewerkbare extractie en trendvisualisatie."
-                        : "Professional blood work tracking with editable extraction and visual trends."}
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+                {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+              </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
                 <button

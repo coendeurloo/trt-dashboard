@@ -80,142 +80,145 @@ const DashboardView = ({
   onUploadClick
 }: DashboardViewProps) => {
   const isNl = language === "nl";
+  const hasReports = reports.length > 0;
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {timeRangeOptions.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                settings.timeRange === value ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-              }`}
-              onClick={() => onUpdateSettings({ timeRange: value })}
-            >
-              {label}
-            </button>
-          ))}
-
-          {settings.timeRange === "custom" ? (
-            <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-2">
-              <input
-                type="date"
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
-                value={settings.customRangeStart}
-                onChange={(event) => onUpdateSettings({ customRangeStart: event.target.value })}
-              />
-              <input
-                type="date"
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
-                value={settings.customRangeEnd}
-                onChange={(event) => onUpdateSettings({ customRangeEnd: event.target.value })}
-              />
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            className={`ml-auto rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-              comparisonMode ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300"
-            }`}
-            onClick={() => onComparisonModeChange(!comparisonMode)}
-          >
-            <span className="inline-flex items-center gap-1">
-              <SlidersHorizontal className="h-4 w-4" /> {isNl ? "Multi-marker modus" : "Multi-marker mode"}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
-            onClick={() => onUpdateSettings({ unitSystem: settings.unitSystem === "eu" ? "us" : "eu" })}
-          >
-            {isNl ? "Eenheden" : "Units"}: {settings.unitSystem.toUpperCase()}
-          </button>
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.showReferenceRanges}
-              onChange={(event) => onUpdateSettings({ showReferenceRanges: event.target.checked })}
-            />
-            {isNl ? "Referentiebereiken" : "Reference ranges"}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.showAbnormalHighlights}
-              onChange={(event) => onUpdateSettings({ showAbnormalHighlights: event.target.checked })}
-            />
-            {isNl ? "Afwijkende waarden markeren" : "Abnormal highlights"}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.showAnnotations}
-              onChange={(event) => onUpdateSettings({ showAnnotations: event.target.checked })}
-            />
-            {isNl ? "Dosisfase-overlay" : "Dose-phase overlays"}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.showTrtTargetZone}
-              onChange={(event) => onUpdateSettings({ showTrtTargetZone: event.target.checked })}
-            />
-            {isNl ? "TRT-doelzone" : "TRT optimal zone"}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.showLongevityTargetZone}
-              onChange={(event) => onUpdateSettings({ showLongevityTargetZone: event.target.checked })}
-            />
-            {isNl ? "Longevity-doelzone" : "Longevity zone"}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-            <input
-              type="checkbox"
-              checked={settings.yAxisMode === "data"}
-              onChange={(event) => onUpdateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
-            />
-            {isNl ? "Gebruik data-bereik Y-as" : "Use data-range Y-axis"}
-          </label>
-        </div>
-
-        {samplingControlsEnabled ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-              {isNl ? "Meetmoment-filter" : "Sampling filter"}
-            </span>
-            {samplingOptions.map(([value, label]) => (
+      {hasReports ? (
+        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {timeRangeOptions.map(([value, label]) => (
               <button
                 key={value}
                 type="button"
                 className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                  settings.samplingFilter === value ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                  settings.timeRange === value ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                 }`}
-                onClick={() => onUpdateSettings({ samplingFilter: value })}
+                onClick={() => onUpdateSettings({ timeRange: value })}
               >
                 {label}
               </button>
             ))}
+
+            {settings.timeRange === "custom" ? (
+              <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-2">
+                <input
+                  type="date"
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
+                  value={settings.customRangeStart}
+                  onChange={(event) => onUpdateSettings({ customRangeStart: event.target.value })}
+                />
+                <input
+                  type="date"
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
+                  value={settings.customRangeEnd}
+                  onChange={(event) => onUpdateSettings({ customRangeEnd: event.target.value })}
+                />
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              className={`ml-auto rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                comparisonMode ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300"
+              }`}
+              onClick={() => onComparisonModeChange(!comparisonMode)}
+            >
+              <span className="inline-flex items-center gap-1">
+                <SlidersHorizontal className="h-4 w-4" /> {isNl ? "Multi-marker modus" : "Multi-marker mode"}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+              onClick={() => onUpdateSettings({ unitSystem: settings.unitSystem === "eu" ? "us" : "eu" })}
+            >
+              {isNl ? "Eenheden" : "Units"}: {settings.unitSystem.toUpperCase()}
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
                 type="checkbox"
-                checked={settings.compareToBaseline}
-                onChange={(event) => onUpdateSettings({ compareToBaseline: event.target.checked })}
+                checked={settings.showReferenceRanges}
+                onChange={(event) => onUpdateSettings({ showReferenceRanges: event.target.checked })}
               />
-              {isNl ? "Vergelijk met baseline" : "Compare to baseline"}
+              {isNl ? "Referentiebereiken" : "Reference ranges"}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+              <input
+                type="checkbox"
+                checked={settings.showAbnormalHighlights}
+                onChange={(event) => onUpdateSettings({ showAbnormalHighlights: event.target.checked })}
+              />
+              {isNl ? "Afwijkende waarden markeren" : "Abnormal highlights"}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+              <input
+                type="checkbox"
+                checked={settings.showAnnotations}
+                onChange={(event) => onUpdateSettings({ showAnnotations: event.target.checked })}
+              />
+              {isNl ? "Dosisfase-overlay" : "Dose-phase overlays"}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+              <input
+                type="checkbox"
+                checked={settings.showTrtTargetZone}
+                onChange={(event) => onUpdateSettings({ showTrtTargetZone: event.target.checked })}
+              />
+              {isNl ? "TRT-doelzone" : "TRT optimal zone"}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+              <input
+                type="checkbox"
+                checked={settings.showLongevityTargetZone}
+                onChange={(event) => onUpdateSettings({ showLongevityTargetZone: event.target.checked })}
+              />
+              {isNl ? "Longevity-doelzone" : "Longevity zone"}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+              <input
+                type="checkbox"
+                checked={settings.yAxisMode === "data"}
+                onChange={(event) => onUpdateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
+              />
+              {isNl ? "Gebruik data-bereik Y-as" : "Use data-range Y-axis"}
             </label>
           </div>
-        ) : null}
-      </div>
 
-      {comparisonMode ? (
+          {samplingControlsEnabled ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+                {isNl ? "Meetmoment-filter" : "Sampling filter"}
+              </span>
+              {samplingOptions.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                    settings.samplingFilter === value ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                  }`}
+                  onClick={() => onUpdateSettings({ samplingFilter: value })}
+                >
+                  {label}
+                </button>
+              ))}
+              <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.compareToBaseline}
+                  onChange={(event) => onUpdateSettings({ compareToBaseline: event.target.checked })}
+                />
+                {isNl ? "Vergelijk met baseline" : "Compare to baseline"}
+              </label>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasReports && comparisonMode ? (
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select
@@ -261,28 +264,32 @@ const DashboardView = ({
       ) : null}
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-        <div className="mb-3 flex gap-2">
-          <button
-            type="button"
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-            }`}
-            onClick={() => onDashboardViewChange("primary")}
-          >
-            {isNl ? "Primaire markers" : "Primary markers"}
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-            }`}
-            onClick={() => onDashboardViewChange("all")}
-          >
-            {isNl ? "Alle markers" : "All markers"}
-          </button>
-        </div>
+        {hasReports ? (
+          <>
+            <div className="mb-3 flex gap-2">
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
+                }`}
+                onClick={() => onDashboardViewChange("primary")}
+              >
+                {isNl ? "Primaire markers" : "Primary markers"}
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
+                }`}
+                onClick={() => onDashboardViewChange("all")}
+              >
+                {isNl ? "Alle markers" : "All markers"}
+              </button>
+            </div>
 
-        {dashboardView === "primary" ? <div className="mb-1" /> : null}
+            {dashboardView === "primary" ? <div className="mb-1" /> : null}
+          </>
+        ) : null}
 
         {reports.length === 0 && !isShareMode ? (
           <WelcomeHero language={language} onLoadDemo={onLoadDemo} onUploadClick={onUploadClick} />
@@ -325,7 +332,7 @@ const DashboardView = ({
           </div>
         )}
 
-        {dashboardView === "primary" ? (
+        {hasReports && dashboardView === "primary" ? (
           <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
             <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
               <div className="relative mx-auto h-28 w-28">
