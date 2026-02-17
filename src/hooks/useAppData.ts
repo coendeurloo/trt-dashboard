@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
-import { normalizeCompounds, normalizeInjectionFrequency, normalizeSupplementContext } from "../protocolStandards";
-import { AppSettings, LabReport, MarkerValue, ReportAnnotations, StoredAppData } from "../types";
+import { AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, StoredAppData } from "../types";
 import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
@@ -38,6 +37,13 @@ const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] =>
       isBaseline: false
     };
   });
+};
+
+const mergeProtocolsById = (existing: Protocol[], incoming: Protocol[]): Protocol[] => {
+  const byId = new Map<string, Protocol>();
+  existing.forEach((protocol) => byId.set(protocol.id, protocol));
+  incoming.forEach((protocol) => byId.set(protocol.id, protocol));
+  return Array.from(byId.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 };
 
 export const detectMarkerMergeSuggestions = (
@@ -155,38 +161,84 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      const compounds = normalizeCompounds({
-        compounds: annotations.compounds,
-        compound: annotations.compound,
-        protocolFallback: annotations.protocol
-      });
-      const supplements = normalizeSupplementContext(annotations.supplementEntries, annotations.supplements);
-      const normalizedAnnotations: ReportAnnotations = {
-        ...annotations,
-        compounds: compounds.compounds,
-        compound: compounds.compound,
-        injectionFrequency: normalizeInjectionFrequency(annotations.injectionFrequency),
-        supplementEntries: supplements.supplementEntries,
-        supplements: supplements.supplements
-      };
+      const normalizedAnnotations: ReportAnnotations = samplingControlsEnabled
+        ? annotations
+        : {
+            ...annotations,
+            samplingTiming: "trough"
+          };
+
       setAppData((prev) => ({
         ...prev,
         reports: prev.reports.map((report) =>
           report.id === reportId
             ? {
                 ...report,
-                annotations: samplingControlsEnabled
-                  ? normalizedAnnotations
-                  : {
-                      ...normalizedAnnotations,
-                      samplingTiming: "trough"
-                    }
+                annotations: normalizedAnnotations
               }
             : report
         )
       }));
     },
     [isShareMode, samplingControlsEnabled]
+  );
+
+  const addProtocol = useCallback(
+    (protocol: Protocol) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        protocols: mergeProtocolsById(prev.protocols, [protocol])
+      }));
+    },
+    [isShareMode]
+  );
+
+  const updateProtocol = useCallback(
+    (protocolId: string, updates: Partial<Protocol>) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        protocols: prev.protocols.map((protocol) =>
+          protocol.id === protocolId
+            ? {
+                ...protocol,
+                ...updates,
+                id: protocol.id,
+                updatedAt: new Date().toISOString()
+              }
+            : protocol
+        )
+      }));
+    },
+    [isShareMode]
+  );
+
+  const getProtocolUsageCount = useCallback(
+    (protocolId: string): number => appData.reports.filter((report) => report.annotations.protocolId === protocolId).length,
+    [appData.reports]
+  );
+
+  const deleteProtocol = useCallback(
+    (protocolId: string): boolean => {
+      if (isShareMode) {
+        return false;
+      }
+      const usageCount = appData.reports.filter((report) => report.annotations.protocolId === protocolId).length;
+      if (usageCount > 0) {
+        return false;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        protocols: prev.protocols.filter((protocol) => protocol.id !== protocolId)
+      }));
+      return true;
+    },
+    [appData.reports, isShareMode]
   );
 
   const setBaseline = useCallback(
@@ -315,7 +367,8 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         const merged = normalizeBaselineFlags(sortReportsChronological(Array.from(byId.values())));
         return {
           ...prev,
-          reports: merged
+          reports: merged,
+          protocols: mergeProtocolsById(prev.protocols, incoming.protocols)
         };
       });
 
@@ -364,6 +417,10 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     deleteReport,
     deleteReports,
     updateReportAnnotations,
+    addProtocol,
+    updateProtocol,
+    deleteProtocol,
+    getProtocolUsageCount,
     setBaseline,
     remapMarker,
     importData,

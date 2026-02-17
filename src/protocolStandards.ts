@@ -72,7 +72,7 @@ const COMPOUND_CATALOG: CompoundCatalogEntry[] = [
   { name: "Methenolone Enanthate", aliases: ["Primobolan", "Primo E"] },
   { name: "Methenolone Acetate", aliases: ["Primo A"] },
   { name: "Stanozolol", aliases: ["Winstrol", "Winny"] },
-  { name: "Oxandrolone", aliases: ["Anavar", "Var"] },
+  { name: "Oxandrolone", aliases: ["Anavar", "Var", "Oxandralone"] },
   { name: "Oxymetholone", aliases: ["Anadrol", "A50"] },
   { name: "Methandrostenolone", aliases: ["Dianabol", "Dbol"] },
   { name: "Chlorodehydromethyltestosterone", aliases: ["Turinabol", "Tbol"] },
@@ -226,7 +226,34 @@ const SUPPLEMENT_CATALOG: SupplementCatalogEntry[] = [
   { name: "Hydration Salts", aliases: ["ORS"] }
 ];
 
-export const COMPOUND_OPTIONS: string[] = COMPOUND_CATALOG.map((entry) => entry.name);
+const COMPOUND_POPULAR_ALIAS_WHITELIST = new Set([
+  "Anavar",
+  "Anadrol",
+  "Dianabol",
+  "Turinabol",
+  "Superdrol",
+  "Winstrol",
+  "Primobolan",
+  "Masteron",
+  "Deca",
+  "Tren",
+  "Equipoise",
+  "Proviron",
+  "HGH",
+  "hCG",
+  "Clomid",
+  "Nolvadex",
+  "Arimidex",
+  "Aromasin"
+]);
+
+const compoundDisplayLabel = (entry: CompoundCatalogEntry): string => {
+  const aliases = entry.aliases ?? [];
+  const preferredAlias = aliases.find((alias) => COMPOUND_POPULAR_ALIAS_WHITELIST.has(alias)) ?? aliases[0] ?? "";
+  return preferredAlias ? `${entry.name} (${preferredAlias})` : entry.name;
+};
+
+export const COMPOUND_OPTIONS: string[] = COMPOUND_CATALOG.map((entry) => compoundDisplayLabel(entry));
 export const SUPPLEMENT_OPTIONS: string[] = SUPPLEMENT_CATALOG.map((entry) => entry.name);
 
 const compoundAliasMap = COMPOUND_CATALOG.reduce((map, entry) => {
@@ -299,8 +326,9 @@ export const canonicalizeCompound = (value: string): string => {
   if (!trimmed) {
     return "";
   }
-  const normalized = normalizeKey(trimmed);
-  return compoundAliasMap.get(normalized) ?? trimmed;
+  const withoutHint = trimmed.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const normalized = normalizeKey(withoutHint || trimmed);
+  return compoundAliasMap.get(normalized) ?? (withoutHint || trimmed);
 };
 
 export const canonicalizeCompoundList = (values: string[]): string[] =>

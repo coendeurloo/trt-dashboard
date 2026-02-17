@@ -1,12 +1,14 @@
 import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_SETTINGS } from "./constants";
-import { AppSettings, LabReport, MarkerValue, ReportAnnotations, StoredAppData } from "./types";
 import {
-  canonicalizeCompound,
-  inferInjectionFrequencyFromProtocol,
-  normalizeCompounds,
-  normalizeInjectionFrequency,
-  normalizeSupplementContext
-} from "./protocolStandards";
+  AppSettings,
+  CompoundEntry,
+  LabReport,
+  MarkerValue,
+  Protocol,
+  ReportAnnotations,
+  StoredAppData,
+  SupplementEntry
+} from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag } from "./utils";
 
@@ -18,6 +20,7 @@ declare global {
 
 type PartialAppData = Partial<StoredAppData> & {
   reports?: Array<Partial<LabReport> & { markers?: Array<Partial<MarkerValue>> }>;
+  protocols?: Array<Partial<Protocol>>;
   settings?: Partial<AppSettings>;
 };
 
@@ -31,43 +34,88 @@ const getStorage = (): Storage | null => {
 const createDefaultData = (): StoredAppData => ({
   schemaVersion: APP_SCHEMA_VERSION,
   reports: [],
+  protocols: [],
   settings: DEFAULT_SETTINGS
 });
 
-const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
-  const protocol = String(annotations?.protocol ?? "");
-  const hasInjectionFrequency = Boolean(annotations && Object.prototype.hasOwnProperty.call(annotations, "injectionFrequency"));
-  const normalizedFrequency = normalizeInjectionFrequency(String(annotations?.injectionFrequency ?? ""));
-  const normalizedCompounds = normalizeCompounds({
-    compounds: Array.isArray(annotations?.compounds) ? annotations?.compounds : undefined,
-    compound: String(annotations?.compound ?? ""),
-    protocolFallback: protocol
-  });
-  const normalizedSupplements = normalizeSupplementContext(
-    Array.isArray(annotations?.supplementEntries) ? annotations?.supplementEntries : undefined,
-    String(annotations?.supplements ?? "")
-  );
+const normalizeSamplingTiming = (value: unknown): ReportAnnotations["samplingTiming"] => {
+  return value === "trough" || value === "mid" || value === "peak" || value === "unknown" ? value : "unknown";
+};
+
+const normalizeSupplementEntry = (value: unknown): SupplementEntry | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<SupplementEntry>;
+  const name = String(row.name ?? "").trim();
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    dose: String(row.dose ?? "").trim()
+  };
+};
+
+const normalizeCompoundEntry = (value: unknown): CompoundEntry | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<CompoundEntry>;
+  const name = String(row.name ?? "").trim();
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    doseMg: String(row.doseMg ?? "").trim(),
+    frequency: String(row.frequency ?? "unknown").trim() || "unknown",
+    route: String(row.route ?? "").trim()
+  };
+};
+
+const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protocol | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const id = String(value.id ?? createId()).trim();
+  const name = String(value.name ?? "").trim();
+  if (!id || !name) {
+    return null;
+  }
+
+  const compounds = Array.isArray(value.compounds)
+    ? value.compounds.map((entry) => normalizeCompoundEntry(entry)).filter((entry): entry is CompoundEntry => entry !== null)
+    : [];
+
+  const supplements = Array.isArray(value.supplements)
+    ? value.supplements
+        .map((entry) => normalizeSupplementEntry(entry))
+        .filter((entry): entry is SupplementEntry => entry !== null)
+    : [];
 
   return {
-    dosageMgPerWeek:
-      typeof annotations?.dosageMgPerWeek === "number" && Number.isFinite(annotations.dosageMgPerWeek)
-        ? annotations.dosageMgPerWeek
-        : null,
-    compounds: normalizedCompounds.compounds,
-    compound: canonicalizeCompound(normalizedCompounds.compound),
-    injectionFrequency: hasInjectionFrequency ? normalizedFrequency : inferInjectionFrequencyFromProtocol(protocol),
-    protocol,
-    supplementEntries: normalizedSupplements.supplementEntries,
-    supplements: normalizedSupplements.supplements,
+    id,
+    name,
+    compounds,
+    supplements,
+    notes: String(value.notes ?? ""),
+    createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : new Date().toISOString(),
+    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : new Date().toISOString()
+  };
+};
+
+const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
+  const protocolIdRaw = annotations?.protocolId;
+  const protocolId = typeof protocolIdRaw === "string" && protocolIdRaw.trim().length > 0 ? protocolIdRaw : null;
+
+  return {
+    protocolId,
+    protocol: String(annotations?.protocol ?? ""),
     symptoms: String(annotations?.symptoms ?? ""),
     notes: String(annotations?.notes ?? ""),
-    samplingTiming:
-      annotations?.samplingTiming === "trough" ||
-      annotations?.samplingTiming === "mid" ||
-      annotations?.samplingTiming === "peak" ||
-      annotations?.samplingTiming === "unknown"
-        ? annotations.samplingTiming
-        : "unknown"
+    samplingTiming: normalizeSamplingTiming(annotations?.samplingTiming)
   };
 };
 
@@ -169,6 +217,18 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
   }
 
   const reports = Array.isArray(raw.reports) ? raw.reports.map((report) => normalizeReport(report)).filter((item): item is LabReport => item !== null) : [];
+  const protocols = Array.isArray(raw.protocols)
+    ? raw.protocols
+        .map((protocol) => normalizeProtocol(protocol))
+        .filter((protocol): protocol is Protocol => protocol !== null)
+        .reduce((deduped, protocol) => {
+          if (deduped.some((current) => current.id === protocol.id)) {
+            return deduped;
+          }
+          deduped.push(protocol);
+          return deduped;
+        }, [] as Protocol[])
+    : [];
 
   // Ensure exactly one baseline when legacy data has multiple baseline flags.
   let baselineTaken = false;
@@ -189,6 +249,7 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
   return {
     schemaVersion: APP_SCHEMA_VERSION,
     reports: normalizedReports,
+    protocols,
     settings: normalizeSettings(raw.settings)
   };
 };

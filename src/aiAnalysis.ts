@@ -1,6 +1,14 @@
 import { sortReportsChronological } from "./utils";
-import { AppLanguage, LabReport, UnitSystem } from "./types";
-import { frequencyPerWeekFromSelectionOrProtocol, injectionFrequencyLabel } from "./protocolStandards";
+import { AppLanguage, LabReport, Protocol, UnitSystem } from "./types";
+import { injectionFrequencyLabel } from "./protocolStandards";
+import {
+  getProtocolCompoundsText,
+  getProtocolDoseMgPerWeek,
+  getProtocolFrequencyPerWeek,
+  getProtocolInjectionFrequency,
+  getProtocolSupplementsText,
+  getReportProtocol
+} from "./protocolUtils";
 import { convertBySystem } from "./unitConversion";
 import {
   DosePrediction,
@@ -19,6 +27,7 @@ interface ClaudeResponse {
 
 interface AnalyzeLabDataOptions {
   reports: LabReport[];
+  protocols: Protocol[];
   unitSystem: UnitSystem;
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
@@ -167,24 +176,27 @@ const deriveAbnormalFromReference = (
   return "normal";
 };
 
-const buildPayload = (reports: LabReport[], unitSystem: UnitSystem): AnalysisReportRow[] => {
+const buildPayload = (reports: LabReport[], protocols: Protocol[], unitSystem: UnitSystem): AnalysisReportRow[] => {
   const sorted = sortReportsChronological(reports);
   return sorted.map((report) => ({
-    date: report.testDate,
-    ann: {
-      dose: report.annotations.dosageMgPerWeek,
-      compound: report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound,
-      frequency: injectionFrequencyLabel(report.annotations.injectionFrequency, "en"),
-      frequencyPerWeek: frequencyPerWeekFromSelectionOrProtocol(
-        report.annotations.injectionFrequency,
-        report.annotations.protocol
-      ),
-      protocol: report.annotations.protocol,
-      supps: report.annotations.supplements,
-      symptoms: report.annotations.symptoms,
-      notes: report.annotations.notes,
-      timing: report.annotations.samplingTiming
-    },
+    ...(() => {
+      const protocol = getReportProtocol(report, protocols);
+      const injectionFrequency = getProtocolInjectionFrequency(protocol);
+      return {
+        date: report.testDate,
+        ann: {
+          dose: getProtocolDoseMgPerWeek(protocol),
+          compound: getProtocolCompoundsText(protocol),
+          frequency: injectionFrequencyLabel(injectionFrequency, "en"),
+          frequencyPerWeek: getProtocolFrequencyPerWeek(protocol),
+          protocol: protocol?.name ?? "",
+          supps: getProtocolSupplementsText(protocol),
+          symptoms: report.annotations.symptoms,
+          notes: report.annotations.notes,
+          timing: report.annotations.samplingTiming
+        }
+      };
+    })(),
     markers: report.markers.map((marker) => {
       const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
       const convertedMin =
@@ -530,6 +542,7 @@ const buildSignals = (
 
 export const analyzeLabDataWithClaude = async ({
   reports,
+  protocols,
   unitSystem,
   language = "nl",
   analysisType = "full",
@@ -543,7 +556,7 @@ export const analyzeLabDataWithClaude = async ({
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const payload = buildPayload(reports, unitSystem);
+  const payload = buildPayload(reports, protocols, unitSystem);
   const derivedSignals = buildDerivedSignals(payload);
   const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);

@@ -18,13 +18,8 @@ describe("storage.coerceStoredAppData", () => {
           createdAt: "2025-01-01T10:00:00.000Z",
           isBaseline: true,
           annotations: {
-            dosageMgPerWeek: null,
-            compounds: [],
-            compound: "",
-            injectionFrequency: "unknown",
+            protocolId: null,
             protocol: "",
-            supplementEntries: [],
-            supplements: "",
             symptoms: "",
             notes: "",
             samplingTiming: "unknown"
@@ -62,13 +57,8 @@ describe("storage.coerceStoredAppData", () => {
           createdAt: "2025-02-01T10:00:00.000Z",
           isBaseline: true,
           annotations: {
-            dosageMgPerWeek: null,
-            compounds: [],
-            compound: "",
-            injectionFrequency: "unknown",
+            protocolId: null,
             protocol: "",
-            supplementEntries: [],
-            supplements: "",
             symptoms: "",
             notes: "",
             samplingTiming: "unknown"

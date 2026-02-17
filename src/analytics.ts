@@ -1,6 +1,11 @@
 import { PRIMARY_MARKERS } from "./constants";
-import { frequencyPerWeekFromSelectionOrProtocol } from "./protocolStandards";
-import { AppLanguage, AppSettings, LabReport, MarkerValue, SamplingTiming } from "./types";
+import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, SamplingTiming } from "./types";
+import {
+  getProtocolCompoundsText,
+  getProtocolDoseMgPerWeek,
+  getProtocolFrequencyPerWeek,
+  getReportProtocol
+} from "./protocolUtils";
 import { canonicalizeMarker, convertBySystem } from "./unitConversion";
 import { clip, createId, deriveAbnormalFlag, sortReportsChronological } from "./utils";
 
@@ -705,7 +710,8 @@ export const filterReportsBySampling = (
 export const buildMarkerSeries = (
   reports: LabReport[],
   markerName: string,
-  unitSystem: AppSettings["unitSystem"]
+  unitSystem: AppSettings["unitSystem"],
+  protocols: Protocol[] = []
 ): MarkerSeriesPoint[] => {
   return sortReportsChronological(reports)
     .map((report) => {
@@ -724,6 +730,8 @@ export const buildMarkerSeries = (
           ? null
           : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
 
+      const protocol = getReportProtocol(report, protocols);
+      const primaryFrequency = protocol?.compounds[0]?.frequency ?? "unknown";
       return {
         key: `${report.testDate}__${report.id}`,
         date: report.testDate,
@@ -735,11 +743,16 @@ export const buildMarkerSeries = (
         referenceMax: convertedMax === null ? null : ROUND_3(convertedMax),
         abnormal: marker.abnormal,
         context: {
-          dosageMgPerWeek: report.annotations.dosageMgPerWeek,
-          compound: report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound,
-          injectionFrequency: report.annotations.injectionFrequency,
-          protocol: report.annotations.protocol,
-          supplements: report.annotations.supplements,
+          dosageMgPerWeek: getProtocolDoseMgPerWeek(protocol),
+          compound: getProtocolCompoundsText(protocol),
+          injectionFrequency: primaryFrequency,
+          protocol: protocol?.name ?? report.annotations.protocol,
+          supplements:
+            protocol && protocol.supplements.length > 0
+              ? protocol.supplements
+                  .map((entry) => (entry.dose.trim() ? `${entry.name} ${entry.dose}` : entry.name))
+                  .join(", ")
+              : "",
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
           samplingTiming: report.annotations.samplingTiming
@@ -1394,8 +1407,7 @@ export const buildTrtStabilitySeries = (
   return points;
 };
 
-export const extractProtocolFrequencyPerWeek = (protocol: string, injectionFrequency = ""): number | null =>
-  frequencyPerWeekFromSelectionOrProtocol(injectionFrequency, protocol);
+export const extractProtocolFrequencyPerWeek = (protocol: Protocol | null): number | null => getProtocolFrequencyPerWeek(protocol);
 
 const protocolConfidenceLabel = (pointsUsed: number, total: number): "High" | "Medium" | "Low" => {
   if (pointsUsed >= 4 && total >= 6) {
@@ -1409,7 +1421,8 @@ const protocolConfidenceLabel = (pointsUsed: number, total: number): "High" | "M
 
 export const buildProtocolImpactSummary = (
   reports: LabReport[],
-  unitSystem: AppSettings["unitSystem"]
+  unitSystem: AppSettings["unitSystem"],
+  protocols: Protocol[] = []
 ): ProtocolImpactSummary => {
   const sorted = sortReportsChronological(reports);
   const events: ProtocolImpactSummary["events"] = [];
@@ -1432,15 +1445,19 @@ export const buildProtocolImpactSummary = (
   for (let index = 1; index < sorted.length; index += 1) {
     const previous = sorted[index - 1];
     const current = sorted[index];
+    const previousProtocol = getReportProtocol(previous, protocols);
+    const currentProtocol = getReportProtocol(current, protocols);
 
-    const previousDose = previous.annotations.dosageMgPerWeek;
-    const currentDose = current.annotations.dosageMgPerWeek;
-    const frequencyFrom = extractProtocolFrequencyPerWeek(previous.annotations.protocol, previous.annotations.injectionFrequency);
-    const frequencyTo = extractProtocolFrequencyPerWeek(current.annotations.protocol, current.annotations.injectionFrequency);
-    const compoundFrom = previous.annotations.compounds.length > 0 ? previous.annotations.compounds.join(" + ") : previous.annotations.compound;
-    const compoundTo = current.annotations.compounds.length > 0 ? current.annotations.compounds.join(" + ") : current.annotations.compound;
+    const previousDose = getProtocolDoseMgPerWeek(previousProtocol);
+    const currentDose = getProtocolDoseMgPerWeek(currentProtocol);
+    const frequencyFrom = extractProtocolFrequencyPerWeek(previousProtocol);
+    const frequencyTo = extractProtocolFrequencyPerWeek(currentProtocol);
+    const compoundFrom = getProtocolCompoundsText(previousProtocol);
+    const compoundTo = getProtocolCompoundsText(currentProtocol);
     const compoundChanged = normalizeProtocolText(compoundFrom) !== normalizeProtocolText(compoundTo);
-    const protocolTextChanged = normalizeProtocolText(previous.annotations.protocol) !== normalizeProtocolText(current.annotations.protocol);
+    const protocolTextChanged =
+      normalizeProtocolText(previousProtocol?.name ?? previous.annotations.protocol) !==
+      normalizeProtocolText(currentProtocol?.name ?? current.annotations.protocol);
     const doseChanged = previousDose !== currentDose;
     const frequencyChanged = frequencyFrom !== null && frequencyTo !== null && Math.abs(frequencyFrom - frequencyTo) > 0.01;
 
@@ -1469,13 +1486,13 @@ export const buildProtocolImpactSummary = (
       doseTo: currentDose,
       frequencyFrom,
       frequencyTo,
-      protocolFrom: previous.annotations.protocol,
-      protocolTo: current.annotations.protocol,
+      protocolFrom: previousProtocol?.name ?? previous.annotations.protocol,
+      protocolTo: currentProtocol?.name ?? current.annotations.protocol,
       trigger
     });
 
     for (const marker of candidateMarkers) {
-      const markerSeries = buildMarkerSeries(sorted, marker, unitSystem);
+      const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols);
       if (markerSeries.length < 3) {
         continue;
       }
@@ -1521,7 +1538,8 @@ export const buildProtocolImpactSummary = (
 export const buildProtocolImpactDoseEvents = (
   reports: LabReport[],
   unitSystem: AppSettings["unitSystem"],
-  windowSize: number
+  windowSize: number,
+  protocols: Protocol[] = []
 ): ProtocolImpactDoseEvent[] => {
   const sorted = sortReportsChronological(reports);
   if (sorted.length < 2) {
@@ -1534,7 +1552,11 @@ export const buildProtocolImpactDoseEvents = (
   for (let index = 1; index < sorted.length; index += 1) {
     const previous = sorted[index - 1];
     const current = sorted[index];
-    if (previous.annotations.dosageMgPerWeek === current.annotations.dosageMgPerWeek) {
+    const previousProtocol = getReportProtocol(previous, protocols);
+    const currentProtocol = getReportProtocol(current, protocols);
+    const previousDose = getProtocolDoseMgPerWeek(previousProtocol);
+    const currentDose = getProtocolDoseMgPerWeek(currentProtocol);
+    if (previousDose === currentDose) {
       continue;
     }
 
@@ -1552,8 +1574,8 @@ export const buildProtocolImpactDoseEvents = (
 
     const rows: ProtocolImpactMarkerRow[] = Array.from(markerSet)
       .map((marker) => {
-        const beforeSeries = buildMarkerSeries(beforeReports, marker, unitSystem);
-        const afterSeries = buildMarkerSeries(afterReports, marker, unitSystem);
+        const beforeSeries = buildMarkerSeries(beforeReports, marker, unitSystem, protocols);
+        const afterSeries = buildMarkerSeries(afterReports, marker, unitSystem, protocols);
         const beforeValues = beforeSeries.map((point) => point.value);
         const afterValues = afterSeries.map((point) => point.value);
         const beforeAvg = beforeValues.length > 0 ? mean(beforeValues) : null;
@@ -1589,8 +1611,8 @@ export const buildProtocolImpactDoseEvents = (
 
     events.push({
       id: `${previous.id}-${current.id}`,
-      fromDose: previous.annotations.dosageMgPerWeek,
-      toDose: current.annotations.dosageMgPerWeek,
+      fromDose: previousDose,
+      toDose: currentDose,
       changeDate: current.testDate,
       beforeCount: beforeReports.length,
       afterCount: afterReports.length,
@@ -1605,18 +1627,19 @@ export const buildProtocolImpactDoseEvents = (
 export const buildDoseCorrelationInsights = (
   reports: LabReport[],
   markerNames: string[],
-  unitSystem: AppSettings["unitSystem"]
+  unitSystem: AppSettings["unitSystem"],
+  protocols: Protocol[] = []
 ): DoseCorrelationInsight[] => {
   const sorted = sortReportsChronological(reports);
   return markerNames
     .map((marker) => {
       const points = sorted
         .map((report) => {
-          const dose = report.annotations.dosageMgPerWeek;
+          const dose = getProtocolDoseMgPerWeek(getReportProtocol(report, protocols));
           if (dose === null || !Number.isFinite(dose)) {
             return null;
           }
-          const value = buildMarkerSeries([report], marker, unitSystem)[0]?.value;
+          const value = buildMarkerSeries([report], marker, unitSystem, protocols)[0]?.value;
           if (value === undefined || !Number.isFinite(value)) {
             return null;
           }
@@ -1638,7 +1661,7 @@ export const buildDoseCorrelationInsights = (
     .slice(0, 6);
 };
 
-export const buildDosePhaseBlocks = (reports: LabReport[]): DosePhaseBlock[] => {
+export const buildDosePhaseBlocks = (reports: LabReport[], protocols: Protocol[] = []): DosePhaseBlock[] => {
   const sorted = sortReportsChronological(reports);
   if (sorted.length < 2) {
     return [];
@@ -1648,12 +1671,13 @@ export const buildDosePhaseBlocks = (reports: LabReport[]): DosePhaseBlock[] => 
   for (let index = 0; index < sorted.length - 1; index += 1) {
     const current = sorted[index];
     const next = sorted[index + 1];
+    const protocol = getReportProtocol(current, protocols);
     blocks.push({
       id: `${current.id}-${next.id}`,
       fromKey: `${current.testDate}__${current.id}`,
       toKey: `${next.testDate}__${next.id}`,
-      dosageMgPerWeek: current.annotations.dosageMgPerWeek,
-      protocol: current.annotations.protocol
+      dosageMgPerWeek: getProtocolDoseMgPerWeek(protocol),
+      protocol: protocol?.name ?? current.annotations.protocol
     });
   }
   return blocks;
@@ -2089,7 +2113,8 @@ const evaluateDoseRelationship = (
 export const estimateDoseResponse = (
   reports: LabReport[],
   markerNames: string[],
-  unitSystem: AppSettings["unitSystem"]
+  unitSystem: AppSettings["unitSystem"],
+  protocols: Protocol[] = []
 ): DosePrediction[] => {
   const predictions: DosePrediction[] = [];
   const sorted = sortReportsChronological(reports);
@@ -2135,10 +2160,10 @@ export const estimateDoseResponse = (
   };
 
   for (const marker of markerNames) {
-    const pointByReportId = new Map(buildMarkerSeries(sorted, marker, unitSystem).map((point) => [point.reportId, point]));
+    const pointByReportId = new Map(buildMarkerSeries(sorted, marker, unitSystem, protocols).map((point) => [point.reportId, point]));
     const rawSamples = sorted
       .map((report) => {
-        const dose = report.annotations.dosageMgPerWeek;
+        const dose = getProtocolDoseMgPerWeek(getReportProtocol(report, protocols));
         if (dose === null || !Number.isFinite(dose)) {
           return null;
         }

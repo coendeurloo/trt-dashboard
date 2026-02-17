@@ -3,6 +3,7 @@ export type UnitSystem = "eu" | "us";
 export type AppLanguage = "nl" | "en";
 export type TabKey =
   | "dashboard"
+  | "protocol"
   | "protocolImpact"
   | "doseResponse"
   | "protocolDose"
@@ -16,6 +17,13 @@ export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 export interface SupplementEntry {
   name: string;
   dose: string;
+}
+
+export interface CompoundEntry {
+  name: string;
+  doseMg: string;
+  frequency: string;
+  route: string;
 }
 
 export interface MarkerValue {
@@ -33,16 +41,21 @@ export interface MarkerValue {
 }
 
 export interface ReportAnnotations {
-  dosageMgPerWeek: number | null;
-  compounds: string[];
-  compound: string;
-  injectionFrequency: string;
+  protocolId: string | null;
   protocol: string;
-  supplementEntries: SupplementEntry[];
-  supplements: string;
   symptoms: string;
   notes: string;
   samplingTiming: SamplingTiming;
+}
+
+export interface Protocol {
+  id: string;
+  name: string;
+  compounds: CompoundEntry[];
+  supplements: SupplementEntry[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LabReport {
@@ -85,6 +98,7 @@ export interface AppSettings {
 export interface StoredAppData {
   schemaVersion: number;
   reports: LabReport[];
+  protocols: Protocol[];
   settings: AppSettings;
 }
 

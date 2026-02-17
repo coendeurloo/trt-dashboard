@@ -37,9 +37,7 @@ const sanitizeReportForShare = (report: LabReport, options: ShareOptions): LabRe
   ...report,
   annotations: {
     ...report.annotations,
-    compounds: options.hideProtocol ? [] : report.annotations.compounds,
-    compound: options.hideProtocol ? "" : report.annotations.compound,
-    injectionFrequency: options.hideProtocol ? "unknown" : report.annotations.injectionFrequency,
+    protocolId: options.hideProtocol ? null : report.annotations.protocolId,
     protocol: options.hideProtocol ? "" : report.annotations.protocol,
     symptoms: options.hideSymptoms ? "" : report.annotations.symptoms,
     notes: options.hideNotes ? "" : report.annotations.notes
@@ -50,6 +48,7 @@ export const buildShareToken = (data: StoredAppData, options: ShareOptions): str
   const sanitizedData: StoredAppData = {
     schemaVersion: APP_SCHEMA_VERSION,
     reports: data.reports.map((report) => sanitizeReportForShare(report, options)),
+    protocols: options.hideProtocol ? [] : data.protocols,
     settings: {
       ...DEFAULT_SETTINGS,
       ...data.settings

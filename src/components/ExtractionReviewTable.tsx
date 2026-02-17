@@ -1,28 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
-import { MarkerValue, ExtractionDraft, ReportAnnotations, AppLanguage, SupplementEntry } from "../types";
 import { FEEDBACK_EMAIL } from "../constants";
-import {
-  canonicalizeCompoundList,
-  COMPOUND_OPTIONS,
-  INJECTION_FREQUENCY_OPTIONS,
-  normalizeInjectionFrequency,
-  normalizeSupplementEntries,
-  supplementEntriesToText,
-  SUPPLEMENT_OPTIONS
-} from "../protocolStandards";
-import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
+import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
+import { AppLanguage, ExtractionDraft, MarkerValue, Protocol, ReportAnnotations } from "../types";
+import ProtocolEditor, { blankProtocolDraft } from "./ProtocolEditor";
 import EditableCell from "./EditableCell";
 
 export interface ExtractionReviewTableProps {
   draft: ExtractionDraft;
   annotations: ReportAnnotations;
+  protocols: Protocol[];
+  selectedProtocolId: string | null;
   language: AppLanguage;
   showSamplingTiming: boolean;
   onDraftChange: (draft: ExtractionDraft) => void;
   onAnnotationsChange: (annotations: ReportAnnotations) => void;
+  onSelectedProtocolIdChange: (protocolId: string | null) => void;
+  onProtocolCreate: (protocol: Protocol) => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -30,57 +26,35 @@ export interface ExtractionReviewTableProps {
 const ExtractionReviewTable = ({
   draft,
   annotations,
+  protocols,
+  selectedProtocolId,
   language,
   showSamplingTiming,
   onDraftChange,
   onAnnotationsChange,
+  onSelectedProtocolIdChange,
+  onProtocolCreate,
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
-  const AUTOCOMPLETE_MIN_CHARS = 2;
-  const AUTOCOMPLETE_MAX_OPTIONS = 8;
-  const buildSuggestions = (value: string, options: string[]): string[] => {
-    const query = value.trim().toLocaleLowerCase();
-    if (query.length < AUTOCOMPLETE_MIN_CHARS) {
-      return [];
-    }
-    const startsWith = options.filter((option) => option.toLocaleLowerCase().startsWith(query));
-    const includes = options.filter(
-      (option) => !option.toLocaleLowerCase().startsWith(query) && option.toLocaleLowerCase().includes(query)
-    );
-    return [...startsWith, ...includes].slice(0, AUTOCOMPLETE_MAX_OPTIONS);
-  };
-
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => (isNl ? nl : en);
-  const [compoundInput, setCompoundInput] = useState("");
-  const [compoundDoseInput, setCompoundDoseInput] = useState("");
-  const [compoundFrequencyInput, setCompoundFrequencyInput] = useState(
-    normalizeInjectionFrequency(annotations.injectionFrequency)
+
+  const [showCreateProtocol, setShowCreateProtocol] = useState(false);
+  const [protocolDraft, setProtocolDraft] = useState(blankProtocolDraft());
+  const [protocolFeedback, setProtocolFeedback] = useState("");
+
+  const selectedProtocol = useMemo(
+    () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
+    [protocols, selectedProtocolId]
   );
-  const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
-  const [supplementNameInput, setSupplementNameInput] = useState("");
-  const [supplementDoseInput, setSupplementDoseInput] = useState("");
-  const [showSupplementSuggestions, setShowSupplementSuggestions] = useState(false);
-  const compounds = Array.isArray(annotations.compounds) ? annotations.compounds : [];
-  const supplementEntries = Array.isArray(annotations.supplementEntries) ? annotations.supplementEntries : [];
-  const compoundSuggestions = useMemo(() => buildSuggestions(compoundInput, COMPOUND_OPTIONS), [compoundInput]);
-  const supplementSuggestions = useMemo(
-    () => buildSuggestions(supplementNameInput, SUPPLEMENT_OPTIONS),
-    [supplementNameInput]
-  );
-  const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
-    if (value === "high") {
-      return tr("Hoog", "High");
+
+  useEffect(() => {
+    if (selectedProtocolId && !selectedProtocol) {
+      onSelectedProtocolIdChange(null);
     }
-    if (value === "low") {
-      return tr("Laag", "Low");
-    }
-    if (value === "normal") {
-      return tr("Normaal", "Normal");
-    }
-    return tr("Onbekend", "Unknown");
-  };
+  }, [selectedProtocol, selectedProtocolId, onSelectedProtocolIdChange]);
+
   const parsingFeedbackMailto = (() => {
     const subject = `PDF Parsing Feedback - ${draft.sourceFileName}`;
     const body = [
@@ -102,6 +76,19 @@ const ExtractionReviewTable = ({
     ].join("\n");
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   })();
+
+  const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
+    if (value === "high") {
+      return tr("Hoog", "High");
+    }
+    if (value === "low") {
+      return tr("Laag", "Low");
+    }
+    if (value === "normal") {
+      return tr("Normaal", "Normal");
+    }
+    return tr("Onbekend", "Unknown");
+  };
 
   const updateRow = (rowId: string, updater: (row: MarkerValue) => MarkerValue) => {
     onDraftChange({
@@ -157,75 +144,33 @@ const ExtractionReviewTable = ({
     });
   };
 
-  const updateCompounds = (
-    nextCompounds: string[],
-    metadata?: { dosageMgPerWeek?: number | null; injectionFrequency?: string }
-  ) => {
-    const normalizedCompounds = canonicalizeCompoundList(nextCompounds);
-    onAnnotationsChange({
-      ...annotations,
-      compounds: normalizedCompounds,
-      compound: normalizedCompounds[0] ?? "",
-      dosageMgPerWeek: metadata?.dosageMgPerWeek ?? annotations.dosageMgPerWeek,
-      injectionFrequency: metadata?.injectionFrequency ?? annotations.injectionFrequency
-    });
-  };
-
-  const addCompound = () => {
-    const name = compoundInput.trim();
+  const saveProtocolFromDraft = () => {
+    const name = protocolDraft.name.trim();
     if (!name) {
+      setProtocolFeedback(tr("Geef een protocolnaam op.", "Please enter a protocol name."));
       return;
     }
-    const doseRaw = compoundDoseInput.trim();
-    const doseNumber = safeNumber(doseRaw);
-    const normalizedFrequency = normalizeInjectionFrequency(compoundFrequencyInput);
-    const frequencyOption = INJECTION_FREQUENCY_OPTIONS.find((option) => option.value === normalizedFrequency);
-    const frequencyLabel = frequencyOption ? (isNl ? frequencyOption.label.nl : frequencyOption.label.en) : "";
-    const details: string[] = [];
-    if (doseRaw) {
-      details.push(doseRaw.toLowerCase().includes("mg") ? doseRaw : `${doseRaw} mg/week`);
-    }
-    if (normalizedFrequency !== "unknown" && frequencyLabel) {
-      details.push(frequencyLabel);
-    }
-    const compoundLabel = details.length > 0 ? `${name} (${details.join(", ")})` : name;
-    updateCompounds([...compounds, compoundLabel], {
-      dosageMgPerWeek: doseNumber,
-      injectionFrequency: normalizedFrequency
-    });
-    setCompoundInput("");
-    setCompoundDoseInput("");
-    setShowCompoundSuggestions(false);
-  };
-
-  const removeCompound = (compoundToRemove: string) => {
-    updateCompounds(compounds.filter((entry) => entry !== compoundToRemove));
-  };
-
-  const updateSupplementList = (nextEntries: SupplementEntry[]) => {
-    const normalizedEntries = normalizeSupplementEntries(nextEntries, annotations.supplements);
-    onAnnotationsChange({
-      ...annotations,
-      supplementEntries: normalizedEntries,
-      supplements: supplementEntriesToText(normalizedEntries)
-    });
-  };
-
-  const addSupplement = () => {
-    const name = supplementNameInput.trim();
-    if (!name) {
+    if (protocolDraft.compounds.length === 0) {
+      setProtocolFeedback(tr("Voeg minimaal 1 compound toe.", "Add at least 1 compound."));
       return;
     }
-    updateSupplementList([
-      ...supplementEntries,
-      {
-        name,
-        dose: supplementDoseInput.trim()
-      }
-    ]);
-    setSupplementNameInput("");
-    setSupplementDoseInput("");
-    setShowSupplementSuggestions(false);
+
+    const now = new Date().toISOString();
+    const protocol: Protocol = {
+      id: createId(),
+      name,
+      compounds: protocolDraft.compounds,
+      supplements: protocolDraft.supplements,
+      notes: protocolDraft.notes,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    onProtocolCreate(protocol);
+    onSelectedProtocolIdChange(protocol.id);
+    setShowCreateProtocol(false);
+    setProtocolDraft(blankProtocolDraft());
+    setProtocolFeedback("");
   };
 
   return (
@@ -239,7 +184,7 @@ const ExtractionReviewTable = ({
         <div>
           <h2 className="text-lg font-semibold text-slate-100">{tr("Controleer geëxtraheerde data", "Review extracted data")}</h2>
           <p className="text-sm text-slate-300">
-            {draft.sourceFileName} | {draft.extraction.provider.toUpperCase()} {tr("betrouwbaarheid", "confidence")}{" "}
+            {draft.sourceFileName} | {draft.extraction.provider.toUpperCase()} {tr("betrouwbaarheid", "confidence")} {" "}
             <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
           </p>
         </div>
@@ -277,15 +222,45 @@ const ExtractionReviewTable = ({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
-            {tr("Protocoldetails", "Protocol details")}
-          </label>
-          <input
-            value={annotations.protocol}
-            onChange={(event) => onAnnotationsChange({ ...annotations, protocol: event.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("bijv. SubQ, split doses, opmerking", "e.g. SubQ, split doses, notes")}
-          />
+          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Protocol", "Protocol")}</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedProtocolId ?? ""}
+              onChange={(event) => {
+                const nextValue = event.target.value.trim();
+                onSelectedProtocolIdChange(nextValue ? nextValue : null);
+              }}
+              className="review-context-input min-w-[220px] flex-1 rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">{tr("Geen protocol", "No protocol")}</option>
+              {protocols.map((protocol) => (
+                <option key={protocol.id} value={protocol.id}>
+                  {protocol.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
+              onClick={() => setShowCreateProtocol((current) => !current)}
+            >
+              <Plus className="h-4 w-4" /> {showCreateProtocol ? tr("Sluit", "Close") : tr("Nieuw", "New")}
+            </button>
+            {selectedProtocol ? (
+              <button
+                type="button"
+                className="rounded-md border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-sm font-medium text-rose-100"
+                onClick={() => onSelectedProtocolIdChange(null)}
+              >
+                {tr("Ontkoppel", "Detach")}
+              </button>
+            ) : null}
+          </div>
+          {!selectedProtocol && protocols.length === 0 ? (
+            <p className="mt-1 text-xs text-slate-400">
+              {tr("Nog geen protocol opgeslagen. Klik op Nieuw om er één aan te maken.", "No saved protocol yet. Click New to create one.")}
+            </p>
+          ) : null}
         </div>
         {showSamplingTiming ? (
           <div>
@@ -309,219 +284,32 @@ const ExtractionReviewTable = ({
         ) : null}
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
-          <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>
-          <div className="space-y-2">
-            <div className="relative">
-              <input
-                value={compoundInput}
-                onChange={(event) => {
-                  setCompoundInput(event.target.value);
-                  setShowCompoundSuggestions(true);
-                }}
-                onFocus={() => setShowCompoundSuggestions(true)}
-                onBlur={() => window.setTimeout(() => setShowCompoundSuggestions(false), 120)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addCompound();
-                  }
-                }}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                placeholder={tr("Zoek of typ compound", "Search or type compound")}
-              />
-              {showCompoundSuggestions && compoundSuggestions.length > 0 ? (
-                <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
-                  {compoundSuggestions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        setCompoundInput(option);
-                        setShowCompoundSuggestions(false);
-                      }}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-[170px_minmax(0,1fr)_auto]">
-              <input
-                value={compoundDoseInput}
-                onChange={(event) => setCompoundDoseInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addCompound();
-                  }
-                }}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                placeholder={tr("Dosis (bv 75 mg/week)", "Dose (e.g. 75 mg/week)")}
-              />
-              <select
-                value={compoundFrequencyInput}
-                onChange={(event) => setCompoundFrequencyInput(event.target.value)}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              >
-                {INJECTION_FREQUENCY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {isNl ? option.label.nl : option.label.en}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:border-cyan-400/60 hover:text-cyan-100"
-                onClick={addCompound}
-              >
-                <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
-              </button>
-            </div>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-400">
-            {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {compounds.length === 0 ? (
-              <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
-            ) : (
-              compounds.map((compound) => (
-                <button
-                  key={compound}
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100"
-                  onClick={() => removeCompound(compound)}
-                  title={tr("Verwijderen", "Remove")}
-                >
-                  {compound}
-                  <X className="h-3 w-3" />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
-          <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">
-            {tr("Supplementen (met dosis)", "Supplements (with dose)")}
-          </label>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
-            <div className="relative">
-              <input
-                value={supplementNameInput}
-                onChange={(event) => {
-                  setSupplementNameInput(event.target.value);
-                  setShowSupplementSuggestions(true);
-                }}
-                onFocus={() => setShowSupplementSuggestions(true)}
-                onBlur={() => window.setTimeout(() => setShowSupplementSuggestions(false), 120)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addSupplement();
-                  }
-                }}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
-              />
-              {showSupplementSuggestions && supplementSuggestions.length > 0 ? (
-                <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
-                  {supplementSuggestions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        setSupplementNameInput(option);
-                        setShowSupplementSuggestions(false);
-                      }}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <input
-              value={supplementDoseInput}
-              onChange={(event) => setSupplementDoseInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addSupplement();
-                }
-              }}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr("Dosis (bv 4000 IU)", "Dose (e.g. 4000 IU)")}
-            />
+      {showCreateProtocol ? (
+        <div className="review-context-card mt-3 rounded-xl border border-cyan-500/30 bg-slate-900/50 p-3">
+          <ProtocolEditor value={protocolDraft} language={language} onChange={setProtocolDraft} />
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400/60 hover:text-emerald-100"
-              onClick={addSupplement}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+              onClick={() => {
+                setShowCreateProtocol(false);
+                setProtocolDraft(blankProtocolDraft());
+                setProtocolFeedback("");
+              }}
             >
-              <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
+              <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+              onClick={saveProtocolFromDraft}
+            >
+              <Save className="h-4 w-4" /> {tr("Opslaan en selecteren", "Save and select")}
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400">
-            {tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}
-          </p>
-          <div className="mt-2 space-y-2">
-            {supplementEntries.length === 0 ? (
-              <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
-            ) : (
-              supplementEntries.map((entry, index) => (
-                <div key={`${entry.name}-${entry.dose}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
-                  <input
-                    value={entry.name}
-                    onChange={(event) =>
-                      updateSupplementList(
-                        supplementEntries.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? {
-                                ...row,
-                                name: event.target.value
-                              }
-                            : row
-                        )
-                      )
-                    }
-                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <input
-                    value={entry.dose}
-                    onChange={(event) =>
-                      updateSupplementList(
-                        supplementEntries.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? {
-                                ...row,
-                                dose: event.target.value
-                              }
-                            : row
-                        )
-                      )
-                    }
-                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 hover:border-rose-400/60 hover:text-rose-100"
-                    onClick={() => updateSupplementList(supplementEntries.filter((_, rowIndex) => rowIndex !== index))}
-                  >
-                    {tr("Verwijderen", "Remove")}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
+          {protocolFeedback ? <p className="mt-2 text-sm text-amber-200">{protocolFeedback}</p> : null}
         </div>
-      </div>
+      ) : null}
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div>
@@ -543,6 +331,7 @@ const ExtractionReviewTable = ({
           />
         </div>
       </div>
+
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">

@@ -25,14 +25,14 @@ import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
-import { getDemoReports } from "./demoData";
+import { getDemoProtocols, getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
-import { normalizeCompounds, normalizeInjectionFrequency, normalizeSupplementContext } from "./protocolStandards";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.png";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.png";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
+import { getMostRecentlyUsedProtocolId } from "./protocolUtils";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
@@ -43,6 +43,7 @@ import AnalysisView from "./views/AnalysisView";
 import DashboardView from "./views/DashboardView";
 import DoseResponseView from "./views/DoseResponseView";
 import ProtocolImpactView from "./views/ProtocolImpactView";
+import ProtocolView from "./views/ProtocolView";
 import ReportsView from "./views/ReportsView";
 import SettingsView from "./views/SettingsView";
 import {
@@ -85,6 +86,10 @@ const App = () => {
     deleteReport: deleteReportFromData,
     deleteReports: deleteReportsFromData,
     updateReportAnnotations,
+    addProtocol,
+    updateProtocol,
+    deleteProtocol,
+    getProtocolUsageCount,
     setBaseline,
     remapMarker,
     importData,
@@ -148,6 +153,8 @@ const App = () => {
   const [uploadError, setUploadError] = useState("");
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
+  const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
 
   const [comparisonMode, setComparisonMode] = useState(false);
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
@@ -187,6 +194,7 @@ const App = () => {
     hasCustomDose
   } = useDerivedData({
     appData,
+    protocols: appData.protocols,
     samplingControlsEnabled,
     protocolWindowSize,
     doseResponseInput
@@ -221,6 +229,7 @@ const App = () => {
     settings: appData.settings,
     language: appData.settings.language,
     visibleReports,
+    protocols: appData.protocols,
     samplingControlsEnabled,
     protocolImpactSummary,
     alerts,
@@ -236,6 +245,20 @@ const App = () => {
       setActiveTab("dashboard");
     }
   }, [activeTab, isShareMode]);
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [draft]);
 
   useEffect(() => {
     if (appData.settings.theme === "dark") {
@@ -322,6 +345,7 @@ const App = () => {
   const startManualEntry = () => {
     setUploadError("");
     setDraftAnnotations(blankAnnotations());
+    setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
     setDraft({
       sourceFileName: "Manual entry",
       testDate: new Date().toISOString().slice(0, 10),
@@ -352,10 +376,12 @@ const App = () => {
     if (isShareMode) {
       return;
     }
+    const demoProtocols = getDemoProtocols();
     const demoReports = getDemoReports();
     setAppData((prev) => ({
       ...prev,
-      reports: demoReports
+      reports: demoReports,
+      protocols: [...prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demoProtocols]
     }));
     setActiveTab("dashboard");
   };
@@ -366,7 +392,8 @@ const App = () => {
     }
     setAppData((prev) => ({
       ...prev,
-      reports: prev.reports.filter((report) => report.extraction.model !== "demo-data")
+      reports: prev.reports.filter((report) => report.extraction.model !== "demo-data"),
+      protocols: prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-"))
     }));
     setActiveTab("dashboard");
   };
@@ -398,6 +425,7 @@ const App = () => {
       const extracted = await extractLabData(file);
       setDraft(extracted);
       setDraftAnnotations(blankAnnotations());
+      setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
@@ -451,28 +479,16 @@ const App = () => {
       testDate: draft.testDate,
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
-      annotations: (() => {
-        const compounds = normalizeCompounds({
-          compounds: draftAnnotations.compounds,
-          compound: draftAnnotations.compound,
-          protocolFallback: draftAnnotations.protocol
-        });
-        const supplements = normalizeSupplementContext(draftAnnotations.supplementEntries, draftAnnotations.supplements);
-        const normalizedDraft: ReportAnnotations = {
-          ...draftAnnotations,
-          compounds: compounds.compounds,
-          compound: compounds.compound,
-          injectionFrequency: normalizeInjectionFrequency(draftAnnotations.injectionFrequency),
-          supplementEntries: supplements.supplementEntries,
-          supplements: supplements.supplements
-        };
-        return samplingControlsEnabled
-          ? normalizedDraft
-          : {
-              ...normalizedDraft,
-              samplingTiming: "trough"
-            };
-      })(),
+      annotations: samplingControlsEnabled
+        ? {
+            ...draftAnnotations,
+            protocolId: selectedProtocolId
+          }
+        : {
+            ...draftAnnotations,
+            protocolId: selectedProtocolId,
+            samplingTiming: "trough"
+          },
       extraction: draft.extraction
     };
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));
@@ -483,11 +499,12 @@ const App = () => {
 
     setDraft(null);
     setDraftAnnotations(blankAnnotations());
+    setSelectedProtocolId(null);
     setUploadError("");
   };
 
   const exportCsv = (selectedMarkers: string[]) => {
-    const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem);
+    const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem, appData.protocols);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -506,7 +523,7 @@ const App = () => {
   };
 
   const chartPointsForMarker = (markerName: string): MarkerSeriesPoint[] =>
-    buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem);
+    buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols);
 
   const markerPercentChange = (marker: string): number | null => {
     const points = chartPointsForMarker(marker);
@@ -583,6 +600,31 @@ const App = () => {
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
   const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
+  const requestTabChange = (nextTab: TabKey) => {
+    if (nextTab === activeTab) {
+      return;
+    }
+    if (draft && !isShareMode) {
+      setPendingTabChange(nextTab);
+      return;
+    }
+    setActiveTab(nextTab);
+  };
+  const cancelPendingTabChange = () => {
+    setPendingTabChange(null);
+  };
+  const confirmPendingTabChange = () => {
+    if (!pendingTabChange) {
+      return;
+    }
+    const nextTab = pendingTabChange;
+    setPendingTabChange(null);
+    setDraft(null);
+    setDraftAnnotations(blankAnnotations());
+    setSelectedProtocolId(null);
+    setUploadError("");
+    setActiveTab(nextTab);
+  };
 
   const timeRangeOptions: Array<[TimeRangeKey, string]> = isNl
     ? [
@@ -630,6 +672,8 @@ const App = () => {
               const icon =
                 tab.key === "dashboard" ? (
                   <BarChart3 className="h-4 w-4" />
+                ) : tab.key === "protocol" ? (
+                  <ClipboardList className="h-4 w-4" />
                 ) : tab.key === "protocolImpact" ? (
                   <Gauge className="h-4 w-4" />
                 ) : tab.key === "doseResponse" ? (
@@ -648,7 +692,7 @@ const App = () => {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key as TabKey)}
+                  onClick={() => requestTabChange(tab.key as TabKey)}
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
                     activeTab === tab.key
                       ? "bg-cyan-500/15 text-cyan-200"
@@ -762,12 +806,19 @@ const App = () => {
                 key="draft"
                 draft={draft}
                 annotations={draftAnnotations}
+                protocols={appData.protocols}
+                selectedProtocolId={selectedProtocolId}
                 language={appData.settings.language}
                 showSamplingTiming={samplingControlsEnabled}
                 onDraftChange={setDraft}
                 onAnnotationsChange={setDraftAnnotations}
+                onSelectedProtocolIdChange={setSelectedProtocolId}
+                onProtocolCreate={addProtocol}
                 onSave={saveDraftAsReport}
-                onCancel={() => setDraft(null)}
+                onCancel={() => {
+                  setDraft(null);
+                  setSelectedProtocolId(null);
+                }}
               />
             ) : null}
           </AnimatePresence>
@@ -853,6 +904,19 @@ const App = () => {
             />
           ) : null}
 
+          {activeTab === "protocol" ? (
+            <ProtocolView
+              protocols={appData.protocols}
+              reports={reports}
+              language={appData.settings.language}
+              isShareMode={isShareMode}
+              onAddProtocol={addProtocol}
+              onUpdateProtocol={updateProtocol}
+              onDeleteProtocol={deleteProtocol}
+              getProtocolUsageCount={getProtocolUsageCount}
+            />
+          ) : null}
+
           {activeTab === "alerts" ? (
             <AlertsView
               alerts={alerts}
@@ -904,6 +968,7 @@ const App = () => {
           {activeTab === "reports" ? (
             <ReportsView
               reports={reports}
+              protocols={appData.protocols}
               settings={appData.settings}
               language={appData.settings.language}
               samplingControlsEnabled={samplingControlsEnabled}
@@ -913,6 +978,7 @@ const App = () => {
               onUpdateReportAnnotations={updateReportAnnotations}
               onSetBaseline={setBaseline}
               onRenameMarker={openRenameDialog}
+              onOpenProtocolTab={() => requestTabChange("protocol")}
             />
           ) : null}
 
@@ -964,6 +1030,50 @@ const App = () => {
       </div>
 
       <AnimatePresence>
+        {pendingTabChange ? (
+          <motion.div
+            className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/70 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={cancelPendingTabChange}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900 p-4 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3 className="text-base font-semibold text-slate-100">
+                {tr("PDF-upload is nog actief", "PDF upload is still active")}
+              </h3>
+              <p className="mt-2 text-sm text-slate-300">
+                {tr(
+                  "Je hebt een rapportreview open. Als je deze sectie verlaat, gaan niet-opgeslagen wijzigingen verloren.",
+                  "You have an active report review. If you leave this section, unsaved changes will be lost."
+                )}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                  onClick={cancelPendingTabChange}
+                >
+                  {tr("Blijven", "Stay")}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-rose-500/50 bg-rose-500/15 px-3 py-1.5 text-sm text-rose-100 hover:bg-rose-500/20"
+                  onClick={confirmPendingTabChange}
+                >
+                  {tr("Verlaten", "Leave")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
         {expandedMarker ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6"

@@ -1,6 +1,13 @@
 import { convertBySystem } from "./unitConversion";
-import { LabReport, UnitSystem } from "./types";
-import { injectionFrequencyLabel, supplementEntriesToText } from "./protocolStandards";
+import { LabReport, Protocol, UnitSystem } from "./types";
+import { injectionFrequencyLabel } from "./protocolStandards";
+import {
+  getProtocolCompoundsText,
+  getProtocolDoseMgPerWeek,
+  getProtocolInjectionFrequency,
+  getProtocolSupplementsText,
+  getReportProtocol
+} from "./protocolUtils";
 
 const escapeCsv = (value: string | number | null): string => {
   if (value === null || value === undefined) {
@@ -13,7 +20,7 @@ const escapeCsv = (value: string | number | null): string => {
   return stringValue;
 };
 
-export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSystem: UnitSystem): string => {
+export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSystem: UnitSystem, protocols: Protocol[]): string => {
   const markerSet = new Set(selectedMarkers);
   const headers = [
     "Test Date",
@@ -54,6 +61,7 @@ export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSy
         marker.referenceMax === null
           ? null
           : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+      const protocol = getReportProtocol(report, protocols);
 
       rows.push(
         [
@@ -63,15 +71,11 @@ export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSy
           escapeCsv(convertedValue.unit),
           escapeCsv(convertedMin === null ? null : Number(convertedMin.toFixed(3))),
           escapeCsv(convertedMax === null ? null : Number(convertedMax.toFixed(3))),
-          escapeCsv(report.annotations.dosageMgPerWeek),
-          escapeCsv(report.annotations.compounds.length > 0 ? report.annotations.compounds.join(" + ") : report.annotations.compound),
-          escapeCsv(injectionFrequencyLabel(report.annotations.injectionFrequency, "en")),
-          escapeCsv(report.annotations.protocol),
-          escapeCsv(
-            report.annotations.supplementEntries.length > 0
-              ? supplementEntriesToText(report.annotations.supplementEntries)
-              : report.annotations.supplements
-          ),
+          escapeCsv(getProtocolDoseMgPerWeek(protocol)),
+          escapeCsv(getProtocolCompoundsText(protocol)),
+          escapeCsv(injectionFrequencyLabel(getProtocolInjectionFrequency(protocol), "en")),
+          escapeCsv(protocol?.name ?? report.annotations.protocol),
+          escapeCsv(getProtocolSupplementsText(protocol)),
           escapeCsv(report.annotations.symptoms),
           escapeCsv(report.annotations.notes)
         ].join(",")

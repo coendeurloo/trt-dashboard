@@ -1,6 +1,9 @@
 import { format, subMonths } from "date-fns";
-import { LabReport, MarkerValue, ReportAnnotations } from "./types";
+import { LabReport, MarkerValue, Protocol, ReportAnnotations } from "./types";
 import { createId, deriveAbnormalFlag } from "./utils";
+
+export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
+export const DEMO_PROTOCOL_ADJUSTED_ID = "demo-protocol-adjusted-115";
 
 type MarkerTemplate = {
   unit: string;
@@ -43,13 +46,8 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 };
 
 const defaultAnnotations = (): ReportAnnotations => ({
-  dosageMgPerWeek: null,
-  compounds: [],
-  compound: "",
-  injectionFrequency: "unknown",
+  protocolId: null,
   protocol: "",
-  supplementEntries: [],
-  supplements: "",
   symptoms: "",
   notes: "",
   samplingTiming: "unknown"
@@ -81,6 +79,54 @@ const makeReport = (input: {
   };
 };
 
+export const getDemoProtocols = (): Protocol[] => {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: DEMO_PROTOCOL_CRUISE_ID,
+      name: "TRT Cruise 125mg",
+      compounds: [
+        {
+          name: "Testosterone Enanthate",
+          doseMg: "125 mg/week",
+          frequency: "2x_week",
+          route: "SubQ"
+        }
+      ],
+      supplements: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "400 mg" },
+        { name: "Zinc", dose: "25 mg" }
+      ],
+      notes: "Stable TRT cruise",
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: DEMO_PROTOCOL_ADJUSTED_ID,
+      name: "TRT Adjusted 115mg",
+      compounds: [
+        {
+          name: "Testosterone Enanthate",
+          doseMg: "115 mg/week",
+          frequency: "2x_week",
+          route: "SubQ"
+        }
+      ],
+      supplements: [
+        { name: "Vitamin D3", dose: "4000 IU" },
+        { name: "Omega-3", dose: "2 g" },
+        { name: "Magnesium Glycinate", dose: "400 mg" },
+        { name: "Zinc", dose: "25 mg" }
+      ],
+      notes: "Adjusted down for balance",
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+};
+
 export const getDemoReports = (): LabReport[] => [
   makeReport({
     monthsAgo: 12,
@@ -88,7 +134,6 @@ export const getDemoReports = (): LabReport[] => [
     isBaseline: true,
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: null,
       protocol: "Pre-TRT baseline",
       samplingTiming: "unknown"
     },
@@ -110,16 +155,8 @@ export const getDemoReports = (): LabReport[] => [
     sourceFileName: "demo-trt-month-3.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 125,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 125mg/week",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3",
+      protocolId: DEMO_PROTOCOL_CRUISE_ID,
+      protocol: "Started TRT cruise",
       samplingTiming: "trough"
     },
     markers: [
@@ -137,19 +174,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 8,
-    sourceFileName: "demo-trt-month-4-dose-increase.pdf",
+    sourceFileName: "demo-trt-month-4.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 140,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 140mg/week (temporary increase)",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3",
+      protocolId: DEMO_PROTOCOL_CRUISE_ID,
+      protocol: "Cruise continued",
       symptoms: "More drive, occasional water retention",
       samplingTiming: "trough"
     },
@@ -168,20 +197,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 7,
-    sourceFileName: "demo-trt-month-5-dose-step-down.pdf",
+    sourceFileName: "demo-trt-month-5.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 115,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 115mg/week",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "200 mg" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
+      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
+      protocol: "Dose adjusted downward",
       symptoms: "More balanced mood after lowering dose",
       samplingTiming: "trough"
     },
@@ -200,20 +220,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 6,
-    sourceFileName: "demo-trt-month-6-dose-adjustment.pdf",
+    sourceFileName: "demo-trt-month-6.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 100,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 100mg/week (lowered from 125mg)",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "200 mg" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
+      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
+      protocol: "Maintaining adjusted protocol",
       symptoms: "Reduced dose due to high hematocrit",
       samplingTiming: "trough"
     },
@@ -232,20 +243,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 4,
-    sourceFileName: "demo-trt-month-8-lower-dose-trial.pdf",
+    sourceFileName: "demo-trt-month-8.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 90,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 90mg/week (short trial)",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "200 mg" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
+      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
+      protocol: "Adjusted protocol continues",
       symptoms: "Slightly lower energy but better sleep",
       samplingTiming: "trough"
     },
@@ -264,20 +266,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 2,
-    sourceFileName: "demo-trt-month-9-stable.pdf",
+    sourceFileName: "demo-trt-month-9.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 100,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 100mg/week",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "200 mg" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
+      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
+      protocol: "Stable phase",
       notes: "Feeling great, energy levels stable",
       samplingTiming: "trough"
     },
@@ -296,20 +289,11 @@ export const getDemoReports = (): LabReport[] => [
   }),
   makeReport({
     monthsAgo: 1,
-    sourceFileName: "demo-trt-month-10-fine-tune.pdf",
+    sourceFileName: "demo-trt-month-10.pdf",
     annotations: {
       ...defaultAnnotations(),
-      dosageMgPerWeek: 110,
-      compounds: ["Testosterone Enanthate"],
-      compound: "Testosterone Enanthate",
-      injectionFrequency: "2x_week",
-      protocol: "Testosterone Enanthate 110mg/week",
-      supplementEntries: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "200 mg" }
-      ],
-      supplements: "Vitamin D 4000IU, Omega-3, Magnesium",
+      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
+      protocol: "Fine-tuned adjusted protocol",
       notes: "Fine-tuned dose for energy and recovery",
       samplingTiming: "trough"
     },
