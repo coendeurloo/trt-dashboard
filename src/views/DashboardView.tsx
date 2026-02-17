@@ -79,9 +79,32 @@ const DashboardView = ({
   onLoadDemo,
   onUploadClick
 }: DashboardViewProps) => {
-  const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
+  const referenceRangesTooltip = tr(
+    "Toont per marker het normale referentiebereik als band in de grafiek.",
+    "Shows each marker's normal reference range as a band on the chart."
+  );
+  const abnormalHighlightsTooltip = tr(
+    "Markeert met kleur wanneer waarden onder of boven het referentiebereik vallen.",
+    "Highlights values in color when they fall below or above the reference range."
+  );
+  const dosePhaseOverlaysTooltip = tr(
+    "Toont protocolfases (zoals dosiswijzigingen) als overlays, zodat je trends per fase kunt vergelijken.",
+    "Shows protocol phases (such as dose changes) as overlays so you can compare trends by phase."
+  );
+  const trtOptimalZoneTooltip = tr(
+    "Toont de ingestelde doelzone voor markers die daar een bekende streefband voor hebben.",
+    "Shows the configured optimal target zone for markers that have a known target band."
+  );
+  const longevityZoneTooltip = tr(
+    "Toont een conservatievere gezondheidszone gericht op lange termijn risicobeperking.",
+    "Shows a more conservative health zone aimed at long-term risk reduction."
+  );
+  const yAxisDataRangeTooltip = tr(
+    "Past de Y-as aan op het bereik van je data. Uit = Y-as start op nul voor betere absolute vergelijking.",
+    "Scales the Y-axis to your data range. Off = Y-axis starts at zero for better absolute comparison."
+  );
 
   return (
     <section className="space-y-3 fade-in">
@@ -139,53 +162,83 @@ const DashboardView = ({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.showReferenceRanges}
                 onChange={(event) => onUpdateSettings({ showReferenceRanges: event.target.checked })}
               />
               {tr("Referentiebereiken", "Reference ranges")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {referenceRangesTooltip}
+              </span>
             </label>
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.showAbnormalHighlights}
                 onChange={(event) => onUpdateSettings({ showAbnormalHighlights: event.target.checked })}
               />
               {tr("Afwijkende waarden markeren", "Abnormal highlights")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {abnormalHighlightsTooltip}
+              </span>
             </label>
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.showAnnotations}
                 onChange={(event) => onUpdateSettings({ showAnnotations: event.target.checked })}
               />
               {tr("Dosisfase-overlay", "Dose-phase overlays")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {dosePhaseOverlaysTooltip}
+              </span>
             </label>
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.showTrtTargetZone}
                 onChange={(event) => onUpdateSettings({ showTrtTargetZone: event.target.checked })}
               />
-              {tr("TRT-doelzone", "TRT optimal zone")}
+              {tr("Doelzone", "Optimal zone")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {trtOptimalZoneTooltip}
+              </span>
             </label>
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.showLongevityTargetZone}
                 onChange={(event) => onUpdateSettings({ showLongevityTargetZone: event.target.checked })}
               />
               {tr("Longevity-doelzone", "Longevity zone")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {longevityZoneTooltip}
+              </span>
             </label>
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
+            <label
+              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+            >
               <input
                 type="checkbox"
                 checked={settings.yAxisMode === "data"}
                 onChange={(event) => onUpdateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
               />
               {tr("Gebruik data-bereik Y-as", "Use data-range Y-axis")}
+              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                {yAxisDataRangeTooltip}
+              </span>
             </label>
           </div>
 
@@ -358,15 +411,15 @@ const DashboardView = ({
               </div>
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-100">TRT Stability Index</p>
+                  <p className="text-sm font-semibold text-slate-100">{tr("Stabiliteitsindex", "Stability Index")}</p>
                   <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
                     {trtStability.score === null ? "-" : `${trtStability.score}`}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-300">
                   {tr(
-                    "Dit is een rust-score van je kern TRT-markers over tijd (Testosteron, Estradiol, Hematocriet, SHBG).",
-                    "This is a steadiness score of your core TRT markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."
+                    "Dit is een rust-score van je kern hormoonmarkers over tijd (Testosteron, Estradiol, Hematocriet, SHBG).",
+                    "This is a steadiness score of your core hormone markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."
                   )}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">

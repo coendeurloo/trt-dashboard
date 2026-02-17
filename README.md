@@ -7,7 +7,10 @@
   </picture>
 </p>
 
-LabTracker is a privacy-first web app for men on TRT to turn messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
+LabTracker is a privacy-first web app that turns messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
+
+Current beta focus: hormone and bloodwork tracking (including TRT-style workflows).  
+Roadmap direction: broader performance and general health lab tracking.
 
 Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.app)
 
@@ -53,3 +56,13 @@ Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.
 - date-fns
 - pdfjs-dist
 - framer-motion
+
+## Local launcher scripts
+
+For local desktop usage, launcher scripts are kept in the repo root:
+- `Start LabTracker.command`
+- `Start LabTracker.bat`
+- `Stop LabTracker.command`
+- `Stop LabTracker.bat`
+
+These are local-dev convenience scripts and are not required for the hosted Vercel app.

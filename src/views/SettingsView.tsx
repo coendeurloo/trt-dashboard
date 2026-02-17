@@ -139,8 +139,8 @@ const SettingsView = ({
       setImportStatus({
         type: "error",
         message: tr(
-          "Import mislukt: dit lijkt geen geldig TRT backup JSON-bestand.",
-          "Import failed: this does not look like a valid TRT backup JSON file."
+          "Import mislukt: dit lijkt geen geldig LabTracker backup JSON-bestand.",
+          "Import failed: this does not look like a valid LabTracker backup JSON file."
         )
       });
     } finally {

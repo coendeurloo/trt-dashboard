@@ -262,4 +262,41 @@ describe("pdfParsing fallback layers", () => {
     expect(markerNames).not.toContain("https://tru-t.org/");
     expect(markerNames).toContain("Testosterone (Total)");
   });
+
+  it("parses three-line marker labels for split lab rows", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "Sex Horm Binding Glob,",
+        "Serum",
+        "34.7 nmol/L 19.3 - 76.4"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const parsed = rows.find((row) => row.markerName.includes("Sex Horm Binding Glob"));
+    expect(parsed).toBeDefined();
+    expect(parsed?.value).toBeCloseTo(34.7, 2);
+    expect(parsed?.unit).toBe("nmol/L");
+    expect(parsed?.referenceMin).toBe(19.3);
+    expect(parsed?.referenceMax).toBe(76.4);
+  });
+
+  it("filters implausible unit-marker combinations during fallback dedupe", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Collected: 03/11/2025",
+        "FSH 65 g/L 1.5 - 12.4",
+        "Testosterone 22.5 nmol/L 8 - 29",
+        "SHBG 36 nmol/L 18 - 54",
+        "Estradiol 95 pmol/L 40 - 160",
+        "Hematocrit 0.48 L/L 0.40 - 0.54"
+      ].join("\n"),
+      "mixed-quality.pdf"
+    );
+
+    const canonicalMarkers = new Set(draft.markers.map((marker) => marker.canonicalMarker));
+    expect(canonicalMarkers.has("FSH")).toBe(false);
+    expect(canonicalMarkers.has("Testosterone")).toBe(true);
+    expect(canonicalMarkers.has("SHBG")).toBe(true);
+  });
 });

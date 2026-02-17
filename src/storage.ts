@@ -119,6 +119,56 @@ const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportA
   };
 };
 
+type DemoReferenceRange = {
+  referenceMin: number | null;
+  referenceMax: number | null;
+  unit?: string;
+};
+
+const DEMO_REFERENCE_RANGE_FALLBACKS: Record<string, DemoReferenceRange> = {
+  Testosterone: { unit: "nmol/L", referenceMin: 8.0, referenceMax: 29.0 },
+  "Free Testosterone": { unit: "nmol/L", referenceMin: 0.17, referenceMax: 0.67 },
+  Estradiol: { unit: "pmol/L", referenceMin: 40, referenceMax: 160 },
+  SHBG: { unit: "nmol/L", referenceMin: 18, referenceMax: 54 },
+  Hematocrit: { unit: "L/L", referenceMin: 0.4, referenceMax: 0.54 },
+  PSA: { unit: "µg/L", referenceMin: 0, referenceMax: 4.0 },
+  Hemoglobin: { unit: "mmol/L", referenceMin: 8.5, referenceMax: 11.0 },
+  Cholesterol: { unit: "mmol/L", referenceMin: 0, referenceMax: 5.0 },
+  "HDL Cholesterol": { unit: "mmol/L", referenceMin: 0.9, referenceMax: 2.0 },
+  "LDL Cholesterol": { unit: "mmol/L", referenceMin: 0, referenceMax: 3.0 },
+  Triglyceriden: { unit: "mmol/L", referenceMin: 0.5, referenceMax: 1.7 },
+  "Apolipoprotein B": { unit: "g/L", referenceMin: 0.55, referenceMax: 1.2 },
+  Ferritine: { unit: "µg/L", referenceMin: 30, referenceMax: 400 },
+  Prolactin: { unit: "mIU/L", referenceMin: 86, referenceMax: 324 }
+};
+
+const applyDemoReferenceRangeFallbacks = (markers: MarkerValue[]): MarkerValue[] =>
+  markers.map((marker) => {
+    const fallback = DEMO_REFERENCE_RANGE_FALLBACKS[marker.canonicalMarker];
+    if (!fallback) {
+      return marker;
+    }
+
+    const referenceMin = marker.referenceMin ?? fallback.referenceMin;
+    const referenceMax = marker.referenceMax ?? fallback.referenceMax;
+    const unit = marker.unit || fallback.unit || marker.unit;
+    const normalized = normalizeMarkerMeasurement({
+      canonicalMarker: marker.canonicalMarker,
+      value: marker.value,
+      unit,
+      referenceMin,
+      referenceMax
+    });
+
+    return {
+      ...marker,
+      unit: normalized.unit,
+      referenceMin: normalized.referenceMin,
+      referenceMax: normalized.referenceMax,
+      abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+    };
+  });
+
 const sanitizeMarker = (marker: Partial<MarkerValue>): MarkerValue | null => {
   const rawValue = typeof marker.value === "number" ? marker.value : Number(marker.value);
   if (!Number.isFinite(rawValue)) {
@@ -178,13 +228,15 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
   if (rawMarkers.length === 0) {
     return null;
   }
+  const isDemoReport = String(report.extraction?.model ?? "") === "demo-data";
+  const normalizedMarkers = isDemoReport ? applyDemoReferenceRangeFallbacks(rawMarkers) : rawMarkers;
 
   const normalizedReport: LabReport = {
     id: String(report.id ?? createId()),
     sourceFileName: String(report.sourceFileName ?? "Imported report"),
     testDate: typeof report.testDate === "string" && report.testDate ? report.testDate : new Date().toISOString().slice(0, 10),
     createdAt: typeof report.createdAt === "string" && report.createdAt ? report.createdAt : new Date().toISOString(),
-    markers: rawMarkers,
+    markers: normalizedMarkers,
     annotations: normalizeAnnotations(report.annotations),
     isBaseline: Boolean(report.isBaseline),
     extraction: {

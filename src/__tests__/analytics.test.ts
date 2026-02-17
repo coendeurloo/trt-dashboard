@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAlerts, buildMarkerSeries, calculatePercentChange } from "../analytics";
+import { buildAlerts, buildMarkerSeries, calculatePercentChange, getTargetZone } from "../analytics";
 import { LabReport } from "../types";
 
 const mkReport = (id: string, date: string, dose: number, markers: Array<{ marker: string; value: number; unit: string }>): LabReport => ({
@@ -69,5 +69,27 @@ describe("analytics", () => {
     expect(calculatePercentChange(80, 100)).toBe(-20);
     expect(calculatePercentChange(10, 0)).toBeNull();
     expect(calculatePercentChange(-12, -10)).toBe(20);
+  });
+
+  it("resolves TRT zones for common hormone label variants", () => {
+    const totalEu = getTargetZone("Testosterone, Total, Serum", "trt", "eu");
+    expect(totalEu).not.toBeNull();
+    expect(totalEu?.min).toBe(18);
+    expect(totalEu?.max).toBe(35);
+
+    const totalUs = getTargetZone("Testosterone, Total, Serum", "trt", "us");
+    expect(totalUs).not.toBeNull();
+    expect(totalUs?.min ?? 0).toBeCloseTo(519.12, 2);
+    expect(totalUs?.max ?? 0).toBeCloseTo(1009.4, 2);
+
+    const freeEu = getTargetZone("Testosterone, Free (Direct)", "trt", "eu");
+    expect(freeEu).not.toBeNull();
+    expect(freeEu?.min).toBe(0.3);
+    expect(freeEu?.max).toBe(0.75);
+
+    const estradiolLongevity = getTargetZone("Estradiol, Sensitive", "longevity", "eu");
+    expect(estradiolLongevity).not.toBeNull();
+    expect(estradiolLongevity?.min).toBe(60);
+    expect(estradiolLongevity?.max).toBe(130);
   });
 });

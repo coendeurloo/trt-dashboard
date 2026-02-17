@@ -38,6 +38,7 @@ import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
 import useDerivedData from "./hooks/useDerivedData";
+import { resolveUploadTriggerAction } from "./uploadFlow";
 import AlertsView from "./views/AlertsView";
 import AnalysisView from "./views/AnalysisView";
 import DashboardView from "./views/DashboardView";
@@ -169,6 +170,7 @@ const App = () => {
   const [markerSuggestions, setMarkerSuggestions] = useState<MarkerMergeSuggestion[]>([]);
   const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
+  const hiddenUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     reports,
@@ -399,14 +401,28 @@ const App = () => {
   };
 
   const scrollToUploadPanel = () => {
-    if (isShareMode) {
-      return;
-    }
     if (activeTab !== "dashboard") {
       setActiveTab("dashboard");
     }
     requestAnimationFrame(() => {
-      uploadPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const action = resolveUploadTriggerAction({
+        isShareMode,
+        hasUploadPanel: Boolean(uploadPanelRef.current),
+        isProcessing
+      });
+      if (action === "scroll-to-panel" && uploadPanelRef.current) {
+        uploadPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (action !== "open-hidden-picker") {
+        return;
+      }
+      const input = hiddenUploadInputRef.current;
+      if (!input) {
+        return;
+      }
+      input.value = "";
+      input.click();
     });
   };
 
@@ -664,6 +680,20 @@ const App = () => {
 
   return (
     <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
+      <input
+        ref={hiddenUploadInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) {
+            return;
+          }
+          void handleUpload(file);
+        }}
+      />
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
         <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
           <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">

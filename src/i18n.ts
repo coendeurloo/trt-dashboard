@@ -51,8 +51,8 @@ export const UI_TEXT = {
     en: "Out of range"
   },
   trtStabilityShort: {
-    nl: "TRT-stabiliteit",
-    en: "TRT stability"
+    nl: "Hormonale stabiliteit",
+    en: "Hormone stability"
   },
   language: {
     nl: "Taal",
@@ -211,8 +211,8 @@ const MARKER_META: Record<string, MarkerMeta> = {
       en: "Primary male hormone linked to energy, libido, muscle building, and recovery."
     },
     why: {
-      nl: "Wordt gevolgd om TRT-respons en hormonale balans te beoordelen.",
-      en: "Tracked to evaluate TRT response and hormonal balance."
+      nl: "Wordt gevolgd om hormonale respons en balans te beoordelen.",
+      en: "Tracked to evaluate hormonal response and balance."
     },
     low: {
       nl: "Laag: kan samengaan met vermoeidheid, laag libido, stemmingsklachten en minder herstel.",
@@ -287,8 +287,8 @@ const MARKER_META: Record<string, MarkerMeta> = {
       en: "Percentage of red blood cells in total blood volume."
     },
     why: {
-      nl: "Cruciaal op TRT omdat verhoogde waarden de bloedviscositeit kunnen verhogen.",
-      en: "Critical on TRT because elevated values can increase blood viscosity."
+      nl: "Cruciaal in hormoontrajecten omdat verhoogde waarden de bloedviscositeit kunnen verhogen.",
+      en: "Critical during hormone treatment because elevated values can increase blood viscosity."
     },
     low: {
       nl: "Laag: kan passen bij anemie of ijzertekort met vermoeidheid en minder inspanningstolerantie.",
@@ -933,8 +933,8 @@ const MARKER_META: Record<string, MarkerMeta> = {
       en: "Prostate-specific antigen, a protein produced by prostate tissue."
     },
     why: {
-      nl: "Wordt gevolgd voor prostaatmonitoring, zeker bij leeftijd/TRT-context.",
-      en: "Tracked for prostate monitoring, especially in age/TRT context."
+      nl: "Wordt gevolgd voor prostaatmonitoring, vooral in leeftijds- en hormooncontext.",
+      en: "Tracked for prostate monitoring, especially in age and hormone-treatment context."
     },
     low: {
       nl: "Laag: wordt meestal als geruststellend gezien binnen context.",
@@ -1009,8 +1009,8 @@ const MARKER_META: Record<string, MarkerMeta> = {
       en: "Ratio between total testosterone and estradiol."
     },
     why: {
-      nl: "Handige samenvatting van androgenen-oestrogenenbalans op TRT.",
-      en: "Useful summary of androgen-estrogen balance on TRT."
+      nl: "Handige samenvatting van androgenen-oestrogenenbalans tijdens hormoonbehandeling.",
+      en: "Useful summary of androgen-estrogen balance during hormone treatment."
     },
     low: {
       nl: "Laag: kan wijzen op relatief sterke oestrogeencomponent t.o.v. testosteron.",

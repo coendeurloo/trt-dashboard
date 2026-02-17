@@ -75,7 +75,20 @@ const RAW_ALIASES: Record<string, string[]> = {
   ],
   Estradiol: ["estradiol", "e2", "oestradiol", "oestrodiol"],
   Hematocrit: ["hematocrit", "hematokriet", "hematocriet", "hct"],
-  SHBG: ["shbg", "sex hormone binding globulin", "sex horm bind gl", "sex horm bind glob"],
+  SHBG: [
+    "shbg",
+    "sex hormone binding globulin",
+    "sex hormone binding glob",
+    "sex hormone binding glob, serum",
+    "sex horm bind gl",
+    "sex horm bind glob",
+    "sex horm binding glob",
+    "sex horm binding glob serum"
+  ],
+  FSH: ["fsh", "follicle stimulating hormone", "follikel stimulerend hormoon"],
+  LH: ["lh", "luteinizing hormone", "luteiniserend hormoon"],
+  Prolactin: ["prolactin", "prolactine", "monomeric prolactin"],
+  "DHEA Sulfate": ["dhea sulfate", "dhea-sulfate", "dehydroepiandrosterone sulfate", "dhea-s"],
   Albumine: ["albumine", "albumin", "serum albumin"],
   "Dihydrotestosteron (DHT)": [
     "dihydrotestosteron",

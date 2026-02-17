@@ -1800,7 +1800,45 @@ const normalizeZoneMarkerKey = (value: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+const tokenizeZoneMarkerKey = (value: string): string[] => {
+  const normalized = normalizeZoneMarkerKey(value);
+  return normalized ? normalized.split(" ") : [];
+};
+
+const resolveZoneKeyByTokens = (source: Record<string, TargetZone>, candidates: string[]): string | null => {
+  const tokenSets = candidates
+    .map((candidate) => new Set(tokenizeZoneMarkerKey(candidate)))
+    .filter((tokens) => tokens.size > 0);
+  if (tokenSets.length === 0) {
+    return null;
+  }
+
+  const sourceKeysBySpecificity = Object.keys(source).sort(
+    (left, right) => tokenizeZoneMarkerKey(right).length - tokenizeZoneMarkerKey(left).length
+  );
+
+  return (
+    sourceKeysBySpecificity.find((sourceKey) => {
+      const sourceTokens = tokenizeZoneMarkerKey(sourceKey);
+      if (sourceTokens.length === 0) {
+        return false;
+      }
+      return tokenSets.some((candidateTokens) => sourceTokens.every((token) => candidateTokens.has(token)));
+    }) ?? null
+  );
+};
+
 const TARGET_ZONE_ALIAS_LOOKUP: Record<string, string> = {
+  testosterone: "Testosterone",
+  "total testosterone": "Testosterone",
+  "testosterone total": "Testosterone",
+  "free testosterone": "Free Testosterone",
+  "testosterone free": "Free Testosterone",
+  estradiol: "Estradiol",
+  e2: "Estradiol",
+  shbg: "SHBG",
+  "sex hormone binding globulin": "SHBG",
+  "sex hormone binding glob": "SHBG",
   albumin: "Albumine",
   "serum albumin": "Albumine",
   dht: "Dihydrotestosteron (DHT)",
@@ -1894,22 +1932,28 @@ export const getTargetZone = (
   const canonicalIncludesResolved = Object.entries(TARGET_ZONE_ALIAS_LOOKUP).find(([alias]) =>
     canonicalNormalized.includes(alias)
   )?.[1];
+  const tokenResolved = resolveZoneKeyByTokens(source, [marker, canonicalResolved, normalized, canonicalNormalized]);
   const directResolved =
     aliasResolved ??
     canonicalAliasResolved ??
     includesResolved ??
     canonicalIncludesResolved ??
+    tokenResolved ??
     (Object.prototype.hasOwnProperty.call(source, canonicalResolved) ? canonicalResolved : null) ??
     Object.keys(source).find((key) => normalizeZoneMarkerKey(key) === normalized) ??
-    Object.keys(source).find((key) => normalizeZoneMarkerKey(key) === canonicalNormalized) ??
-    marker;
+    Object.keys(source).find((key) => normalizeZoneMarkerKey(key) === canonicalNormalized);
+  if (!directResolved) {
+    return null;
+  }
   const zone = source[directResolved];
   if (!zone) {
     return null;
   }
 
-  const minConverted = convertBySystem(directResolved, zone.min, zone.unit, unitSystem).value;
-  const maxConverted = convertBySystem(directResolved, zone.max, zone.unit, unitSystem).value;
+  const conversionMarker = canonicalizeMarker(directResolved);
+  const markerForConversion = conversionMarker === "Unknown Marker" ? directResolved : conversionMarker;
+  const minConverted = convertBySystem(markerForConversion, zone.min, zone.unit, unitSystem).value;
+  const maxConverted = convertBySystem(markerForConversion, zone.max, zone.unit, unitSystem).value;
   return {
     min: ROUND_3(minConverted),
     max: ROUND_3(maxConverted)

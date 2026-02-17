@@ -82,6 +82,23 @@ export const canonicalizeMarker = (input: string): string => {
     return "Free Testosterone";
   }
 
+  if (
+    /\b(testosterone|testosteron)\b/.test(normalized) &&
+    /\bdirect\b/.test(normalized) &&
+    !/\b(total|totaal|totale)\b/.test(normalized)
+  ) {
+    return "Free Testosterone";
+  }
+
+  // Combined headings like "Testosterone, Free+Total" should not force Free Testosterone.
+  if (
+    /\b(testosterone|testosteron)\b/.test(normalized) &&
+    /\b(free|vrij|vrije)\b/.test(normalized) &&
+    /\b(total|totaal|totale)\b/.test(normalized)
+  ) {
+    return "Testosterone";
+  }
+
   // Prefer the explicit "free + testosterone" pattern before generic testosterone aliases.
   if (
     /\b(testosterone|testosteron)\b/.test(normalized) &&

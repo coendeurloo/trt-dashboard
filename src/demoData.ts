@@ -21,7 +21,62 @@ const MARKER_TEMPLATES: Record<string, MarkerTemplate> = {
   Hemoglobin: { unit: "mmol/L", referenceMin: 8.5, referenceMax: 11.0 },
   Cholesterol: { unit: "mmol/L", referenceMin: 0, referenceMax: 5.0 },
   "HDL Cholesterol": { unit: "mmol/L", referenceMin: 0.9, referenceMax: 2.0 },
-  "LDL Cholesterol": { unit: "mmol/L", referenceMin: 0, referenceMax: 3.0 }
+  "LDL Cholesterol": { unit: "mmol/L", referenceMin: 0, referenceMax: 3.0 },
+  Triglycerides: { unit: "mmol/L", referenceMin: 0.4, referenceMax: 1.7 },
+  "Apolipoprotein B": { unit: "g/L", referenceMin: 0.55, referenceMax: 1.2 },
+  Ferritin: { unit: "µg/L", referenceMin: 30, referenceMax: 400 },
+  Prolactin: { unit: "mIU/L", referenceMin: 86, referenceMax: 324 }
+};
+
+const EXTRA_DEMO_MARKERS_BY_MONTH: Record<number, Array<{ marker: string; value: number }>> = {
+  12: [
+    { marker: "Triglycerides", value: 1.5 },
+    { marker: "Apolipoprotein B", value: 1.05 },
+    { marker: "Ferritin", value: 290 },
+    { marker: "Prolactin", value: 210 }
+  ],
+  9: [
+    { marker: "Triglycerides", value: 1.4 },
+    { marker: "Apolipoprotein B", value: 1.0 },
+    { marker: "Ferritin", value: 270 },
+    { marker: "Prolactin", value: 190 }
+  ],
+  8: [
+    { marker: "Triglycerides", value: 1.35 },
+    { marker: "Apolipoprotein B", value: 0.98 },
+    { marker: "Ferritin", value: 255 },
+    { marker: "Prolactin", value: 185 }
+  ],
+  7: [
+    { marker: "Triglycerides", value: 1.28 },
+    { marker: "Apolipoprotein B", value: 0.94 },
+    { marker: "Ferritin", value: 240 },
+    { marker: "Prolactin", value: 178 }
+  ],
+  6: [
+    { marker: "Triglycerides", value: 1.2 },
+    { marker: "Apolipoprotein B", value: 0.9 },
+    { marker: "Ferritin", value: 225 },
+    { marker: "Prolactin", value: 170 }
+  ],
+  4: [
+    { marker: "Triglycerides", value: 1.12 },
+    { marker: "Apolipoprotein B", value: 0.86 },
+    { marker: "Ferritin", value: 210 },
+    { marker: "Prolactin", value: 160 }
+  ],
+  2: [
+    { marker: "Triglycerides", value: 1.06 },
+    { marker: "Apolipoprotein B", value: 0.82 },
+    { marker: "Ferritin", value: 200 },
+    { marker: "Prolactin", value: 155 }
+  ],
+  1: [
+    { marker: "Triglycerides", value: 1.0 },
+    { marker: "Apolipoprotein B", value: 0.8 },
+    { marker: "Ferritin", value: 195 },
+    { marker: "Prolactin", value: 150 }
+  ]
 };
 
 const makeIsoDate = (date: Date): string => format(date, "yyyy-MM-dd");
@@ -67,7 +122,9 @@ const makeReport = (input: {
     sourceFileName: input.sourceFileName,
     testDate,
     createdAt: makeCreatedAt(testDate),
-    markers: input.markers.map((item) => makeMarker(item.marker, item.value)),
+    markers: [...input.markers, ...(EXTRA_DEMO_MARKERS_BY_MONTH[input.monthsAgo] ?? [])].map((item) =>
+      makeMarker(item.marker, item.value)
+    ),
     annotations: input.annotations,
     isBaseline: input.isBaseline,
     extraction: {

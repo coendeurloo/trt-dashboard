@@ -110,11 +110,11 @@ const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const HISTORY_CALCULATOR_NOISE_PATTERN =
-  /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay)\b|https?:\/\/|www\./i;
+  /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|free\s+testosterone\s*-\s*calculated|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay|calculated\s+value)\b|https?:\/\/|www\./i;
 const SPATIAL_PRIORITY_MARKER_PATTERN =
   /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|dht|dihydrotestosterone|prolactin|psa)\b/i;
 const OCR_LANGS = "eng+nld";
-const OCR_MAX_PAGES = 8;
+const OCR_MAX_PAGES = 12;
 const OCR_RENDER_SCALE = 2;
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
 const SPATIAL_CLUSTER_GAP = 42;
@@ -824,6 +824,7 @@ const cleanMarkerName = (rawMarker: string): string => {
   }
 
   marker = marker.replace(METHOD_SUFFIX_PATTERN, "").trim();
+  marker = marker.replace(/\s*[=<>]+\s*$/g, "").trim();
 
   if (
     /\b(langere tijd tussen (?:bloed)?afname en analyse|longer time between blood collection and analysis)\b/i.test(marker)
@@ -870,6 +871,10 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   }
 
   if (/^\d/.test(marker)) {
+    return true;
+  }
+
+  if (/[=<>]/.test(marker)) {
     return true;
   }
 
@@ -1100,6 +1105,14 @@ const looksLikeNonResultLine = (line: string): boolean => {
 
 const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DEFAULT_PROFILE): boolean => {
   if (
+    /\b(?:in patients|in men with|according to|values obtained|comparison of serial|cannot be used interchangeably|performed using|developed and validated|educational purposes|methodology|reference interval is based on|psa below|psa above)\b/i.test(
+      row.markerName
+    )
+  ) {
+    return false;
+  }
+
+  if (
     /\b(?:report|sample|date|patient|doctor|laboratory|result|normal|range|collection|precision analytical|daily free cortisol pattern|described|section|comment|defines|followed by|levels below)\b/i.test(
       row.markerName
     )
@@ -1108,6 +1121,10 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DE
   }
 
   if (/\bN\/A\b/i.test(row.markerName) || /\bwww\./i.test(row.markerName)) {
+    return false;
+  }
+
+  if (/\bvalue\b$/i.test(row.markerName)) {
     return false;
   }
 
@@ -1230,6 +1247,20 @@ const parseLineRows = (text: string, profile: ParserProfile): ParsedFallbackRow[
     const nextLine = lines[index + 1];
     if (!nextLine) {
       continue;
+    }
+
+    const thirdLine = lines[index + 2];
+    if (thirdLine && !/\d/.test(line) && !/\d/.test(nextLine) && /\d/.test(thirdLine)) {
+      const combinedMarker = applyProfileMarkerFixes(cleanMarkerName(`${line} ${nextLine}`));
+      if (!looksLikeNoiseMarker(combinedMarker)) {
+        const threeLine = parseSingleRow(`${combinedMarker} ${thirdLine}`, 0.63, profile);
+        if (threeLine && shouldKeepParsedRow(threeLine, profile)) {
+          rows.push(threeLine);
+          consumed.add(index + 1);
+          consumed.add(index + 2);
+          continue;
+        }
+      }
     }
 
     const twoLine = parseTwoLineRow(line, nextLine, profile);
@@ -1406,6 +1437,49 @@ const isPlausibleSpatialMeasurement = (canonicalMarker: string, unit: string, va
   return value > 0 && value <= 5000;
 };
 
+const isPlausibleNonSpatialMeasurement = (canonicalMarker: string, unit: string, value: number): boolean => {
+  if (!Number.isFinite(value) || value <= 0 || value > 20000) {
+    return false;
+  }
+
+  const normalizedUnit = normalizeUnit(unit);
+  if (!normalizedUnit) {
+    return true;
+  }
+
+  const canonical = canonicalMarker.toLowerCase();
+  if (
+    canonical === "testosterone" ||
+    canonical === "free testosterone" ||
+    canonical === "estradiol" ||
+    canonical === "shbg" ||
+    canonical === "hematocrit"
+  ) {
+    return isPlausibleSpatialMeasurement(canonicalMarker, normalizedUnit, value);
+  }
+  if (canonical === "fsh" || canonical === "lh") {
+    return ["mIU/mL", "IU/L", "U/L", "mU/L"].includes(normalizedUnit) && value <= 300;
+  }
+
+  if (canonical === "prolactin") {
+    return ["ng/mL", "mIU/L", "µg/L"].includes(normalizedUnit) && value <= 4000;
+  }
+
+  if (canonical === "dhea sulfate" || canonical === "dhea-sulfate") {
+    return ["mcg/dL", "µg/dL", "ng/mL", "µmol/L"].includes(normalizedUnit) && value <= 5000;
+  }
+
+  if (canonical === "psa") {
+    return ["ng/mL", "µg/L", "%"].includes(normalizedUnit) && value <= 100;
+  }
+
+  if (canonical === "bioavailable testosterone") {
+    return ["ng/dL", "nmol/L", "pg/mL", "%"].includes(normalizedUnit) && value <= 2000;
+  }
+
+  return true;
+};
+
 const parseSpatialRows = (rows: PdfSpatialRow[], profile: ParserProfile): ParsedFallbackRow[] => {
   const parsedRows: ParsedFallbackRow[] = [];
   const activeMarkerByBand = new Map<number, string>();
@@ -1568,7 +1642,7 @@ const HISTORY_MARKER_CONFIGS: HistoryMarkerConfig[] = [
   {
     canonicalMarker: "Free Testosterone",
     markerName: "Free Testosterone",
-    headingPattern: /\bfree\s+testosterone\b/i,
+    headingPattern: /\b(?:free\s+testosterone|testosterone\s*,?\s*free)\b/i,
     rejectHeadingPattern: /\b(?:calculated|bioavailable)\b/i,
     valueRejectPattern: /\b(?:range|ref|baseline|per\s+week|calculator|bioavailable|balance|https?:\/\/|www\.)\b/i,
     allowedUnits: ["pmol/L", "ng/dL", "pg/mL", "nmol/L"],
@@ -1811,6 +1885,9 @@ const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
       referenceMin: row.referenceMin,
       referenceMax: row.referenceMax
     });
+    if (!isPlausibleNonSpatialMeasurement(canonicalMarker, normalized.unit, normalized.value)) {
+      continue;
+    }
     const confidence = IMPORTANT_MARKERS.has(canonicalMarker)
       ? Math.min(1, row.confidence + 0.12)
       : row.confidence;

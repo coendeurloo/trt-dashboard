@@ -33,7 +33,14 @@ const MarkerTrendChart = ({
   const maxs = points.map((point) => point.referenceMax).filter((value): value is number => value !== null);
   const rangeMin = mins.length > 0 ? Math.min(...mins) : undefined;
   const rangeMax = maxs.length > 0 ? Math.max(...maxs) : undefined;
-  const yAxisCandidates = points.map((point) => point.value);
+  const trtZone = settings.showTrtTargetZone ? getTargetZone(marker, "trt", settings.unitSystem) : null;
+  const longevityZone = settings.showLongevityTargetZone ? getTargetZone(marker, "longevity", settings.unitSystem) : null;
+  const yAxisCandidates = [
+    ...points.map((point) => point.value),
+    ...(settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? [rangeMin, rangeMax] : []),
+    ...(trtZone && trtZone.min < trtZone.max ? [trtZone.min, trtZone.max] : []),
+    ...(longevityZone && longevityZone.min < longevityZone.max ? [longevityZone.min, longevityZone.max] : [])
+  ];
   const yDomain = buildYAxisDomain(yAxisCandidates, settings.yAxisMode);
   const availableKeys = new Set(points.map((point) => point.key));
   const compactTooltip = settings.tooltipDetailMode === "compact";
@@ -151,28 +158,23 @@ const MarkerTrendChart = ({
           : null}
 
         {settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? (
-          <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.12} strokeOpacity={0} />
+          <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
         ) : null}
 
-        {settings.showTrtTargetZone
-          ? (() => {
-              const zone = getTargetZone(marker, "trt", settings.unitSystem);
-              if (!zone || zone.min >= zone.max) {
-                return null;
-              }
-              return <ReferenceArea y1={zone.min} y2={zone.max} fill="#0ea5e9" fillOpacity={0.09} strokeOpacity={0} />;
-            })()
-          : null}
+        {trtZone && trtZone.min < trtZone.max ? (
+          <ReferenceArea y1={trtZone.min} y2={trtZone.max} fill="#0ea5e9" fillOpacity={0.15} stroke="#0ea5e9" strokeOpacity={0.3} />
+        ) : null}
 
-        {settings.showLongevityTargetZone
-          ? (() => {
-              const zone = getTargetZone(marker, "longevity", settings.unitSystem);
-              if (!zone || zone.min >= zone.max) {
-                return null;
-              }
-              return <ReferenceArea y1={zone.min} y2={zone.max} fill="#a855f7" fillOpacity={0.06} strokeOpacity={0} />;
-            })()
-          : null}
+        {longevityZone && longevityZone.min < longevityZone.max ? (
+          <ReferenceArea
+            y1={longevityZone.min}
+            y2={longevityZone.max}
+            fill="#a855f7"
+            fillOpacity={0.12}
+            stroke="#a855f7"
+            strokeOpacity={0.28}
+          />
+        ) : null}
 
         <Line
           type="monotone"

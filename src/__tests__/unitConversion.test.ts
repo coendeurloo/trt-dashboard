@@ -7,6 +7,9 @@ describe("unitConversion", () => {
     expect(canonicalizeMarker("Hemoglobin")).toBe("Hemoglobin");
     expect(canonicalizeMarker("glucose nuchter")).toBe("Glucose Nuchter");
     expect(canonicalizeMarker("testosteron, vrij (volgens ISSAM)")).toBe("Free Testosterone");
+    expect(canonicalizeMarker("Testosterone, Free+Total LC/MS")).toBe("Testosterone");
+    expect(canonicalizeMarker("Testosterone (Direct)")).toBe("Free Testosterone");
+    expect(canonicalizeMarker("Sex Horm Binding Glob, Serum")).toBe("SHBG");
     expect(canonicalizeMarker("Bioavailable Testosterone")).toBe("Bioavailable Testosterone");
   });
 
