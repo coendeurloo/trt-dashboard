@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./src/assets/labtracker-logo-dark.png" />
-    <img src="./src/assets/labtracker-logo-light.png" alt="LabTracker logo" width="560" />
+    <img src="./src/assets/labtracker-logo-light.png" alt="LabTracker logo" width="520" />
   </picture>
 </p>
 
@@ -19,8 +19,8 @@ Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.
 - Claude structured extraction + AI lab analysis (full and latest-vs-previous)
 - Editable extraction review table with hover edit icon
 - Report context fields:
-  - Testosterone dosage (mg/week)
   - Protocol
+  - Sampling timing
   - Supplements
   - Symptoms
   - Notes
@@ -37,65 +37,10 @@ Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.
 - Data management:
   - Delete report
   - Bulk delete
-  - Export JSON
   - Export CSV (selected markers)
   - Export PDF report screenshot (`html2canvas` + `jspdf`)
 - Responsive UI + dark/light mode persistence
 - Medical disclaimer
-
-## Run the app
-
-### Windows (easiest)
-
-1. Install Node.js LTS from [https://nodejs.org](https://nodejs.org)
-2. Double-click `Start LabTracker.bat`
-3. The app opens at `http://127.0.0.1:4173`
-
-Stop it with `Stop LabTracker.bat`.
-
-### macOS / Linux
-
-```bash
-npm install
-npm run build
-npm run server:start:open
-```
-
-If you start via Finder/shortcut: the shell wrappers now auto-detect Node from common installs (`/opt/homebrew`, `/usr/local`, `nvm`, `volta`, `fnm`).
-
-You can also double-click:
-- `Start LabTracker.command`
-- `Stop LabTracker.command`
-
-Stop server:
-
-```bash
-npm run server:stop
-```
-
-Check status:
-
-```bash
-npm run server:status
-```
-
-### Development mode
-
-```bash
-npm install
-npm run dev
-```
-
-## Claude API key
-
-This app now uses a server-side API key.
-
-1. Copy `.env.example` to `.env`
-2. Set `CLAUDE_API_KEY=...` in `.env`
-3. Restart the dev server (`npm run dev`) or static server (`npm run app:start`)
-
-On Vercel, add the same project environment variable:
-- `CLAUDE_API_KEY`
 
 ## Tech stack
 
@@ -108,10 +53,3 @@ On Vercel, add the same project environment variable:
 - date-fns
 - pdfjs-dist
 - framer-motion
-
-## Windows notes
-
-- Start/stop is now cross-platform via `scripts/server-control.mjs`
-- Existing shell wrappers still work on macOS/Linux:
-  - `scripts/start-server.sh`
-  - `scripts/stop-server.sh`
