@@ -151,10 +151,10 @@ export const getDemoProtocols = (): Protocol[] => {
         }
       ],
       supplements: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "400 mg" },
-        { name: "Zinc", dose: "25 mg" }
+        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
+        { name: "Omega-3", dose: "2 g", frequency: "daily" },
+        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
+        { name: "Zinc", dose: "25 mg", frequency: "daily" }
       ],
       notes: "Stable TRT cruise",
       createdAt: now,
@@ -172,10 +172,10 @@ export const getDemoProtocols = (): Protocol[] => {
         }
       ],
       supplements: [
-        { name: "Vitamin D3", dose: "4000 IU" },
-        { name: "Omega-3", dose: "2 g" },
-        { name: "Magnesium Glycinate", dose: "400 mg" },
-        { name: "Zinc", dose: "25 mg" }
+        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
+        { name: "Omega-3", dose: "2 g", frequency: "daily" },
+        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
+        { name: "Zinc", dose: "25 mg", frequency: "daily" }
       ],
       notes: "Adjusted down for balance",
       createdAt: now,

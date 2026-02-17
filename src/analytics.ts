@@ -5,6 +5,7 @@ import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolFrequencyPerWeek,
+  getProtocolSupplementsText,
   getReportProtocol
 } from "./protocolUtils";
 import { canonicalizeMarker, convertBySystem } from "./unitConversion";
@@ -748,12 +749,7 @@ export const buildMarkerSeries = (
           compound: getProtocolCompoundsText(protocol),
           injectionFrequency: primaryFrequency,
           protocol: protocol?.name ?? report.annotations.protocol,
-          supplements:
-            protocol && protocol.supplements.length > 0
-              ? protocol.supplements
-                  .map((entry) => (entry.dose.trim() ? `${entry.name} ${entry.dose}` : entry.name))
-                  .join(", ")
-              : "",
+          supplements: getProtocolSupplementsText(protocol),
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
           samplingTiming: report.annotations.samplingTiming

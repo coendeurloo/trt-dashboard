@@ -17,6 +17,7 @@ export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 export interface SupplementEntry {
   name: string;
   dose: string;
+  frequency: string;
 }
 
 export interface CompoundEntry {

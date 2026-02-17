@@ -21,6 +21,15 @@ export interface InjectionFrequencyOption {
   aliases?: string[];
 }
 
+export interface SupplementFrequencyOption {
+  value: string;
+  label: {
+    nl: string;
+    en: string;
+  };
+  aliases?: string[];
+}
+
 const normalizeKey = (value: string): string =>
   value
     .toLowerCase()
@@ -294,31 +303,69 @@ const parseSupplementChunk = (chunk: string): SupplementEntry | null => {
 
   const parenMatch = trimmed.match(/^(.+?)\s*\((.+)\)$/);
   if (parenMatch) {
+    const name = canonicalizeSupplement(parenMatch[1] ?? "");
+    if (!name) {
+      return null;
+    }
+    const parsed = extractSupplementDoseAndFrequency(String(parenMatch[2] ?? ""));
     return {
-      name: canonicalizeSupplement(parenMatch[1] ?? ""),
-      dose: String(parenMatch[2] ?? "").trim()
+      name,
+      dose: parsed.dose,
+      frequency: parsed.frequency
     };
   }
 
   const dashMatch = trimmed.match(/^(.+?)\s*[-:]\s*(.+)$/);
   if (dashMatch) {
+    const name = canonicalizeSupplement(dashMatch[1] ?? "");
+    if (!name) {
+      return null;
+    }
+    const parsed = extractSupplementDoseAndFrequency(String(dashMatch[2] ?? ""));
     return {
-      name: canonicalizeSupplement(dashMatch[1] ?? ""),
-      dose: String(dashMatch[2] ?? "").trim()
+      name,
+      dose: parsed.dose,
+      frequency: parsed.frequency
     };
   }
 
-  const firstDigitIndex = trimmed.search(/\d/);
+  const doseStartMatch = trimmed.match(/\s\d/);
+  const firstDigitIndex = doseStartMatch?.index !== undefined ? doseStartMatch.index + 1 : -1;
   if (firstDigitIndex > 0) {
+    const name = canonicalizeSupplement(trimmed.slice(0, firstDigitIndex).replace(/[-:]+$/, "").trim());
+    if (!name) {
+      return null;
+    }
+    const parsed = extractSupplementDoseAndFrequency(trimmed.slice(firstDigitIndex).trim());
     return {
-      name: canonicalizeSupplement(trimmed.slice(0, firstDigitIndex).replace(/[-:]+$/, "").trim()),
-      dose: trimmed.slice(firstDigitIndex).trim()
+      name,
+      dose: parsed.dose,
+      frequency: parsed.frequency
     };
   }
 
+  const atSplit = trimmed.match(/^(.+?)\s+[@]\s+(.+)$/);
+  if (atSplit) {
+    const name = canonicalizeSupplement(atSplit[1] ?? "");
+    if (!name) {
+      return null;
+    }
+    const frequency = normalizeSupplementFrequency(String(atSplit[2] ?? ""));
+    return {
+      name,
+      dose: "",
+      frequency
+    };
+  }
+
+  const name = canonicalizeSupplement(trimmed);
+  if (!name) {
+    return null;
+  }
   return {
-    name: canonicalizeSupplement(trimmed),
-    dose: ""
+    name,
+    dose: "",
+    frequency: "unknown"
   };
 };
 
@@ -434,6 +481,64 @@ export const INJECTION_FREQUENCY_OPTIONS: InjectionFrequencyOption[] = [
   }
 ];
 
+export const SUPPLEMENT_FREQUENCY_OPTIONS: SupplementFrequencyOption[] = [
+  {
+    value: "unknown",
+    label: { nl: "Onbekend / niet ingevuld", en: "Unknown / not set" },
+    aliases: ["unknown", "onbekend", "not set", "none"]
+  },
+  {
+    value: "daily",
+    label: { nl: "Dagelijks", en: "Daily" },
+    aliases: ["daily", "dagelijks", "every day", "ed", "q.d."]
+  },
+  {
+    value: "twice_daily",
+    label: { nl: "2x per dag", en: "2x per day" },
+    aliases: ["twice daily", "2x/day", "2x per day", "2x per dag", "bid", "b.i.d."]
+  },
+  {
+    value: "three_times_daily",
+    label: { nl: "3x per dag", en: "3x per day" },
+    aliases: ["three times daily", "3x/day", "3x per day", "3x per dag", "tid", "t.i.d."]
+  },
+  {
+    value: "with_meals",
+    label: { nl: "Bij maaltijden", en: "With meals" },
+    aliases: ["with meals", "bij maaltijden", "with food", "met eten"]
+  },
+  {
+    value: "before_bed",
+    label: { nl: "Voor het slapen", en: "Before bed" },
+    aliases: ["before bed", "voor het slapen", "nightly", "at night"]
+  },
+  {
+    value: "training_days",
+    label: { nl: "Alleen trainingsdagen", en: "Training days only" },
+    aliases: ["training days", "trainingsdagen", "on workout days"]
+  },
+  {
+    value: "as_needed",
+    label: { nl: "Zo nodig", en: "As needed" },
+    aliases: ["as needed", "zo nodig", "prn", "p.r.n."]
+  },
+  {
+    value: "1x_week",
+    label: { nl: "1x per week", en: "1x per week" },
+    aliases: ["1x/week", "1x per week", "once weekly", "weekly", "q7d"]
+  },
+  {
+    value: "2x_week",
+    label: { nl: "2x per week", en: "2x per week" },
+    aliases: ["2x/week", "2x per week", "twice weekly", "2 per week"]
+  },
+  {
+    value: "3x_week",
+    label: { nl: "3x per week", en: "3x per week" },
+    aliases: ["3x/week", "3x per week", "three times weekly", "3 per week"]
+  }
+];
+
 const frequencyByValue = new Map(INJECTION_FREQUENCY_OPTIONS.map((option) => [option.value, option]));
 
 const frequencyAliasMap = INJECTION_FREQUENCY_OPTIONS.reduce((map, option) => {
@@ -513,6 +618,73 @@ export const normalizeInjectionFrequency = (value: string): string => {
   return frequencyAliasMap.get(normalized) ?? "unknown";
 };
 
+const supplementFrequencyByValue = new Map(SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => [option.value, option]));
+
+const supplementFrequencyAliasMap = SUPPLEMENT_FREQUENCY_OPTIONS.reduce((map, option) => {
+  const aliases = [option.value, option.label.en, option.label.nl, ...(option.aliases ?? [])];
+  aliases.forEach((alias) => {
+    const key = normalizeKey(alias);
+    if (key) {
+      map.set(key, option.value);
+    }
+  });
+  return map;
+}, new Map<string, string>());
+
+export const normalizeSupplementFrequency = (value: string): string => {
+  const normalized = normalizeKey(value);
+  if (!normalized) {
+    return "unknown";
+  }
+  return supplementFrequencyAliasMap.get(normalized) ?? value.trim();
+};
+
+const extractSupplementDoseAndFrequency = (value: string): { dose: string; frequency: string } => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { dose: "", frequency: "unknown" };
+  }
+
+  const explicitSplit = trimmed.match(/^(.+?)\s*[@;|]\s*(.+)$/);
+  if (explicitSplit) {
+    return {
+      dose: String(explicitSplit[1] ?? "").trim(),
+      frequency: normalizeSupplementFrequency(String(explicitSplit[2] ?? ""))
+    };
+  }
+
+  const candidateMatches = Array.from(supplementFrequencyAliasMap.entries())
+    .sort((left, right) => right[0].length - left[0].length)
+    .map(([alias, normalizedValue]) => ({
+      normalizedValue,
+      pattern: new RegExp(`(?:^|\\s)${escapeRegex(alias).replace(/\s+/g, "\\s+")}$`, "i")
+    }));
+
+  for (const candidate of candidateMatches) {
+    const matched = trimmed.match(candidate.pattern);
+    if (!matched || matched.index === undefined) {
+      continue;
+    }
+    const dose = trimmed.slice(0, matched.index).trim().replace(/[,@;|]+$/, "").trim();
+    if (!dose) {
+      return { dose: "", frequency: candidate.normalizedValue };
+    }
+    return { dose, frequency: candidate.normalizedValue };
+  }
+
+  return { dose: trimmed, frequency: "unknown" };
+};
+
+export const supplementFrequencyLabel = (value: string, language: AppLanguage): string => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const normalized = normalizeSupplementFrequency(value);
+  const option = supplementFrequencyByValue.get(normalized);
+  if (option) {
+    return tr(option.label.nl, option.label.en);
+  }
+  return value.trim() || tr("Onbekend", "Unknown");
+};
+
 export const inferInjectionFrequencyFromProtocol = (protocol: string): string => {
   const parsed = parseFrequencyPerWeekFromFreeText(protocol);
   if (parsed === null) {
@@ -559,12 +731,14 @@ export const canonicalizeSupplement = (value: string): string => {
 const normalizeSingleSupplementEntry = (entry: Partial<SupplementEntry>): SupplementEntry | null => {
   const name = canonicalizeSupplement(String(entry.name ?? ""));
   const dose = String(entry.dose ?? "").trim();
+  const frequency = normalizeSupplementFrequency(String(entry.frequency ?? "unknown"));
   if (!name) {
     return null;
   }
   return {
     name,
-    dose
+    dose,
+    frequency
   };
 };
 
@@ -574,10 +748,10 @@ const parseSupplementEntriesFromText = (supplements: string): SupplementEntry[] 
       .split(/[\n,;]+/)
       .map((chunk) => parseSupplementChunk(chunk))
       .filter((entry): entry is SupplementEntry => entry !== null)
-      .map((entry) => `${entry.name}|${entry.dose}`)
+      .map((entry) => `${entry.name}|${entry.dose}|${entry.frequency}`)
   ).map((encoded) => {
-    const [name = "", dose = ""] = encoded.split("|");
-    return { name, dose };
+    const [name = "", dose = "", frequency = "unknown"] = encoded.split("|");
+    return { name, dose, frequency };
   });
 
 export const normalizeSupplementEntries = (
@@ -596,9 +770,9 @@ export const normalizeSupplementEntries = (
     : [];
 
   if (sourceEntries.length > 0) {
-    return dedupeCaseInsensitive(sourceEntries.map((entry) => `${entry.name}|${entry.dose}`)).map((encoded) => {
-      const [name = "", dose = ""] = encoded.split("|");
-      return { name, dose };
+    return dedupeCaseInsensitive(sourceEntries.map((entry) => `${entry.name}|${entry.dose}|${entry.frequency}`)).map((encoded) => {
+      const [name = "", dose = "", frequency = "unknown"] = encoded.split("|");
+      return { name, dose, frequency };
     });
   }
 
@@ -610,10 +784,17 @@ export const supplementEntriesToText = (supplementEntries: SupplementEntry[]): s
     .map((entry) => {
       const name = canonicalizeSupplement(entry.name);
       const dose = entry.dose.trim();
+      const frequency = normalizeSupplementFrequency(entry.frequency);
       if (!name) {
         return "";
       }
-      return dose ? `${name} ${dose}` : name;
+      const base = dose ? `${name} ${dose}` : name;
+      if (frequency === "unknown") {
+        return base;
+      }
+      const option = supplementFrequencyByValue.get(frequency);
+      const frequencyText = option?.label.en ?? entry.frequency.trim();
+      return frequencyText ? `${base} @ ${frequencyText}` : base;
     })
     .filter((value) => value.length > 0)
     .join(", ");

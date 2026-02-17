@@ -11,7 +11,7 @@ const makeSampleData = (): StoredAppData => ({
       id: "p1",
       name: "Protocol A",
       compounds: [{ name: "Testosterone Enanthate", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
-      supplements: [{ name: "Vitamin D3", dose: "4000 IU" }],
+      supplements: [{ name: "Vitamin D3", dose: "4000 IU", frequency: "daily" }],
       notes: "Protocol note",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"

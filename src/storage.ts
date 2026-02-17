@@ -9,6 +9,7 @@ import {
   StoredAppData,
   SupplementEntry
 } from "./types";
+import { normalizeSupplementFrequency } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag } from "./utils";
 
@@ -53,7 +54,8 @@ const normalizeSupplementEntry = (value: unknown): SupplementEntry | null => {
   }
   return {
     name,
-    dose: String(row.dose ?? "").trim()
+    dose: String(row.dose ?? "").trim(),
+    frequency: normalizeSupplementFrequency(String(row.frequency ?? "unknown"))
   };
 };
 

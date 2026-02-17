@@ -7,7 +7,9 @@ import {
   COMPOUND_OPTIONS,
   INJECTION_FREQUENCY_OPTIONS,
   normalizeInjectionFrequency,
+  normalizeSupplementFrequency,
   normalizeSupplementEntries,
+  SUPPLEMENT_FREQUENCY_OPTIONS,
   SUPPLEMENT_OPTIONS
 } from "../protocolStandards";
 import { PROTOCOL_ROUTE_OPTIONS } from "../protocolUtils";
@@ -60,6 +62,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
+  const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("unknown");
   const [showSupplementSuggestions, setShowSupplementSuggestions] = useState(false);
 
   const compoundSuggestions = useMemo(() => buildSuggestions(compoundNameInput, COMPOUND_OPTIONS), [compoundNameInput]);
@@ -123,7 +126,8 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
         ...value.supplements,
         {
           name,
-          dose: supplementDoseInput.trim()
+          dose: supplementDoseInput.trim(),
+          frequency: normalizeSupplementFrequency(supplementFrequencyInput)
         }
       ],
       ""
@@ -136,6 +140,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
     setSupplementNameInput("");
     setSupplementDoseInput("");
+    setSupplementFrequencyInput("unknown");
     setShowSupplementSuggestions(false);
   };
 
@@ -309,10 +314,10 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
       <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
         <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">
-          {tr("Supplementen (met dosis)", "Supplements (with dose)")}
+          {tr("Supplementen (met dosis + frequentie)", "Supplements (with dose + frequency)")}
         </label>
 
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_190px_auto]">
           <div className="relative">
             <input
               value={supplementNameInput}
@@ -350,6 +355,17 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             placeholder={tr("Dosis", "Dose")}
           />
+          <select
+            value={supplementFrequencyInput}
+            onChange={(event) => setSupplementFrequencyInput(event.target.value)}
+            className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+          >
+            {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {tr(option.label.nl, option.label.en)}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
@@ -366,7 +382,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             <span className="text-xs text-slate-400">{tr("Nog geen supplementen toegevoegd.", "No supplements added yet.")}</span>
           ) : (
             value.supplements.map((supplement, index) => (
-              <div key={`${supplement.name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_auto]">
+              <div key={`${supplement.name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_190px_auto]">
                 <input
                   value={supplement.name}
                   onChange={(event) => updateSupplement(index, { name: canonicalizeSupplement(event.target.value) })}
@@ -377,6 +393,17 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                   onChange={(event) => updateSupplement(index, { dose: event.target.value })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
+                <select
+                  value={normalizeSupplementFrequency(supplement.frequency)}
+                  onChange={(event) => updateSupplement(index, { frequency: event.target.value })}
+                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                >
+                  {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {tr(option.label.nl, option.label.en)}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
