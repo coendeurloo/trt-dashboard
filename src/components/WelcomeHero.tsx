@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { BarChart3, FileText, Lock } from "lucide-react";
+import { trLocale } from "../i18n";
 import { AppLanguage } from "../types";
 
 export interface WelcomeHeroProps {
@@ -10,7 +11,7 @@ export interface WelcomeHeroProps {
 
 const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const features = [
     {

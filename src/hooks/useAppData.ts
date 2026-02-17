@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
+import { trLocale } from "../i18n";
 import { AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, StoredAppData } from "../types";
 import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
@@ -96,7 +97,7 @@ export const detectMarkerMergeSuggestions = (
 export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   const [appData, setAppData] = useState<StoredAppData>(() => (sharedData ? sharedData : loadAppData()));
   const isNl = appData.settings.language === "nl";
-  const tr = useCallback((nl: string, en: string): string => (isNl ? nl : en), [isNl]);
+  const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const samplingControlsEnabled = appData.settings.enableSamplingControls;
 
   useEffect(() => {

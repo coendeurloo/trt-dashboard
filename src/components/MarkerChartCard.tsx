@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Pencil } from "lucide-react";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, MarkerTrendSummary } from "../analytics";
 import { AppLanguage, AppSettings, MarkerValue } from "../types";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { markerCardAccentClass, trendVisual } from "../chartHelpers";
 import MarkerInfoBadge from "./MarkerInfoBadge";
 import MarkerTrendChart from "./MarkerTrendChart";
@@ -38,29 +38,31 @@ const MarkerChartCard = ({
   onOpenLarge,
   onRenameMarker
 }: MarkerChartCardProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const latestPoint = points[points.length - 1] ?? null;
   const trend = trendVisual(trendSummary?.direction ?? null);
   const accent = markerCardAccentClass(alertCount, latestPoint?.abnormal ?? null);
   const markerLabel = getMarkerDisplayName(marker, language);
   const trendText =
-    language === "nl"
-      ? trend.text === "Rising"
-        ? "Stijgend"
-        : trend.text === "Falling"
-          ? "Dalend"
-          : trend.text === "Volatile"
-            ? "Volatiel"
-            : "Stabiel"
-      : trend.text;
-  const trendExplanation =
-    language === "nl"
-      ? trendSummary?.explanation
-          ?.replace("Volatile pattern: variability is high", "Volatiel patroon: variabiliteit is hoog")
-          .replace("Rising trend based on positive linear regression slope.", "Stijgende trend op basis van positieve regressie-helling.")
-          .replace("Falling trend based on negative linear regression slope.", "Dalende trend op basis van negatieve regressie-helling.")
-          .replace("Stable trend: slope remains close to zero.", "Stabiele trend: helling blijft dicht bij nul.")
-          .replace("Insufficient points for trend classification.", "Onvoldoende meetpunten voor trendclassificatie.")
-      : trendSummary?.explanation;
+    trend.text === "Rising"
+      ? tr("Stijgend", "Rising")
+      : trend.text === "Falling"
+        ? tr("Dalend", "Falling")
+        : trend.text === "Volatile"
+          ? tr("Volatiel", "Volatile")
+          : tr("Stabiel", "Stable");
+  const trendExplanation = trendSummary?.explanation
+    ?.replace("Volatile pattern: variability is high", tr("Volatiel patroon: variabiliteit is hoog", "Volatile pattern: variability is high"))
+    .replace(
+      "Rising trend based on positive linear regression slope.",
+      tr("Stijgende trend op basis van positieve regressie-helling.", "Rising trend based on positive linear regression slope.")
+    )
+    .replace(
+      "Falling trend based on negative linear regression slope.",
+      tr("Dalende trend op basis van negatieve regressie-helling.", "Falling trend based on negative linear regression slope.")
+    )
+    .replace("Stable trend: slope remains close to zero.", tr("Stabiele trend: helling blijft dicht bij nul.", "Stable trend: slope remains close to zero."))
+    .replace("Insufficient points for trend classification.", tr("Onvoldoende meetpunten voor trendclassificatie.", "Insufficient points for trend classification."));
 
   return (
     <motion.div
@@ -78,8 +80,8 @@ const MarkerChartCard = ({
               type="button"
               className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
               onClick={() => onRenameMarker(marker)}
-              aria-label={language === "nl" ? "Marker hernoemen" : "Rename marker"}
-              title={language === "nl" ? "Marker hernoemen" : "Rename marker"}
+              aria-label={tr("Marker hernoemen", "Rename marker")}
+              title={tr("Marker hernoemen", "Rename marker")}
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
@@ -89,7 +91,7 @@ const MarkerChartCard = ({
           ) : null}
           {alertCount > 0 ? (
             <span className="rounded-full border border-rose-400/50 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-200">
-              {alertCount} {language === "nl" ? "alert" : `alert${alertCount > 1 ? "s" : ""}`}
+              {alertCount} {tr("alert", `alert${alertCount > 1 ? "s" : ""}`)}
             </span>
           ) : null}
         </div>
@@ -100,7 +102,7 @@ const MarkerChartCard = ({
             className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
             onClick={onOpenLarge}
           >
-            {language === "nl" ? "Vergroot" : "Enlarge"}
+            {tr("Vergroot", "Enlarge")}
           </button>
         </div>
       </div>
@@ -111,14 +113,14 @@ const MarkerChartCard = ({
           {trendText}
         </span>
         <span>
-          {language === "nl" ? "Sinds vorige test" : "Since last test"}:{" "}
+          {tr("Sinds vorige test", "Since last test")}:{" "}
           <strong className={percentChange === null ? "text-slate-300" : percentChange >= 0 ? "text-emerald-300" : "text-amber-300"}>
             {percentChange === null ? "-" : `${percentChange > 0 ? "+" : ""}${percentChange}%`}
           </strong>
         </span>
         {settings.compareToBaseline ? (
           <span>
-            {language === "nl" ? "t.o.v. baseline" : "vs baseline"}:{" "}
+            {tr("t.o.v. baseline", "vs baseline")}:{" "}
             <strong className={baselineDelta === null ? "text-slate-300" : baselineDelta >= 0 ? "text-emerald-300" : "text-amber-300"}>
               {baselineDelta === null ? "-" : `${baselineDelta > 0 ? "+" : ""}${baselineDelta}%`}
             </strong>
@@ -130,7 +132,7 @@ const MarkerChartCard = ({
         type="button"
         className="block w-full cursor-zoom-in text-left"
         onClick={onOpenLarge}
-        aria-label={language === "nl" ? `Open grotere grafiek voor ${markerLabel}` : `Open larger chart for ${markerLabel}`}
+        aria-label={`${tr("Open grotere grafiek voor", "Open larger chart for")} ${markerLabel}`}
       >
         <MarkerTrendChart
           marker={marker}

@@ -27,7 +27,7 @@ import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
 import { getDemoProtocols, getDemoReports } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
-import { getMarkerDisplayName, getTabLabel, t } from "./i18n";
+import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.png";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.png";
 import { exportElementToPdf } from "./pdfExport";
@@ -98,7 +98,7 @@ const App = () => {
     sharedData: sharedSnapshot ? sharedSnapshot.data : null,
     isShareMode
   });
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(appData.settings.language, nl, en);
   const mapServiceErrorToMessage = (
     error: unknown,
     scope: "ai" | "pdf"
@@ -716,14 +716,14 @@ const App = () => {
 
           {isShareMode ? (
             <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-100">
-              <p className="font-semibold">{isNl ? "Read-only deellink-snapshot" : "Read-only share snapshot"}</p>
+              <p className="font-semibold">{tr("Read-only deellink-snapshot", "Read-only share snapshot")}</p>
               <p className="mt-1">
                 {isNl
                   ? "Bewerken, uploads, API-keys en lokale opslagwijzigingen zijn uitgeschakeld in deze weergave."
                   : "Editing, uploads, API keys and local data writes are disabled in this view."}
               </p>
               {sharedSnapshot?.generatedAt ? (
-                <p className="mt-1 text-cyan-200/80">{isNl ? "Gegenereerd" : "Generated"}: {formatDate(sharedSnapshot.generatedAt)}</p>
+                <p className="mt-1 text-cyan-200/80">{tr("Gegenereerd", "Generated")}: {formatDate(sharedSnapshot.generatedAt)}</p>
               ) : null}
             </div>
           ) : reports.length > 0 ? (
@@ -746,7 +746,7 @@ const App = () => {
           ) : null}
 
           <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">{appData.settings.language === "nl" ? "Snel overzicht" : "Quick stats"}</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Snel overzicht", "Quick stats")}</p>
             <div className="mt-2 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-slate-300">{t(appData.settings.language, "reports")}</span>
@@ -777,13 +777,21 @@ const App = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200 hover:border-cyan-500/50"
-                  onClick={() => updateSettings({ language: appData.settings.language === "nl" ? "en" : "nl" })}
-                >
-                  {t(appData.settings.language, "language")}: {appData.settings.language.toUpperCase()}
-                </button>
+                <label className="rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200">
+                  <span className="sr-only">{t(appData.settings.language, "language")}</span>
+                  <select
+                    value={appData.settings.language}
+                    onChange={(event) => updateSettings({ language: event.target.value as AppSettings["language"] })}
+                    className="bg-transparent text-sm text-inherit outline-none"
+                    aria-label={t(appData.settings.language, "language")}
+                  >
+                    {APP_LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value} className="text-slate-900">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   type="button"
                   className={`rounded-md px-2.5 py-1.25 text-sm ${

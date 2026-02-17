@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 import { ReportAnnotations, AppLanguage, MarkerValue, AppSettings, ExtractionDraft, LabReport } from "./types";
+import { trLocale } from "./i18n";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "./utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { MarkerTrendSummary } from "./analytics";
@@ -184,16 +185,17 @@ export const phaseColor = (dose: number | null, index: number): string => {
 };
 
 export const abnormalStatusLabel = (value: MarkerValue["abnormal"], language: AppLanguage): string => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   if (value === "high") {
-    return language === "nl" ? "Hoog" : "High";
+    return tr("Hoog", "High");
   }
   if (value === "low") {
-    return language === "nl" ? "Laag" : "Low";
+    return tr("Laag", "Low");
   }
   if (value === "normal") {
-    return language === "nl" ? "Normaal" : "Normal";
+    return tr("Normaal", "Normal");
   }
-  return language === "nl" ? "Onbekend" : "Unknown";
+  return tr("Onbekend", "Unknown");
 };
 
 export const normalizeDraftMarker = (row: MarkerValue): MarkerValue => {

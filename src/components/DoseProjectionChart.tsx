@@ -2,7 +2,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DosePrediction, MarkerSeriesPoint, buildMarkerSeries } from "../analytics";
 import { AppLanguage, AppSettings, LabReport } from "../types";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { formatDate } from "../utils";
 import { buildYAxisDomain, formatAxisTick } from "../chartHelpers";
 import { useMemo } from "react";
@@ -17,6 +17,7 @@ export interface DoseProjectionChartProps {
 }
 
 const DoseProjectionChart = ({ prediction, reports, settings, language, targetDose, targetEstimate }: DoseProjectionChartProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(prediction.marker, language);
   const projectedDose = typeof targetDose === "number" && Number.isFinite(targetDose) ? targetDose : prediction.suggestedDose;
   const projectedEstimate =
@@ -76,9 +77,7 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
       <p className="mb-1 text-[11px] text-slate-300">
-        {language === "nl"
-          ? "Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario."
-          : "Solid line = measured. Dotted line = model estimate for this dose scenario."}
+        {tr("Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario.", "Solid line = measured. Dotted line = model estimate for this dose scenario.")}
       </p>
       <ResponsiveContainer width="100%" height={140}>
         <LineChart data={chartData} margin={{ left: 2, right: 6, top: 6, bottom: 4 }}>
@@ -120,9 +119,10 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
                   </p>
                   {isProjectionPoint ? (
                     <p className="mt-1 text-[10px] text-amber-200">
-                      {language === "nl"
-                        ? `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`
-                        : `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`}
+                      {tr(
+                        `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`,
+                        `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`
+                      )}
                     </p>
                   ) : null}
                 </div>

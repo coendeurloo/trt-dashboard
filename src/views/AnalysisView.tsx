@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { FileText, Loader2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 
 interface AnalysisViewProps {
@@ -51,7 +52,7 @@ const AnalysisView = ({
   onCopyAnalysis
 }: AnalysisViewProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isDarkTheme = settings.theme === "dark";
   const betaBannerClassName =
     isDarkTheme

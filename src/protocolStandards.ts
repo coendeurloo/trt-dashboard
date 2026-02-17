@@ -1,4 +1,5 @@
 import { AppLanguage, SupplementEntry } from "./types";
+import { trLocale } from "./i18n";
 
 interface CompoundCatalogEntry {
   name: string;
@@ -537,12 +538,13 @@ export const frequencyPerWeekFromSelectionOrProtocol = (
 };
 
 export const injectionFrequencyLabel = (value: string, language: AppLanguage): string => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const normalized = normalizeInjectionFrequency(value);
   const option = frequencyByValue.get(normalized);
   if (!option) {
-    return language === "nl" ? "Onbekend" : "Unknown";
+    return tr("Onbekend", "Unknown");
   }
-  return language === "nl" ? option.label.nl : option.label.en;
+  return tr(option.label.nl, option.label.en);
 };
 
 export const canonicalizeSupplement = (value: string): string => {

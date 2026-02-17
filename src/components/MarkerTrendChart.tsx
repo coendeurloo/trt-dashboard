@@ -4,7 +4,7 @@ import { MarkerSeriesPoint, buildDosePhaseBlocks, getTargetZone } from "../analy
 import { AppLanguage, AppSettings } from "../types";
 import { formatDate } from "../utils";
 import { buildYAxisDomain, compactTooltipText, formatAxisTick, markerColor, phaseColor } from "../chartHelpers";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 
 export interface MarkerTrendChartProps {
   marker: string;
@@ -27,6 +27,7 @@ const MarkerTrendChart = ({
   height,
   showYearHints = false
 }: MarkerTrendChartProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(marker, language);
   const mins = points.map((point) => point.referenceMin).filter((value): value is number => value !== null);
   const maxs = points.map((point) => point.referenceMax).filter((value): value is number => value !== null);
@@ -46,7 +47,7 @@ const MarkerTrendChart = ({
         className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 text-sm text-slate-400"
         style={{ height }}
       >
-        {language === "nl" ? "Geen data in dit bereik" : "No data in selected range"}
+        {tr("Geen data in dit bereik", "No data in selected range")}
       </div>
     );
   }
@@ -117,15 +118,15 @@ const MarkerTrendChart = ({
                   {markerLabel}: <strong>{formatAxisTick(point.value)}</strong> {point.unit}
                 </p>
                 <div className="mt-1.5 space-y-1 text-slate-300">
-                  <p>{language === "nl" ? "Dosis" : "Dose"}: {point.context.dosageMgPerWeek === null ? "-" : `${point.context.dosageMgPerWeek} mg/week`}</p>
+                  <p>{tr("Dosis", "Dose")}: {point.context.dosageMgPerWeek === null ? "-" : `${point.context.dosageMgPerWeek} mg/week`}</p>
                   {compactTooltip ? (
                     <p>Protocol: {protocolText}</p>
                   ) : (
                     <>
                       <p>Protocol: {point.context.protocol || "-"}</p>
-                      <p>{language === "nl" ? "Supplementen" : "Supplements"}: {point.context.supplements || "-"}</p>
-                      <p>{language === "nl" ? "Symptomen" : "Symptoms"}: {point.context.symptoms || "-"}</p>
-                      <p>{language === "nl" ? "Notities" : "Notes"}: {point.context.notes || "-"}</p>
+                      <p>{tr("Supplementen", "Supplements")}: {point.context.supplements || "-"}</p>
+                      <p>{tr("Symptomen", "Symptoms")}: {point.context.symptoms || "-"}</p>
+                      <p>{tr("Notities", "Notes")}: {point.context.notes || "-"}</p>
                     </>
                   )}
                 </div>

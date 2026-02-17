@@ -1,9 +1,21 @@
 import { AppLanguage, TabKey } from "./types";
+import { translateFromEnglish } from "./locales/enToExtraLocales";
 
 type LocalizedText = {
-  nl: string;
   en: string;
+  nl: string;
+  es?: string;
+  pt?: string;
+  de?: string;
 };
+
+export const APP_LANGUAGE_OPTIONS: Array<{ value: AppLanguage; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "pt", label: "Português" },
+  { value: "de", label: "Deutsch" },
+  { value: "nl", label: "Nederlands" }
+];
 
 type MarkerMeta = {
   name: LocalizedText;
@@ -114,9 +126,32 @@ export const UI_TEXT = {
 
 export type UiTextKey = keyof typeof UI_TEXT;
 
+const pickLocalizedText = (
+  value: Partial<Record<AppLanguage, string>> & { en: string },
+  language: AppLanguage
+): string => {
+  if (language === "nl") {
+    return value.nl ?? value.en;
+  }
+  if (language === "en") {
+    return value.en;
+  }
+  return value[language] ?? translateFromEnglish(language, value.en);
+};
+
+export const trLocale = (language: AppLanguage, nl: string, en: string): string => {
+  if (language === "nl") {
+    return nl;
+  }
+  if (language === "en") {
+    return en;
+  }
+  return translateFromEnglish(language, en);
+};
+
 export const t = (language: AppLanguage, key: UiTextKey): string => {
   const value = UI_TEXT[key];
-  return value?.[language] ?? value?.en ?? key;
+  return value ? pickLocalizedText(value, language) : key;
 };
 
 const TAB_LABELS: Record<TabKey, LocalizedText> = {
@@ -132,7 +167,8 @@ const TAB_LABELS: Record<TabKey, LocalizedText> = {
 };
 
 export const getTabLabel = (tab: TabKey, language: AppLanguage): string => {
-  return TAB_LABELS[tab]?.[language] ?? TAB_LABELS[tab]?.en ?? tab;
+  const label = TAB_LABELS[tab];
+  return label ? pickLocalizedText(label, language) : tab;
 };
 
 const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
@@ -1258,10 +1294,10 @@ const resolveMarkerMeta = (marker: string): MarkerMeta | undefined => {
 export const getMarkerDisplayName = (marker: string, language: AppLanguage): string => {
   const translated = MARKER_NAME_TRANSLATIONS[marker];
   if (translated) {
-    return translated[language] ?? translated.en ?? marker;
+    return pickLocalizedText(translated, language);
   }
   const meta = resolveMarkerMeta(marker);
-  return meta?.name?.[language] ?? meta?.name?.en ?? marker;
+  return meta ? pickLocalizedText(meta.name, language) : marker;
 };
 
 export const getMarkerMeta = (
@@ -1281,8 +1317,8 @@ export const getMarkerMeta = (
 
   return {
     title: getMarkerDisplayName(marker, language),
-    what: meta.what[language],
-    why: meta.why[language],
+    what: pickLocalizedText(meta.what, language),
+    why: pickLocalizedText(meta.why, language),
     low: meta.low?.[language] ?? t(language, "unknownMarkerInfoLow"),
     high: meta.high?.[language] ?? t(language, "unknownMarkerInfoHigh")
   };

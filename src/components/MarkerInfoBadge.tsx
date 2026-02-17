@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { AppLanguage } from "../types";
-import { getMarkerMeta } from "../i18n";
+import { getMarkerMeta, trLocale } from "../i18n";
 import { clampNumber } from "../chartHelpers";
 
 export interface MarkerInfoBadgeProps {
@@ -12,6 +12,7 @@ export interface MarkerInfoBadgeProps {
 
 const MarkerInfoBadge = ({ marker, language }: MarkerInfoBadgeProps) => {
   const meta = getMarkerMeta(marker, language);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
@@ -61,13 +62,13 @@ const MarkerInfoBadge = ({ marker, language }: MarkerInfoBadgeProps) => {
           <p className="font-semibold text-slate-100">{meta.title}</p>
           <p className="mt-1">{meta.what}</p>
           <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Waarom meten:" : "Why measured:"}</strong> {meta.why}
+            <strong>{tr("Waarom meten:", "Why measured:")}</strong> {meta.why}
           </p>
           <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Bij tekort/laag:" : "If low:"}</strong> {meta.low}
+            <strong>{tr("Bij tekort/laag:", "If low:")}</strong> {meta.low}
           </p>
           <p className="mt-1 text-slate-300">
-            <strong>{language === "nl" ? "Bij teveel/hoog:" : "If high:"}</strong> {meta.high}
+            <strong>{tr("Bij teveel/hoog:", "If high:")}</strong> {meta.high}
           </p>
         </div>,
         document.body

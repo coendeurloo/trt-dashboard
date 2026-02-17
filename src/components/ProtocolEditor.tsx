@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { trLocale } from "../i18n";
 import {
   canonicalizeCompound,
   canonicalizeSupplement,
@@ -49,7 +50,7 @@ interface ProtocolEditorProps {
 
 const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [compoundNameInput, setCompoundNameInput] = useState("");
   const [compoundDoseInput, setCompoundDoseInput] = useState("");
@@ -226,7 +227,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             >
               {INJECTION_FREQUENCY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {isNl ? option.label.nl : option.label.en}
+                  {tr(option.label.nl, option.label.en)}
                 </option>
               ))}
             </select>
@@ -277,7 +278,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                 >
                   {INJECTION_FREQUENCY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {isNl ? option.label.nl : option.label.en}
+                      {tr(option.label.nl, option.label.en)}
                     </option>
                   ))}
                 </select>

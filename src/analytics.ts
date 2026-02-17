@@ -1,4 +1,5 @@
 import { PRIMARY_MARKERS } from "./constants";
+import { trLocale } from "./i18n";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, SamplingTiming } from "./types";
 import {
   getProtocolCompoundsText,
@@ -853,7 +854,7 @@ const trendSuggestionByMarker = (
   direction: "up" | "down",
   language: AppLanguage
 ): string => {
-  const tr = (nl: string, en: string): string => (language === "nl" ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   if (marker === "Testosterone") {
     return direction === "up"
@@ -974,7 +975,7 @@ const positiveTrendSuggestionByMarker = (
   direction: "up" | "down",
   language: AppLanguage
 ): string => {
-  const tr = (nl: string, en: string): string => (language === "nl" ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   if (marker === "Homocysteine" && direction === "down") {
     return tr(
@@ -1015,7 +1016,7 @@ const abnormalSuggestionByMarker = (
   abnormal: "high" | "low",
   language: AppLanguage
 ): string => {
-  const tr = (nl: string, en: string): string => (language === "nl" ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   if (marker === "Hematocrit") {
     return abnormal === "high"
@@ -1090,7 +1091,7 @@ export const buildAlerts = (
   language: AppLanguage = "en"
 ): MarkerAlert[] => {
   const alerts: MarkerAlert[] = [];
-  const tr = (nl: string, en: string): string => (language === "nl" ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   for (const marker of markerNames) {
     const series = buildMarkerSeries(reports, marker, unitSystem);

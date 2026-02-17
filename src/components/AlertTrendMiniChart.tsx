@@ -2,7 +2,7 @@ import { format, parseISO } from "date-fns";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MarkerSeriesPoint } from "../analytics";
 import { AppLanguage } from "../types";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { formatDate } from "../utils";
 import { buildYAxisDomain, formatAxisTick } from "../chartHelpers";
 
@@ -15,10 +15,11 @@ export interface AlertTrendMiniChartProps {
 }
 
 const AlertTrendMiniChart = ({ marker, points, highlightDate, language, height = 110 }: AlertTrendMiniChartProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   if (points.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500" style={{ height }}>
-        {language === "nl" ? "Geen trenddata" : "No trend data"}
+        {tr("Geen trenddata", "No trend data")}
       </div>
     );
   }

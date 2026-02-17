@@ -3,7 +3,7 @@ import { formatDate } from "../utils";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { convertBySystem } from "../unitConversion";
 import { buildYAxisDomain, formatAxisTick } from "../chartHelpers";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { motion } from "framer-motion";
 import { CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { parseISO } from "date-fns";
@@ -17,6 +17,7 @@ export interface ComparisonChartProps {
 }
 
 const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language }: ComparisonChartProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const leftLabel = getMarkerDisplayName(leftMarker, language);
   const rightLabel = getMarkerDisplayName(rightMarker, language);
   const data = useMemo(() => {
@@ -118,9 +119,9 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
   if (data.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/50 p-4">
-        <h3 className="text-sm font-semibold text-slate-100">{language === "nl" ? "Vergelijkingsmodus" : "Comparison mode"}</h3>
+        <h3 className="text-sm font-semibold text-slate-100">{tr("Vergelijkingsmodus", "Comparison mode")}</h3>
         <p className="mt-2 text-sm text-slate-400">
-          {language === "nl" ? "Geen overlappende data in gekozen bereik." : "No overlapping data in selected range."}
+          {tr("Geen overlappende data in gekozen bereik.", "No overlapping data in selected range.")}
         </p>
       </div>
     );
@@ -134,8 +135,8 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
       animate={{ opacity: 1, y: 0 }}
     >
       <h3 className="mb-2 text-sm font-semibold text-slate-100">
-        {language === "nl" ? "Vergelijkingsmodus" : "Comparison mode"}{" "}
-        {settings.comparisonScale === "normalized" ? (language === "nl" ? "(genormaliseerd 0-100%)" : "(normalized 0-100%)") : ""}
+        {tr("Vergelijkingsmodus", "Comparison mode")}{" "}
+        {settings.comparisonScale === "normalized" ? tr("(genormaliseerd 0-100%)", "(normalized 0-100%)") : ""}
       </h3>
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={normalizedData} margin={{ left: 2, right: 8, top: 8, bottom: 4 }}>

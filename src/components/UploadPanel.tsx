@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Loader2, UploadCloud } from "lucide-react";
 import { useDropzone } from "react-dropzone";
+import { trLocale } from "../i18n";
 import { AppLanguage } from "../types";
 
 export interface UploadPanelProps {
@@ -10,6 +11,7 @@ export interface UploadPanelProps {
 }
 
 const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProps) => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       "application/pdf": [".pdf"]
@@ -43,7 +45,7 @@ const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProp
           <>
             <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
             <p className="text-sm text-slate-200">
-              {language === "nl" ? "PDF wordt verwerkt en labwaarden worden uitgelezen..." : "Processing PDF and extracting lab values..."}
+              {tr("PDF wordt verwerkt en labwaarden worden uitgelezen...", "Processing PDF and extracting lab values...")}
             </p>
           </>
         ) : (
@@ -51,9 +53,9 @@ const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProp
             <UploadCloud className="h-9 w-9 text-cyan-300" />
             <div>
               <p className="text-base font-semibold text-slate-100">
-                {language === "nl" ? "Sleep je lab-PDF hierheen" : "Drag and drop your lab PDF here"}
+                {tr("Sleep je lab-PDF hierheen", "Drag and drop your lab PDF here")}
               </p>
-              <p className="mt-1 text-sm text-slate-300">{language === "nl" ? "of klik om te bladeren" : "or click to browse files"}</p>
+              <p className="mt-1 text-sm text-slate-300">{tr("of klik om te bladeren", "or click to browse files")}</p>
             </div>
           </>
         )}

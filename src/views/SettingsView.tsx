@@ -1,7 +1,7 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
-import { getMarkerDisplayName, t } from "../i18n";
+import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, t, trLocale } from "../i18n";
 import { ShareOptions } from "../share";
 import { AppLanguage, AppSettings } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
@@ -54,7 +54,7 @@ const SettingsView = ({
   onGenerateShareLink
 }: SettingsViewProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [mergeFromMarker, setMergeFromMarker] = useState("");
   const [mergeIntoMarker, setMergeIntoMarker] = useState("");
@@ -89,7 +89,7 @@ const SettingsView = ({
   }, [allMarkers]);
 
   const settingsFeedbackMailto = useMemo(() => {
-    const subject = isNl ? "Feedback PDF-verwerking" : "PDF Parsing Feedback";
+    const subject = tr("Feedback PDF-verwerking", "PDF Parsing Feedback");
     const body = isNl
       ? [
           "Hoi,",
@@ -172,8 +172,11 @@ const SettingsView = ({
               value={settings.language}
               onChange={(event) => onUpdateSettings({ language: event.target.value as AppSettings["language"] })}
             >
-              <option value="nl">Nederlands</option>
-              <option value="en">English</option>
+              {APP_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 

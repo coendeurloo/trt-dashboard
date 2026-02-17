@@ -11,7 +11,7 @@ import ComparisonChart from "../components/ComparisonChart";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { stabilityColor } from "../chartHelpers";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport, TimeRangeKey } from "../types";
 
 interface DashboardViewProps {
@@ -80,6 +80,7 @@ const DashboardView = ({
   onUploadClick
 }: DashboardViewProps) => {
   const isNl = language === "nl";
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
 
   return (
@@ -125,7 +126,7 @@ const DashboardView = ({
               onClick={() => onComparisonModeChange(!comparisonMode)}
             >
               <span className="inline-flex items-center gap-1">
-                <SlidersHorizontal className="h-4 w-4" /> {isNl ? "Multi-marker modus" : "Multi-marker mode"}
+                <SlidersHorizontal className="h-4 w-4" /> {tr("Multi-marker modus", "Multi-marker mode")}
               </span>
             </button>
             <button
@@ -133,7 +134,7 @@ const DashboardView = ({
               className="rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
               onClick={() => onUpdateSettings({ unitSystem: settings.unitSystem === "eu" ? "us" : "eu" })}
             >
-              {isNl ? "Eenheden" : "Units"}: {settings.unitSystem.toUpperCase()}
+              {tr("Eenheden", "Units")}: {settings.unitSystem.toUpperCase()}
             </button>
           </div>
 
@@ -144,7 +145,7 @@ const DashboardView = ({
                 checked={settings.showReferenceRanges}
                 onChange={(event) => onUpdateSettings({ showReferenceRanges: event.target.checked })}
               />
-              {isNl ? "Referentiebereiken" : "Reference ranges"}
+              {tr("Referentiebereiken", "Reference ranges")}
             </label>
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
@@ -152,7 +153,7 @@ const DashboardView = ({
                 checked={settings.showAbnormalHighlights}
                 onChange={(event) => onUpdateSettings({ showAbnormalHighlights: event.target.checked })}
               />
-              {isNl ? "Afwijkende waarden markeren" : "Abnormal highlights"}
+              {tr("Afwijkende waarden markeren", "Abnormal highlights")}
             </label>
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
@@ -160,7 +161,7 @@ const DashboardView = ({
                 checked={settings.showAnnotations}
                 onChange={(event) => onUpdateSettings({ showAnnotations: event.target.checked })}
               />
-              {isNl ? "Dosisfase-overlay" : "Dose-phase overlays"}
+              {tr("Dosisfase-overlay", "Dose-phase overlays")}
             </label>
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
@@ -168,7 +169,7 @@ const DashboardView = ({
                 checked={settings.showTrtTargetZone}
                 onChange={(event) => onUpdateSettings({ showTrtTargetZone: event.target.checked })}
               />
-              {isNl ? "TRT-doelzone" : "TRT optimal zone"}
+              {tr("TRT-doelzone", "TRT optimal zone")}
             </label>
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
@@ -176,7 +177,7 @@ const DashboardView = ({
                 checked={settings.showLongevityTargetZone}
                 onChange={(event) => onUpdateSettings({ showLongevityTargetZone: event.target.checked })}
               />
-              {isNl ? "Longevity-doelzone" : "Longevity zone"}
+              {tr("Longevity-doelzone", "Longevity zone")}
             </label>
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
               <input
@@ -184,14 +185,14 @@ const DashboardView = ({
                 checked={settings.yAxisMode === "data"}
                 onChange={(event) => onUpdateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
               />
-              {isNl ? "Gebruik data-bereik Y-as" : "Use data-range Y-axis"}
+              {tr("Gebruik data-bereik Y-as", "Use data-range Y-axis")}
             </label>
           </div>
 
           {samplingControlsEnabled ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                {isNl ? "Meetmoment-filter" : "Sampling filter"}
+                {tr("Meetmoment-filter", "Sampling filter")}
               </span>
               {samplingOptions.map(([value, label]) => (
                 <button
@@ -211,7 +212,7 @@ const DashboardView = ({
                   checked={settings.compareToBaseline}
                   onChange={(event) => onUpdateSettings({ compareToBaseline: event.target.checked })}
                 />
-                {isNl ? "Vergelijk met baseline" : "Compare to baseline"}
+                {tr("Vergelijk met baseline", "Compare to baseline")}
               </label>
             </div>
           ) : null}
@@ -249,7 +250,7 @@ const DashboardView = ({
                 checked={settings.comparisonScale === "normalized"}
                 onChange={(event) => onUpdateSettings({ comparisonScale: event.target.checked ? "normalized" : "absolute" })}
               />
-              {language === "nl" ? "Genormaliseerde schaal (0-100%)" : "Normalized scale (0-100%)"}
+              {tr("Genormaliseerde schaal (0-100%)", "Normalized scale (0-100%)")}
             </label>
           </div>
 
@@ -274,7 +275,7 @@ const DashboardView = ({
                 }`}
                 onClick={() => onDashboardViewChange("primary")}
               >
-                {isNl ? "Primaire markers" : "Primary markers"}
+                {tr("Primaire markers", "Primary markers")}
               </button>
               <button
                 type="button"
@@ -283,7 +284,7 @@ const DashboardView = ({
                 }`}
                 onClick={() => onDashboardViewChange("all")}
               >
-                {isNl ? "Alle markers" : "All markers"}
+                {tr("Alle markers", "All markers")}
               </button>
             </div>
 
@@ -295,15 +296,11 @@ const DashboardView = ({
           <WelcomeHero language={language} onLoadDemo={onLoadDemo} onUploadClick={onUploadClick} />
         ) : visibleReports.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">
-            <p className="text-base font-semibold text-slate-200">{isNl ? "Geen data in huidige filter" : "No data in current filter"}</p>
+            <p className="text-base font-semibold text-slate-200">{tr("Geen data in huidige filter", "No data in current filter")}</p>
             <p className="mt-1 text-sm text-slate-400">
-              {isNl
-                ? samplingControlsEnabled
-                  ? "Pas tijdsbereik of meetmoment-filter aan om data te tonen."
-                  : "Pas het tijdsbereik aan om data te tonen."
-                : samplingControlsEnabled
-                  ? "Change time range or sampling filter to show data."
-                  : "Change time range to show data."}
+              {samplingControlsEnabled
+                ? tr("Pas tijdsbereik of meetmoment-filter aan om data te tonen.", "Change time range or sampling filter to show data.")
+                : tr("Pas het tijdsbereik aan om data te tonen.", "Change time range to show data.")}
             </p>
           </div>
         ) : (
@@ -367,19 +364,22 @@ const DashboardView = ({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-300">
-                  {isNl
-                    ? "Dit is een rust-score van je kern TRT-markers over tijd (Testosteron, Estradiol, Hematocriet, SHBG)."
-                    : "This is a steadiness score of your core TRT markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."}
+                  {tr(
+                    "Dit is een rust-score van je kern TRT-markers over tijd (Testosteron, Estradiol, Hematocriet, SHBG).",
+                    "This is a steadiness score of your core TRT markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {isNl
-                    ? "Belangrijk: het zegt niets over ‘goed’ of ‘slecht’, alleen hoe stabiel je patroon is."
-                    : "Important: it does not mean 'good' or 'bad'; it only reflects how stable your pattern is."}
+                  {tr(
+                    "Belangrijk: het zegt niets over ‘goed’ of ‘slecht’, alleen hoe stabiel je patroon is.",
+                    "Important: it does not mean 'good' or 'bad'; it only reflects how stable your pattern is."
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {isNl
-                    ? "Snelle interpretatie: 80-100 = vrij stabiel, 60-79 = matig stabiel, <60 = duidelijk wisselend."
-                    : "Quick interpretation: 80-100 = fairly stable, 60-79 = moderately stable, <60 = clearly variable."}
+                  {tr(
+                    "Snelle interpretatie: 80-100 = vrij stabiel, 60-79 = matig stabiel, <60 = duidelijk wisselend.",
+                    "Quick interpretation: 80-100 = fairly stable, 60-79 = moderately stable, <60 = clearly variable."
+                  )}
                 </p>
               </div>
             </div>

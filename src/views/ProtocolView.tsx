@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import ProtocolEditor, { ProtocolDraft, blankProtocolDraft } from "../components/ProtocolEditor";
+import { trLocale } from "../i18n";
 import { getProtocolCompoundsText, getReportProtocol } from "../protocolUtils";
 import { AppLanguage, LabReport, Protocol } from "../types";
 import { createId } from "../utils";
@@ -34,7 +35,7 @@ const ProtocolView = ({
   getProtocolUsageCount
 }: ProtocolViewProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

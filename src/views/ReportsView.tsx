@@ -4,7 +4,7 @@ import { CheckSquare, ChevronDown, ClipboardList, Lock, Pencil, Save, Square, Tr
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
@@ -46,7 +46,7 @@ const ReportsView = ({
   onOpenProtocolTab
 }: ReportsViewProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [expandedReportIds, setExpandedReportIds] = useState<string[]>([]);
@@ -141,13 +141,13 @@ const ReportsView = ({
 
   const samplingTimingLabel = (value: ReportAnnotations["samplingTiming"]): string => {
     if (value === "unknown") {
-      return isNl ? "Onbekend" : "Unknown";
+      return tr("Onbekend", "Unknown");
     }
     if (value === "trough") {
       return "Trough";
     }
     if (value === "mid") {
-      return isNl ? "Midden" : "Mid";
+      return tr("Midden", "Mid");
     }
     return "Peak";
   };
@@ -156,7 +156,7 @@ const ReportsView = ({
     <section className="space-y-3 fade-in">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <div className="text-sm text-slate-300">
-          <span className="font-semibold text-slate-100">{reports.length}</span> {isNl ? "rapporten totaal" : "reports total"}
+          <span className="font-semibold text-slate-100">{reports.length}</span> {tr("rapporten totaal", "reports total")}
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/70 p-0.5">
@@ -165,14 +165,14 @@ const ReportsView = ({
               className={`rounded px-2 py-1 text-xs ${reportSortOrder === "desc" ? "bg-cyan-500/20 text-cyan-200" : "text-slate-300 hover:text-slate-100"}`}
               onClick={() => setReportSortOrder("desc")}
             >
-              {isNl ? "Nieuwste eerst" : "Newest first"}
+              {tr("Nieuwste eerst", "Newest first")}
             </button>
             <button
               type="button"
               className={`rounded px-2 py-1 text-xs ${reportSortOrder === "asc" ? "bg-cyan-500/20 text-cyan-200" : "text-slate-300 hover:text-slate-100"}`}
               onClick={() => setReportSortOrder("asc")}
             >
-              {isNl ? "Oudste eerst" : "Oldest first"}
+              {tr("Oudste eerst", "Oldest first")}
             </button>
           </div>
           <button
@@ -191,7 +191,7 @@ const ReportsView = ({
             ) : (
               <Square className="h-4 w-4" />
             )}
-            {isNl ? "Selecteer alles" : "Select all"}
+            {tr("Selecteer alles", "Select all")}
           </button>
           <button
             type="button"
@@ -199,7 +199,7 @@ const ReportsView = ({
             disabled={selectedReports.length < 2}
             onClick={() => setReportComparisonOpen((prev) => !prev)}
           >
-            <ClipboardList className="h-4 w-4" /> {isNl ? "Vergelijk selectie" : "Compare selected"}
+            <ClipboardList className="h-4 w-4" /> {tr("Vergelijk selectie", "Compare selected")}
           </button>
           <button
             type="button"
@@ -207,7 +207,7 @@ const ReportsView = ({
             disabled={selectedReports.length === 0 || isShareMode}
             onClick={deleteSelectedReports}
           >
-            <Trash2 className="h-4 w-4" /> {isNl ? "Verwijder selectie" : "Delete selected"}
+            <Trash2 className="h-4 w-4" /> {tr("Verwijder selectie", "Delete selected")}
           </button>
         </div>
       </div>
@@ -215,12 +215,12 @@ const ReportsView = ({
       {reportComparisonOpen && compareReports.length >= 2 ? (
         <div className="overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
           <h4 className="mb-2 text-sm font-semibold text-slate-100">
-            {isNl ? "Vergelijking van geselecteerde rapporten" : "Selected report comparison"}
+            {tr("Vergelijking van geselecteerde rapporten", "Selected report comparison")}
           </h4>
           <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
             <thead className="bg-slate-900/70 text-slate-300">
               <tr>
-                <th className="px-2 py-2 text-left">{isNl ? "Marker" : "Marker"}</th>
+                <th className="px-2 py-2 text-left">{tr("Marker", "Marker")}</th>
                 {compareReports.map((report) => (
                   <th key={report.id} className="px-2 py-2 text-right">
                     {formatDate(report.testDate)}
@@ -281,7 +281,7 @@ const ReportsView = ({
                   ) : null}
                 </h3>
                 <p className="text-xs text-slate-300">
-                  {isNl ? "Dosis" : "Dose"}: {dose === null ? "-" : `${dose} mg/week`}
+                  {tr("Dosis", "Dose")}: {dose === null ? "-" : `${dose} mg/week`}
                 </p>
                 <p className="truncate text-xs text-slate-400">{report.sourceFileName}</p>
               </span>
@@ -307,13 +307,7 @@ const ReportsView = ({
                     ) : (
                       <Square className="h-4 w-4" />
                     )}
-                    {selectedReports.includes(report.id)
-                      ? isNl
-                        ? "Geselecteerd"
-                        : "Selected"
-                      : isNl
-                        ? "Selecteer"
-                        : "Select"}
+                    {selectedReports.includes(report.id) ? tr("Geselecteerd", "Selected") : tr("Selecteer", "Select")}
                   </button>
 
                   {!isShareMode && isEditing ? (
@@ -323,14 +317,14 @@ const ReportsView = ({
                         className="inline-flex items-center gap-1 rounded-md border border-slate-500/60 bg-slate-800/70 px-2 py-1.5 text-xs text-slate-200"
                         onClick={cancelEditingReport}
                       >
-                        <X className="h-3.5 w-3.5" /> {isNl ? "Annuleer" : "Cancel"}
+                        <X className="h-3.5 w-3.5" /> {tr("Annuleer", "Cancel")}
                       </button>
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-300"
                         onClick={saveEditedReport}
                       >
-                        <Save className="h-3.5 w-3.5" /> {isNl ? "Opslaan" : "Save"}
+                        <Save className="h-3.5 w-3.5" /> {tr("Opslaan", "Save")}
                       </button>
                     </>
                   ) : !isShareMode ? (
@@ -339,11 +333,11 @@ const ReportsView = ({
                       className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1.5 text-xs text-cyan-200"
                       onClick={() => startEditingReport(report)}
                     >
-                      <Pencil className="h-3.5 w-3.5" /> {isNl ? "Bewerk details" : "Edit details"}
+                      <Pencil className="h-3.5 w-3.5" /> {tr("Bewerk details", "Edit details")}
                     </button>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1.5 text-xs text-slate-300">
-                      <Lock className="h-3.5 w-3.5" /> {isNl ? "Alleen-lezen" : "Read-only"}
+                      <Lock className="h-3.5 w-3.5" /> {tr("Alleen-lezen", "Read-only")}
                     </span>
                   )}
 
@@ -357,7 +351,7 @@ const ReportsView = ({
                       }`}
                       onClick={() => onSetBaseline(report.id)}
                     >
-                      <Lock className="h-3.5 w-3.5" /> {report.isBaseline ? "Baseline" : isNl ? "Zet als baseline" : "Set baseline"}
+                      <Lock className="h-3.5 w-3.5" /> {report.isBaseline ? "Baseline" : tr("Zet als baseline", "Set baseline")}
                     </button>
                   ) : null}
 
@@ -373,14 +367,14 @@ const ReportsView = ({
                       }
                     }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" /> {isNl ? "Verwijder" : "Delete"}
+                    <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijder", "Delete")}
                   </button>
                 </div>
 
                 {isEditing ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Protocoldetails" : "Protocol details"}</span>
+                      <span className="mb-1 block text-slate-400">{tr("Protocoldetails", "Protocol details")}</span>
                       <input
                         className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
                         value={editingAnnotations.protocol}
@@ -390,11 +384,11 @@ const ReportsView = ({
                             protocol: event.target.value
                           }))
                         }
-                        placeholder={isNl ? "bijv. SubQ, injectieplek, timing" : "e.g. SubQ, injection site, timing"}
+                        placeholder={tr("bijv. SubQ, injectieplek, timing", "e.g. SubQ, injection site, timing")}
                       />
                     </label>
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{isNl ? "Symptomen" : "Symptoms"}</span>
+                      <span className="mb-1 block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
                       <input
                         className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
                         value={editingAnnotations.symptoms}
@@ -421,7 +415,7 @@ const ReportsView = ({
                     </label>
                     {samplingControlsEnabled ? (
                       <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="mb-1 block text-slate-400">{isNl ? "Meetmoment" : "Sampling timing"}</span>
+                        <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
                         <select
                           className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
                           value={editingAnnotations.samplingTiming}
@@ -432,9 +426,9 @@ const ReportsView = ({
                             }))
                           }
                         >
-                          <option value="unknown">{isNl ? "Onbekend" : "Unknown"}</option>
+                          <option value="unknown">{tr("Onbekend", "Unknown")}</option>
                           <option value="trough">Trough</option>
-                          <option value="mid">{isNl ? "Midden" : "Mid"}</option>
+                          <option value="mid">{tr("Midden", "Mid")}</option>
                           <option value="peak">Peak</option>
                         </select>
                       </label>
@@ -443,11 +437,11 @@ const ReportsView = ({
                 ) : (
                   <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${samplingControlsEnabled ? "xl:grid-cols-8" : "xl:grid-cols-7"}`}>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Dosis" : "Dose"}</span>
+                      <span className="block text-slate-400">{tr("Dosis", "Dose")}</span>
                       <strong className="text-sm text-slate-100">{dose === null ? "-" : `${dose} mg/week`}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Protocol" : "Protocol"}</span>
+                      <span className="block text-slate-400">{tr("Protocol", "Protocol")}</span>
                       {protocol ? (
                         <button
                           type="button"
@@ -461,19 +455,19 @@ const ReportsView = ({
                       )}
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Compound" : "Compound"}</span>
+                      <span className="block text-slate-400">{tr("Compound", "Compound")}</span>
                       <strong className="text-sm text-slate-100">{getProtocolCompoundsText(protocol) || "-"}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Injectiefrequentie" : "Injection frequency"}</span>
+                      <span className="block text-slate-400">{tr("Injectiefrequentie", "Injection frequency")}</span>
                       <strong className="text-sm text-slate-100">{getProtocolFrequencyLabel(protocol, language)}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Supplementen" : "Supplements"}</span>
+                      <span className="block text-slate-400">{tr("Supplementen", "Supplements")}</span>
                       <strong className="text-sm text-slate-100">{getProtocolSupplementsText(protocol) || "-"}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{isNl ? "Symptomen" : "Symptoms"}</span>
+                      <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
                       <strong className="text-sm text-slate-100">{report.annotations.symptoms || "-"}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
@@ -482,7 +476,7 @@ const ReportsView = ({
                     </div>
                     {samplingControlsEnabled ? (
                       <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="block text-slate-400">{isNl ? "Meetmoment" : "Sampling timing"}</span>
+                        <span className="block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
                         <strong className="text-sm text-slate-100">{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
                       </div>
                     ) : null}
@@ -495,9 +489,9 @@ const ReportsView = ({
                       <thead className="bg-slate-900/70 text-slate-300">
                         <tr>
                           <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
-                          <th className="px-3 py-2 text-right">{isNl ? "Waarde" : "Value"}</th>
+                          <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
                           <th className="px-3 py-2 text-left">{tr("Eenheid", "Unit")}</th>
-                          <th className="px-3 py-2 text-right">{isNl ? "Bereik" : "Range"}</th>
+                          <th className="px-3 py-2 text-right">{tr("Bereik", "Range")}</th>
                           <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
                         </tr>
                       </thead>

@@ -2,7 +2,7 @@ import { ChevronDown } from "lucide-react";
 import { DoseCorrelationInsight, ProtocolImpactDoseEvent } from "../analytics";
 import { PROTOCOL_MARKER_CATEGORIES } from "../constants";
 import { formatAxisTick } from "../chartHelpers";
-import { getMarkerDisplayName } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
 import { formatDate } from "../utils";
 
@@ -39,20 +39,17 @@ const ProtocolImpactView = ({
   onProtocolSortKeyChange,
   onToggleCollapsedEvent
 }: ProtocolImpactViewProps) => {
-  const isNl = language === "nl";
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const confidenceLabel = (value: string): string => {
-    if (!isNl) {
-      return value;
-    }
     if (value === "High") {
-      return "Hoog";
+      return tr("Hoog", "High");
     }
     if (value === "Medium") {
-      return "Middel";
+      return tr("Middel", "Medium");
     }
     if (value === "Low") {
-      return "Laag";
+      return tr("Laag", "Low");
     }
     return value;
   };
@@ -60,19 +57,19 @@ const ProtocolImpactView = ({
   return (
     <section className="space-y-3 fade-in">
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{isNl ? "Protocol-impact" : "Protocol Impact"}</h3>
+        <h3 className="text-base font-semibold text-slate-100">{tr("Protocol-impact", "Protocol Impact")}</h3>
         <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
           <label className="text-xs text-slate-300">
-            {isNl ? "Zoek marker" : "Filter markers"}
+            {tr("Zoek marker", "Filter markers")}
             <input
               value={protocolMarkerSearch}
               onChange={(event) => onProtocolMarkerSearchChange(event.target.value)}
-              placeholder={isNl ? "bijv. Estradiol" : "e.g. Estradiol"}
+              placeholder={tr("bijv. Estradiol", "e.g. Estradiol")}
               className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
             />
           </label>
           <label className="text-xs text-slate-300">
-            {isNl ? "Window grootte" : "Window size"}
+            {tr("Window grootte", "Window size")}
             <select
               value={protocolWindowSize}
               onChange={(event) => onProtocolWindowSizeChange(Number(event.target.value))}
@@ -86,7 +83,7 @@ const ProtocolImpactView = ({
             </select>
           </label>
           <label className="text-xs text-slate-300">
-            {isNl ? "Categorie" : "Category"}
+            {tr("Categorie", "Category")}
             <select
               value={protocolCategoryFilter}
               onChange={(event) =>
@@ -94,22 +91,23 @@ const ProtocolImpactView = ({
               }
               className="mt-1 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
             >
-              <option value="all">{isNl ? "Alle categorieën" : "All categories"}</option>
-              <option value="Hormones">{isNl ? "Hormonen" : "Hormones"}</option>
-              <option value="Lipids">{isNl ? "Lipiden" : "Lipids"}</option>
-              <option value="Hematology">{isNl ? "Hematologie" : "Hematology"}</option>
-              <option value="Inflammation">{isNl ? "Ontsteking" : "Inflammation"}</option>
+              <option value="all">{tr("Alle categorieën", "All categories")}</option>
+              <option value="Hormones">{tr("Hormonen", "Hormones")}</option>
+              <option value="Lipids">{tr("Lipiden", "Lipids")}</option>
+              <option value="Hematology">{tr("Hematologie", "Hematology")}</option>
+              <option value="Inflammation">{tr("Ontsteking", "Inflammation")}</option>
             </select>
           </label>
         </div>
 
         <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
-          <h4 className="text-sm font-semibold text-slate-100">{isNl ? "Dosis-respons overzicht" : "Dose Response Overview"}</h4>
+          <h4 className="text-sm font-semibold text-slate-100">{tr("Dosis-respons overzicht", "Dose Response Overview")}</h4>
           {protocolDoseOverview.length === 0 ? (
             <p className="mt-2 text-xs text-slate-400">
-              {isNl
-                ? "Nog te weinig punten (minimaal n=3 per marker) voor correlatie-overzicht."
-                : "Not enough points yet (minimum n=3 per marker) for correlation overview."}
+              {tr(
+                "Nog te weinig punten (minimaal n=3 per marker) voor correlatie-overzicht.",
+                "Not enough points yet (minimum n=3 per marker) for correlation overview."
+              )}
             </p>
           ) : (
             <ul className="mt-2 space-y-1 text-xs text-slate-300">
@@ -117,12 +115,8 @@ const ProtocolImpactView = ({
                 <li key={item.marker}>
                   {getMarkerDisplayName(item.marker, settings.language)}{" "}
                   {item.r >= 0
-                    ? isNl
-                      ? "neigt omhoog bij hogere dosis"
-                      : "tends to increase with higher dose"
-                    : isNl
-                      ? "neigt omlaag bij hogere dosis"
-                      : "tends to decrease with higher dose"}{" "}
+                    ? tr("neigt omhoog bij hogere dosis", "tends to increase with higher dose")
+                    : tr("neigt omlaag bij hogere dosis", "tends to decrease with higher dose")}{" "}
                   (r={formatAxisTick(item.r)}, n={item.n})
                 </li>
               ))}
@@ -132,9 +126,7 @@ const ProtocolImpactView = ({
 
         {protocolDoseEvents.length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">
-            {isNl
-              ? "Nog geen dosisveranderingsevents gevonden in je huidige datafilter."
-              : "No dose change events found in your current data filter."}
+            {tr("Nog geen dosisveranderingsevents gevonden in je huidige datafilter.", "No dose change events found in your current data filter.")}
           </p>
         ) : (
           <div className="mt-3 space-y-3">
@@ -175,8 +167,8 @@ const ProtocolImpactView = ({
                     </h4>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-slate-400">
-                        {formatDate(event.changeDate)} | {isNl ? "Window" : "Window"}: {event.beforeCount} {isNl ? "voor" : "before"} /{" "}
-                        {event.afterCount} {isNl ? "na" : "after"}
+                        {formatDate(event.changeDate)} | {tr("Window", "Window")}: {event.beforeCount} {tr("voor", "before")} /{" "}
+                        {event.afterCount} {tr("na", "after")}
                       </p>
                       <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isCollapsed ? "" : "rotate-180"}`} />
                     </div>
@@ -185,7 +177,7 @@ const ProtocolImpactView = ({
                     <>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {event.topImpacts.length === 0 ? (
-                          <span className="text-xs text-slate-400">{isNl ? "Top impacts: onvoldoende data" : "Top impacts: insufficient data"}</span>
+                          <span className="text-xs text-slate-400">{tr("Top impacts: onvoldoende data", "Top impacts: insufficient data")}</span>
                         ) : (
                           event.topImpacts.map((row) => (
                             <span key={`${event.id}-${row.marker}`} className="rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-cyan-200">
@@ -196,7 +188,7 @@ const ProtocolImpactView = ({
                         )}
                       </div>
                       <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                        <span>{isNl ? "Sorteer op" : "Sort by"}:</span>
+                        <span>{tr("Sorteer op", "Sort by")}:</span>
                         <button
                           type="button"
                           className={`rounded px-2 py-0.5 ${protocolSortKey === "deltaPct" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`}
@@ -216,28 +208,32 @@ const ProtocolImpactView = ({
                           className={`rounded px-2 py-0.5 ${protocolSortKey === "marker" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`}
                           onClick={() => onProtocolSortKeyChange("marker")}
                         >
-                          {isNl ? "Marker" : "Marker"}
+                          {tr("Marker", "Marker")}
                         </button>
                       </div>
                       <div className="mt-2 overflow-x-auto rounded-lg border border-slate-700">
                         <table className="min-w-full divide-y divide-slate-700 text-xs">
                           <thead className="bg-slate-900/70 text-slate-300">
                             <tr>
-                              <th className="px-2 py-1.5 text-left">{isNl ? "Marker" : "Marker"}</th>
-                              <th className="px-2 py-1.5 text-right">{isNl ? "Voor gem." : "Before avg"}</th>
-                              <th className="px-2 py-1.5 text-right">{isNl ? "Na gem." : "After avg"}</th>
+                              <th className="px-2 py-1.5 text-left">{tr("Marker", "Marker")}</th>
+                              <th className="px-2 py-1.5 text-right">{tr("Voor gem.", "Before avg")}</th>
+                              <th className="px-2 py-1.5 text-right">{tr("Na gem.", "After avg")}</th>
                               <th className="px-2 py-1.5 text-right">Δ</th>
                               <th className="px-2 py-1.5 text-right">Δ%</th>
-                              <th className="px-2 py-1.5 text-center">{isNl ? "Trend" : "Trend"}</th>
-                              <th className="px-2 py-1.5 text-left">{isNl ? "Confidence" : "Confidence"}</th>
+                              <th className="px-2 py-1.5 text-center">{tr("Trend", "Trend")}</th>
+                              <th className="px-2 py-1.5 text-left">{tr("Confidence", "Confidence")}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800">
                             {rows.map((row) => (
                               <tr key={`${event.id}-${row.marker}`} className="bg-slate-900/30 text-slate-200">
                                 <td className="px-2 py-1.5">{getMarkerDisplayName(row.marker, settings.language)}</td>
-                                <td className="px-2 py-1.5 text-right">{row.beforeAvg === null ? "Insufficient data" : `${formatAxisTick(row.beforeAvg)} ${row.unit}`}</td>
-                                <td className="px-2 py-1.5 text-right">{row.afterAvg === null ? "Insufficient data" : `${formatAxisTick(row.afterAvg)} ${row.unit}`}</td>
+                                <td className="px-2 py-1.5 text-right">
+                                  {row.beforeAvg === null ? tr("Onvoldoende data", "Insufficient data") : `${formatAxisTick(row.beforeAvg)} ${row.unit}`}
+                                </td>
+                                <td className="px-2 py-1.5 text-right">
+                                  {row.afterAvg === null ? tr("Onvoldoende data", "Insufficient data") : `${formatAxisTick(row.afterAvg)} ${row.unit}`}
+                                </td>
                                 <td className="px-2 py-1.5 text-right">{row.deltaAbs === null ? "-" : formatAxisTick(row.deltaAbs)}</td>
                                 <td className="px-2 py-1.5 text-right">{row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}</td>
                                 <td className="px-2 py-1.5 text-center">

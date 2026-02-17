@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
+import { trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { AppLanguage, ExtractionDraft, MarkerValue, Protocol, ReportAnnotations } from "../types";
@@ -38,7 +39,7 @@ const ExtractionReviewTable = ({
   onCancel
 }: ExtractionReviewTableProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => (isNl ? nl : en);
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [showCreateProtocol, setShowCreateProtocol] = useState(false);
   const [protocolDraft, setProtocolDraft] = useState(blankProtocolDraft());
