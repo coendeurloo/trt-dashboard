@@ -24,7 +24,7 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Alerts Center": { es: "Centro de alertas", pt: "Central de Alertas", de: "Benachrichtigungszentrum" },
   "All categories": { es: "Todas las categorias", pt: "Todas as categorias", de: "Alle Kategorien" },
   "All data is stored locally in your browser. Nothing is sent to any server.": { es: "Todos los datos se almacenan localmente en su navegador. No se envía nada a ningún servidor.", pt: "Todos os dados são armazenados localmente no seu navegador. Nada é enviado para nenhum servidor.", de: "Alle Daten werden lokal in Ihrem Browser gespeichert. Es wird nichts an einen Server gesendet." },
-  "All markers": { es: "Todos los marcadores", pt: "Todos os marcadores", de: "Alle Markierungen" },
+  "All markers": { es: "Todos los marcadores", pt: "Todos os marcadores", de: "Alle Marker" },
   "All timings": { es: "Todos los horarios", pt: "Todos os horários", de: "Alle Zeiten" },
   "An upward trend is often reassuring; confirm stability with periodic checks.": { es: "Una tendencia alcista suele ser tranquilizadora; Confirmar la estabilidad con controles periódicos.", pt: "Uma tendência ascendente é muitas vezes tranquilizadora; confirme a estabilidade com verificações periódicas.", de: "Ein Aufwärtstrend ist oft beruhigend; Bestätigen Sie die Stabilität durch regelmäßige Kontrollen." },
   "Analysis output (full)": { es: "Salida del análisis (completa)", pt: "Resultado da análise (completo)", de: "Analyseausgabe (vollständig)" },
@@ -121,6 +121,7 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Feedback": { es: "Comentario", pt: "Opinião", de: "Rückmeldung" },
   "Filter active": { es: "Filtro activo", pt: "Filtro ativo", de: "Filter aktiv" },
   "Filter markers": { es: "Marcadores de filtro", pt: "Marcadores de filtro", de: "Filtermarkierungen" },
+  "Filters": { es: "Filtros", pt: "Filtros", de: "Filter" },
   "Format: text-only (no tables)": { es: "Formato: solo texto (sin tablas)", pt: "Formato: somente texto (sem tabelas)", de: "Format: Nur Text (keine Tabellen)" },
   "Full AI analysis": { es: "Análisis completo de IA", pt: "Análise completa de IA", de: "Vollständige KI-Analyse" },
   "Generate a read-only snapshot link without API keys. Shared view does not allow editing.": { es: "Genere un enlace de instantánea de solo lectura sin claves API. La vista compartida no permite editar.", pt: "Gere um link de instantâneo somente leitura sem chaves de API. A visualização compartilhada não permite edição.", de: "Generieren Sie einen schreibgeschützten Snapshot-Link ohne API-Schlüssel. Die freigegebene Ansicht erlaubt keine Bearbeitung." },
@@ -164,6 +165,22 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Markers tracked": { es: "Marcadores rastreados", pt: "Marcadores rastreados", de: "Markierungen verfolgt" },
   "Match score": { es: "Puntuación del partido", pt: "Pontuação da partida", de: "Spielstand" },
   "Medical disclaimer": { es: "Descargo de responsabilidad médica", pt: "Isenção de responsabilidade médica", de: "Medizinischer Haftungsausschluss" },
+  "Medical note": { es: "Nota médica", pt: "Nota médica", de: "Medizinischer Hinweis" },
+  "Measured comparison: pre-change window vs post-change window around this event.": {
+    es: "Comparación medida: ventana previa al cambio versus ventana posterior al cambio alrededor de este evento.",
+    pt: "Comparação medida: janela pré-mudança versus janela pós-mudança neste evento.",
+    de: "Gemessener Vergleich: Vorher-Fenster vs. Nachher-Fenster rund um dieses Ereignis."
+  },
+  "Not enough measured pre/post data for this event yet.": {
+    es: "Aún no hay suficientes datos medidos pre/post para este evento.",
+    pt: "Ainda não há dados medidos pré/pós suficientes para este evento.",
+    de: "Für dieses Ereignis liegen noch nicht genug gemessene Vorher/Nachher-Daten vor."
+  },
+  "For some markers, the nearest pre/post event measurement was used because the lag window was empty.": {
+    es: "Para algunos marcadores se usó la medición pre/post más cercana del evento porque la ventana de desfase estaba vacía.",
+    pt: "Para alguns marcadores, foi usada a medição pré/pós mais próxima do evento porque a janela de atraso estava vazia.",
+    de: "Für einige Marker wurde die nächstgelegene Vorher/Nachher-Ereignismessung verwendet, weil das Lag-Fenster leer war."
+  },
   "Merge markers": { es: "Fusionar marcadores", pt: "Mesclar marcadores", de: "Markierungen zusammenführen" },
   "Merge now": { es: "Fusionarse ahora", pt: "Mesclar agora", de: "Jetzt zusammenführen" },
   "Mid": { es: "Medio", pt: "Meio", de: "Mitte" },
@@ -215,6 +232,16 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Professional blood work tracking with editable extraction and visual trends.": { es: "Seguimiento profesional de análisis de sangre con extracción editable y tendencias visuales.", pt: "Acompanhamento profissional de exames de sangue com extração editável e tendências visuais.", de: "Professionelle Blutuntersuchungsverfolgung mit bearbeitbarer Extraktion und visuellen Trends." },
   "Protocol": { es: "Protocolo", pt: "Protocolo", de: "Protokoll" },
   "Protocol Impact": { es: "Impacto del protocolo", pt: "Impacto do Protocolo", de: "Protokollauswirkungen" },
+  "For each protocol change, you see what factually changed in your measurements.": {
+    es: "Para cada cambio de protocolo, ves qué cambió de forma factual en tus mediciones.",
+    pt: "Para cada mudança de protocolo, você vê o que mudou de forma factual nas suas medições.",
+    de: "Für jede Protokolländerung sehen Sie, was sich in Ihren Messwerten faktisch verändert hat."
+  },
+  "No protocol-change events with usable before/after data were found.": {
+    es: "No se encontraron eventos de cambio de protocolo con datos utilizables antes/después.",
+    pt: "Nenhum evento de mudança de protocolo com dados utilizáveis antes/depois foi encontrado.",
+    de: "Es wurden keine Protokolländerungsereignisse mit nutzbaren Vorher/Nachher-Daten gefunden."
+  },
   "Protocol Impact Timeline": { es: "Cronología del impacto del protocolo", pt: "Linha do tempo do impacto do protocolo", de: "Zeitachse der Protokollauswirkungen" },
   "For each protocol change, you see in plain language what changed factually and how that may relate to your protocol.": {
     es: "Para cada cambio de protocolo, ves en lenguaje simple qué cambió de forma factual y cómo puede relacionarse con tu protocolo.",
@@ -242,12 +269,18 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Interpretation": { es: "Interpretación", pt: "Interpretação", de: "Interpretation" },
   "Extra factors": { es: "Factores extra", pt: "Fatores extras", de: "Zusätzliche Faktoren" },
   "Main effects": { es: "Efectos principales", pt: "Principais efeitos", de: "Haupteffekte" },
+  "Biggest measured changes": { es: "Mayores cambios medidos", pt: "Maiores mudanças medidas", de: "Größte gemessene Veränderungen" },
   "Early signal": { es: "Señal temprana", pt: "Sinal inicial", de: "Frühes Signal" },
   "Building signal": { es: "Señal en construcción", pt: "Sinal em formação", de: "Sich aufbauendes Signal" },
   "Established pattern": { es: "Patrón establecido", pt: "Padrão estabelecido", de: "Etabliertes Muster" },
   "Insufficient data": { es: "Datos insuficientes", pt: "Dados insuficientes", de: "Unzureichende Daten" },
   "Not enough data yet": { es: "Aún no hay suficientes datos", pt: "Ainda não há dados suficientes", de: "Noch nicht genug Daten" },
   "Technical details": { es: "Detalles técnicos", pt: "Detalhes técnicos", de: "Technische Details" },
+  "Overall conclusions": { es: "Conclusiones generales", pt: "Conclusões gerais", de: "Gesamtfazit" },
+  "Established patterns": { es: "Patrones establecidos", pt: "Padrões estabelecidos", de: "Etablierte Muster" },
+  "Building signals": { es: "Señales en construcción", pt: "Sinais em formação", de: "Sich aufbauende Signale" },
+  "Early signals": { es: "Señales tempranas", pt: "Sinais iniciais", de: "Frühe Signale" },
+  "Most recurring shifts": { es: "Cambios más recurrentes", pt: "Mudanças mais recorrentes", de: "Häufigste Verschiebungen" },
   "Used baseline as starting point when pre-window data was missing.": {
     es: "Se usó la línea base como punto de partida cuando faltaban datos en la ventana previa.",
     pt: "A linha de base foi usada como ponto de partida quando faltavam dados na janela prévia.",

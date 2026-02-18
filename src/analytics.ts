@@ -107,7 +107,8 @@ export interface ProtocolImpactMarkerRow {
   marker: string;
   unit: string;
   beforeAvg: number | null;
-  beforeSource: "window" | "baseline" | "none";
+  beforeSource: "window" | "none";
+  comparisonBasis: "local_pre_post" | "event_reports" | "insufficient";
   baselineAgeDays: number | null;
   afterAvg: number | null;
   deltaAbs: number | null;
@@ -157,6 +158,7 @@ export interface ProtocolImpactDoseEvent {
   signalStatus: ProtocolImpactSignalStatus;
   signalStatusLabel: string;
   signalNextStep: string;
+  comparisonBasis: "local_pre_post";
   headlineNarrative: string;
   storyObserved: string;
   storyInterpretation: string;
@@ -620,6 +622,7 @@ const protocolImpactEventSignalStatus = (
 
 const protocolImpactSignalNextStep = (
   signalStatus: ProtocolImpactSignalStatus,
+  eventSubType: ProtocolImpactDoseEvent["eventSubType"],
   rows: ProtocolImpactMarkerRow[],
   confounders: ProtocolImpactDoseEvent["confounders"]
 ): string => {
@@ -631,16 +634,34 @@ const protocolImpactSignalNextStep = (
     .length;
 
   if (signalStatus === "established_pattern") {
+    if (eventSubType === "start") {
+      return confounderCount > 0
+        ? "Your baseline-to-start comparison is now robust. Keep timing and protocol context consistent on follow-up labs."
+        : "Your baseline-to-start comparison is now robust. Keep your regular monitoring cadence to confirm stability.";
+    }
     return confounderCount > 0
       ? "Strong pattern detected. Keep sampling timing and protocol context consistent in follow-up checks."
       : "Strong pattern detected. Keep your regular monitoring cadence to confirm stability.";
   }
 
   if (signalStatus === "building_signal") {
+    if (eventSubType === "start") {
+      if (nextDate) {
+        return `This start comparison is becoming clearer. One follow-up lab around ${formatHumanDate(nextDate)} will make it stronger.`;
+      }
+      return "This start comparison is becoming clearer. One additional follow-up lab will make it stronger.";
+    }
     if (nextDate) {
       return `Good directional signal. A follow-up lab around ${formatHumanDate(nextDate)} will make this conclusion stronger.`;
     }
     return "Good directional signal. One additional follow-up lab will make this conclusion stronger.";
+  }
+
+  if (eventSubType === "start") {
+    if (nextDate) {
+      return `This is your first baseline-to-start comparison. Recheck around ${formatHumanDate(nextDate)} for a clearer start signal.`;
+    }
+    return "This is your first baseline-to-start comparison. Add one stable follow-up lab for a clearer start signal.";
   }
 
   if (nextDate) {
@@ -690,8 +711,8 @@ const protocolImpactMarkerNarrative = (
   const direction =
     trend === "up" ? "rose" : trend === "down" ? "fell" : "stayed roughly stable";
   const pctPart = deltaPct === null ? "" : ` by about ${deltaPct > 0 ? "+" : ""}${ROUND_2(deltaPct)}%`;
-  const baselineContext = beforeSource === "baseline" ? " using your baseline as the starting point" : "";
-  return `${marker} ${direction}${pctPart} after this protocol change${baselineContext} (${confidence} confidence).`;
+  const localWindowContext = beforeSource === "window" ? " based on local pre/post windows" : "";
+  return `${marker} ${direction}${pctPart} after this protocol change${localWindowContext} (${confidence} confidence).`;
 };
 
 const protocolImpactEventHeadline = (event: {
@@ -719,6 +740,9 @@ const protocolImpactEventHeadline = (event: {
   const compoundsTo = event.toCompounds.length > 0 ? event.toCompounds.join(" + ") : "none";
   const dateLabel = formatHumanDate(event.changeDate);
   const anchor = event.anchorCompound || "Protocol";
+  const normalizedSet = (items: string[]): string[] =>
+    Array.from(new Set(items.map((item) => item.trim().toLowerCase()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const compoundsUnchanged = setsEqual(normalizedSet(event.fromCompounds), normalizedSet(event.toCompounds));
 
   if (event.eventType === "dose") {
     return `${anchor} dose change from ${doseFrom} to ${doseTo} on ${dateLabel}.`;
@@ -729,7 +753,31 @@ const protocolImpactEventHeadline = (event: {
   if (event.eventType === "compound") {
     return `Compound change from ${compoundsFrom} to ${compoundsTo} on ${dateLabel}.`;
   }
+  if (compoundsUnchanged && event.toCompounds.length > 0) {
+    return `${event.toCompounds[0]} protocol change on ${dateLabel}: dose ${doseFrom} to ${doseTo}, frequency ${freqFrom} to ${freqTo}.`;
+  }
   return `Protocol change on ${dateLabel}: dose ${doseFrom} to ${doseTo}, frequency ${freqFrom} to ${freqTo}, compounds ${compoundsFrom} to ${compoundsTo}.`;
+};
+
+const selectTopChangedMarkers = (
+  rows: ProtocolImpactMarkerRow[]
+): ProtocolImpactMarkerRow[] => {
+  return rows
+    .filter((row) => !row.insufficientData && row.deltaPct !== null)
+    .sort((left, right) => {
+      const leftDeltaPct = Math.abs(left.deltaPct ?? 0);
+      const rightDeltaPct = Math.abs(right.deltaPct ?? 0);
+      if (rightDeltaPct !== leftDeltaPct) {
+        return rightDeltaPct - leftDeltaPct;
+      }
+      const leftSampleCount = left.nBefore + left.nAfter;
+      const rightSampleCount = right.nBefore + right.nAfter;
+      if (rightSampleCount !== leftSampleCount) {
+        return rightSampleCount - leftSampleCount;
+      }
+      return Math.abs(right.deltaAbs ?? 0) - Math.abs(left.deltaAbs ?? 0);
+    })
+    .slice(0, 4);
 };
 
 const protocolImpactObservedNarrative = (rows: ProtocolImpactMarkerRow[]): string => {
@@ -2114,9 +2162,6 @@ export const buildProtocolImpactDoseEvents = (
     const preEndTs = changeDateTs - DAY_MS;
     const baselinePostStartTs = changeDateTs + PROTOCOL_IMPACT_MARKER_LAG_DAYS.hormones * DAY_MS;
     const baselinePostEndTs = baselinePostStartTs + safeWindowDays * DAY_MS;
-    const baselineReport =
-      sorted.find((report) => Boolean(report.isBaseline) && parseDateSafe(report.testDate) < changeDateTs) ?? null;
-
     const beforeReports = sorted.filter((report) => {
       const reportTs = parseDateSafe(report.testDate);
       return reportTs >= preStartTs && reportTs <= preEndTs;
@@ -2175,19 +2220,19 @@ export const buildProtocolImpactDoseEvents = (
           return pointTs >= markerPostStartTs && pointTs <= markerPostEndTs;
         });
 
-        let beforeValues = beforeSeries.map((point) => point.value);
-        let beforeSource: ProtocolImpactMarkerRow["beforeSource"] = beforeValues.length > 0 ? "window" : "none";
-        let baselineAgeDays: number | null = null;
-        if (beforeValues.length === 0 && baselineReport) {
-          const baselinePoint = buildMarkerSeries([baselineReport], marker, unitSystem, protocols)[0];
-          if (baselinePoint) {
-            beforeValues = [baselinePoint.value];
-            beforeSource = "baseline";
-            baselineAgeDays = Math.max(0, Math.round((changeDateTs - parseDateSafe(baselineReport.testDate)) / DAY_MS));
-          }
-        }
+        const previousEventPoint = markerSeries.find((point) => point.reportId === previous.id) ?? null;
+        const currentEventPoint = markerSeries.find((point) => point.reportId === current.id) ?? null;
 
-        const afterValues = afterSeries.map((point) => point.value);
+        let beforeValues = beforeSeries.map((point) => point.value);
+        const beforeSource: ProtocolImpactMarkerRow["beforeSource"] = beforeValues.length > 0 ? "window" : "none";
+        if (beforeValues.length === 0 && previousEventPoint) {
+          beforeValues = [previousEventPoint.value];
+        }
+        const baselineAgeDays: number | null = null;
+        let afterValues = afterSeries.map((point) => point.value);
+        if (afterValues.length === 0 && currentEventPoint) {
+          afterValues = [currentEventPoint.value];
+        }
         const nBefore = beforeValues.length;
         const nAfter = afterValues.length;
         const beforeAvg = beforeValues.length > 0 ? mean(beforeValues) : null;
@@ -2205,8 +2250,8 @@ export const buildProtocolImpactDoseEvents = (
         const clinicalWeight = PROTOCOL_IMPACT_CLINICAL_WEIGHTS[marker] ?? PROTOCOL_IMPACT_DEFAULT_CLINICAL_WEIGHT;
         const impactScore = Math.round(0.55 * effectScore + 0.45 * clinicalWeight);
         const effectClarityScore = protocolImpactEffectClarityScore(deltaPct, deltaAbs, beforeValues, afterValues);
-        const baselinePenalty = protocolImpactBaselinePenalty(baselineAgeDays);
-        const totalPenalty = confounderPenalty + baselinePenalty;
+        const baselinePenalty = 0;
+        const totalPenalty = confounderPenalty;
         let confidenceScore = Math.round(
           clip(
             0.35 * sampleScore +
@@ -2236,14 +2281,14 @@ export const buildProtocolImpactDoseEvents = (
           confounderPenalty
         );
         const deltaDirectionLabel = protocolImpactDeltaDirectionLabel(trend);
-        const contextHint =
-          beforeSource === "baseline"
-            ? "Compared to baseline because pre-window data was missing."
-            : insufficientData && nAfter === 0
-              ? "Waiting for lag-adjusted post-change measurements."
-              : insufficientData && nBefore === 0
-                ? "Waiting for pre-window measurements."
-                : null;
+        const usedEventReportsFallback = (beforeSeries.length === 0 && beforeValues.length > 0) || (afterSeries.length === 0 && afterValues.length > 0);
+        const contextHint = usedEventReportsFallback
+          ? "Used nearest pre/post event measurements because lag-window data was missing."
+          : insufficientData && nAfter === 0
+            ? "Waiting for lag-adjusted post-change measurements."
+            : insufficientData && nBefore === 0
+              ? "Waiting for pre-window measurements."
+              : null;
         const narrativeShort = protocolImpactMarkerNarrativeShort(
           marker,
           deltaPct,
@@ -2267,6 +2312,7 @@ export const buildProtocolImpactDoseEvents = (
           unit,
           beforeAvg: beforeAvg === null ? null : ROUND_2(beforeAvg),
           beforeSource,
+          comparisonBasis: insufficientData ? "insufficient" : usedEventReportsFallback ? "event_reports" : "local_pre_post",
           baselineAgeDays,
           afterAvg: afterAvg === null ? null : ROUND_2(afterAvg),
           deltaAbs: deltaAbs === null ? null : ROUND_2(deltaAbs),
@@ -2301,7 +2347,7 @@ export const buildProtocolImpactDoseEvents = (
         return rightAbs - leftAbs;
       });
 
-    const topImpacts = rows.filter((row) => !row.insufficientData).slice(0, 4);
+    const topImpacts = selectTopChangedMarkers(rows);
     const lagDaysByMarker = rows.reduce<Record<string, number>>((acc, row) => {
       acc[row.marker] = row.lagDays;
       return acc;
@@ -2309,7 +2355,7 @@ export const buildProtocolImpactDoseEvents = (
     const eventConfidence = protocolImpactEventConfidence(rows);
     const signalStatus = protocolImpactEventSignalStatus(rows, eventConfidence.score);
     const signalStatusLabel = signalStatusLabelFromStatus(signalStatus);
-    const signalNextStep = protocolImpactSignalNextStep(signalStatus, rows, confounders);
+    const signalNextStep = protocolImpactSignalNextStep(signalStatus, eventSubType, rows, confounders);
     const anchorCompound = currentCompounds[0] ?? previousCompounds[0] ?? "Protocol";
     const headlineNarrative = protocolImpactEventHeadline({
       eventType,
@@ -2370,6 +2416,7 @@ export const buildProtocolImpactDoseEvents = (
       signalStatus,
       signalStatusLabel,
       signalNextStep,
+      comparisonBasis: "local_pre_post",
       headlineNarrative,
       storyObserved,
       storyInterpretation,

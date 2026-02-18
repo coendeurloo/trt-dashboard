@@ -9,14 +9,14 @@ import ProtocolImpactView from "../views/ProtocolImpactView";
 const row = (
   marker: string,
   impactScore: number,
-  confidenceScore: number,
-  beforeSource: "window" | "baseline" | "none" = "window"
+  confidenceScore: number
 ): ProtocolImpactMarkerRow => ({
   marker,
   unit: "ng/dL",
   beforeAvg: 500,
-  beforeSource,
-  baselineAgeDays: beforeSource === "baseline" ? 40 : null,
+  beforeSource: "window",
+  comparisonBasis: "local_pre_post",
+  baselineAgeDays: null,
   afterAvg: 600,
   deltaAbs: 100,
   deltaPct: 20,
@@ -40,7 +40,7 @@ const row = (
 
 const makeEvent = (): ProtocolImpactDoseEvent => {
   const rows = [
-    row("Testosterone", 94, 82, "baseline"),
+    row("Testosterone", 94, 82),
     row("Free Testosterone", 89, 78),
     row("Estradiol", 85, 74),
     row("Hematocrit", 80, 66),
@@ -74,9 +74,10 @@ const makeEvent = (): ProtocolImpactDoseEvent => {
     signalStatus: "established_pattern",
     signalStatusLabel: "Established pattern",
     signalNextStep: "Strong pattern detected. Keep your regular monitoring cadence to confirm stability.",
+    comparisonBasis: "local_pre_post",
     headlineNarrative: "Testosterone Enanthate dose change from 120 mg/week to 115 mg/week on 17 Jul 2024.",
     storyObserved: "Testosterone increased by +20%. Free Testosterone increased by +20%.",
-    storyInterpretation: "This pattern is strongly consistent with the protocol change.",
+    storyInterpretation: "Not shown in facts-only card.",
     storyContextHint: "No major extra factors detected in this event.",
     storyChange: "Testosterone Enanthate dose change from 120 mg/week to 115 mg/week on 17 Jul 2024.",
     storyEffect: "Testosterone increased by +20%. Free Testosterone increased by +20%.",
@@ -123,10 +124,10 @@ describe("ProtocolImpactView", () => {
     onProtocolCategoryFilterChange: vi.fn()
   };
 
-  it("renders disclaimer under title", () => {
+  it("renders minimal header copy", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText(/These insights use real measurements from your lab reports/i)).toBeTruthy();
-    expect(screen.getByText(/How to read this/i)).toBeTruthy();
+    expect(screen.getByText("Protocol Impact")).toBeTruthy();
+    expect(screen.getByText(/For each protocol change, you see what factually changed in your measurements./i)).toBeTruthy();
   });
 
   it("renders narrative event title", () => {
@@ -139,28 +140,54 @@ describe("ProtocolImpactView", () => {
     expect(screen.queryByText(/Reliability:/i)).toBeNull();
   });
 
-  it("renders status pill", () => {
+  it("does not render signal status pill", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText(/Established pattern/)).toBeTruthy();
+    expect(screen.queryByText(/Established pattern/)).toBeNull();
+  });
+
+  it("renders jump links to protocol changes", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.getByRole("link", { name: /17 Jul 2024/i })).toBeTruthy();
+  });
+
+  it("does not render overall conclusions block", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.queryByText("Overall conclusions")).toBeNull();
+  });
+
+  it("does not render filters block", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.queryByText("Filters")).toBeNull();
   });
 
   it("shows top-4 effects by default in the grid", () => {
     render(<ProtocolImpactView {...baseProps} />);
 
-    expect(screen.getByText("Estradiol increased by +20%.")).toBeTruthy();
-    expect(screen.getByText("Hematocrit increased by +20%.")).toBeTruthy();
+    expect(screen.getAllByText("Increased by +20%.").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByRole("button", { name: "Show more effects" })).toBeNull();
   });
 
-  it("shows context tooltip chip on marker row", () => {
+  it("does not show context tooltip chip on marker row", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getAllByText("💡 Context").length).toBeGreaterThan(0);
+    expect(screen.queryByText("💡 Context")).toBeNull();
   });
 
-  it("keeps technical details collapsed by default", () => {
+  it("does not show interpretation row in event card", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    const details = screen.getByText("Technical details").closest("details");
+    expect(screen.queryByText(/Interpretation/i)).toBeNull();
+  });
+
+  it("keeps all markers details collapsed by default", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    const details = screen.getByText("All markers").closest("details");
     expect(details).toBeTruthy();
     expect((details as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it("renders medical note at the bottom, collapsed by default", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    const note = screen.getByText("Medical note").closest("details");
+    expect(note).toBeTruthy();
+    expect((note as HTMLDetailsElement).open).toBe(false);
   });
 });

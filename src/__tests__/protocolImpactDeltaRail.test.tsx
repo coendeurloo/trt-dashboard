@@ -25,7 +25,7 @@ describe("ProtocolImpactDeltaRail", () => {
 
     expect(screen.getByText(/Before/)).toBeTruthy();
     expect(screen.getByText(/After/)).toBeTruthy();
-    expect(screen.getByText(/Δ -27%/)).toBeTruthy();
+    expect(screen.getByText(/-27%/)).toBeTruthy();
   });
 
   it("renders directional arrow state", () => {

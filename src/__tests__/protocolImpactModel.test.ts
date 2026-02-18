@@ -137,7 +137,7 @@ describe("protocol impact model", () => {
     expect(ldlRow?.afterAvg).toBe(140);
   });
 
-  it("uses baseline fallback when pre-window is empty", () => {
+  it("does not use baseline fallback when pre-window is empty", () => {
     const protocols = [
       mkProtocol("p-a", { doseMg: 0, frequency: "0x/week" }),
       mkProtocol("p-b", { doseMg: 125, frequency: "2x/week" })
@@ -152,12 +152,13 @@ describe("protocol impact model", () => {
     const event = buildProtocolImpactDoseEvents(reports, "us", 45, protocols)[0];
     const row = event?.rows.find((item) => item.marker === "Testosterone");
 
-    expect(row?.beforeSource).toBe("baseline");
-    expect(row?.beforeAvg).toBe(320);
-    expect(row?.nBefore).toBe(1);
+    expect(row?.beforeSource).toBe("none");
+    expect(row?.beforeAvg).toBeNull();
+    expect(row?.nBefore).toBe(0);
+    expect(row?.comparisonBasis).toBe("insufficient");
   });
 
-  it("does not use baseline fallback when pre-window already has data", () => {
+  it("uses local pre-window when data exists", () => {
     const protocols = [
       mkProtocol("p-a", { doseMg: 0, frequency: "0x/week" }),
       mkProtocol("p-b", { doseMg: 125, frequency: "2x/week" })
@@ -174,39 +175,24 @@ describe("protocol impact model", () => {
 
     expect(row?.beforeSource).toBe("window");
     expect(row?.beforeAvg).toBe(490);
+    expect(row?.comparisonBasis).toBe("local_pre_post");
   });
 
-  it("reduces confidence score when baseline is older", () => {
+  it("sets event comparison basis to local pre/post", () => {
     const protocols = [
-      mkProtocol("p-a", { doseMg: 0, frequency: "0x/week" }),
-      mkProtocol("p-b", { doseMg: 125, frequency: "2x/week" })
+      mkProtocol("p-a", { doseMg: 100, frequency: "2x/week" }),
+      mkProtocol("p-b", { doseMg: 130, frequency: "2x/week" })
+    ];
+    const reports = [
+      mkReport("r1", "2025-01-01", "p-a", [{ marker: "Testosterone", value: 500, unit: "ng/dL" }]),
+      mkReport("r2", "2025-02-15", "p-b", [{ marker: "Testosterone", value: 540, unit: "ng/dL" }])
     ];
 
-    const recentBaselineReports = [
-      mkReport("base", "2025-01-15", "p-a", [{ marker: "Testosterone", value: 320, unit: "ng/dL" }], "trough", "", true),
-      mkReport("r1", "2025-02-01", "p-a", [{ marker: "SHBG", value: 32, unit: "nmol/L" }]),
-      mkReport("r2", "2025-03-20", "p-b", [{ marker: "Testosterone", value: 500, unit: "ng/dL" }]),
-      mkReport("r3", "2025-04-12", "p-b", [{ marker: "Testosterone", value: 690, unit: "ng/dL" }])
-    ];
-
-    const oldBaselineReports = [
-      mkReport("base", "2024-01-01", "p-a", [{ marker: "Testosterone", value: 320, unit: "ng/dL" }], "trough", "", true),
-      mkReport("r1", "2025-02-01", "p-a", [{ marker: "SHBG", value: 32, unit: "nmol/L" }]),
-      mkReport("r2", "2025-03-20", "p-b", [{ marker: "Testosterone", value: 500, unit: "ng/dL" }]),
-      mkReport("r3", "2025-04-12", "p-b", [{ marker: "Testosterone", value: 690, unit: "ng/dL" }])
-    ];
-
-    const recentScore =
-      buildProtocolImpactDoseEvents(recentBaselineReports, "us", 45, protocols)[0]?.rows.find((row) => row.marker === "Testosterone")
-        ?.confidenceScore ?? 0;
-    const oldScore =
-      buildProtocolImpactDoseEvents(oldBaselineReports, "us", 45, protocols)[0]?.rows.find((row) => row.marker === "Testosterone")
-        ?.confidenceScore ?? 0;
-
-    expect(oldScore).toBeLessThan(recentScore);
+    const event = buildProtocolImpactDoseEvents(reports, "us", 45, protocols)[0];
+    expect(event?.comparisonBasis).toBe("local_pre_post");
   });
 
-  it("fills recommended next test date when waiting for post-window data", () => {
+  it("uses current event measurement when post-window data is missing", () => {
     const protocols = [
       mkProtocol("p-a", { doseMg: 0, frequency: "0x/week" }),
       mkProtocol("p-b", { doseMg: 125, frequency: "2x/week" })
@@ -220,8 +206,9 @@ describe("protocol impact model", () => {
     const event = buildProtocolImpactDoseEvents(reports, "us", 45, protocols)[0];
     const row = event?.rows.find((item) => item.marker === "Testosterone");
 
-    expect(row?.readinessStatus).toBe("waiting_post");
-    expect(row?.recommendedNextTestDate).toBe("2025-04-13");
+    expect(row?.readinessStatus).toBe("ready");
+    expect(row?.recommendedNextTestDate).toBeNull();
+    expect(row?.comparisonBasis).toBe("event_reports");
   });
 
   it("sets readiness status for different data-availability cases", () => {
@@ -246,10 +233,10 @@ describe("protocol impact model", () => {
 
     expect(event?.rows.find((row) => row.marker === "Hematocrit")?.readinessStatus).toBe("waiting_post");
     expect(event?.rows.find((row) => row.marker === "Estradiol")?.readinessStatus).toBe("waiting_pre");
-    expect(event?.rows.find((row) => row.marker === "CRP")?.readinessStatus).toBe("waiting_both");
+    expect(event?.rows.find((row) => row.marker === "CRP")?.readinessStatus).toBe("waiting_pre");
   });
 
-  it("keeps top-4 effects sorted by impact score", () => {
+  it("keeps top-4 effects sorted by measured percentage change", () => {
     const protocols = [
       mkProtocol("p-a", { doseMg: 100, frequency: "2x/week" }),
       mkProtocol("p-b", { doseMg: 160, frequency: "2x/week" })
@@ -302,11 +289,12 @@ describe("protocol impact model", () => {
 
     expect(event?.topImpacts).toHaveLength(4);
     expect(event?.topImpacts.every((row) => !row.insufficientData)).toBe(true);
-    expect((event?.topImpacts[0]?.impactScore ?? 0) >= (event?.topImpacts[1]?.impactScore ?? 0)).toBe(true);
-    expect((event?.topImpacts[1]?.impactScore ?? 0) >= (event?.topImpacts[2]?.impactScore ?? 0)).toBe(true);
+    const changes = event?.topImpacts.map((row) => Math.abs(row.deltaPct ?? 0)) ?? [];
+    expect(changes[0]).toBeGreaterThanOrEqual(changes[1]);
+    expect(changes[1]).toBeGreaterThanOrEqual(changes[2]);
   });
 
-  it("returns a human narrative for insufficient post-window data", () => {
+  it("returns a human narrative when event report fallback is used", () => {
     const protocols = [
       mkProtocol("p-a", { doseMg: 100, frequency: "2x/week" }),
       mkProtocol("p-b", { doseMg: 130, frequency: "2x/week" })
@@ -319,8 +307,9 @@ describe("protocol impact model", () => {
     const event = buildProtocolImpactDoseEvents(reports, "us", 45, protocols)[0];
     const row = event?.rows.find((item) => item.marker === "Testosterone");
 
-    expect(row?.insufficientData).toBe(true);
-    expect(row?.narrative.toLowerCase()).toContain("post window");
+    expect(row?.insufficientData).toBe(false);
+    expect(row?.narrative.toLowerCase()).toContain("after this protocol change");
+    expect(row?.comparisonBasis).toBe("event_reports");
   });
 
   it("creates factual observed story plus cautious interpretation story", () => {

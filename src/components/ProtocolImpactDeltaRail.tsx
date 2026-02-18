@@ -42,28 +42,30 @@ const ProtocolImpactDeltaRail = ({
 
   return (
     <div className="protocol-impact-delta-rail" role="img" aria-label={ariaSummary}>
-      <div className="protocol-impact-delta-value">
+      <div className="protocol-impact-delta-side">
         <span className="protocol-impact-delta-caption">⬅ {tr("Voor", "Before")}</span>
-        <span className="protocol-impact-delta-number">
-          {formatAxisTick(beforeValue)} {unit}
+        <span className="protocol-impact-delta-value">
+          <span className="protocol-impact-delta-number">{formatAxisTick(beforeValue)}</span>
+          <span className="protocol-impact-delta-unit">{unit}</span>
         </span>
       </div>
 
       <div className="protocol-impact-delta-center">
-        <div className="protocol-impact-delta-track" aria-hidden="true">
+        <span className="protocol-impact-delta-direction-dot" aria-hidden="true">
           <span className="protocol-impact-delta-arrow">{directionArrow}</span>
-        </div>
+        </span>
         <span className="protocol-impact-delta-badge" title={`${tr("Eenheidssysteem", "Unit system")}: ${unitSystem.toUpperCase()}`}>
-          Δ {deltaLabel}
+          {deltaLabel}
         </span>
       </div>
 
-      <div className="protocol-impact-delta-value text-right">
+      <div className="protocol-impact-delta-side protocol-impact-delta-side-right">
         <span className="protocol-impact-delta-caption">
           {tr("Na", "After")} ➡
         </span>
-        <span className="protocol-impact-delta-number">
-          {formatAxisTick(afterValue)} {unit}
+        <span className="protocol-impact-delta-value">
+          <span className="protocol-impact-delta-number">{formatAxisTick(afterValue)}</span>
+          <span className="protocol-impact-delta-unit">{unit}</span>
         </span>
       </div>
     </div>
