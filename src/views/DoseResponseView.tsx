@@ -1,7 +1,10 @@
-import { DosePrediction, MarkerSeriesPoint, calculatePercentChange } from "../analytics";
-import DoseProjectionChart from "../components/DoseProjectionChart";
+import { useMemo, useState } from "react";
+import { AlertTriangle, BadgeInfo, Loader2, Sparkles } from "lucide-react";
+import { DosePrediction, projectDosePredictionAt } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
-import { getMarkerDisplayName, trLocale } from "../i18n";
+import DoseMarkerCard from "../components/DoseMarkerCard";
+import useDoseResponsePremium from "../hooks/useDoseResponsePremium";
+import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 
 interface DoseResponseViewProps {
@@ -15,6 +18,18 @@ interface DoseResponseViewProps {
   onDoseResponseInputChange: (value: string) => void;
 }
 
+const median = (values: number[]): number => {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
+};
+
 const DoseResponseView = ({
   dosePredictions,
   customDoseValue,
@@ -26,171 +41,248 @@ const DoseResponseView = ({
   onDoseResponseInputChange
 }: DoseResponseViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const [markerScope, setMarkerScope] = useState<"top" | "all">("top");
+  const {
+    predictions: premiumPredictions,
+    loading,
+    offlinePriorFallback,
+    limitReason,
+    remainingAssisted,
+    assistedLimits,
+    apiAssistedCount
+  } = useDoseResponsePremium({
+    basePredictions: dosePredictions,
+    unitSystem: settings.unitSystem
+  });
 
-  const confidenceLabel = (value: string): string => {
-    if (value === "High") {
-      return tr("Hoog", "High");
+  const currentDoseValues = useMemo(
+    () => premiumPredictions.map((prediction) => prediction.currentDose).filter((value) => Number.isFinite(value) && value > 0),
+    [premiumPredictions]
+  );
+
+  const baselineDose = useMemo(() => {
+    if (currentDoseValues.length === 0) {
+      return 120;
     }
-    if (value === "Medium") {
-      return tr("Middel", "Medium");
+    return Number(median(currentDoseValues).toFixed(1));
+  }, [currentDoseValues]);
+
+  const scenarioDose = hasCustomDose && customDoseValue !== null ? customDoseValue : baselineDose;
+  const minObservedDose = currentDoseValues.length === 0 ? 80 : Math.min(...currentDoseValues);
+  const maxObservedDose = currentDoseValues.length === 0 ? 180 : Math.max(...currentDoseValues);
+  const sliderMin = Math.max(20, Math.floor((minObservedDose * 0.8) / 5) * 5);
+  const sliderMax = Math.max(sliderMin + 10, Math.ceil((maxObservedDose * 1.2) / 5) * 5);
+  const sliderValue = Math.min(Math.max(scenarioDose, sliderMin), sliderMax);
+  const topPredictions = premiumPredictions.slice(0, 8);
+  const visiblePredictions = markerScope === "top" ? topPredictions : premiumPredictions;
+
+  const quickScenarios = [
+    { key: "minus20", delta: -0.2 },
+    { key: "minus10", delta: -0.1 },
+    { key: "current", delta: 0 },
+    { key: "plus10", delta: 0.1 },
+    { key: "plus20", delta: 0.2 }
+  ].map((entry) => ({
+    ...entry,
+    value: Number(Math.max(0, baselineDose * (1 + entry.delta)).toFixed(1))
+  }));
+
+  const scenarioLabel = (delta: number): string => {
+    if (delta === 0) {
+      return tr("Huidig", "Current");
     }
-    if (value === "Low") {
-      return tr("Laag", "Low");
-    }
-    return value;
+    return `${delta > 0 ? "+" : ""}${Math.round(delta * 100)}%`;
   };
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Dosis-respons schattingen", "Dose-response Estimates")}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr(
-            "In gewone taal: dit model schat, op basis van je eigen historie, wat er waarschijnlijk met een marker gebeurt als je dosis verandert.",
-            "In plain language: this model estimates, from your own history, what will likely happen to a marker if your dose changes."
-          )}
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          {tr(
-            "Alleen zichtbaar bij voldoende meetpunten; bedoeld als gesprekshulp met je arts.",
-            "Only shown with enough data points; intended as a discussion aid with your doctor."
-          )}
-        </p>
-
-        <div className="mt-3 rounded-lg border border-cyan-500/25 bg-cyan-500/5 p-3">
-          <label className="text-xs font-medium uppercase tracking-wide text-cyan-200">
-            {tr("Simuleer testosterondosis (mg/week)", "Simulate testosterone dose (mg/week)")}
-          </label>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              inputMode="decimal"
-              value={doseResponseInput}
-              onChange={(event) => onDoseResponseInputChange(event.target.value)}
-              placeholder={tr("Bijv. 100", "e.g. 100")}
-              className="w-40 rounded-md border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => onDoseResponseInputChange("")}
-              className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-            >
-              {tr("Auto-scenario", "Auto scenario")}
-            </button>
+      <div className="dose-premium-shell rounded-2xl border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-100">
+              <Sparkles className="h-4 w-4 text-cyan-300" />
+              {tr("Premium Dose Simulator", "Premium Dose Simulator")}
+            </h3>
+            <p className="mt-1 text-sm text-slate-300">
+              {tr(
+                "Zie per relevante marker wat er waarschijnlijk verandert als je je testosterondosis aanpast.",
+                "See what is likely to change per relevant marker when your testosterone dose changes."
+              )}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {tr(
+                "Educatief hulpmiddel voor bespreking met je arts, niet als medisch voorschrift.",
+                "Educational aid for doctor discussion, not a medical prescription."
+              )}
+            </p>
           </div>
-          <p className="mt-2 text-xs text-slate-400">
-            {hasCustomDose && customDoseValue !== null
-              ? tr(
-                  `Actief scenario: ${formatAxisTick(customDoseValue)} mg/week voor alle voorspellingen.`,
-                  `Active scenario: ${formatAxisTick(customDoseValue)} mg/week for all estimates.`
-                )
-              : tr(
-                  "Geen handmatige dosis ingevuld; per marker wordt het standaard scenario gebruikt.",
-                  "No manual dose entered; each marker currently uses its default scenario."
-                )}
+          <div className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+            {tr("Relevante markers in focus", "Relevant markers in focus")}: {Math.min(8, premiumPredictions.length)}
+            {" · "}
+            {tr("Totaal", "Total")}: {premiumPredictions.length}
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-xs font-medium uppercase tracking-wide text-cyan-200">
+              {tr("Dose scenario (mg/week)", "Dose scenario (mg/week)")}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                inputMode="decimal"
+                value={doseResponseInput}
+                onChange={(event) => onDoseResponseInputChange(event.target.value)}
+                placeholder={tr("Bijv. 120", "e.g. 120")}
+                className="w-28 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => onDoseResponseInputChange("")}
+                className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+              >
+                {tr("Auto", "Auto")}
+              </button>
+            </div>
+          </div>
+
+          <input
+            type="range"
+            min={sliderMin}
+            max={sliderMax}
+            step={0.5}
+            value={sliderValue}
+            onChange={(event) => onDoseResponseInputChange(event.target.value)}
+            className="mt-3 w-full accent-cyan-400"
+          />
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {quickScenarios.map((scenario) => {
+              const active = Math.abs(scenarioDose - scenario.value) <= 0.2;
+              return (
+                <button
+                  key={scenario.key}
+                  type="button"
+                  onClick={() => onDoseResponseInputChange(String(scenario.value))}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${
+                    active
+                      ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                      : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                  }`}
+                >
+                  {scenarioLabel(scenario.delta)} ({formatAxisTick(scenario.value)} mg)
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mt-2 text-xs text-slate-300">
+            {tr("Actief scenario", "Active scenario")}: {formatAxisTick(scenarioDose)} mg/week
+            {" · "}
+            {tr("Baseline", "Baseline")}: {formatAxisTick(baselineDose)} mg/week
           </p>
         </div>
 
-        {dosePredictions.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">
-            {tr(
-              "We hebben nog wat extra meetmomenten met bekende weekdosis nodig voordat we hier betrouwbare schattingen kunnen tonen.",
-              "We need a few more test results with a known weekly dose before we can show reliable estimates here."
-            )}
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-2 text-sm">
-            {dosePredictions.map((prediction) => {
-              const markerLabel = getMarkerDisplayName(prediction.marker, settings.language);
-              const targetDose = hasCustomDose && customDoseValue !== null ? customDoseValue : prediction.suggestedDose;
-              const canPredict = prediction.status === "clear";
-              const targetEstimate = canPredict ? Math.max(0, prediction.intercept + prediction.slopePerMg * targetDose) : null;
-              const targetPercentChange =
-                canPredict && targetEstimate !== null ? calculatePercentChange(targetEstimate, prediction.currentEstimate) : null;
-              const currentEstimate = `${formatAxisTick(prediction.currentEstimate)} ${prediction.unit}`;
-              const projectedEstimate = targetEstimate === null ? "-" : `${formatAxisTick(targetEstimate)} ${prediction.unit}`;
-              const pctText =
-                targetPercentChange === null
-                  ? tr("onbekend", "unknown")
-                  : `${targetPercentChange > 0 ? "+" : ""}${targetPercentChange}%`;
-              const directionText =
-                targetPercentChange === null
-                  ? tr("verandering", "change")
-                  : targetPercentChange >= 0
-                    ? tr("stijging", "increase")
-                    : tr("daling", "decrease");
-              const correlationText =
-                prediction.correlationR === null
-                  ? tr("n.v.t.", "n/a")
-                  : `${prediction.correlationR > 0 ? "+" : ""}${formatAxisTick(prediction.correlationR)}`;
-              const usedDatesText = prediction.usedReportDates.length === 0 ? "-" : prediction.usedReportDates.join(", ");
-              const excludedSummary =
-                prediction.excludedPoints.length === 0
-                  ? null
-                  : prediction.excludedPoints
-                      .slice(0, 3)
-                      .map((item) => `${item.date}: ${item.reason}`)
-                      .join(" | ");
+        <div className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>
+              {tr("Assisted study calls over", "Assisted study calls left")}: {remainingAssisted.dailyRemaining}/
+              {assistedLimits.maxRunsPerDay} {tr("vandaag", "today")}
+            </span>
+            <span>
+              {remainingAssisted.monthlyRemaining}/{assistedLimits.maxRunsPerMonth} {tr("deze maand", "this month")}
+            </span>
+            {loading ? (
+              <span className="inline-flex items-center gap-1 text-cyan-200">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {tr("Assisted model wordt ververst...", "Refreshing assisted model...")}
+              </span>
+            ) : apiAssistedCount > 0 ? (
+              <span className="text-emerald-200">
+                {tr("API-assisted markers", "API-assisted markers")}: {apiAssistedCount}
+              </span>
+            ) : null}
+          </div>
+          {limitReason ? (
+            <p className="mt-1 inline-flex items-center gap-1 text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {tr(
+                "Assisted quota bereikt; er wordt lokaal fallback model gebruikt.",
+                "Assisted quota reached; using local fallback model."
+              )}
+            </p>
+          ) : null}
+          {offlinePriorFallback && !limitReason ? (
+            <p className="mt-1 inline-flex items-center gap-1 text-amber-200">
+              <BadgeInfo className="h-3.5 w-3.5" />
+              {tr(
+                "Offline prior fallback actief door API-onbereikbaarheid.",
+                "Offline prior fallback active because API was unreachable."
+              )}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {premiumPredictions.length === 0 ? (
+        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 text-sm text-slate-300">
+          {tr(
+            "Voeg meer blood reports met bekende weekdosis toe om dose-response simulaties te kunnen tonen.",
+            "Add more blood reports with known weekly dose to unlock dose-response simulations."
+          )}
+        </div>
+      ) : (
+        <>
+          {premiumPredictions.length > 8 ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setMarkerScope("top")}
+                className={`rounded-full border px-3 py-1.5 text-xs ${
+                  markerScope === "top"
+                    ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                    : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                }`}
+              >
+                {tr("Top 8 relevant", "Top 8 relevant")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkerScope("all")}
+                className={`rounded-full border px-3 py-1.5 text-xs ${
+                  markerScope === "all"
+                    ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                    : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                }`}
+              >
+                {tr("Alle markers", "All markers")}
+              </button>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3">
+            {visiblePredictions.map((prediction) => {
+              const projected = projectDosePredictionAt(prediction, scenarioDose);
               return (
-                <li key={prediction.marker} className="rounded-lg bg-slate-800/70 px-3 py-2 text-slate-200">
-                  <p className="font-medium">{markerLabel}</p>
-                  {canPredict ? (
-                    <p className="mt-1 text-xs leading-relaxed text-slate-200">
-                      {tr(
-                        `Als je dosis rond ${formatAxisTick(targetDose)} mg/week ligt, verwacht dit model dat ${markerLabel} ongeveer ${projectedEstimate} wordt. Ter vergelijking: bij ongeveer ${formatAxisTick(prediction.currentDose)} mg/week is de modelwaarde nu ${currentEstimate}. Dat is waarschijnlijk een ${directionText} van ${pctText}.`,
-                        `If your dose is around ${formatAxisTick(targetDose)} mg/week, this model expects ${markerLabel} to be about ${projectedEstimate}. For reference, at around ${formatAxisTick(prediction.currentDose)} mg/week the current model value is ${currentEstimate}. That is likely a ${directionText} of ${pctText}.`
-                      )}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs leading-relaxed text-amber-200">
-                      {tr(
-                        `Nog geen betrouwbare dosis-schatting voor ${markerLabel}. ${prediction.statusReason}`,
-                        `No reliable dose estimate yet for ${markerLabel}. ${prediction.statusReason}`
-                      )}
-                    </p>
-                  )}
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {tr("Betrouwbaarheid van deze inschatting", "Confidence of this estimate")}: {confidenceLabel(prediction.confidence)}{" "}
-                    (n={prediction.sampleCount}, r={correlationText}, R²={formatAxisTick(prediction.rSquared)}, {prediction.modelType})
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {tr("Debug (gebruikte data)", "Debug (used data)")}: {tr("helling", "slope")}=
-                    {formatAxisTick(prediction.slopePerMg)}, {tr("intercept", "intercept")}={formatAxisTick(prediction.intercept)},{" "}
-                    {tr("data-datums", "dates")}={usedDatesText}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {tr("Samplingbasis", "Sampling basis")}:{" "}
-                    {prediction.samplingMode === "trough"
-                      ? tr("Alleen trough", "Trough-only")
-                      : tr("Alle timings", "All timings")}
-                    {prediction.samplingWarning ? ` • ${prediction.samplingWarning}` : ""}
-                  </p>
-                  {excludedSummary ? (
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("Uitgesloten punten", "Excluded points")}: {excludedSummary}
-                      {prediction.excludedPoints.length > 3 ? ` +${prediction.excludedPoints.length - 3}` : ""}
-                    </p>
-                  ) : null}
-                  {canPredict && targetEstimate !== null ? (
-                    <div className="mt-2">
-                      <DoseProjectionChart
-                        prediction={prediction}
-                        reports={visibleReports}
-                        settings={settings}
-                        language={language}
-                        targetDose={targetDose}
-                        targetEstimate={targetEstimate}
-                      />
-                    </div>
-                  ) : null}
-                </li>
+                <DoseMarkerCard
+                  key={`${prediction.marker}|${prediction.unit}`}
+                  prediction={prediction}
+                  targetDose={scenarioDose}
+                  targetEstimate={projected.estimate}
+                  targetLow={projected.low}
+                  targetHigh={projected.high}
+                  reports={visibleReports}
+                  settings={settings}
+                  language={language}
+                />
               );
             })}
-          </ul>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </section>
   );
 };

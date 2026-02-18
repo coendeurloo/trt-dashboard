@@ -158,7 +158,7 @@ const TAB_LABELS: Record<TabKey, LocalizedText> = {
   dashboard: { nl: "Dashboard", en: "Dashboard" },
   protocol: { nl: "Protocollen", en: "Protocols" },
   protocolImpact: { nl: "Protocol-impact", en: "Protocol Impact" },
-  doseResponse: { nl: "Dosis-respons", en: "Dose Response" },
+  doseResponse: { nl: "Dosis-simulator", en: "Dose Simulator" },
   protocolDose: { nl: "Protocol & Dosis", en: "Protocol & Dose" },
   alerts: { nl: "Alerts", en: "Alerts" },
   reports: { nl: "Alle Rapporten", en: "All Reports" },

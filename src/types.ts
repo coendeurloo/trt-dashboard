@@ -14,6 +14,8 @@ export type TabKey =
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 
+export type DosePredictionSource = "personal" | "hybrid" | "study_prior";
+
 export interface SupplementEntry {
   name: string;
   dose: string;
@@ -25,6 +27,34 @@ export interface CompoundEntry {
   doseMg: string;
   frequency: string;
   route: string;
+}
+
+export interface DosePriorEvidence {
+  citation: string;
+  studyType: string;
+  relevance: string;
+  quality: "high" | "medium" | "low";
+}
+
+export interface DosePrior {
+  marker: string;
+  unitSystem: UnitSystem;
+  unit: string;
+  slopePerMg: number;
+  sigma: number;
+  doseRange: {
+    min: number;
+    max: number;
+  };
+  evidence: DosePriorEvidence[];
+}
+
+export interface DoseBlendDiagnostics {
+  wPersonal: number;
+  sigmaPersonal: number;
+  sigmaPrior: number;
+  sigmaResidual: number;
+  offlinePriorFallback: boolean;
 }
 
 export interface MarkerValue {

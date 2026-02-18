@@ -358,6 +358,332 @@ body.light .review-suggestion-item:hover {
   color: #0c4a6e;
 }
 
+.dose-premium-shell {
+  border-color: rgba(100, 116, 139, 0.55);
+  background:
+    radial-gradient(circle at 80% 12%, rgba(56, 189, 248, 0.1), transparent 38%),
+    radial-gradient(circle at 20% 85%, rgba(16, 185, 129, 0.08), transparent 40%),
+    rgba(15, 23, 42, 0.58);
+}
+
+.dose-premium-card {
+  border-color: rgba(100, 116, 139, 0.58);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74) 0%, rgba(15, 23, 42, 0.52) 100%),
+    rgba(15, 23, 42, 0.6);
+  box-shadow: 0 18px 34px -26px rgba(2, 6, 23, 0.9);
+}
+
+.dose-premium-card-locked {
+  filter: saturate(0.88);
+}
+
+.dose-source-badge {
+  border-color: rgba(6, 182, 212, 0.35);
+  background: rgba(6, 182, 212, 0.12);
+  color: #a5f3fc;
+}
+
+.dose-confidence-badge {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: #bbf7d0;
+}
+
+.dose-stat-card {
+  border-color: rgba(71, 85, 105, 0.72);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+body.light .dose-premium-shell {
+  border-color: rgba(148, 163, 184, 0.45);
+  background:
+    radial-gradient(circle at 80% 12%, rgba(14, 116, 144, 0.12), transparent 38%),
+    radial-gradient(circle at 15% 84%, rgba(13, 148, 136, 0.11), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 248, 255, 0.94) 100%);
+  box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.34);
+}
+
+body.light .dose-premium-card {
+  border-color: rgba(148, 163, 184, 0.48);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(238, 246, 254, 0.92) 100%);
+  box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.28);
+}
+
+body.light .dose-source-badge {
+  border-color: rgba(8, 145, 178, 0.38);
+  background: rgba(8, 145, 178, 0.12);
+  color: #155e75;
+}
+
+body.light .dose-confidence-badge {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.11);
+  color: #065f46;
+}
+
+body.light .dose-stat-card {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.protocol-impact-premium-shell {
+  border-color: rgba(100, 116, 139, 0.55);
+  background:
+    radial-gradient(circle at 84% 16%, rgba(6, 182, 212, 0.08), transparent 44%),
+    radial-gradient(circle at 18% 84%, rgba(14, 165, 233, 0.05), transparent 50%),
+    rgba(15, 23, 42, 0.58);
+}
+
+.protocol-impact-event-shell {
+  border-color: rgba(100, 116, 139, 0.55);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.64) 0%, rgba(15, 23, 42, 0.5) 100%);
+  box-shadow: 0 16px 32px -24px rgba(2, 6, 23, 0.82);
+}
+
+.protocol-impact-status-pill {
+  font-weight: 600;
+}
+
+.protocol-impact-story-row {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.protocol-impact-emoji-label {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.protocol-impact-story-block {
+  color: #cbd5e1;
+}
+
+.protocol-impact-effect-tile {
+  border-color: rgba(100, 116, 139, 0.45);
+  background: rgba(2, 6, 23, 0.24);
+  min-width: 0;
+}
+
+.protocol-impact-effects-grid {
+  grid-auto-rows: 1fr;
+}
+
+.protocol-impact-effect-title {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.protocol-impact-effect-summary {
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.protocol-impact-context-chip {
+  border-color: rgba(100, 116, 139, 0.55);
+  background: rgba(30, 41, 59, 0.56);
+  color: #dbeafe;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.protocol-impact-status-early {
+  border-color: rgba(168, 85, 247, 0.35);
+  background: rgba(88, 28, 135, 0.23);
+  color: #e9d5ff;
+}
+
+.protocol-impact-status-building {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(146, 64, 14, 0.24);
+  color: #fde68a;
+}
+
+.protocol-impact-status-established {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(6, 78, 59, 0.24);
+  color: #bbf7d0;
+}
+
+.protocol-impact-delta-rail {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 34%) minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid rgba(100, 116, 139, 0.42);
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.protocol-impact-delta-rail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  color: #94a3b8;
+  text-align: center;
+  grid-template-columns: 1fr;
+}
+
+.protocol-impact-delta-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.protocol-impact-delta-caption {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.protocol-impact-delta-number {
+  color: #f8fafc;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.protocol-impact-delta-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.protocol-impact-delta-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.22), rgba(6, 182, 212, 0.36));
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.protocol-impact-delta-arrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.protocol-impact-delta-badge {
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0.22rem 0.5rem;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.65);
+  white-space: nowrap;
+}
+
+.protocol-impact-tech-details {
+  border-color: rgba(100, 116, 139, 0.55);
+  background: rgba(2, 6, 23, 0.24);
+}
+
+body.light .protocol-impact-premium-shell {
+  border-color: rgba(148, 163, 184, 0.45);
+  background:
+    radial-gradient(circle at 86% 14%, rgba(14, 165, 233, 0.1), transparent 43%),
+    radial-gradient(circle at 14% 82%, rgba(13, 148, 136, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 248, 255, 0.93) 100%);
+  box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.32);
+}
+
+body.light .protocol-impact-event-shell {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 247, 254, 0.92) 100%);
+  box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.28);
+}
+
+body.light .protocol-impact-emoji-label {
+  color: #0f172a;
+}
+
+body.light .protocol-impact-story-block {
+  color: #334155;
+}
+
+body.light .protocol-impact-effect-tile {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+body.light .protocol-impact-context-chip {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(241, 245, 249, 0.95);
+  color: #1e293b;
+}
+
+body.light .protocol-impact-status-early {
+  border-color: rgba(147, 51, 234, 0.32);
+  background: rgba(233, 213, 255, 0.8);
+  color: #6b21a8;
+}
+
+body.light .protocol-impact-status-building {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(253, 230, 138, 0.62);
+  color: #92400e;
+}
+
+body.light .protocol-impact-status-established {
+  border-color: rgba(22, 163, 74, 0.42);
+  background: rgba(187, 247, 208, 0.7);
+  color: #166534;
+}
+
+body.light .protocol-impact-delta-rail {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+body.light .protocol-impact-delta-caption {
+  color: #64748b;
+}
+
+body.light .protocol-impact-delta-number {
+  color: #0f172a;
+}
+
+body.light .protocol-impact-delta-badge {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(226, 232, 240, 0.95);
+  color: #1e293b;
+}
+
+body.light .protocol-impact-tech-details {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+@media (max-width: 768px) {
+  .protocol-impact-delta-rail {
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+
+  .protocol-impact-delta-center {
+    width: 100%;
+  }
+
+  .protocol-impact-delta-track {
+    width: 100%;
+  }
+}
+
 #root {
   min-height: 100vh;
 }

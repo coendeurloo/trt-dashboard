@@ -1,6 +1,6 @@
 import { addDays, format, parseISO } from "date-fns";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { DosePrediction, MarkerSeriesPoint, buildMarkerSeries } from "../analytics";
+import { Area, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { DosePrediction, buildMarkerSeries } from "../analytics";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { formatDate } from "../utils";
@@ -14,14 +14,37 @@ export interface DoseProjectionChartProps {
   language: AppLanguage;
   targetDose?: number;
   targetEstimate?: number;
+  targetLow?: number | null;
+  targetHigh?: number | null;
 }
 
-const DoseProjectionChart = ({ prediction, reports, settings, language, targetDose, targetEstimate }: DoseProjectionChartProps) => {
+const DoseProjectionChart = ({
+  prediction,
+  reports,
+  settings,
+  language,
+  targetDose,
+  targetEstimate,
+  targetLow,
+  targetHigh
+}: DoseProjectionChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(prediction.marker, language);
   const projectedDose = typeof targetDose === "number" && Number.isFinite(targetDose) ? targetDose : prediction.suggestedDose;
   const projectedEstimate =
     typeof targetEstimate === "number" && Number.isFinite(targetEstimate) ? targetEstimate : prediction.suggestedEstimate;
+  const projectedLow =
+    typeof targetLow === "number" && Number.isFinite(targetLow)
+      ? targetLow
+      : prediction.predictedLow !== null
+        ? prediction.predictedLow
+        : null;
+  const projectedHigh =
+    typeof targetHigh === "number" && Number.isFinite(targetHigh)
+      ? targetHigh
+      : prediction.predictedHigh !== null
+        ? prediction.predictedHigh
+        : null;
   const historical = useMemo(
     () => buildMarkerSeries(reports, prediction.marker, settings.unitSystem),
     [reports, prediction.marker, settings.unitSystem]
@@ -52,24 +75,46 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
   const projectionDateIso = format(addDays(parseISO(latest.date), projectionSpacingDays), "yyyy-MM-dd");
   const projectionKey = `${projectionDateIso}__projection`;
 
-  const chartData: Array<{ x: string; date: string; actual: number | null; projected: number | null }> = recentHistorical.map((point, index) => ({
+  const chartData: Array<{
+    x: string;
+    date: string;
+    actual: number | null;
+    projected: number | null;
+    bandBase: number | null;
+    bandSpan: number | null;
+    projectedLow: number | null;
+    projectedHigh: number | null;
+  }> = recentHistorical.map((point, index) => ({
     x: point.key,
     date: point.date,
     actual: point.value,
-    projected: index === recentHistorical.length - 1 ? point.value : null
+    projected: index === recentHistorical.length - 1 ? point.value : null,
+    bandBase: index === recentHistorical.length - 1 ? point.value : null,
+    bandSpan: index === recentHistorical.length - 1 ? 0 : null,
+    projectedLow: index === recentHistorical.length - 1 ? point.value : null,
+    projectedHigh: index === recentHistorical.length - 1 ? point.value : null
   }));
 
   chartData.push({
     x: projectionKey,
     date: projectionDateIso,
     actual: null,
-    projected: projectedEstimate
+    projected: projectedEstimate,
+    bandBase: projectedLow,
+    bandSpan:
+      projectedLow !== null && projectedHigh !== null && projectedHigh >= projectedLow
+        ? projectedHigh - projectedLow
+        : null,
+    projectedLow,
+    projectedHigh
   });
 
   const yDomain = buildYAxisDomain(
     [
       ...recentHistorical.map((point) => point.value),
-      projectedEstimate
+      projectedEstimate,
+      projectedLow ?? projectedEstimate,
+      projectedHigh ?? projectedEstimate
     ].filter((value): value is number => Number.isFinite(value)),
     "data"
   );
@@ -105,7 +150,15 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
           />
           <Tooltip
             content={({ active, payload }) => {
-              const point = payload?.[0]?.payload as { date: string; actual: number | null; projected: number | null } | undefined;
+              const point = payload?.[0]?.payload as
+                | {
+                    date: string;
+                    actual: number | null;
+                    projected: number | null;
+                    projectedLow: number | null;
+                    projectedHigh: number | null;
+                  }
+                | undefined;
               if (!active || !point) {
                 return null;
               }
@@ -118,16 +171,45 @@ const DoseProjectionChart = ({ prediction, reports, settings, language, targetDo
                     {markerLabel}: {value === null ? "-" : `${formatAxisTick(value)} ${prediction.unit}`}
                   </p>
                   {isProjectionPoint ? (
-                    <p className="mt-1 text-[10px] text-amber-200">
-                      {tr(
-                        `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`,
-                        `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`
-                      )}
-                    </p>
+                    <>
+                      {point.projectedLow !== null && point.projectedHigh !== null ? (
+                        <p className="mt-1 text-[10px] text-amber-200">
+                          {tr(
+                            `Waarschijnlijk bereik: ${formatAxisTick(point.projectedLow)} - ${formatAxisTick(point.projectedHigh)} ${prediction.unit}`,
+                            `Likely range: ${formatAxisTick(point.projectedLow)} - ${formatAxisTick(point.projectedHigh)} ${prediction.unit}`
+                          )}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-[10px] text-amber-200">
+                        {tr(
+                          `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`,
+                          `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`
+                        )}
+                      </p>
+                    </>
                   ) : null}
                 </div>
               );
             }}
+          />
+          <Area
+            type="monotone"
+            dataKey="bandBase"
+            stackId="projectionBand"
+            stroke="none"
+            fill="transparent"
+            isAnimationActive={false}
+            connectNulls
+          />
+          <Area
+            type="monotone"
+            dataKey="bandSpan"
+            stackId="projectionBand"
+            stroke="none"
+            fill="#f59e0b"
+            fillOpacity={0.16}
+            isAnimationActive={false}
+            connectNulls
           />
           <Line
             type="monotone"

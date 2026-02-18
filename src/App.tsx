@@ -162,11 +162,9 @@ const App = () => {
   const [rightCompareMarker, setRightCompareMarker] = useState<string>(PRIMARY_MARKERS[2]);
 
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
-  const [protocolWindowSize, setProtocolWindowSize] = useState(2);
+  const [protocolWindowSize, setProtocolWindowSize] = useState(45);
   const [protocolMarkerSearch, setProtocolMarkerSearch] = useState("");
   const [protocolCategoryFilter, setProtocolCategoryFilter] = useState<"all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation">("all");
-  const [protocolSortKey, setProtocolSortKey] = useState<"deltaPct" | "deltaAbs" | "marker">("deltaPct");
-  const [collapsedProtocolEvents, setCollapsedProtocolEvents] = useState<string[]>([]);
   const [markerSuggestions, setMarkerSuggestions] = useState<MarkerMergeSuggestion[]>([]);
   const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
@@ -974,19 +972,11 @@ const App = () => {
               protocolWindowSize={protocolWindowSize}
               protocolMarkerSearch={protocolMarkerSearch}
               protocolCategoryFilter={protocolCategoryFilter}
-              protocolSortKey={protocolSortKey}
-              collapsedProtocolEvents={collapsedProtocolEvents}
               settings={appData.settings}
               language={appData.settings.language}
               onProtocolWindowSizeChange={setProtocolWindowSize}
               onProtocolMarkerSearchChange={setProtocolMarkerSearch}
               onProtocolCategoryFilterChange={setProtocolCategoryFilter}
-              onProtocolSortKeyChange={setProtocolSortKey}
-              onToggleCollapsedEvent={(eventId) =>
-                setCollapsedProtocolEvents((current) =>
-                  current.includes(eventId) ? current.filter((id) => id !== eventId) : [...current, eventId]
-                )
-              }
             />
           ) : null}
 

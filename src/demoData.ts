@@ -4,6 +4,8 @@ import { createId, deriveAbnormalFlag } from "./utils";
 
 export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
 export const DEMO_PROTOCOL_ADJUSTED_ID = "demo-protocol-adjusted-115";
+export const DEMO_PROTOCOL_SPLIT_ID = "demo-protocol-split-110";
+export const DEMO_PROTOCOL_CYPIO_ID = "demo-protocol-cypio-120";
 
 type MarkerTemplate = {
   unit: string;
@@ -180,6 +182,48 @@ export const getDemoProtocols = (): Protocol[] => {
       notes: "Adjusted down for balance",
       createdAt: now,
       updatedAt: now
+    },
+    {
+      id: DEMO_PROTOCOL_SPLIT_ID,
+      name: "TRT Split 110mg",
+      compounds: [
+        {
+          name: "Testosterone Enanthate",
+          doseMg: "110 mg/week",
+          frequency: "3x_week",
+          route: "SubQ"
+        }
+      ],
+      supplements: [
+        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
+        { name: "Omega-3", dose: "2 g", frequency: "daily" },
+        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
+        { name: "Zinc", dose: "20 mg", frequency: "daily" }
+      ],
+      notes: "Split frequency for smoother levels",
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: DEMO_PROTOCOL_CYPIO_ID,
+      name: "TRT Cypionate 120mg",
+      compounds: [
+        {
+          name: "Testosterone Cypionate",
+          doseMg: "120 mg/week",
+          frequency: "2x_week",
+          route: "IM"
+        }
+      ],
+      supplements: [
+        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
+        { name: "Omega-3", dose: "2 g", frequency: "daily" },
+        { name: "Magnesium Glycinate", dose: "350 mg", frequency: "before_bed" },
+        { name: "Zinc", dose: "20 mg", frequency: "daily" }
+      ],
+      notes: "Compound switch trial with stable weekly total",
+      createdAt: now,
+      updatedAt: now
     }
   ];
 };
@@ -217,7 +261,7 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 22.5 },
+      { marker: "Testosterone", value: 30.4 },
       { marker: "Free Testosterone", value: 0.45 },
       { marker: "Estradiol", value: 118 },
       { marker: "SHBG", value: 38 },
@@ -303,15 +347,15 @@ export const getDemoReports = (): LabReport[] => [
     sourceFileName: "demo-trt-month-8.pdf",
     annotations: {
       ...defaultAnnotations(),
-      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
-      protocol: "Adjusted protocol continues",
-      symptoms: "Slightly lower energy but better sleep",
+      protocolId: DEMO_PROTOCOL_SPLIT_ID,
+      protocol: "Frequency split trial",
+      symptoms: "Smoother mood and fewer peaks",
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 16.8 },
-      { marker: "Free Testosterone", value: 0.34 },
-      { marker: "Estradiol", value: 80 },
+      { marker: "Testosterone", value: 17.4 },
+      { marker: "Free Testosterone", value: 0.36 },
+      { marker: "Estradiol", value: 84 },
       { marker: "SHBG", value: 36 },
       { marker: "Hematocrit", value: 0.46 },
       { marker: "PSA", value: 0.74 },
@@ -326,22 +370,22 @@ export const getDemoReports = (): LabReport[] => [
     sourceFileName: "demo-trt-month-9.pdf",
     annotations: {
       ...defaultAnnotations(),
-      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
-      protocol: "Stable phase",
-      notes: "Feeling great, energy levels stable",
+      protocolId: DEMO_PROTOCOL_CYPIO_ID,
+      protocol: "Switched to cypionate",
+      notes: "Trial switch to compare feel and recovery",
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 19.3 },
-      { marker: "Free Testosterone", value: 0.41 },
-      { marker: "Estradiol", value: 88 },
-      { marker: "SHBG", value: 35 },
+      { marker: "Testosterone", value: 21.1 },
+      { marker: "Free Testosterone", value: 0.44 },
+      { marker: "Estradiol", value: 94 },
+      { marker: "SHBG", value: 34.5 },
       { marker: "Hematocrit", value: 0.47 },
       { marker: "PSA", value: 0.8 },
       { marker: "Hemoglobin", value: 9.7 },
       { marker: "Cholesterol", value: 4.6 },
       { marker: "HDL Cholesterol", value: 1.2 },
-      { marker: "LDL Cholesterol", value: 2.6 }
+      { marker: "LDL Cholesterol", value: 2.7 }
     ]
   }),
   makeReport({
@@ -349,15 +393,15 @@ export const getDemoReports = (): LabReport[] => [
     sourceFileName: "demo-trt-month-10.pdf",
     annotations: {
       ...defaultAnnotations(),
-      protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
-      protocol: "Fine-tuned adjusted protocol",
-      notes: "Fine-tuned dose for energy and recovery",
+      protocolId: DEMO_PROTOCOL_CYPIO_ID,
+      protocol: "Cypionate maintenance",
+      notes: "Stable response on new compound",
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 20.0 },
-      { marker: "Free Testosterone", value: 0.43 },
-      { marker: "Estradiol", value: 92 },
+      { marker: "Testosterone", value: 20.7 },
+      { marker: "Free Testosterone", value: 0.42 },
+      { marker: "Estradiol", value: 90 },
       { marker: "SHBG", value: 34.5 },
       { marker: "Hematocrit", value: 0.468 },
       { marker: "PSA", value: 0.79 },

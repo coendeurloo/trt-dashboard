@@ -1,6 +1,16 @@
-import { PRIMARY_MARKERS } from "./constants";
+import { PRIMARY_MARKERS, PROTOCOL_MARKER_CATEGORIES } from "./constants";
 import { trLocale } from "./i18n";
-import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, SamplingTiming } from "./types";
+import {
+  AppLanguage,
+  AppSettings,
+  DoseBlendDiagnostics,
+  DosePredictionSource,
+  DosePrior,
+  LabReport,
+  MarkerValue,
+  Protocol,
+  SamplingTiming
+} from "./types";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
@@ -9,7 +19,7 @@ import {
   getReportProtocol
 } from "./protocolUtils";
 import { canonicalizeMarker, convertBySystem } from "./unitConversion";
-import { clip, createId, deriveAbnormalFlag, sortReportsChronological } from "./utils";
+import { clip, createId, deriveAbnormalFlag, formatDate as formatHumanDate, sortReportsChronological } from "./utils";
 
 export interface MarkerSeriesPoint {
   key: string;
@@ -91,10 +101,14 @@ export interface ProtocolImpactSummary {
   insights: ProtocolImpactInsight[];
 }
 
+export type ProtocolImpactSignalStatus = "early_signal" | "building_signal" | "established_pattern";
+
 export interface ProtocolImpactMarkerRow {
   marker: string;
   unit: string;
   beforeAvg: number | null;
+  beforeSource: "window" | "baseline" | "none";
+  baselineAgeDays: number | null;
   afterAvg: number | null;
   deltaAbs: number | null;
   deltaPct: number | null;
@@ -102,15 +116,61 @@ export interface ProtocolImpactMarkerRow {
   confidence: "High" | "Medium" | "Low";
   confidenceReason: string;
   insufficientData: boolean;
+  impactScore: number;
+  confidenceScore: number;
+  lagDays: number;
+  nBefore: number;
+  nAfter: number;
+  readinessStatus: "ready" | "waiting_post" | "waiting_pre" | "waiting_both";
+  recommendedNextTestDate: string | null;
+  signalStatus: ProtocolImpactSignalStatus;
+  deltaDirectionLabel: string;
+  contextHint: string | null;
+  narrativeShort: string;
+  narrative: string;
 }
 
 export interface ProtocolImpactDoseEvent {
   id: string;
   fromDose: number | null;
   toDose: number | null;
+  fromFrequency: number | null;
+  toFrequency: number | null;
+  fromCompounds: string[];
+  toCompounds: string[];
   changeDate: string;
   beforeCount: number;
   afterCount: number;
+  beforeWindow: {
+    start: string;
+    end: string;
+  };
+  afterWindow: {
+    start: string;
+    end: string;
+  };
+  eventType: "dose" | "frequency" | "compound" | "mixed";
+  eventSubType: "start" | "adjustment";
+  triggerStrength: number;
+  eventConfidenceScore: number;
+  eventConfidence: "High" | "Medium" | "Low";
+  signalStatus: ProtocolImpactSignalStatus;
+  signalStatusLabel: string;
+  signalNextStep: string;
+  headlineNarrative: string;
+  storyObserved: string;
+  storyInterpretation: string;
+  storyContextHint: string | null;
+  storyChange: string;
+  storyEffect: string;
+  storyReliability: string;
+  storySummary: string;
+  confounders: {
+    samplingChanged: boolean;
+    supplementsChanged: boolean;
+    symptomsChanged: boolean;
+  };
+  lagDaysByMarker: Record<string, number>;
   rows: ProtocolImpactMarkerRow[];
   topImpacts: ProtocolImpactMarkerRow[];
 }
@@ -140,10 +200,16 @@ export interface DosePrediction {
   rSquared: number;
   correlationR: number | null;
   sampleCount: number;
+  uniqueDoseLevels: number;
+  allSampleCount: number;
+  troughSampleCount: number;
   currentDose: number;
   suggestedDose: number;
   currentEstimate: number;
   suggestedEstimate: number;
+  predictionSigma: number | null;
+  predictedLow: number | null;
+  predictedHigh: number | null;
   suggestedPercentChange: number | null;
   confidence: "High" | "Medium" | "Low";
   status: "clear" | "unclear" | "insufficient";
@@ -152,7 +218,12 @@ export interface DosePrediction {
   samplingWarning: string | null;
   usedReportDates: string[];
   excludedPoints: Array<{ date: string; reason: string }>;
-  modelType: "linear" | "theil-sen";
+  modelType: "linear" | "theil-sen" | "hybrid" | "prior";
+  source: DosePredictionSource;
+  relevanceScore: number;
+  whyRelevant: string;
+  isApiAssisted: boolean;
+  blendDiagnostics: DoseBlendDiagnostics | null;
   scenarios: Array<{ dose: number; estimatedValue: number }>;
 }
 
@@ -164,13 +235,167 @@ interface TargetZone {
 
 const ROUND_2 = (value: number): number => Number(value.toFixed(2));
 const ROUND_3 = (value: number): number => Number(value.toFixed(3));
+const DAY_MS = 24 * 60 * 60 * 1000;
 const DOSE_EXPECTED_POSITIVE_MARKERS = new Set(["Testosterone", "Free Testosterone", "Free Androgen Index"]);
+const DOSE_CLINICAL_WEIGHTS: Record<string, number> = {
+  Testosterone: 98,
+  "Free Testosterone": 92,
+  Estradiol: 88,
+  Hematocrit: 88,
+  SHBG: 78,
+  "Apolipoprotein B": 86,
+  "LDL Cholesterol": 82,
+  "Non-HDL Cholesterol": 78,
+  Cholesterol: 70,
+  Hemoglobin: 74
+};
+const DOSE_RELEVANCE_HINTS: Record<string, string> = {
+  Testosterone: "Primary efficacy marker for testosterone dose exposure.",
+  "Free Testosterone": "Reflects active androgen availability, often linked to symptom response.",
+  Estradiol: "Commonly shifts with testosterone dose and aromatization load.",
+  Hematocrit: "Safety marker that can rise with higher androgen exposure.",
+  SHBG: "Modifies free hormone availability and can affect interpretation.",
+  "Apolipoprotein B": "Cardiometabolic risk marker relevant for protocol safety.",
+  "LDL Cholesterol": "Cardiometabolic marker that may shift with androgen protocols."
+};
+const PROTOCOL_IMPACT_CLINICAL_WEIGHTS: Record<string, number> = {
+  Testosterone: 95,
+  "Free Testosterone": 92,
+  Estradiol: 88,
+  Hematocrit: 90,
+  Hemoglobin: 78,
+  SHBG: 74,
+  "LDL Cholesterol": 86,
+  "Apolipoprotein B": 90,
+  "Non-HDL Cholesterol": 82,
+  Cholesterol: 72,
+  Triglyceriden: 74,
+  CRP: 80,
+  Ferritine: 70
+};
+const PROTOCOL_IMPACT_DEFAULT_CLINICAL_WEIGHT = 55;
+const PROTOCOL_IMPACT_EFFECT_CAP_PCT = 45;
+const PROTOCOL_IMPACT_MARKER_LAG_DAYS = {
+  hormones: 10,
+  inflammation: 14,
+  hematology: 21,
+  lipids: 28,
+  other: 21
+} as const;
+const HORMONE_MARKERS = new Set(PROTOCOL_MARKER_CATEGORIES.Hormones ?? []);
+const LIPID_MARKERS = new Set(PROTOCOL_MARKER_CATEGORIES.Lipids ?? []);
+const HEMATOLOGY_MARKERS = new Set(PROTOCOL_MARKER_CATEGORIES.Hematology ?? []);
+const INFLAMMATION_MARKERS = new Set(PROTOCOL_MARKER_CATEGORIES.Inflammation ?? []);
+const PROTOCOL_IMPACT_MAX_LAG_DAYS = Math.max(...Object.values(PROTOCOL_IMPACT_MARKER_LAG_DAYS));
 
 const normalizeProtocolText = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, " ");
 
 const parseDateSafe = (value: string): number => {
   const parsed = Date.parse(`${value}T00:00:00Z`);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const dateToIso = (timestamp: number): string => new Date(timestamp).toISOString().slice(0, 10);
+
+const shiftDateByDays = (date: string, days: number): string => dateToIso(parseDateSafe(date) + days * DAY_MS);
+
+const normalizeSetValue = (value: string): string => normalizeProtocolText(value);
+
+const setsEqual = (left: string[], right: string[]): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
+};
+
+const canonicalCompoundSet = (protocol: Protocol | null): string[] => {
+  if (!protocol || protocol.compounds.length === 0) {
+    return [];
+  }
+  return Array.from(new Set(protocol.compounds.map((entry) => normalizeSetValue(entry.name)).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+};
+
+const displayCompoundSet = (protocol: Protocol | null): string[] => {
+  if (!protocol || protocol.compounds.length === 0) {
+    return [];
+  }
+  return Array.from(new Set(protocol.compounds.map((entry) => entry.name.trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+};
+
+const canonicalSupplementSet = (protocol: Protocol | null): string[] => {
+  if (!protocol || protocol.supplements.length === 0) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      protocol.supplements
+        .map((entry) => {
+          const name = normalizeSetValue(entry.name);
+          const dose = normalizeSetValue(entry.dose);
+          const frequency = normalizeSetValue(entry.frequency);
+          return `${name}|${dose}|${frequency}`;
+        })
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+};
+
+const markerLagDays = (marker: string): number => {
+  if (HORMONE_MARKERS.has(marker)) {
+    return PROTOCOL_IMPACT_MARKER_LAG_DAYS.hormones;
+  }
+  if (INFLAMMATION_MARKERS.has(marker)) {
+    return PROTOCOL_IMPACT_MARKER_LAG_DAYS.inflammation;
+  }
+  if (HEMATOLOGY_MARKERS.has(marker)) {
+    return PROTOCOL_IMPACT_MARKER_LAG_DAYS.hematology;
+  }
+  if (LIPID_MARKERS.has(marker)) {
+    return PROTOCOL_IMPACT_MARKER_LAG_DAYS.lipids;
+  }
+  return PROTOCOL_IMPACT_MARKER_LAG_DAYS.other;
+};
+
+const confidenceLabelFromScore = (score: number): "High" | "Medium" | "Low" => {
+  if (score >= 75) {
+    return "High";
+  }
+  if (score >= 50) {
+    return "Medium";
+  }
+  return "Low";
+};
+
+const signalStatusLabelFromStatus = (status: ProtocolImpactSignalStatus): string => {
+  if (status === "established_pattern") {
+    return "Established pattern";
+  }
+  if (status === "building_signal") {
+    return "Building signal";
+  }
+  return "Early signal";
+};
+
+const dominantSamplingTiming = (items: LabReport[]): SamplingTiming | null => {
+  if (items.length === 0) {
+    return null;
+  }
+  const counts = items.reduce((acc, report) => {
+    const key = report.annotations.samplingTiming;
+    acc.set(key, (acc.get(key) ?? 0) + 1);
+    return acc;
+  }, new Map<SamplingTiming, number>());
+  const ranked = Array.from(counts.entries()).sort((left, right) => {
+    if (right[1] !== left[1]) {
+      return right[1] - left[1];
+    }
+    return left[0].localeCompare(right[0]);
+  });
+  return ranked[0]?.[0] ?? null;
 };
 
 const buildRegInput = (values: number[]): Array<{ x: number; y: number }> => values.map((value, index) => ({ x: index, y: value }));
@@ -236,38 +461,338 @@ const trendFromDelta = (delta: number | null): ProtocolImpactMarkerRow["trend"] 
   return delta > 0 ? "up" : "down";
 };
 
-const protocolConfidenceForWindows = (
-  beforeValues: number[],
+const protocolImpactEventType = (
+  doseTriggered: boolean,
+  frequencyTriggered: boolean,
+  compoundChanged: boolean
+): ProtocolImpactDoseEvent["eventType"] => {
+  const active = [doseTriggered, frequencyTriggered, compoundChanged].filter(Boolean).length;
+  if (active >= 2) {
+    return "mixed";
+  }
+  if (doseTriggered) {
+    return "dose";
+  }
+  if (frequencyTriggered) {
+    return "frequency";
+  }
+  return "compound";
+};
+
+const protocolImpactEffectScore = (deltaPct: number | null): number => {
+  if (deltaPct === null) {
+    return 0;
+  }
+  return Math.round((clip(Math.abs(deltaPct), 0, PROTOCOL_IMPACT_EFFECT_CAP_PCT) / PROTOCOL_IMPACT_EFFECT_CAP_PCT) * 100);
+};
+
+const protocolImpactConsistencyScore = (
+  baseline: number | null,
   afterValues: number[],
-  baseline: number
-): { level: "High" | "Medium" | "Low"; reason: string } => {
-  if (beforeValues.length === 0 || afterValues.length === 0) {
-    return {
-      level: "Low",
-      reason: "Insufficient data"
-    };
+  deltaAbs: number | null
+): number => {
+  if (baseline === null || afterValues.length === 0 || deltaAbs === null) {
+    return 0;
   }
-  if (beforeValues.length >= 2 && afterValues.length >= 2) {
-    const signs = afterValues
-      .map((value) => value - baseline)
-      .filter((value) => Math.abs(value) > 0.000001)
-      .map((value) => (value > 0 ? 1 : -1));
-    const consistent = signs.length <= 1 || signs.every((value) => value === signs[0]);
-    if (consistent) {
-      return {
-        level: "High",
-        reason: `${beforeValues.length}/${afterValues.length} points; consistent direction`
-      };
+  if (Math.abs(deltaAbs) <= 0.000001) {
+    return 50;
+  }
+  const expectedSign = deltaAbs > 0 ? 1 : -1;
+  const signs = afterValues
+    .map((value) => value - baseline)
+    .filter((value) => Math.abs(value) > 0.000001)
+    .map((value) => (value > 0 ? 1 : -1));
+  if (signs.length === 0) {
+    return 50;
+  }
+  const consistentCount = signs.filter((value) => value === expectedSign).length;
+  return Math.round((consistentCount / signs.length) * 100);
+};
+
+const protocolImpactSampleScore = (nBefore: number, nAfter: number): number => {
+  const balanceScore = clip((Math.min(nBefore, nAfter) / 3) * 70, 0, 70);
+  const totalScore = clip((Math.min(nBefore + nAfter, 8) / 8) * 30, 0, 30);
+  return Math.round(balanceScore + totalScore);
+};
+
+const protocolImpactEffectClarityScore = (
+  deltaPct: number | null,
+  deltaAbs: number | null,
+  beforeValues: number[],
+  afterValues: number[]
+): number => {
+  if (deltaPct === null || deltaAbs === null) {
+    return 25;
+  }
+  const baseScore = 25 + (clip(Math.abs(deltaPct), 0, PROTOCOL_IMPACT_EFFECT_CAP_PCT) / PROTOCOL_IMPACT_EFFECT_CAP_PCT) * 75;
+  const preStd = beforeValues.length > 1 ? stdDev(beforeValues) : 0;
+  const postStd = afterValues.length > 1 ? stdDev(afterValues) : 0;
+  const noise = preStd + postStd;
+  if (noise <= 0.000001) {
+    return Math.round(clip(baseScore, 0, 100));
+  }
+  const signalToNoise = Math.abs(deltaAbs) / noise;
+  const clarityPenalty = signalToNoise < 0.5 ? 20 : signalToNoise < 0.8 ? 10 : 0;
+  return Math.round(clip(baseScore - clarityPenalty, 0, 100));
+};
+
+const protocolImpactConfidenceReason = (
+  nBefore: number,
+  nAfter: number,
+  consistencyScore: number,
+  triggerStrength: number,
+  confounderPenalty: number,
+  baselinePenalty: number
+): string =>
+  `${nBefore} pre / ${nAfter} post points; consistency ${consistencyScore}%; trigger ${triggerStrength}/100; confounder penalty ${confounderPenalty}; baseline penalty ${baselinePenalty}.`;
+
+const protocolImpactReadinessStatus = (
+  nBefore: number,
+  nAfter: number
+): ProtocolImpactMarkerRow["readinessStatus"] => {
+  if (nBefore > 0 && nAfter > 0) {
+    return "ready";
+  }
+  if (nBefore === 0 && nAfter === 0) {
+    return "waiting_both";
+  }
+  if (nBefore === 0) {
+    return "waiting_pre";
+  }
+  return "waiting_post";
+};
+
+const protocolImpactBaselinePenalty = (baselineAgeDays: number | null): number => {
+  if (baselineAgeDays === null) {
+    return 0;
+  }
+  if (baselineAgeDays > 240) {
+    return 20;
+  }
+  if (baselineAgeDays > 120) {
+    return 10;
+  }
+  return 0;
+};
+
+const protocolImpactMarkerSignalStatus = (
+  insufficientData: boolean,
+  nBefore: number,
+  nAfter: number,
+  confidenceScore: number,
+  confounderPenalty: number
+): ProtocolImpactSignalStatus => {
+  if (insufficientData || nBefore === 0 || nAfter === 0) {
+    return "early_signal";
+  }
+  if (confidenceScore >= 75 && nBefore >= 2 && nAfter >= 2 && confounderPenalty <= 10) {
+    return "established_pattern";
+  }
+  if (confidenceScore >= 50 && nBefore >= 1 && nAfter >= 1) {
+    return "building_signal";
+  }
+  return "early_signal";
+};
+
+const protocolImpactEventSignalStatus = (
+  rows: ProtocolImpactMarkerRow[],
+  eventConfidenceScore: number
+): ProtocolImpactSignalStatus => {
+  const ranked = rows.filter((row) => !row.insufficientData).slice(0, 4);
+  if (ranked.length === 0) {
+    return "early_signal";
+  }
+  const establishedCount = ranked.filter((row) => row.signalStatus === "established_pattern").length;
+  if (
+    establishedCount >= 2 ||
+    (establishedCount >= 1 && eventConfidenceScore >= 68) ||
+    (ranked.length >= 2 && eventConfidenceScore >= 60) ||
+    eventConfidenceScore >= 78
+  ) {
+    return "established_pattern";
+  }
+  const buildingCount = ranked.filter((row) => row.signalStatus === "building_signal").length;
+  if (buildingCount >= 1 || eventConfidenceScore >= 50) {
+    return "building_signal";
+  }
+  return "early_signal";
+};
+
+const protocolImpactSignalNextStep = (
+  signalStatus: ProtocolImpactSignalStatus,
+  rows: ProtocolImpactMarkerRow[],
+  confounders: ProtocolImpactDoseEvent["confounders"]
+): string => {
+  const nextDate = rows
+    .filter((row) => row.recommendedNextTestDate)
+    .map((row) => row.recommendedNextTestDate as string)
+    .sort((left, right) => parseDateSafe(left) - parseDateSafe(right))[0];
+  const confounderCount = [confounders.samplingChanged, confounders.supplementsChanged, confounders.symptomsChanged].filter(Boolean)
+    .length;
+
+  if (signalStatus === "established_pattern") {
+    return confounderCount > 0
+      ? "Strong pattern detected. Keep sampling timing and protocol context consistent in follow-up checks."
+      : "Strong pattern detected. Keep your regular monitoring cadence to confirm stability.";
+  }
+
+  if (signalStatus === "building_signal") {
+    if (nextDate) {
+      return `Good directional signal. A follow-up lab around ${formatHumanDate(nextDate)} will make this conclusion stronger.`;
     }
-    return {
-      level: "Medium",
-      reason: `${beforeValues.length}/${afterValues.length} points; mixed direction`
-    };
+    return "Good directional signal. One additional follow-up lab will make this conclusion stronger.";
   }
-  return {
-    level: "Medium",
-    reason: `${beforeValues.length}/${afterValues.length} points`
-  };
+
+  if (nextDate) {
+    return `Early signal only. The next useful recheck is around ${formatHumanDate(nextDate)} for clearer before/after comparison.`;
+  }
+  return "Early signal only. Capture at least one stable pre and one lag-adjusted post measurement for a clearer comparison.";
+};
+
+const protocolImpactDeltaDirectionLabel = (
+  trend: ProtocolImpactMarkerRow["trend"]
+): string => {
+  if (trend === "up") {
+    return "Increased";
+  }
+  if (trend === "down") {
+    return "Decreased";
+  }
+  if (trend === "flat") {
+    return "Stable";
+  }
+  return "Insufficient data";
+};
+
+const protocolImpactMarkerNarrative = (
+  marker: string,
+  deltaPct: number | null,
+  trend: ProtocolImpactMarkerRow["trend"],
+  confidence: "High" | "Medium" | "Low",
+  insufficientData: boolean,
+  nBefore: number,
+  nAfter: number,
+  beforeSource: ProtocolImpactMarkerRow["beforeSource"]
+): string => {
+  if (insufficientData) {
+    if (nAfter === 0 && nBefore === 0) {
+      return `We could not find measurements for ${marker} in either the before or after window.`;
+    }
+    if (nAfter === 0) {
+      return `We need more ${marker} measurements in the post window to estimate this effect.`;
+    }
+    if (nBefore === 0) {
+      return `We need at least one ${marker} value in the pre window to compare this change.`;
+    }
+    return `There are too few ${marker} measurements to estimate this effect reliably.`;
+  }
+
+  const direction =
+    trend === "up" ? "rose" : trend === "down" ? "fell" : "stayed roughly stable";
+  const pctPart = deltaPct === null ? "" : ` by about ${deltaPct > 0 ? "+" : ""}${ROUND_2(deltaPct)}%`;
+  const baselineContext = beforeSource === "baseline" ? " using your baseline as the starting point" : "";
+  return `${marker} ${direction}${pctPart} after this protocol change${baselineContext} (${confidence} confidence).`;
+};
+
+const protocolImpactEventHeadline = (event: {
+  eventType: ProtocolImpactDoseEvent["eventType"];
+  eventSubType: ProtocolImpactDoseEvent["eventSubType"];
+  changeDate: string;
+  anchorCompound: string;
+  fromDose: number | null;
+  toDose: number | null;
+  fromFrequency: number | null;
+  toFrequency: number | null;
+  fromCompounds: string[];
+  toCompounds: string[];
+}): string => {
+  const doseFrom = event.fromDose === null ? "not set" : `${ROUND_2(event.fromDose)} mg/week`;
+  const doseTo = event.toDose === null ? "not set" : `${ROUND_2(event.toDose)} mg/week`;
+  const freqFrom = event.fromFrequency === null ? "not set" : `${ROUND_2(event.fromFrequency)}/week`;
+  const freqTo = event.toFrequency === null ? "not set" : `${ROUND_2(event.toFrequency)}/week`;
+  const compoundsFrom =
+    event.fromCompounds.length > 0
+      ? event.fromCompounds.join(" + ")
+      : event.eventSubType === "start"
+        ? "baseline"
+        : "not set";
+  const compoundsTo = event.toCompounds.length > 0 ? event.toCompounds.join(" + ") : "none";
+  const dateLabel = formatHumanDate(event.changeDate);
+  const anchor = event.anchorCompound || "Protocol";
+
+  if (event.eventType === "dose") {
+    return `${anchor} dose change from ${doseFrom} to ${doseTo} on ${dateLabel}.`;
+  }
+  if (event.eventType === "frequency") {
+    return `Injection frequency change from ${freqFrom} to ${freqTo} on ${dateLabel}.`;
+  }
+  if (event.eventType === "compound") {
+    return `Compound change from ${compoundsFrom} to ${compoundsTo} on ${dateLabel}.`;
+  }
+  return `Protocol change on ${dateLabel}: dose ${doseFrom} to ${doseTo}, frequency ${freqFrom} to ${freqTo}, compounds ${compoundsFrom} to ${compoundsTo}.`;
+};
+
+const protocolImpactObservedNarrative = (rows: ProtocolImpactMarkerRow[]): string => {
+  if (rows.length === 0) {
+    return "There are not enough lag-adjusted marker measurements yet.";
+  }
+  const summary = rows.slice(0, 2).map((row) => row.narrativeShort).join(" ");
+  return summary;
+};
+
+const protocolImpactMarkerNarrativeShort = (
+  marker: string,
+  deltaPct: number | null,
+  trend: ProtocolImpactMarkerRow["trend"],
+  insufficientData: boolean
+): string => {
+  if (insufficientData || deltaPct === null || trend === "insufficient") {
+    return `${marker}: not enough measured data yet.`;
+  }
+  const direction = trend === "up" ? "increased" : trend === "down" ? "decreased" : "stayed stable";
+  return `${marker} ${direction} by ${deltaPct > 0 ? "+" : ""}${ROUND_2(deltaPct)}%.`;
+};
+
+const protocolImpactEventConfidence = (
+  rows: ProtocolImpactMarkerRow[]
+): { score: number; label: "High" | "Medium" | "Low" } => {
+  const ranked = rows.filter((row) => !row.insufficientData).slice(0, 4);
+  const score = ranked.length === 0 ? 35 : Math.round(mean(ranked.map((row) => row.confidenceScore)));
+  return { score, label: confidenceLabelFromScore(score) };
+};
+
+const protocolImpactInterpretationNarrative = (
+  signalStatus: ProtocolImpactSignalStatus,
+  _rows: ProtocolImpactMarkerRow[],
+  _confounders: ProtocolImpactDoseEvent["confounders"]
+): string => {
+  return (
+    signalStatus === "established_pattern"
+      ? "This pattern is strongly consistent with the protocol change."
+      : signalStatus === "building_signal"
+        ? "This pattern appears related to the protocol change, but still needs one more confirmation point."
+        : "This is an early signal and should be treated as provisional."
+  );
+};
+
+const protocolImpactContextHint = (
+  signalStatus: ProtocolImpactSignalStatus,
+  confounders: ProtocolImpactDoseEvent["confounders"]
+): string | null => {
+  const factors: string[] = [];
+  if (confounders.samplingChanged) {
+    factors.push("sampling");
+  }
+  if (confounders.supplementsChanged) {
+    factors.push("supplements");
+  }
+  if (confounders.symptomsChanged) {
+    factors.push("symptoms");
+  }
+  if (factors.length === 0) {
+    return signalStatus === "established_pattern" ? "No major extra factors detected in this event." : null;
+  }
+  return `Potential extra factors: ${factors.join(", ")}.`;
 };
 
 const mean = (values: number[]): number => values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -1543,7 +2068,7 @@ export const buildProtocolImpactDoseEvents = (
     return [];
   }
 
-  const safeWindow = clip(Math.round(windowSize), 1, 4);
+  const safeWindowDays = clip(Math.round(windowSize), 21, 90);
   const events: ProtocolImpactDoseEvent[] = [];
 
   for (let index = 1; index < sorted.length; index += 1) {
@@ -1551,17 +2076,64 @@ export const buildProtocolImpactDoseEvents = (
     const current = sorted[index];
     const previousProtocol = getReportProtocol(previous, protocols);
     const currentProtocol = getReportProtocol(current, protocols);
+
     const previousDose = getProtocolDoseMgPerWeek(previousProtocol);
     const currentDose = getProtocolDoseMgPerWeek(currentProtocol);
-    if (previousDose === currentDose) {
+    const previousFrequency = extractProtocolFrequencyPerWeek(previousProtocol);
+    const currentFrequency = extractProtocolFrequencyPerWeek(currentProtocol);
+    const previousCompoundCanonical = canonicalCompoundSet(previousProtocol);
+    const currentCompoundCanonical = canonicalCompoundSet(currentProtocol);
+    const previousCompounds = displayCompoundSet(previousProtocol);
+    const currentCompounds = displayCompoundSet(currentProtocol);
+
+    const doseDelta = previousDose === null || currentDose === null ? null : currentDose - previousDose;
+    const frequencyDelta =
+      previousFrequency === null || currentFrequency === null ? null : currentFrequency - previousFrequency;
+    const doseTriggered = doseDelta !== null && Math.abs(doseDelta) >= 1;
+    const frequencyTriggered = frequencyDelta !== null && Math.abs(frequencyDelta) >= 0.25;
+    const compoundChanged = !setsEqual(previousCompoundCanonical, currentCompoundCanonical);
+
+    if (!doseTriggered && !frequencyTriggered && !compoundChanged) {
       continue;
     }
 
-    // Event detection: each time dose changes between consecutive reports.
-    const beforeReports = sorted.slice(Math.max(0, index - safeWindow), index);
-    const afterReports = sorted.slice(index, Math.min(sorted.length, index + safeWindow));
+    const hasPreviousProtocolSignal =
+      previousCompounds.length > 0 || previousDose !== null || previousFrequency !== null;
+    const hasCurrentProtocolSignal = currentCompounds.length > 0 || currentDose !== null || currentFrequency !== null;
+    const eventSubType: ProtocolImpactDoseEvent["eventSubType"] =
+      !hasPreviousProtocolSignal && hasCurrentProtocolSignal ? "start" : "adjustment";
+
+    const eventType = protocolImpactEventType(doseTriggered, frequencyTriggered, compoundChanged);
+    const dosePart = doseDelta === null ? 0 : Math.min(Math.abs(doseDelta) / 40, 1) * 40;
+    const frequencyPart = frequencyDelta === null ? 0 : Math.min(Math.abs(frequencyDelta) / 2, 1) * 30;
+    const compoundPart = compoundChanged ? 30 : 0;
+    const triggerStrength = Math.round(dosePart + frequencyPart + compoundPart);
+
+    const changeDateTs = parseDateSafe(current.testDate);
+    const preStartTs = changeDateTs - safeWindowDays * DAY_MS;
+    const preEndTs = changeDateTs - DAY_MS;
+    const baselinePostStartTs = changeDateTs + PROTOCOL_IMPACT_MARKER_LAG_DAYS.hormones * DAY_MS;
+    const baselinePostEndTs = baselinePostStartTs + safeWindowDays * DAY_MS;
+    const baselineReport =
+      sorted.find((report) => Boolean(report.isBaseline) && parseDateSafe(report.testDate) < changeDateTs) ?? null;
+
+    const beforeReports = sorted.filter((report) => {
+      const reportTs = parseDateSafe(report.testDate);
+      return reportTs >= preStartTs && reportTs <= preEndTs;
+    });
+    const baselineAfterReports = sorted.filter((report) => {
+      const reportTs = parseDateSafe(report.testDate);
+      return reportTs >= baselinePostStartTs && reportTs <= baselinePostEndTs;
+    });
+
+    const candidateRangeEndTs = changeDateTs + (safeWindowDays + PROTOCOL_IMPACT_MAX_LAG_DAYS) * DAY_MS;
+    const candidateReports = sorted.filter((report) => {
+      const reportTs = parseDateSafe(report.testDate);
+      return reportTs >= preStartTs && reportTs <= candidateRangeEndTs;
+    });
+
     const markerSet = new Set<string>();
-    [...beforeReports, ...afterReports].forEach((report) => {
+    candidateReports.forEach((report) => {
       report.markers.forEach((marker) => {
         if (!marker.isCalculated) {
           markerSet.add(marker.canonicalMarker);
@@ -1569,56 +2141,251 @@ export const buildProtocolImpactDoseEvents = (
       });
     });
 
+    const preSampling = dominantSamplingTiming(beforeReports);
+    const postSampling = dominantSamplingTiming(baselineAfterReports);
+    const previousSupplements = canonicalSupplementSet(previousProtocol);
+    const currentSupplements = canonicalSupplementSet(currentProtocol);
+    const previousSymptoms = normalizeProtocolText(previous.annotations.symptoms);
+    const currentSymptoms = normalizeProtocolText(current.annotations.symptoms);
+
+    const confounders: ProtocolImpactDoseEvent["confounders"] = {
+      samplingChanged: preSampling !== null && postSampling !== null && preSampling !== postSampling,
+      supplementsChanged: !setsEqual(previousSupplements, currentSupplements),
+      symptomsChanged:
+        previousSymptoms !== currentSymptoms && (previousSymptoms.length > 0 || currentSymptoms.length > 0)
+    };
+    const confounderPenalty =
+      (confounders.samplingChanged ? 15 : 0) +
+      (confounders.supplementsChanged ? 10 : 0) +
+      (confounders.symptomsChanged ? 10 : 0);
+
     const rows: ProtocolImpactMarkerRow[] = Array.from(markerSet)
       .map((marker) => {
-        const beforeSeries = buildMarkerSeries(beforeReports, marker, unitSystem, protocols);
-        const afterSeries = buildMarkerSeries(afterReports, marker, unitSystem, protocols);
-        const beforeValues = beforeSeries.map((point) => point.value);
+        const lagDays = markerLagDays(marker);
+        const markerPostStartTs = changeDateTs + lagDays * DAY_MS;
+        const markerPostEndTs = markerPostStartTs + safeWindowDays * DAY_MS;
+        const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols);
+
+        const beforeSeries = markerSeries.filter((point) => {
+          const pointTs = parseDateSafe(point.date);
+          return pointTs >= preStartTs && pointTs <= preEndTs;
+        });
+        const afterSeries = markerSeries.filter((point) => {
+          const pointTs = parseDateSafe(point.date);
+          return pointTs >= markerPostStartTs && pointTs <= markerPostEndTs;
+        });
+
+        let beforeValues = beforeSeries.map((point) => point.value);
+        let beforeSource: ProtocolImpactMarkerRow["beforeSource"] = beforeValues.length > 0 ? "window" : "none";
+        let baselineAgeDays: number | null = null;
+        if (beforeValues.length === 0 && baselineReport) {
+          const baselinePoint = buildMarkerSeries([baselineReport], marker, unitSystem, protocols)[0];
+          if (baselinePoint) {
+            beforeValues = [baselinePoint.value];
+            beforeSource = "baseline";
+            baselineAgeDays = Math.max(0, Math.round((changeDateTs - parseDateSafe(baselineReport.testDate)) / DAY_MS));
+          }
+        }
+
         const afterValues = afterSeries.map((point) => point.value);
+        const nBefore = beforeValues.length;
+        const nAfter = afterValues.length;
         const beforeAvg = beforeValues.length > 0 ? mean(beforeValues) : null;
         const afterAvg = afterValues.length > 0 ? mean(afterValues) : null;
         const deltaAbs = beforeAvg === null || afterAvg === null ? null : afterAvg - beforeAvg;
         const deltaPct = beforeAvg === null || afterAvg === null ? null : calculatePercentChange(afterAvg, beforeAvg);
-        const confidence =
-          beforeAvg === null
-            ? { level: "Low" as const, reason: "Insufficient data" }
-            : protocolConfidenceForWindows(beforeValues, afterValues, beforeAvg);
-        const unit = afterSeries[0]?.unit ?? beforeSeries[0]?.unit ?? "";
+        const trend = trendFromDelta(deltaAbs);
+        const insufficientData = nBefore === 0 || nAfter === 0;
+        const readinessStatus = protocolImpactReadinessStatus(nBefore, nAfter);
+        const recommendedNextTestDate =
+          nAfter === 0 ? dateToIso(changeDateTs + (lagDays + 14) * DAY_MS) : null;
+        const consistencyScore = protocolImpactConsistencyScore(beforeAvg, afterValues, deltaAbs);
+        const sampleScore = protocolImpactSampleScore(nBefore, nAfter);
+        const effectScore = protocolImpactEffectScore(deltaPct);
+        const clinicalWeight = PROTOCOL_IMPACT_CLINICAL_WEIGHTS[marker] ?? PROTOCOL_IMPACT_DEFAULT_CLINICAL_WEIGHT;
+        const impactScore = Math.round(0.55 * effectScore + 0.45 * clinicalWeight);
+        const effectClarityScore = protocolImpactEffectClarityScore(deltaPct, deltaAbs, beforeValues, afterValues);
+        const baselinePenalty = protocolImpactBaselinePenalty(baselineAgeDays);
+        const totalPenalty = confounderPenalty + baselinePenalty;
+        let confidenceScore = Math.round(
+          clip(
+            0.35 * sampleScore +
+              0.25 * consistencyScore +
+              0.2 * triggerStrength +
+              0.2 * effectClarityScore -
+              totalPenalty,
+            0,
+            100
+          )
+        );
+        if (insufficientData) {
+          confidenceScore = Math.min(confidenceScore, 40);
+        }
+        const confidence = confidenceLabelFromScore(confidenceScore);
+        const confidenceReason =
+          insufficientData && nAfter === 0
+            ? "Too few measurements in the post window."
+            : insufficientData && nBefore === 0
+              ? "Too few measurements in the pre window."
+              : protocolImpactConfidenceReason(nBefore, nAfter, consistencyScore, triggerStrength, confounderPenalty, baselinePenalty);
+        const signalStatus = protocolImpactMarkerSignalStatus(
+          insufficientData,
+          nBefore,
+          nAfter,
+          confidenceScore,
+          confounderPenalty
+        );
+        const deltaDirectionLabel = protocolImpactDeltaDirectionLabel(trend);
+        const contextHint =
+          beforeSource === "baseline"
+            ? "Compared to baseline because pre-window data was missing."
+            : insufficientData && nAfter === 0
+              ? "Waiting for lag-adjusted post-change measurements."
+              : insufficientData && nBefore === 0
+                ? "Waiting for pre-window measurements."
+                : null;
+        const narrativeShort = protocolImpactMarkerNarrativeShort(
+          marker,
+          deltaPct,
+          trend,
+          insufficientData
+        );
+        const narrative = protocolImpactMarkerNarrative(
+          marker,
+          deltaPct,
+          trend,
+          confidence,
+          insufficientData,
+          nBefore,
+          nAfter,
+          beforeSource
+        );
+        const unit = afterSeries[0]?.unit ?? beforeSeries[0]?.unit ?? markerSeries[0]?.unit ?? "";
 
         return {
           marker,
           unit,
           beforeAvg: beforeAvg === null ? null : ROUND_2(beforeAvg),
+          beforeSource,
+          baselineAgeDays,
           afterAvg: afterAvg === null ? null : ROUND_2(afterAvg),
           deltaAbs: deltaAbs === null ? null : ROUND_2(deltaAbs),
           deltaPct: deltaPct === null ? null : ROUND_2(deltaPct),
-          trend: trendFromDelta(deltaAbs),
-          confidence: confidence.level,
-          confidenceReason: confidence.reason,
-          insufficientData: beforeValues.length === 0 || afterValues.length === 0
+          trend,
+          confidence,
+          confidenceReason,
+          insufficientData,
+          impactScore,
+          confidenceScore,
+          lagDays,
+          nBefore,
+          nAfter,
+          readinessStatus,
+          recommendedNextTestDate,
+          signalStatus,
+          deltaDirectionLabel,
+          contextHint,
+          narrativeShort,
+          narrative
         } satisfies ProtocolImpactMarkerRow;
       })
       .sort((left, right) => {
+        if (left.insufficientData !== right.insufficientData) {
+          return left.insufficientData ? 1 : -1;
+        }
+        if (right.impactScore !== left.impactScore) {
+          return right.impactScore - left.impactScore;
+        }
         const leftAbs = left.deltaPct === null ? -1 : Math.abs(left.deltaPct);
         const rightAbs = right.deltaPct === null ? -1 : Math.abs(right.deltaPct);
         return rightAbs - leftAbs;
       });
 
-    const topImpacts = rows.filter((row) => !row.insufficientData && row.deltaPct !== null).slice(0, 3);
+    const topImpacts = rows.filter((row) => !row.insufficientData).slice(0, 4);
+    const lagDaysByMarker = rows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.marker] = row.lagDays;
+      return acc;
+    }, {});
+    const eventConfidence = protocolImpactEventConfidence(rows);
+    const signalStatus = protocolImpactEventSignalStatus(rows, eventConfidence.score);
+    const signalStatusLabel = signalStatusLabelFromStatus(signalStatus);
+    const signalNextStep = protocolImpactSignalNextStep(signalStatus, rows, confounders);
+    const anchorCompound = currentCompounds[0] ?? previousCompounds[0] ?? "Protocol";
+    const headlineNarrative = protocolImpactEventHeadline({
+      eventType,
+      eventSubType,
+      changeDate: current.testDate,
+      anchorCompound,
+      fromDose: previousDose,
+      toDose: currentDose,
+      fromFrequency: previousFrequency,
+      toFrequency: currentFrequency,
+      fromCompounds: previousCompounds,
+      toCompounds: currentCompounds
+    });
+    const storyObserved = protocolImpactObservedNarrative(topImpacts);
+    const storyInterpretation = protocolImpactInterpretationNarrative(signalStatus, rows, confounders);
+    const storyContextHint = protocolImpactContextHint(signalStatus, confounders);
+
+    const storyChange = protocolImpactEventHeadline({
+      eventType,
+      eventSubType,
+      changeDate: current.testDate,
+      anchorCompound,
+      fromDose: previousDose,
+      toDose: currentDose,
+      fromFrequency: previousFrequency,
+      toFrequency: currentFrequency,
+      fromCompounds: previousCompounds,
+      toCompounds: currentCompounds
+    });
+    const storyEffect = storyObserved;
+    const storyReliability = storyInterpretation;
+    const storySummary = `${storyChange} ${storyEffect} ${storyReliability}`;
 
     events.push({
       id: `${previous.id}-${current.id}`,
       fromDose: previousDose,
       toDose: currentDose,
+      fromFrequency: previousFrequency,
+      toFrequency: currentFrequency,
+      fromCompounds: previousCompounds,
+      toCompounds: currentCompounds,
       changeDate: current.testDate,
       beforeCount: beforeReports.length,
-      afterCount: afterReports.length,
+      afterCount: baselineAfterReports.length,
+      beforeWindow: {
+        start: dateToIso(preStartTs),
+        end: dateToIso(preEndTs)
+      },
+      afterWindow: {
+        start: dateToIso(baselinePostStartTs),
+        end: dateToIso(baselinePostEndTs)
+      },
+      eventType,
+      eventSubType,
+      triggerStrength,
+      eventConfidenceScore: eventConfidence.score,
+      eventConfidence: eventConfidence.label,
+      signalStatus,
+      signalStatusLabel,
+      signalNextStep,
+      headlineNarrative,
+      storyObserved,
+      storyInterpretation,
+      storyContextHint,
+      storyChange,
+      storyEffect,
+      storyReliability,
+      storySummary,
+      confounders,
+      lagDaysByMarker,
       rows,
       topImpacts
     });
   }
 
-  return events;
+  return events.sort((left, right) => parseDateSafe(right.changeDate) - parseDateSafe(left.changeDate));
 };
 
 export const buildDoseCorrelationInsights = (
@@ -2151,6 +2918,192 @@ const evaluateDoseRelationship = (
   };
 };
 
+const defaultDoseWhyRelevant = (marker: string): string =>
+  DOSE_RELEVANCE_HINTS[marker] ?? "Potentially dose-sensitive marker based on available personal trend data.";
+
+const predictionQualityScore = (prediction: DosePrediction): number => {
+  const sampleScore = clip(prediction.sampleCount / 6, 0, 1);
+  const doseLevelScore = clip(prediction.uniqueDoseLevels / 3, 0, 1);
+  const correlationScore = clip(Math.abs(prediction.correlationR ?? 0) / 0.7, 0, 1);
+  const samplingScore = prediction.samplingMode === "trough" ? 1 : 0.72;
+
+  let quality = (sampleScore * 0.4 + doseLevelScore * 0.25 + correlationScore * 0.25 + samplingScore * 0.1) * 100;
+  if (prediction.source === "study_prior") {
+    quality *= 0.42;
+  } else if (prediction.source === "hybrid") {
+    quality *= 0.72;
+  }
+  return ROUND_2(quality);
+};
+
+const predictionEffectPotentialScore = (prediction: DosePrediction): number => {
+  const doseStep = Math.max(prediction.currentDose * 0.1, 5);
+  const expectedDelta = Math.abs(prediction.slopePerMg) * doseStep;
+  const scale = Math.max(Math.abs(prediction.currentEstimate) * 0.15, 0.3);
+  return ROUND_2(clip(expectedDelta / scale, 0, 1) * 100);
+};
+
+const clinicalWeightScore = (marker: string): number => DOSE_CLINICAL_WEIGHTS[marker] ?? 48;
+
+const assignPredictionRelevance = (prediction: DosePrediction): DosePrediction => {
+  const clinicalWeight = clinicalWeightScore(prediction.marker);
+  const dataQuality = predictionQualityScore(prediction);
+  const effectPotential = predictionEffectPotentialScore(prediction);
+  const relevanceScore = ROUND_2(clinicalWeight * 0.45 + dataQuality * 0.35 + effectPotential * 0.2);
+  return {
+    ...prediction,
+    relevanceScore,
+    whyRelevant: defaultDoseWhyRelevant(prediction.marker)
+  };
+};
+
+export const isPersonalDosePredictionEligible = (prediction: DosePrediction): boolean => {
+  const absR = Math.abs(prediction.correlationR ?? 0);
+  const directionConflict = DOSE_EXPECTED_POSITIVE_MARKERS.has(prediction.marker) && prediction.slopePerMg < -0.000001;
+  return prediction.sampleCount >= 4 && prediction.uniqueDoseLevels >= 2 && absR >= 0.35 && !directionConflict;
+};
+
+export const projectDosePredictionAt = (
+  prediction: DosePrediction,
+  targetDose: number
+): { estimate: number; low: number | null; high: number | null } => {
+  const estimate = Math.max(0, prediction.intercept + prediction.slopePerMg * targetDose);
+  const sigma = prediction.predictionSigma;
+  if (sigma === null || !Number.isFinite(sigma) || sigma <= 0) {
+    return {
+      estimate: ROUND_2(estimate),
+      low: null,
+      high: null
+    };
+  }
+  return {
+    estimate: ROUND_2(estimate),
+    low: ROUND_2(Math.max(0, estimate - sigma)),
+    high: ROUND_2(Math.max(0, estimate + sigma))
+  };
+};
+
+interface ApplyDosePriorsOptions {
+  apiAssistedMarkers?: Set<string>;
+  offlinePriorFallback?: boolean;
+}
+
+export const applyDosePriorsToPredictions = (
+  predictions: DosePrediction[],
+  priors: DosePrior[],
+  options: ApplyDosePriorsOptions = {}
+): DosePrediction[] => {
+  const priorMap = priors.reduce((map, prior) => {
+    map.set(canonicalizeMarker(prior.marker), prior);
+    return map;
+  }, new Map<string, DosePrior>());
+
+  const statusOrder: Record<DosePrediction["status"], number> = {
+    clear: 0,
+    unclear: 1,
+    insufficient: 2
+  };
+
+  return predictions
+    .map((original) => {
+      const markerKey = canonicalizeMarker(original.marker);
+      const prior = priorMap.get(markerKey) ?? null;
+      const personalEligible = isPersonalDosePredictionEligible(original);
+
+      if (!prior || personalEligible) {
+        const base = {
+          ...original,
+          source: "personal" as const,
+          isApiAssisted: false,
+          blendDiagnostics: null
+        };
+        return assignPredictionRelevance(base);
+      }
+
+      const absR = Math.abs(original.correlationR ?? 0);
+      const hasSomePersonalSignal = original.sampleCount >= 2 && original.uniqueDoseLevels >= 2 && original.correlationR !== null;
+      const hasApiAssistedMarker = options.apiAssistedMarkers?.has(original.marker) ?? false;
+      const sigmaPersonal = Math.max(original.predictionSigma ?? 0, Math.abs(original.currentEstimate) * 0.04, 0.2);
+      const sigmaPrior = Math.max(prior.sigma, 0.1);
+      const sigmaResidual = Math.max(sigmaPersonal * 0.5, 0.1);
+
+      if (!hasSomePersonalSignal) {
+        const slopePerMg = prior.slopePerMg;
+        const intercept = original.currentEstimate - slopePerMg * original.currentDose;
+        const suggestedEstimate = Math.max(0, intercept + slopePerMg * original.suggestedDose);
+        const predictionSigma = sigmaPrior;
+        const projectedLow = Math.max(0, suggestedEstimate - predictionSigma);
+        const projectedHigh = Math.max(0, suggestedEstimate + predictionSigma);
+        const priorOnly: DosePrediction = {
+          ...original,
+          slopePerMg: ROUND_3(slopePerMg),
+          intercept: ROUND_3(intercept),
+          suggestedEstimate: ROUND_2(suggestedEstimate),
+          suggestedPercentChange: calculatePercentChange(suggestedEstimate, original.currentEstimate),
+          predictionSigma: ROUND_2(predictionSigma),
+          predictedLow: ROUND_2(projectedLow),
+          predictedHigh: ROUND_2(projectedHigh),
+          source: "study_prior",
+          confidence: "Low",
+          status: "unclear",
+          statusReason: "Personal dose-linked data is too limited, so this estimate uses a study-based prior.",
+          modelType: "prior",
+          isApiAssisted: hasApiAssistedMarker,
+          blendDiagnostics: {
+            wPersonal: 0,
+            sigmaPersonal: ROUND_2(sigmaPersonal),
+            sigmaPrior: ROUND_2(sigmaPrior),
+            sigmaResidual: ROUND_2(sigmaResidual),
+            offlinePriorFallback: options.offlinePriorFallback ?? false
+          }
+        };
+        return assignPredictionRelevance(priorOnly);
+      }
+
+      const wPersonal = clip((original.sampleCount - 2) / 6, 0, 1) * clip(absR / 0.6, 0, 1);
+      const slopePerMg = wPersonal * original.slopePerMg + (1 - wPersonal) * prior.slopePerMg;
+      const intercept = original.currentEstimate - slopePerMg * original.currentDose;
+      const suggestedEstimate = Math.max(0, intercept + slopePerMg * original.suggestedDose);
+      const predictionSigma = Math.sqrt(
+        (wPersonal * sigmaPersonal) ** 2 + ((1 - wPersonal) * sigmaPrior) ** 2 + sigmaResidual ** 2
+      );
+      const projectedLow = Math.max(0, suggestedEstimate - predictionSigma);
+      const projectedHigh = Math.max(0, suggestedEstimate + predictionSigma);
+
+      const blended: DosePrediction = {
+        ...original,
+        slopePerMg: ROUND_3(slopePerMg),
+        intercept: ROUND_3(intercept),
+        suggestedEstimate: ROUND_2(suggestedEstimate),
+        suggestedPercentChange: calculatePercentChange(suggestedEstimate, original.currentEstimate),
+        predictionSigma: ROUND_2(predictionSigma),
+        predictedLow: ROUND_2(projectedLow),
+        predictedHigh: ROUND_2(projectedHigh),
+        source: "hybrid",
+        confidence: original.confidence === "Low" ? "Low" : "Medium",
+        status: original.status === "insufficient" ? "unclear" : original.status,
+        statusReason: `${original.statusReason} Study prior blended in because personal signal is limited.`,
+        modelType: "hybrid",
+        isApiAssisted: hasApiAssistedMarker,
+        blendDiagnostics: {
+          wPersonal: ROUND_2(wPersonal),
+          sigmaPersonal: ROUND_2(sigmaPersonal),
+          sigmaPrior: ROUND_2(sigmaPrior),
+          sigmaResidual: ROUND_2(sigmaResidual),
+          offlinePriorFallback: options.offlinePriorFallback ?? false
+        }
+      };
+      return assignPredictionRelevance(blended);
+    })
+    .sort((left, right) => {
+      const byStatus = statusOrder[left.status] - statusOrder[right.status];
+      if (byStatus !== 0) {
+        return byStatus;
+      }
+      return right.relevanceScore - left.relevanceScore;
+    });
+};
+
 export const estimateDoseResponse = (
   reports: LabReport[],
   markerNames: string[],
@@ -2175,6 +3128,8 @@ export const estimateDoseResponse = (
     if (!latest) {
       return;
     }
+    const uniqueDoseLevels = uniqueDoseCount(ordered);
+    const troughSampleCount = ordered.filter((sample) => sample.samplingTiming === "trough").length;
     predictions.push({
       marker,
       unit: unitFallback ?? latest.unit,
@@ -2183,10 +3138,16 @@ export const estimateDoseResponse = (
       rSquared: 0,
       correlationR: null,
       sampleCount: ordered.length,
+      uniqueDoseLevels,
+      allSampleCount: ordered.length,
+      troughSampleCount,
       currentDose: ROUND_2(latest.dose),
       suggestedDose: ROUND_2(latest.dose),
       currentEstimate: ROUND_2(latest.value),
       suggestedEstimate: ROUND_2(latest.value),
+      predictionSigma: null,
+      predictedLow: null,
+      predictedHigh: null,
       suggestedPercentChange: null,
       confidence: "Low",
       status: "insufficient",
@@ -2196,6 +3157,11 @@ export const estimateDoseResponse = (
       usedReportDates: ordered.map((sample) => sample.date),
       excludedPoints,
       modelType: "linear",
+      source: "personal",
+      relevanceScore: 0,
+      whyRelevant: defaultDoseWhyRelevant(marker),
+      isApiAssisted: false,
+      blendDiagnostics: null,
       scenarios: []
     });
   };
@@ -2363,6 +3329,8 @@ export const estimateDoseResponse = (
     const predictAtDose = (dose: number): number => Math.max(0, model.estimateAtDose(dose));
     const currentEstimate = predictAtDose(currentDose);
     const rawSuggestedEstimate = predictAtDose(suggestedDose);
+    const residuals = modelSamples.map((sample) => sample.value - predictAtDose(sample.dose));
+    const residualSigma = Math.max(stdDev(residuals), Math.abs(currentEstimate) * 0.02, 0.1);
 
     let suggestedEstimate = rawSuggestedEstimate;
     if (relationship.status !== "clear") {
@@ -2390,6 +3358,9 @@ export const estimateDoseResponse = (
       });
     }
 
+    const predictedLow = relationship.status === "clear" ? ROUND_2(Math.max(0, suggestedEstimate - residualSigma)) : null;
+    const predictedHigh = relationship.status === "clear" ? ROUND_2(Math.max(0, suggestedEstimate + residualSigma)) : null;
+
     predictions.push({
       marker,
       unit: preferredUnit,
@@ -2398,10 +3369,16 @@ export const estimateDoseResponse = (
       rSquared: model.rSquared,
       correlationR,
       sampleCount: modelSamples.length,
+      uniqueDoseLevels: uniqueDoseCount(modelSamples),
+      allSampleCount: samplingFiltered.length,
+      troughSampleCount: troughSamples.length,
       currentDose: ROUND_2(currentDose),
       suggestedDose: ROUND_2(suggestedDose),
       currentEstimate: ROUND_2(currentEstimate),
       suggestedEstimate: ROUND_2(suggestedEstimate),
+      predictionSigma: ROUND_2(residualSigma),
+      predictedLow,
+      predictedHigh,
       suggestedPercentChange: relationship.status === "clear" ? calculatePercentChange(suggestedEstimate, currentEstimate) : null,
       confidence,
       status: relationship.status,
@@ -2411,6 +3388,11 @@ export const estimateDoseResponse = (
       usedReportDates: modelSamples.map((sample) => sample.date),
       excludedPoints,
       modelType,
+      source: "personal",
+      relevanceScore: 0,
+      whyRelevant: defaultDoseWhyRelevant(marker),
+      isApiAssisted: false,
+      blendDiagnostics: null,
       scenarios: scenarioCandidates.sort((left, right) => left.dose - right.dose)
     });
   }
@@ -2426,15 +3408,17 @@ export const estimateDoseResponse = (
     Low: 2
   };
 
-  return predictions.sort((left, right) => {
-    const byStatus = statusOrder[left.status] - statusOrder[right.status];
-    if (byStatus !== 0) {
-      return byStatus;
-    }
-    const byConfidence = confidenceOrder[left.confidence] - confidenceOrder[right.confidence];
-    if (byConfidence !== 0) {
-      return byConfidence;
-    }
-    return Math.abs(right.correlationR ?? 0) - Math.abs(left.correlationR ?? 0);
-  });
+  return predictions
+    .map((prediction) => assignPredictionRelevance(prediction))
+    .sort((left, right) => {
+      const byStatus = statusOrder[left.status] - statusOrder[right.status];
+      if (byStatus !== 0) {
+        return byStatus;
+      }
+      const byConfidence = confidenceOrder[left.confidence] - confidenceOrder[right.confidence];
+      if (byConfidence !== 0) {
+        return byConfidence;
+      }
+      return right.relevanceScore - left.relevanceScore;
+    });
 };

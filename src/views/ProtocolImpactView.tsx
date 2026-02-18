@@ -1,10 +1,10 @@
-import { ChevronDown } from "lucide-react";
+import { useMemo } from "react";
 import { DoseCorrelationInsight, ProtocolImpactDoseEvent } from "../analytics";
+import ProtocolImpactEventCard from "../components/ProtocolImpactEventCard";
 import { PROTOCOL_MARKER_CATEGORIES } from "../constants";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
-import { formatDate } from "../utils";
 
 interface ProtocolImpactViewProps {
   protocolDoseOverview: DoseCorrelationInsight[];
@@ -12,15 +12,11 @@ interface ProtocolImpactViewProps {
   protocolWindowSize: number;
   protocolMarkerSearch: string;
   protocolCategoryFilter: "all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation";
-  protocolSortKey: "deltaPct" | "deltaAbs" | "marker";
-  collapsedProtocolEvents: string[];
   settings: AppSettings;
   language: AppLanguage;
   onProtocolWindowSizeChange: (value: number) => void;
   onProtocolMarkerSearchChange: (value: string) => void;
   onProtocolCategoryFilterChange: (value: "all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation") => void;
-  onProtocolSortKeyChange: (value: "deltaPct" | "deltaAbs" | "marker") => void;
-  onToggleCollapsedEvent: (eventId: string) => void;
 }
 
 const ProtocolImpactView = ({
@@ -29,36 +25,63 @@ const ProtocolImpactView = ({
   protocolWindowSize,
   protocolMarkerSearch,
   protocolCategoryFilter,
-  protocolSortKey,
-  collapsedProtocolEvents,
   settings,
   language,
   onProtocolWindowSizeChange,
   onProtocolMarkerSearchChange,
-  onProtocolCategoryFilterChange,
-  onProtocolSortKeyChange,
-  onToggleCollapsedEvent
+  onProtocolCategoryFilterChange
 }: ProtocolImpactViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
-  const confidenceLabel = (value: string): string => {
-    if (value === "High") {
-      return tr("Hoog", "High");
-    }
-    if (value === "Medium") {
-      return tr("Middel", "Medium");
-    }
-    if (value === "Low") {
-      return tr("Laag", "Low");
-    }
-    return value;
-  };
+  const categorySet = useMemo(
+    () => (protocolCategoryFilter === "all" ? null : new Set(PROTOCOL_MARKER_CATEGORIES[protocolCategoryFilter] ?? [])),
+    [protocolCategoryFilter]
+  );
+
+  const markerQuery = protocolMarkerSearch.trim().toLowerCase();
+
+  const doseContextByMarker = useMemo(() => {
+    return protocolDoseOverview.reduce<Record<string, string>>((acc, item) => {
+      const markerLabel = getMarkerDisplayName(item.marker, language);
+      const direction =
+        item.r >= 0
+          ? tr("neigt omhoog bij hogere dosis", "tends to increase with higher dose")
+          : tr("neigt omlaag bij hogere dosis", "tends to decrease with higher dose");
+      acc[item.marker] = `${tr("Dosis-context", "Dose context")}: ${markerLabel} ${direction} (r=${formatAxisTick(item.r)}, n=${item.n})`;
+      return acc;
+    }, {});
+  }, [protocolDoseOverview, language, tr]);
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Protocol-impact", "Protocol Impact")}</h3>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+      <div className="protocol-impact-premium-shell rounded-2xl border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-slate-100">{tr("Protocol Impact Timeline", "Protocol Impact Timeline")}</h3>
+            <p className="mt-1 text-sm text-slate-300">
+              {tr(
+                "Per protocolwijziging zie je in gewone taal wat feitelijk veranderde en hoe dat mogelijk samenhangt met je protocol.",
+                "For each protocol change, you see in plain language what changed factually and how that may relate to your protocol."
+              )}
+            </p>
+            <p className="mt-2 text-xs text-slate-300">
+              <strong>{tr("Zo lees je dit", "How to read this")}:</strong>{" "}
+              {tr(
+                "Gemeten veranderingen zijn feiten. De koppeling aan je protocol is een inschatting, omdat timing, supplementen, klachten en normale schommelingen ook invloed kunnen hebben.",
+                "Measured changes are facts. The link to your protocol is an estimate, because timing, supplements, symptoms, and normal variability can also influence results."
+              )}
+            </p>
+          </div>
+          <div className="medical-disclaimer rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <strong>{tr("Medische disclaimer", "Medical disclaimer")}: </strong>
+            {tr(
+              "Deze inzichten gebruiken echte metingen uit je labrapporten. De verandering na een protocolwijziging is feitelijk gemeten. Of die verandering volledig door het protocol komt, blijft een inschatting, omdat ook timing, supplementen, klachten en normale schommelingen invloed kunnen hebben.",
+              "These insights use real measurements from your lab reports. The change after a protocol adjustment is factually measured. Whether that change is fully caused by the protocol remains an estimate, because timing, supplements, symptoms, and normal variability can also influence results."
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="text-xs text-slate-300">
             {tr("Zoek marker", "Filter markers")}
             <input
@@ -67,20 +90,6 @@ const ProtocolImpactView = ({
               placeholder={tr("bijv. Estradiol", "e.g. Estradiol")}
               className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
             />
-          </label>
-          <label className="text-xs text-slate-300">
-            {tr("Window grootte", "Window size")}
-            <select
-              value={protocolWindowSize}
-              onChange={(event) => onProtocolWindowSizeChange(Number(event.target.value))}
-              className="mt-1 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
-            >
-              {[1, 2, 3, 4].map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
           </label>
           <label className="text-xs text-slate-300">
             {tr("Categorie", "Category")}
@@ -100,156 +109,57 @@ const ProtocolImpactView = ({
           </label>
         </div>
 
-        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
-          <h4 className="text-sm font-semibold text-slate-100">{tr("Dosis-respons overzicht", "Dose Response Overview")}</h4>
-          {protocolDoseOverview.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-400">
-              {tr(
-                "Nog te weinig punten (minimaal n=3 per marker) voor correlatie-overzicht.",
-                "Not enough points yet (minimum n=3 per marker) for correlation overview."
-              )}
-            </p>
-          ) : (
-            <ul className="mt-2 space-y-1 text-xs text-slate-300">
-              {protocolDoseOverview.map((item) => (
-                <li key={item.marker}>
-                  {getMarkerDisplayName(item.marker, settings.language)}{" "}
-                  {item.r >= 0
-                    ? tr("neigt omhoog bij hogere dosis", "tends to increase with higher dose")
-                    : tr("neigt omlaag bij hogere dosis", "tends to decrease with higher dose")}{" "}
-                  (r={formatAxisTick(item.r)}, n={item.n})
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <details className="mt-2 rounded-xl border border-slate-700/70 bg-slate-900/35 p-3 text-xs text-slate-300">
+          <summary className="cursor-pointer list-none font-medium text-slate-200">{tr("Advanced", "Advanced")}</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[auto_auto] sm:items-end">
+            <label>
+              {tr("Venstergrootte", "Window size")}
+              <select
+                value={protocolWindowSize}
+                onChange={(event) => onProtocolWindowSizeChange(Number(event.target.value))}
+                className="mt-1 block rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100"
+              >
+                {[30, 45, 60].map((value) => (
+                  <option key={value} value={value}>
+                    {value} {tr("dagen", "days")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="rounded-full border border-slate-600 px-2 py-0.5">Lag: 10-28 {tr("dagen", "days")}</span>
+          </div>
+        </details>
 
         {protocolDoseEvents.length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">
-            {tr("Nog geen dosisveranderingsevents gevonden in je huidige datafilter.", "No dose change events found in your current data filter.")}
+            {tr(
+              "Nog geen protocolwijziging met bruikbare voor/na-data gevonden in je huidige filter.",
+              "No protocol-change events with usable before/after data were found in your current filter."
+            )}
           </p>
         ) : (
           <div className="mt-3 space-y-3">
             {protocolDoseEvents.map((event) => {
-              const isCollapsed = collapsedProtocolEvents.includes(event.id);
-              const categorySet =
-                protocolCategoryFilter === "all" ? null : new Set(PROTOCOL_MARKER_CATEGORIES[protocolCategoryFilter] ?? []);
-              const query = protocolMarkerSearch.trim().toLowerCase();
-              const rows = event.rows
-                .filter((row) => {
-                  if (categorySet && !categorySet.has(row.marker)) {
-                    return false;
-                  }
-                  if (!query) {
-                    return true;
-                  }
-                  const label = getMarkerDisplayName(row.marker, settings.language).toLowerCase();
-                  return label.includes(query) || row.marker.toLowerCase().includes(query);
-                })
-                .sort((left, right) => {
-                  if (protocolSortKey === "marker") {
-                    return left.marker.localeCompare(right.marker);
-                  }
-                  if (protocolSortKey === "deltaAbs") {
-                    return Math.abs(right.deltaAbs ?? -Infinity) - Math.abs(left.deltaAbs ?? -Infinity);
-                  }
-                  return Math.abs(right.deltaPct ?? -Infinity) - Math.abs(left.deltaPct ?? -Infinity);
-                });
+              const filteredRows = event.rows.filter((row) => {
+                if (categorySet && !categorySet.has(row.marker)) {
+                  return false;
+                }
+                if (!markerQuery) {
+                  return true;
+                }
+                const label = getMarkerDisplayName(row.marker, settings.language).toLowerCase();
+                return label.includes(markerQuery) || row.marker.toLowerCase().includes(markerQuery);
+              });
+
               return (
-                <article key={event.id} className="rounded-xl border border-slate-700 bg-slate-800/70 p-3">
-                  <button
-                    type="button"
-                    className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
-                    onClick={() => onToggleCollapsedEvent(event.id)}
-                  >
-                    <h4 className="text-sm font-semibold text-slate-100">
-                      {(event.fromDose ?? "-")} {"->"} {(event.toDose ?? "-")} mg/week
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-slate-400">
-                        {formatDate(event.changeDate)} | {tr("Window", "Window")}: {event.beforeCount} {tr("voor", "before")} /{" "}
-                        {event.afterCount} {tr("na", "after")}
-                      </p>
-                      <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isCollapsed ? "" : "rotate-180"}`} />
-                    </div>
-                  </button>
-                  {!isCollapsed ? (
-                    <>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {event.topImpacts.length === 0 ? (
-                          <span className="text-xs text-slate-400">{tr("Top impacts: onvoldoende data", "Top impacts: insufficient data")}</span>
-                        ) : (
-                          event.topImpacts.map((row) => (
-                            <span key={`${event.id}-${row.marker}`} className="rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-cyan-200">
-                              {getMarkerDisplayName(row.marker, settings.language)}{" "}
-                              {row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                        <span>{tr("Sorteer op", "Sort by")}:</span>
-                        <button
-                          type="button"
-                          className={`rounded px-2 py-0.5 ${protocolSortKey === "deltaPct" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`}
-                          onClick={() => onProtocolSortKeyChange("deltaPct")}
-                        >
-                          Δ%
-                        </button>
-                        <button
-                          type="button"
-                          className={`rounded px-2 py-0.5 ${protocolSortKey === "deltaAbs" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`}
-                          onClick={() => onProtocolSortKeyChange("deltaAbs")}
-                        >
-                          Δ
-                        </button>
-                        <button
-                          type="button"
-                          className={`rounded px-2 py-0.5 ${protocolSortKey === "marker" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-900/70"}`}
-                          onClick={() => onProtocolSortKeyChange("marker")}
-                        >
-                          {tr("Marker", "Marker")}
-                        </button>
-                      </div>
-                      <div className="mt-2 overflow-x-auto rounded-lg border border-slate-700">
-                        <table className="min-w-full divide-y divide-slate-700 text-xs">
-                          <thead className="bg-slate-900/70 text-slate-300">
-                            <tr>
-                              <th className="px-2 py-1.5 text-left">{tr("Marker", "Marker")}</th>
-                              <th className="px-2 py-1.5 text-right">{tr("Voor gem.", "Before avg")}</th>
-                              <th className="px-2 py-1.5 text-right">{tr("Na gem.", "After avg")}</th>
-                              <th className="px-2 py-1.5 text-right">Δ</th>
-                              <th className="px-2 py-1.5 text-right">Δ%</th>
-                              <th className="px-2 py-1.5 text-center">{tr("Trend", "Trend")}</th>
-                              <th className="px-2 py-1.5 text-left">{tr("Confidence", "Confidence")}</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800">
-                            {rows.map((row) => (
-                              <tr key={`${event.id}-${row.marker}`} className="bg-slate-900/30 text-slate-200">
-                                <td className="px-2 py-1.5">{getMarkerDisplayName(row.marker, settings.language)}</td>
-                                <td className="px-2 py-1.5 text-right">
-                                  {row.beforeAvg === null ? tr("Onvoldoende data", "Insufficient data") : `${formatAxisTick(row.beforeAvg)} ${row.unit}`}
-                                </td>
-                                <td className="px-2 py-1.5 text-right">
-                                  {row.afterAvg === null ? tr("Onvoldoende data", "Insufficient data") : `${formatAxisTick(row.afterAvg)} ${row.unit}`}
-                                </td>
-                                <td className="px-2 py-1.5 text-right">{row.deltaAbs === null ? "-" : formatAxisTick(row.deltaAbs)}</td>
-                                <td className="px-2 py-1.5 text-right">{row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}</td>
-                                <td className="px-2 py-1.5 text-center">
-                                  {row.trend === "up" ? "↑" : row.trend === "down" ? "↓" : row.trend === "flat" ? "→" : "·"}
-                                </td>
-                                <td className="px-2 py-1.5" title={row.confidenceReason}>
-                                  {confidenceLabel(row.confidence)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  ) : null}
-                </article>
+                <ProtocolImpactEventCard
+                  key={event.id}
+                  event={event}
+                  rows={filteredRows}
+                  settings={settings}
+                  language={language}
+                  doseContextByMarker={doseContextByMarker}
+                />
               );
             })}
           </div>
