@@ -2666,115 +2666,149 @@ const callGeminiExtraction = async (
   rawPdfBuffer: ArrayBuffer
 ): Promise<ExtractionDraft | null> => {
   const shouldAttachPdf = rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= 7_000_000;
-  const routePayload = {
-    fileName,
-    pdfText,
-    pdfBase64: shouldAttachPdf ? arrayBufferToBase64(rawPdfBuffer) : null
-  };
-
-  let response: Response | null = null;
-  try {
-    response = await fetch("/api/gemini/extract", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(routePayload)
-    });
-  } catch {
-    response = null;
+  const pdfBase64 = shouldAttachPdf ? arrayBufferToBase64(rawPdfBuffer) : null;
+  const routePayloads: Array<{ fileName: string; pdfText: string; pdfBase64: string | null }> = [
+    { fileName, pdfText, pdfBase64 },
+    { fileName, pdfText: "", pdfBase64 }
+  ];
+  if (!pdfBase64 && pdfText) {
+    routePayloads.push({ fileName, pdfText, pdfBase64: null });
   }
 
-  let body: GeminiExtractionResponse = {};
-  if (response?.ok) {
+  const fetchGeminiRoute = async (
+    payload: { fileName: string; pdfText: string; pdfBase64: string | null }
+  ): Promise<GeminiExtractionResponse | null> => {
+    let response: Response | null = null;
     try {
-      body = (await response.json()) as GeminiExtractionResponse;
+      response = await fetch("/api/gemini/extract", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
     } catch {
-      body = {};
+      return null;
     }
-  } else {
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!/application\/json/i.test(contentType)) {
+      return null;
+    }
+
+    try {
+      return (await response.json()) as GeminiExtractionResponse;
+    } catch {
+      return null;
+    }
+  };
+
+  const callGeminiDirect = async (): Promise<GeminiExtractionResponse | null> => {
     const directGeminiKey = String(import.meta.env.VITE_GEMINI_API_KEY ?? "").trim();
     if (!directGeminiKey) {
       return null;
     }
 
-    const parts: Array<Record<string, unknown>> = [{ text: buildClaudeExtractionPrompt(fileName, pdfText) }];
-    if (routePayload.pdfBase64) {
-      parts.push({
-        inline_data: {
-          mime_type: "application/pdf",
-          data: routePayload.pdfBase64
-        }
-      });
-    }
-
-    let parsedBody: GeminiExtractionResponse | null = null;
-    for (const model of GEMINI_MODEL_CANDIDATES) {
-      let directResponse: Response;
-      try {
-        directResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json"
-            },
-            body: JSON.stringify({
-              generationConfig: {
-                temperature: 0.1,
-                responseMimeType: "application/json"
-              },
-              contents: [
-                {
-                  role: "user",
-                  parts
-                }
-              ]
-            })
+    for (const payload of routePayloads) {
+      const parts: Array<Record<string, unknown>> = [{ text: buildClaudeExtractionPrompt(fileName, payload.pdfText) }];
+      if (payload.pdfBase64) {
+        parts.push({
+          inline_data: {
+            mime_type: "application/pdf",
+            data: payload.pdfBase64
           }
-        );
-      } catch {
-        continue;
+        });
       }
 
-      if (!directResponse.ok) {
-        if (directResponse.status === 404) {
+      for (const model of GEMINI_MODEL_CANDIDATES) {
+        let directResponse: Response;
+        try {
+          directResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json"
+              },
+              body: JSON.stringify({
+                generationConfig: {
+                  temperature: 0.1,
+                  responseMimeType: "application/json"
+                },
+                contents: [
+                  {
+                    role: "user",
+                    parts
+                  }
+                ]
+              })
+            }
+          );
+        } catch {
           continue;
         }
-        return null;
-      }
 
-      let rawBody: unknown;
-      try {
-        rawBody = await directResponse.json();
-      } catch {
-        continue;
-      }
+        if (!directResponse.ok) {
+          if (directResponse.status === 404) {
+            continue;
+          }
+          break;
+        }
 
-      const candidateText =
-        (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
-        "";
-      const jsonBlock = extractJsonBlock(candidateText);
-      if (!jsonBlock) {
-        continue;
-      }
-      try {
-        const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
-        parsedBody = {
-          model,
-          testDate: parsed.testDate,
-          markers: Array.isArray(parsed.markers) ? parsed.markers : []
-        };
-        break;
-      } catch {
-        continue;
+        let rawBody: unknown;
+        try {
+          rawBody = await directResponse.json();
+        } catch {
+          continue;
+        }
+
+        const candidateText =
+          (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
+          "";
+        const jsonBlock = extractJsonBlock(candidateText);
+        if (!jsonBlock) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
+          if (Array.isArray(parsed.markers) && parsed.markers.length > 0) {
+            return {
+              model,
+              testDate: parsed.testDate,
+              markers: parsed.markers
+            };
+          }
+        } catch {
+          continue;
+        }
       }
     }
 
-    if (!parsedBody) {
-      return null;
+    return null;
+  };
+
+  let body: GeminiExtractionResponse | null = null;
+  for (const payload of routePayloads) {
+    const routeBody = await fetchGeminiRoute(payload);
+    if (routeBody && Array.isArray(routeBody.markers) && routeBody.markers.length > 0) {
+      body = routeBody;
+      break;
     }
-    body = parsedBody;
+  }
+
+  if (!body) {
+    const directBody = await callGeminiDirect();
+    if (directBody?.markers?.length) {
+      body = directBody;
+    }
+  }
+
+  if (!body) {
+    return null;
   }
 
   const rawMarkers = Array.isArray(body.markers) ? body.markers : [];
