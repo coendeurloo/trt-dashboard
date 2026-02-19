@@ -22,7 +22,12 @@ interface GeminiExtractionPayload {
 }
 
 const MAX_JSON_BYTES = 18 * 1024 * 1024;
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-2.0-flash"
+] as const;
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -167,32 +172,49 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
+    let responseText = "";
+    let selectedModel = "";
+    let lastErrorStatus = 500;
+    let lastErrorText = "";
+    for (const model of GEMINI_MODELS) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
           },
-          contents: [
-            {
-              role: "user",
-              parts
-            }
-          ]
-        })
-      }
-    );
+          body: JSON.stringify({
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json"
+            },
+            contents: [
+              {
+                role: "user",
+                parts
+              }
+            ]
+          })
+        }
+      );
 
-    const responseText = await response.text();
-    if (!response.ok) {
-      sendJson(res, response.status, {
-        error: { message: "Gemini extraction failed", detail: responseText.slice(0, 800) }
+      responseText = await response.text();
+      if (response.ok) {
+        selectedModel = model;
+        break;
+      }
+
+      lastErrorStatus = response.status;
+      lastErrorText = responseText.slice(0, 800);
+      if (response.status !== 404) {
+        break;
+      }
+    }
+
+    if (!selectedModel) {
+      sendJson(res, lastErrorStatus, {
+        error: { message: "Gemini extraction failed", detail: lastErrorText }
       });
       return;
     }
@@ -223,7 +245,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     sendJson(res, 200, {
-      model: GEMINI_MODEL,
+      model: selectedModel,
       testDate: extraction.testDate,
       markers: Array.isArray(extraction.markers) ? extraction.markers : []
     });

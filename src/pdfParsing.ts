@@ -178,6 +178,12 @@ const OCR_INIT_BACKOFF_MS = 250;
 const OCR_PAGE_TIMEOUT_MS = 15_000;
 const OCR_TOTAL_TIMEOUT_MS = 75_000;
 const OCR_LANG_FALLBACK = "eng";
+const GEMINI_MODEL_CANDIDATES = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-2.0-flash"
+] as const;
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
 const SPATIAL_CLUSTER_GAP = 42;
 const SPATIAL_COLUMN_BAND_WIDTH = 120;
@@ -2702,61 +2708,73 @@ const callGeminiExtraction = async (
       });
     }
 
-    let directResponse: Response;
-    try {
-      directResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify({
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json"
+    let parsedBody: GeminiExtractionResponse | null = null;
+    for (const model of GEMINI_MODEL_CANDIDATES) {
+      let directResponse: Response;
+      try {
+        directResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json"
             },
-            contents: [
-              {
-                role: "user",
-                parts
-              }
-            ]
-          })
+            body: JSON.stringify({
+              generationConfig: {
+                temperature: 0.1,
+                responseMimeType: "application/json"
+              },
+              contents: [
+                {
+                  role: "user",
+                  parts
+                }
+              ]
+            })
+          }
+        );
+      } catch {
+        continue;
+      }
+
+      if (!directResponse.ok) {
+        if (directResponse.status === 404) {
+          continue;
         }
-      );
-    } catch {
-      return null;
+        return null;
+      }
+
+      let rawBody: unknown;
+      try {
+        rawBody = await directResponse.json();
+      } catch {
+        continue;
+      }
+
+      const candidateText =
+        (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
+        "";
+      const jsonBlock = extractJsonBlock(candidateText);
+      if (!jsonBlock) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
+        parsedBody = {
+          model,
+          testDate: parsed.testDate,
+          markers: Array.isArray(parsed.markers) ? parsed.markers : []
+        };
+        break;
+      } catch {
+        continue;
+      }
     }
 
-    if (!directResponse.ok) {
+    if (!parsedBody) {
       return null;
     }
-
-    let rawBody: unknown;
-    try {
-      rawBody = await directResponse.json();
-    } catch {
-      return null;
-    }
-
-    const candidateText =
-      (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
-      "";
-    const jsonBlock = extractJsonBlock(candidateText);
-    if (!jsonBlock) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
-      body = {
-        model: "gemini-2.0-flash",
-        testDate: parsed.testDate,
-        markers: Array.isArray(parsed.markers) ? parsed.markers : []
-      };
-    } catch {
-      return null;
-    }
+    body = parsedBody;
   }
 
   const rawMarkers = Array.isArray(body.markers) ? body.markers : [];
