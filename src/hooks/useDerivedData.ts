@@ -17,18 +17,26 @@ import {
   filterReportsBySampling
 } from "../analytics";
 import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS } from "../constants";
-import { AppSettings, Protocol, StoredAppData } from "../types";
+import { AppSettings, Protocol, StoredAppData, SupplementPeriod } from "../types";
 import { safeNumber, sortReportsChronological, withinRange } from "../utils";
 
 interface UseDerivedDataOptions {
   appData: StoredAppData;
   protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
   samplingControlsEnabled: boolean;
   protocolWindowSize: number;
   doseResponseInput: string;
 }
 
-export const useDerivedData = ({ appData, protocols, samplingControlsEnabled, protocolWindowSize, doseResponseInput }: UseDerivedDataOptions) => {
+export const useDerivedData = ({
+  appData,
+  protocols,
+  supplementTimeline,
+  samplingControlsEnabled,
+  protocolWindowSize,
+  doseResponseInput
+}: UseDerivedDataOptions) => {
   const reports = useMemo(
     () =>
       sortReportsChronological(
@@ -124,13 +132,13 @@ export const useDerivedData = ({ appData, protocols, samplingControlsEnabled, pr
   const trendByMarker = useMemo(() => {
     return allMarkers.reduce(
       (acc, marker) => {
-        const series = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem, protocols);
+        const series = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem, protocols, supplementTimeline);
         acc[marker] = classifyMarkerTrend(series, marker);
         return acc;
       },
       {} as Record<string, MarkerTrendSummary>
     );
-  }, [allMarkers, visibleReports, appData.settings.unitSystem]);
+  }, [allMarkers, visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]);
 
   const alerts = useMemo(
     () => buildAlerts(visibleReports, allMarkers, appData.settings.unitSystem, appData.settings.language),
@@ -145,12 +153,12 @@ export const useDerivedData = ({ appData, protocols, samplingControlsEnabled, pr
     const markerSet = new Set<string>(alerts.map((alert) => alert.marker));
     return Array.from(markerSet).reduce(
       (acc, marker) => {
-        acc[marker] = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem);
+        acc[marker] = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem, protocols, supplementTimeline);
         return acc;
       },
       {} as Record<string, MarkerSeriesPoint[]>
     );
-  }, [alerts, visibleReports, appData.settings.unitSystem]);
+  }, [alerts, visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]);
 
   const trtStability = useMemo(
     () => computeTrtStabilityIndex(visibleReports, appData.settings.unitSystem),
@@ -163,23 +171,23 @@ export const useDerivedData = ({ appData, protocols, samplingControlsEnabled, pr
   );
 
   const protocolImpactSummary = useMemo(
-    () => buildProtocolImpactSummary(visibleReports, appData.settings.unitSystem, protocols),
-    [visibleReports, appData.settings.unitSystem, protocols]
+    () => buildProtocolImpactSummary(visibleReports, appData.settings.unitSystem, protocols, supplementTimeline),
+    [visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]
   );
 
   const protocolDoseEvents = useMemo(
-    () => buildProtocolImpactDoseEvents(visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols),
-    [visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols]
+    () => buildProtocolImpactDoseEvents(visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols, supplementTimeline),
+    [visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols, supplementTimeline]
   );
 
   const protocolDoseOverview = useMemo(
-    () => buildDoseCorrelationInsights(visibleReports, allMarkers, appData.settings.unitSystem, protocols),
-    [visibleReports, allMarkers, appData.settings.unitSystem, protocols]
+    () => buildDoseCorrelationInsights(visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline),
+    [visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline]
   );
 
   const dosePredictions = useMemo(
-    () => estimateDoseResponse(visibleReports, allMarkers, appData.settings.unitSystem, protocols),
-    [visibleReports, allMarkers, appData.settings.unitSystem, protocols]
+    () => estimateDoseResponse(visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline),
+    [visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline]
   );
 
   const customDoseValue = useMemo(() => safeNumber(doseResponseInput), [doseResponseInput]);

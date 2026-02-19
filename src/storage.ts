@@ -7,9 +7,11 @@ import {
   Protocol,
   ReportAnnotations,
   StoredAppData,
-  SupplementEntry
+  SupplementEntry,
+  SupplementPeriod,
+  SymptomCheckIn
 } from "./types";
-import { normalizeSupplementFrequency } from "./protocolStandards";
+import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag } from "./utils";
 
@@ -22,6 +24,8 @@ declare global {
 type PartialAppData = Partial<StoredAppData> & {
   reports?: Array<Partial<LabReport> & { markers?: Array<Partial<MarkerValue>> }>;
   protocols?: Array<Partial<Protocol>>;
+  supplementTimeline?: Array<Partial<SupplementPeriod>>;
+  checkIns?: Array<Partial<SymptomCheckIn>>;
   settings?: Partial<AppSettings>;
 };
 
@@ -36,6 +40,8 @@ const createDefaultData = (): StoredAppData => ({
   schemaVersion: APP_SCHEMA_VERSION,
   reports: [],
   protocols: [],
+  supplementTimeline: [],
+  checkIns: [],
   settings: DEFAULT_SETTINGS
 });
 
@@ -56,6 +62,98 @@ const normalizeSupplementEntry = (value: unknown): SupplementEntry | null => {
     name,
     dose: String(row.dose ?? "").trim(),
     frequency: normalizeSupplementFrequency(String(row.frequency ?? "unknown"))
+  };
+};
+
+const normalizeIsoDate = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+  const ms = Date.parse(`${trimmed}T00:00:00Z`);
+  if (!Number.isFinite(ms)) {
+    return null;
+  }
+  return trimmed;
+};
+
+const normalizeSupplementPeriod = (value: unknown): SupplementPeriod | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<SupplementPeriod>;
+  const name = canonicalizeSupplement(String(row.name ?? ""));
+  if (!name) {
+    return null;
+  }
+  const startDate = normalizeIsoDate(row.startDate);
+  if (!startDate) {
+    return null;
+  }
+  const parsedEndDate = row.endDate === null || row.endDate === undefined ? null : normalizeIsoDate(row.endDate);
+  const endDate = parsedEndDate;
+  if (endDate && endDate < startDate) {
+    return null;
+  }
+  return {
+    id: String(row.id ?? createId()),
+    name,
+    dose: String(row.dose ?? "").trim(),
+    frequency: normalizeSupplementFrequency(String(row.frequency ?? "unknown")),
+    startDate,
+    endDate
+  };
+};
+
+const normalizeSupplementOverrides = (value: unknown): SupplementPeriod[] | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized = value
+    .map((entry) => normalizeSupplementPeriod(entry))
+    .filter((entry): entry is SupplementPeriod => entry !== null);
+  return normalized.length > 0 ? normalized : [];
+};
+
+const normalizeScore = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  const rounded = Math.round(parsed);
+  if (rounded < 1 || rounded > 5) {
+    return null;
+  }
+  return rounded;
+};
+
+const normalizeSymptomCheckIn = (value: unknown): SymptomCheckIn | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<SymptomCheckIn>;
+  const date = normalizeIsoDate(row.date);
+  if (!date) {
+    return null;
+  }
+  return {
+    id: String(row.id ?? createId()),
+    date,
+    energy: normalizeScore(row.energy),
+    libido: normalizeScore(row.libido),
+    mood: normalizeScore(row.mood),
+    sleep: normalizeScore(row.sleep),
+    motivation: normalizeScore(row.motivation),
+    notes: String(row.notes ?? "")
   };
 };
 
@@ -91,17 +189,10 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
     ? value.compounds.map((entry) => normalizeCompoundEntry(entry)).filter((entry): entry is CompoundEntry => entry !== null)
     : [];
 
-  const supplements = Array.isArray(value.supplements)
-    ? value.supplements
-        .map((entry) => normalizeSupplementEntry(entry))
-        .filter((entry): entry is SupplementEntry => entry !== null)
-    : [];
-
   return {
     id,
     name,
     compounds,
-    supplements,
     notes: String(value.notes ?? ""),
     createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : new Date().toISOString(),
     updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : new Date().toISOString()
@@ -115,6 +206,7 @@ const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportA
   return {
     protocolId,
     protocol: String(annotations?.protocol ?? ""),
+    supplementOverrides: normalizeSupplementOverrides(annotations?.supplementOverrides),
     symptoms: String(annotations?.symptoms ?? ""),
     notes: String(annotations?.notes ?? ""),
     samplingTiming: normalizeSamplingTiming(annotations?.samplingTiming)
@@ -283,6 +375,18 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
           return deduped;
         }, [] as Protocol[])
     : [];
+  const supplementTimeline = Array.isArray(raw.supplementTimeline)
+    ? raw.supplementTimeline
+        .map((entry) => normalizeSupplementPeriod(entry))
+        .filter((entry): entry is SupplementPeriod => entry !== null)
+        .sort((left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
+    : [];
+  const checkIns = Array.isArray(raw.checkIns)
+    ? raw.checkIns
+        .map((entry) => normalizeSymptomCheckIn(entry))
+        .filter((entry): entry is SymptomCheckIn => entry !== null)
+        .sort((left, right) => left.date.localeCompare(right.date))
+    : [];
 
   // Ensure exactly one baseline when legacy data has multiple baseline flags.
   let baselineTaken = false;
@@ -304,6 +408,8 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
     schemaVersion: APP_SCHEMA_VERSION,
     reports: normalizedReports,
     protocols,
+    supplementTimeline,
+    checkIns,
     settings: normalizeSettings(raw.settings)
   };
 };

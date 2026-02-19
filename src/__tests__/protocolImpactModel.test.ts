@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildProtocolImpactDoseEvents } from "../analytics";
-import { LabReport, Protocol, SamplingTiming, SupplementEntry } from "../types";
+import { LabReport, Protocol, SamplingTiming } from "../types";
 
 const mkProtocol = (
   id: string,
@@ -8,7 +8,6 @@ const mkProtocol = (
     doseMg: number;
     frequency: string;
     compound?: string;
-    supplements?: SupplementEntry[];
   }
 ): Protocol => ({
   id,
@@ -21,7 +20,6 @@ const mkProtocol = (
       route: "IM"
     }
   ],
-  supplements: options.supplements ?? [],
   notes: "",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z"
@@ -55,6 +53,7 @@ const mkReport = (
   annotations: {
     protocolId,
     protocol: "",
+    supplementOverrides: null,
     symptoms,
     notes: "",
     samplingTiming

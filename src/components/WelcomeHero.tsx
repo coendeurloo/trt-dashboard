@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BarChart3, FileText, Lock } from "lucide-react";
+import { ArrowRight, BarChart3, FileText, Lock, Play, Sparkles, Upload } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage } from "../types";
 
@@ -10,40 +10,44 @@ export interface WelcomeHeroProps {
 }
 
 const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) => {
-  const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
-  const features = [
+  const steps = [
     {
-      icon: FileText,
-      title: tr("Slimme PDF-verwerking", "Smart PDF Parsing"),
+      icon: Upload,
+      title: tr("Upload je lab-PDF", "Upload your lab PDF"),
       description: tr(
-        "Upload een lab-PDF en de markers worden automatisch uitgelezen.",
-        "Upload any lab PDF and markers are extracted automatically."
+        "Sleep je PDF in de app. Markers worden automatisch uitgelezen.",
+        "Drop your PDF into the app. Markers are extracted automatically."
       )
     },
     {
       icon: BarChart3,
-      title: tr("Trendvisualisatie", "Trend Visualization"),
+      title: tr("Bekijk je trends", "See your trends"),
       description: tr(
-        "Bekijk hoe je waarden veranderen met interactieve grafieken.",
-        "See how your markers change over time with interactive charts."
+        "Grafieken, referentiebereiken en veranderingen over tijd — direct zichtbaar.",
+        "Charts, reference ranges, and changes over time — visible immediately."
       )
     },
     {
-      icon: Lock,
-      title: tr("Privacy eerst", "Privacy First"),
+      icon: Sparkles,
+      title: tr("Optimaliseer je protocol", "Optimize your protocol"),
       description: tr(
-        "Alle data wordt lokaal opgeslagen in je browser. Niets wordt naar een server gestuurd.",
-        "All data is stored locally in your browser. Nothing is sent to any server."
+        "Koppel protocollen aan je labs en laat AI patronen analyseren.",
+        "Connect protocols to your labs and let AI surface patterns."
       )
     }
   ];
 
-  const steps = [
-    tr("Upload een lab-PDF", "Upload a lab PDF"),
-    tr("Controleer de uitgelezen waarden", "Review extracted markers"),
-    tr("Volg trends over tijd", "Track trends over time")
+  const trust = [
+    {
+      icon: Lock,
+      label: tr("Alles lokaal opgeslagen", "All data stays local")
+    },
+    {
+      icon: FileText,
+      label: tr("Werkt met elk lab-formaat", "Works with any lab format")
+    }
   ];
 
   return (
@@ -51,69 +55,127 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
-      className="welcome-hero rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-6"
+      className="welcome-hero rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-8"
     >
-      <div className="max-w-3xl">
-        <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">{tr("Volg je bloedwaarden", "Track Your Blood Work")}</h3>
-        <p className="mt-2 text-sm text-slate-300 sm:text-base">
+      {/* Headline */}
+      <div className="max-w-2xl">
+        <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">
+          {tr("Begrijp wat je bloedwaarden je vertellen", "Understand what your blood work is telling you")}
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-slate-400 sm:text-base">
           {tr(
-            "Upload lab-PDF's, ontdek trends en optimaliseer je protocol — alle data blijft in je browser.",
-            "Upload lab PDFs, spot trends, and optimize your protocol — all data stays in your browser."
+            "Track markers, volg trends over tijd, en optimaliseer je protocol — alle data blijft in je browser.",
+            "Track markers, follow trends over time, and optimize your protocol — all data stays in your browser."
           )}
         </p>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {features.map((feature, index) => {
-          const Icon = feature.icon;
-          return (
-            <motion.article
-              key={feature.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, delay: index * 0.06 }}
-              className="welcome-hero-feature rounded-xl border border-slate-700/70 bg-slate-900/60 p-4"
-            >
-              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/35 bg-cyan-500/15 text-cyan-200">
-                <Icon className="h-4 w-4" />
-              </div>
-              <p className="mt-3 text-sm font-semibold text-slate-100">{feature.title}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-300">{feature.description}</p>
-            </motion.article>
-          );
-        })}
-      </div>
+      {/* Primary CTA — demo first */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-start">
+        {/* Demo button — primary */}
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={onLoadDemo}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 active:scale-[0.98]"
+          >
+            <Play className="h-4 w-4" />
+            {tr("Bekijk live demo", "See a live demo")}
+          </button>
+          <p className="text-xs text-slate-500">
+            {tr(
+              "Geen account nodig · je kunt daarna eenvoudig opnieuw beginnen",
+              "No account needed · you can easily start fresh afterwards"
+            )}
+          </p>
+        </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onUploadClick}
-          className="inline-flex items-center justify-center rounded-md bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-900 hover:bg-cyan-400"
-        >
-          {tr("Upload je eerste PDF", "Upload your first PDF")}
-        </button>
-        <button
-          type="button"
-          onClick={onLoadDemo}
-          className="inline-flex items-center justify-center rounded-md border border-slate-600 px-3.5 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-        >
-          {tr("Probeer met demodata", "Try with demo data")}
-        </button>
-      </div>
+        <div className="flex items-center gap-2 sm:mt-2.5">
+          <span className="text-xs text-slate-600">{tr("of", "or")}</span>
+        </div>
 
-      <div className="mt-5 rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Hoe het werkt", "How it works")}</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {steps.map((step, index) => (
-            <div key={step} className="welcome-hero-step flex items-start gap-2 rounded-lg border border-slate-700/70 bg-slate-900/35 p-3">
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-xs font-semibold text-cyan-200">
-                {index + 1}
-              </span>
-              <span className="text-sm text-slate-200">{step}</span>
-            </div>
-          ))}
+        {/* Upload button — secondary */}
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={onUploadClick}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 px-5 py-2.5 text-sm text-slate-200 transition hover:border-cyan-500/50 hover:text-cyan-200 active:scale-[0.98]"
+          >
+            <Upload className="h-4 w-4" />
+            {tr("Upload je eigen PDF", "Upload your own PDF")}
+          </button>
+          <p className="text-xs text-slate-500">
+            {tr("Direct beginnen met je eigen data", "Jump straight in with your own data")}
+          </p>
         </div>
       </div>
+
+      {/* Divider */}
+      <div className="mt-7 border-t border-slate-800" />
+
+      {/* Steps */}
+      <div className="mt-6">
+        <p className="mb-4 text-xs font-medium uppercase tracking-widest text-slate-500">
+          {tr("Hoe het werkt", "How it works")}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: 0.1 + index * 0.07 }}
+                className="relative flex gap-3 rounded-xl border border-slate-700/60 bg-slate-900/50 p-4"
+              >
+                {/* Step number + connector line */}
+                <div className="flex flex-col items-center">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-xs font-bold text-cyan-300">
+                    {index + 1}
+                  </div>
+                  {index < steps.length - 1 ? (
+                    <div className="mt-1 hidden h-full w-px bg-slate-700/50 sm:block" />
+                  ) : null}
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-1.5 inline-flex items-center justify-center rounded-lg border border-slate-700/60 bg-slate-800/60 p-1.5 text-slate-400">
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-100">{step.title}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-400">{step.description}</p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Trust signals */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: 0.35 }}
+        className="mt-5 flex flex-wrap items-center gap-4"
+      >
+        {trust.map((item) => {
+          const Icon = item.icon;
+          return (
+            <span key={item.label} className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+              <Icon className="h-3.5 w-3.5 text-slate-600" />
+              {item.label}
+            </span>
+          );
+        })}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); onLoadDemo(); }}
+          className="ml-auto inline-flex items-center gap-1 text-xs text-cyan-500/70 transition hover:text-cyan-400"
+        >
+          {tr("Of bekijk eerst de demo", "Or explore the demo first")}
+          <ArrowRight className="h-3 w-3" />
+        </a>
+      </motion.div>
     </motion.section>
   );
 };

@@ -161,6 +161,7 @@ export const t = (language: AppLanguage, key: UiTextKey): string => {
 const TAB_LABELS: Record<TabKey, LocalizedText> = {
   dashboard: { nl: "Dashboard", en: "Dashboard" },
   protocol: { nl: "Protocollen", en: "Protocols" },
+  supplements: { nl: "Supplementen", en: "Supplements" },
   protocolImpact: { nl: "Protocol-impact", en: "Protocol Impact" },
   doseResponse: { nl: "Dosis-simulator", en: "Dose Simulator" },
   protocolDose: { nl: "Protocol & Dosis", en: "Protocol & Dose" },

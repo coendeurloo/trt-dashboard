@@ -4,6 +4,7 @@ export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type TabKey =
   | "dashboard"
   | "protocol"
+  | "supplements"
   | "protocolImpact"
   | "doseResponse"
   | "protocolDose"
@@ -20,6 +21,15 @@ export interface SupplementEntry {
   name: string;
   dose: string;
   frequency: string;
+}
+
+export interface SupplementPeriod {
+  id: string;
+  name: string;
+  dose: string;
+  frequency: string;
+  startDate: string;
+  endDate: string | null;
 }
 
 export interface CompoundEntry {
@@ -74,6 +84,7 @@ export interface MarkerValue {
 export interface ReportAnnotations {
   protocolId: string | null;
   protocol: string;
+  supplementOverrides: SupplementPeriod[] | null;
   symptoms: string;
   notes: string;
   samplingTiming: SamplingTiming;
@@ -83,10 +94,20 @@ export interface Protocol {
   id: string;
   name: string;
   compounds: CompoundEntry[];
-  supplements: SupplementEntry[];
   notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SymptomCheckIn {
+  id: string;
+  date: string;
+  energy: number | null;
+  libido: number | null;
+  mood: number | null;
+  sleep: number | null;
+  motivation: number | null;
+  notes: string;
 }
 
 export interface LabReport {
@@ -130,6 +151,8 @@ export interface StoredAppData {
   schemaVersion: number;
   reports: LabReport[];
   protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
+  checkIns: SymptomCheckIn[];
   settings: AppSettings;
 }
 

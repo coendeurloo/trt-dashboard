@@ -9,16 +9,17 @@ import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolFrequencyLabel,
-  getProtocolSupplementsText,
   getReportProtocol
 } from "../protocolUtils";
-import { AppLanguage, AppSettings, LabReport, Protocol, ReportAnnotations } from "../types";
+import { AppLanguage, AppSettings, LabReport, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
+import { getEffectiveSupplements, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
 import { formatDate } from "../utils";
 
 interface ReportsViewProps {
   reports: LabReport[];
   protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
   settings: AppSettings;
   language: AppLanguage;
   samplingControlsEnabled: boolean;
@@ -34,6 +35,7 @@ interface ReportsViewProps {
 const ReportsView = ({
   reports,
   protocols,
+  supplementTimeline,
   settings,
   language,
   samplingControlsEnabled,
@@ -463,8 +465,10 @@ const ReportsView = ({
                       <strong className="text-sm text-slate-100">{getProtocolFrequencyLabel(protocol, language)}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Supplementen", "Supplements")}</span>
-                      <strong className="text-sm text-slate-100">{getProtocolSupplementsText(protocol) || "-"}</strong>
+                      <span className="block text-slate-400">{tr("Actief bij testdatum", "Active at test date")}</span>
+                      <strong className="text-sm text-slate-100">
+                        {supplementPeriodsToText(getEffectiveSupplements(report, supplementTimeline)) || "-"}
+                      </strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>

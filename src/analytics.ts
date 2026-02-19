@@ -9,15 +9,17 @@ import {
   LabReport,
   MarkerValue,
   Protocol,
-  SamplingTiming
+  SamplingTiming,
+  SupplementPeriod
 } from "./types";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolFrequencyPerWeek,
-  getProtocolSupplementsText,
+  getReportSupplementsText,
   getReportProtocol
 } from "./protocolUtils";
+import { buildSupplementStackKey, getEffectiveSupplements } from "./supplementUtils";
 import { canonicalizeMarker, convertBySystem } from "./unitConversion";
 import { clip, createId, deriveAbnormalFlag, formatDate as formatHumanDate, sortReportsChronological } from "./utils";
 
@@ -328,23 +330,8 @@ const displayCompoundSet = (protocol: Protocol | null): string[] => {
   );
 };
 
-const canonicalSupplementSet = (protocol: Protocol | null): string[] => {
-  if (!protocol || protocol.supplements.length === 0) {
-    return [];
-  }
-  return Array.from(
-    new Set(
-      protocol.supplements
-        .map((entry) => {
-          const name = normalizeSetValue(entry.name);
-          const dose = normalizeSetValue(entry.dose);
-          const frequency = normalizeSetValue(entry.frequency);
-          return `${name}|${dose}|${frequency}`;
-        })
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b));
-};
+const canonicalSupplementSet = (report: LabReport, supplementTimeline: SupplementPeriod[]): string[] =>
+  buildSupplementStackKey(getEffectiveSupplements(report, supplementTimeline));
 
 const markerLagDays = (marker: string): number => {
   if (HORMONE_MARKERS.has(marker)) {
@@ -1286,7 +1273,8 @@ export const buildMarkerSeries = (
   reports: LabReport[],
   markerName: string,
   unitSystem: AppSettings["unitSystem"],
-  protocols: Protocol[] = []
+  protocols: Protocol[] = [],
+  supplementTimeline: SupplementPeriod[] = []
 ): MarkerSeriesPoint[] => {
   return sortReportsChronological(reports)
     .map((report) => {
@@ -1322,7 +1310,7 @@ export const buildMarkerSeries = (
           compound: getProtocolCompoundsText(protocol),
           injectionFrequency: primaryFrequency,
           protocol: protocol?.name ?? report.annotations.protocol,
-          supplements: getProtocolSupplementsText(protocol),
+          supplements: getReportSupplementsText(report, supplementTimeline),
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
           samplingTiming: report.annotations.samplingTiming
@@ -1992,7 +1980,8 @@ const protocolConfidenceLabel = (pointsUsed: number, total: number): "High" | "M
 export const buildProtocolImpactSummary = (
   reports: LabReport[],
   unitSystem: AppSettings["unitSystem"],
-  protocols: Protocol[] = []
+  protocols: Protocol[] = [],
+  supplementTimeline: SupplementPeriod[] = []
 ): ProtocolImpactSummary => {
   const sorted = sortReportsChronological(reports);
   const events: ProtocolImpactSummary["events"] = [];
@@ -2062,7 +2051,7 @@ export const buildProtocolImpactSummary = (
     });
 
     for (const marker of candidateMarkers) {
-      const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols);
+      const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols, supplementTimeline);
       if (markerSeries.length < 3) {
         continue;
       }
@@ -2109,7 +2098,8 @@ export const buildProtocolImpactDoseEvents = (
   reports: LabReport[],
   unitSystem: AppSettings["unitSystem"],
   windowSize: number,
-  protocols: Protocol[] = []
+  protocols: Protocol[] = [],
+  supplementTimeline: SupplementPeriod[] = []
 ): ProtocolImpactDoseEvent[] => {
   const sorted = sortReportsChronological(reports);
   if (sorted.length < 2) {
@@ -2188,8 +2178,8 @@ export const buildProtocolImpactDoseEvents = (
 
     const preSampling = dominantSamplingTiming(beforeReports);
     const postSampling = dominantSamplingTiming(baselineAfterReports);
-    const previousSupplements = canonicalSupplementSet(previousProtocol);
-    const currentSupplements = canonicalSupplementSet(currentProtocol);
+    const previousSupplements = canonicalSupplementSet(previous, supplementTimeline);
+    const currentSupplements = canonicalSupplementSet(current, supplementTimeline);
     const previousSymptoms = normalizeProtocolText(previous.annotations.symptoms);
     const currentSymptoms = normalizeProtocolText(current.annotations.symptoms);
 
@@ -2209,7 +2199,7 @@ export const buildProtocolImpactDoseEvents = (
         const lagDays = markerLagDays(marker);
         const markerPostStartTs = changeDateTs + lagDays * DAY_MS;
         const markerPostEndTs = markerPostStartTs + safeWindowDays * DAY_MS;
-        const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols);
+        const markerSeries = buildMarkerSeries(sorted, marker, unitSystem, protocols, supplementTimeline);
 
         const beforeSeries = markerSeries.filter((point) => {
           const pointTs = parseDateSafe(point.date);
@@ -2439,7 +2429,8 @@ export const buildDoseCorrelationInsights = (
   reports: LabReport[],
   markerNames: string[],
   unitSystem: AppSettings["unitSystem"],
-  protocols: Protocol[] = []
+  protocols: Protocol[] = [],
+  supplementTimeline: SupplementPeriod[] = []
 ): DoseCorrelationInsight[] => {
   const sorted = sortReportsChronological(reports);
   return markerNames
@@ -2450,7 +2441,7 @@ export const buildDoseCorrelationInsights = (
           if (dose === null || !Number.isFinite(dose)) {
             return null;
           }
-          const value = buildMarkerSeries([report], marker, unitSystem, protocols)[0]?.value;
+          const value = buildMarkerSeries([report], marker, unitSystem, protocols, supplementTimeline)[0]?.value;
           if (value === undefined || !Number.isFinite(value)) {
             return null;
           }
@@ -3155,7 +3146,8 @@ export const estimateDoseResponse = (
   reports: LabReport[],
   markerNames: string[],
   unitSystem: AppSettings["unitSystem"],
-  protocols: Protocol[] = []
+  protocols: Protocol[] = [],
+  supplementTimeline: SupplementPeriod[] = []
 ): DosePrediction[] => {
   const predictions: DosePrediction[] = [];
   const sorted = sortReportsChronological(reports);
@@ -3214,7 +3206,9 @@ export const estimateDoseResponse = (
   };
 
   for (const marker of markerNames) {
-    const pointByReportId = new Map(buildMarkerSeries(sorted, marker, unitSystem, protocols).map((point) => [point.reportId, point]));
+    const pointByReportId = new Map(
+      buildMarkerSeries(sorted, marker, unitSystem, protocols, supplementTimeline).map((point) => [point.reportId, point])
+    );
     const rawSamples = sorted
       .map((report) => {
         const dose = getProtocolDoseMgPerWeek(getReportProtocol(report, protocols));

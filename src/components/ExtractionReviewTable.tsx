@@ -5,7 +5,14 @@ import { FEEDBACK_EMAIL } from "../constants";
 import { trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
-import { AppLanguage, ExtractionDraft, MarkerValue, Protocol, ReportAnnotations } from "../types";
+import { AppLanguage, ExtractionDraft, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
+import {
+  canonicalizeSupplement,
+  SUPPLEMENT_FREQUENCY_OPTIONS,
+  SUPPLEMENT_OPTIONS,
+  supplementFrequencyLabel
+} from "../protocolStandards";
+import { getActiveSupplementsAtDate, supplementPeriodsToText } from "../supplementUtils";
 import ProtocolEditor, { blankProtocolDraft } from "./ProtocolEditor";
 import EditableCell from "./EditableCell";
 
@@ -13,6 +20,7 @@ export interface ExtractionReviewTableProps {
   draft: ExtractionDraft;
   annotations: ReportAnnotations;
   protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
   selectedProtocolId: string | null;
   language: AppLanguage;
   showSamplingTiming: boolean;
@@ -20,6 +28,7 @@ export interface ExtractionReviewTableProps {
   onAnnotationsChange: (annotations: ReportAnnotations) => void;
   onSelectedProtocolIdChange: (protocolId: string | null) => void;
   onProtocolCreate: (protocol: Protocol) => void;
+  onAddSupplementPeriod: (period: SupplementPeriod) => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -28,6 +37,7 @@ const ExtractionReviewTable = ({
   draft,
   annotations,
   protocols,
+  supplementTimeline,
   selectedProtocolId,
   language,
   showSamplingTiming,
@@ -35,6 +45,7 @@ const ExtractionReviewTable = ({
   onAnnotationsChange,
   onSelectedProtocolIdChange,
   onProtocolCreate,
+  onAddSupplementPeriod,
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
@@ -44,6 +55,12 @@ const ExtractionReviewTable = ({
   const [showCreateProtocol, setShowCreateProtocol] = useState(false);
   const [protocolDraft, setProtocolDraft] = useState(blankProtocolDraft());
   const [protocolFeedback, setProtocolFeedback] = useState("");
+  const [showSupplementOverrideEditor, setShowSupplementOverrideEditor] = useState(false);
+  const [supplementNameInput, setSupplementNameInput] = useState("");
+  const [supplementDoseInput, setSupplementDoseInput] = useState("");
+  const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("daily");
+  const [addTimelineStartDate, setAddTimelineStartDate] = useState(draft.testDate);
+  const [addTimelineEndDate, setAddTimelineEndDate] = useState("");
 
   const selectedProtocol = useMemo(
     () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
@@ -55,6 +72,25 @@ const ExtractionReviewTable = ({
       onSelectedProtocolIdChange(null);
     }
   }, [selectedProtocol, selectedProtocolId, onSelectedProtocolIdChange]);
+
+  useEffect(() => {
+    setAddTimelineStartDate(draft.testDate);
+  }, [draft.testDate]);
+
+  const autoMatchedSupplements = useMemo(
+    () => getActiveSupplementsAtDate(supplementTimeline, draft.testDate),
+    [supplementTimeline, draft.testDate]
+  );
+
+  const activeSupplements = annotations.supplementOverrides ?? autoMatchedSupplements;
+  const overrideSupplements = annotations.supplementOverrides ?? [];
+  const supplementSuggestions = useMemo(() => {
+    const query = supplementNameInput.trim().toLowerCase();
+    if (query.length < 2) {
+      return [];
+    }
+    return SUPPLEMENT_OPTIONS.filter((option) => option.toLowerCase().includes(query)).slice(0, 8);
+  }, [supplementNameInput]);
 
   const parsingFeedbackMailto = (() => {
     const subject = `PDF Parsing Feedback - ${draft.sourceFileName}`;
@@ -89,6 +125,60 @@ const ExtractionReviewTable = ({
       return tr("Normaal", "Normal");
     }
     return tr("Onbekend", "Unknown");
+  };
+
+  const addSupplementOverride = () => {
+    const name = canonicalizeSupplement(supplementNameInput);
+    if (!name) {
+      return;
+    }
+    const normalizedFrequency = supplementFrequencyInput.trim() || "unknown";
+    const period: SupplementPeriod = {
+      id: createId(),
+      name,
+      dose: supplementDoseInput.trim(),
+      frequency: normalizedFrequency,
+      startDate: draft.testDate,
+      endDate: draft.testDate
+    };
+    onAnnotationsChange({
+      ...annotations,
+      supplementOverrides: [...overrideSupplements, period]
+    });
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+    setSupplementFrequencyInput("daily");
+  };
+
+  const removeSupplementOverride = (id: string) => {
+    onAnnotationsChange({
+      ...annotations,
+      supplementOverrides: overrideSupplements.filter((item) => item.id !== id)
+    });
+  };
+
+  const resetSupplementsToAuto = () => {
+    onAnnotationsChange({
+      ...annotations,
+      supplementOverrides: null
+    });
+    setShowSupplementOverrideEditor(false);
+  };
+
+  const addOverridesToTimeline = () => {
+    if (overrideSupplements.length === 0) {
+      return;
+    }
+    const startDate = addTimelineStartDate || draft.testDate;
+    const endDate = addTimelineEndDate.trim() ? addTimelineEndDate : null;
+    overrideSupplements.forEach((supplement) => {
+      onAddSupplementPeriod({
+        ...supplement,
+        id: createId(),
+        startDate,
+        endDate
+      });
+    });
   };
 
   const updateRow = (rowId: string, updater: (row: MarkerValue) => MarkerValue) => {
@@ -161,7 +251,6 @@ const ExtractionReviewTable = ({
       id: createId(),
       name,
       compounds: protocolDraft.compounds,
-      supplements: protocolDraft.supplements,
       notes: protocolDraft.notes,
       createdAt: now,
       updatedAt: now
@@ -311,6 +400,167 @@ const ExtractionReviewTable = ({
           {protocolFeedback ? <p className="mt-2 text-sm text-amber-200">{protocolFeedback}</p> : null}
         </div>
       ) : null}
+
+      <div className="review-context-card mt-3 rounded-xl border border-slate-700 bg-slate-900/45 p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <label className="block text-xs uppercase tracking-wide text-slate-400">
+            {tr("Supplementen op moment van test", "Supplements at time of test")}
+          </label>
+          {annotations.supplementOverrides ? (
+            <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+              {tr("Aangepaste override", "Custom override")}
+            </span>
+          ) : (
+            <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+              {tr("Auto-match op datum", "Auto-matched by test date")}
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm text-slate-300">
+          {supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active at this date.")}
+        </p>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+            onClick={() => setShowSupplementOverrideEditor((current) => !current)}
+          >
+            {showSupplementOverrideEditor
+              ? tr("Verberg aanpassen", "Hide customization")
+              : tr("Deze kloppen niet - aanpassen", "These weren't my supplements - customize")}
+          </button>
+          {annotations.supplementOverrides ? (
+            <button
+              type="button"
+              className="rounded-md border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100"
+              onClick={resetSupplementsToAuto}
+            >
+              {tr("Terug naar auto-match", "Reset to auto-match")}
+            </button>
+          ) : null}
+        </div>
+
+        {showSupplementOverrideEditor ? (
+          <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
+            <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Supplement", "Supplement")}</label>
+                <input
+                  value={supplementNameInput}
+                  onChange={(event) => setSupplementNameInput(event.target.value)}
+                  placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+                {supplementSuggestions.length > 0 ? (
+                  <div className="mt-1 rounded-md border border-slate-700 bg-slate-900/95 p-1">
+                    {supplementSuggestions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className="block w-full rounded px-2 py-1 text-left text-sm text-slate-200 hover:bg-slate-800"
+                        onClick={() => setSupplementNameInput(option)}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Dosis", "Dose")}</label>
+                <input
+                  value={supplementDoseInput}
+                  onChange={(event) => setSupplementDoseInput(event.target.value)}
+                  placeholder={tr("bijv. 4000 IU", "e.g. 4000 IU")}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Frequentie", "Frequency")}</label>
+                <select
+                  value={supplementFrequencyInput}
+                  onChange={(event) => setSupplementFrequencyInput(event.target.value)}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                >
+                  {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {tr(option.label.nl, option.label.en)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                  onClick={addSupplementOverride}
+                >
+                  <Plus className="mr-1 inline-block h-4 w-4" />
+                  {tr("Toevoegen", "Add")}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {overrideSupplements.length === 0 ? (
+                <p className="text-sm text-slate-400">{tr("Nog geen overrides toegevoegd.", "No overrides added yet.")}</p>
+              ) : (
+                overrideSupplements.map((supplement) => (
+                  <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
+                    <p className="text-sm text-slate-200">
+                      <span className="font-medium">{supplement.name}</span>
+                      {supplement.dose ? ` · ${supplement.dose}` : ""}
+                      {` · ${supplementFrequencyLabel(supplement.frequency, language)}`}
+                    </p>
+                    <button
+                      type="button"
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
+                      onClick={() => removeSupplementOverride(supplement.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {overrideSupplements.length > 0 ? (
+              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-200">{tr("Voeg deze ook toe aan je supplement-tijdlijn", "Add these to your supplement timeline")}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">{tr("Startdatum", "Start date")}</label>
+                    <input
+                      type="date"
+                      value={addTimelineStartDate}
+                      onChange={(event) => setAddTimelineStartDate(event.target.value)}
+                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">{tr("Einddatum (optioneel)", "End date (optional)")}</label>
+                    <input
+                      type="date"
+                      value={addTimelineEndDate}
+                      onChange={(event) => setAddTimelineEndDate(event.target.value)}
+                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="mt-2 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                  onClick={addOverridesToTimeline}
+                >
+                  {tr("Toevoegen aan tijdlijn", "Add to timeline")}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div>

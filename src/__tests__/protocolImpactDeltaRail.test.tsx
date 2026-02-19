@@ -43,7 +43,8 @@ describe("ProtocolImpactDeltaRail", () => {
     );
 
     expect(container.querySelector(".protocol-impact-delta-rail")).toBeTruthy();
-    expect(screen.getByText("↗")).toBeTruthy();
+    expect(screen.getByText("+34.7%")).toBeTruthy();
+    expect(container.querySelector("svg")).toBeTruthy();
   });
 
   it("shows placeholder when data is insufficient", () => {

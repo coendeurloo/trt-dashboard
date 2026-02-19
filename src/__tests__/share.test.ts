@@ -4,19 +4,20 @@ import { buildShareToken, parseShareToken } from "../share";
 import { StoredAppData } from "../types";
 
 const makeSampleData = (): StoredAppData => ({
-  schemaVersion: 3,
+  schemaVersion: 4,
   settings: DEFAULT_SETTINGS,
   protocols: [
     {
       id: "p1",
       name: "Protocol A",
       compounds: [{ name: "Testosterone Enanthate", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
-      supplements: [{ name: "Vitamin D3", dose: "4000 IU", frequency: "daily" }],
       notes: "Protocol note",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
   ],
+  supplementTimeline: [],
+  checkIns: [],
   reports: [
     {
       id: "r1",
@@ -40,6 +41,7 @@ const makeSampleData = (): StoredAppData => ({
       annotations: {
         protocolId: "p1",
         protocol: "Protocol A",
+        supplementOverrides: null,
         symptoms: "Stable mood",
         notes: "Doing fine",
         samplingTiming: "trough"

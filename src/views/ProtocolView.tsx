@@ -20,7 +20,6 @@ interface ProtocolViewProps {
 const protocolToDraft = (protocol: Protocol): ProtocolDraft => ({
   name: protocol.name,
   compounds: protocol.compounds,
-  supplements: protocol.supplements,
   notes: protocol.notes
 });
 
@@ -100,7 +99,6 @@ const ProtocolView = ({
       onUpdateProtocol(editingId, {
         name,
         compounds: draft.compounds,
-        supplements: draft.supplements,
         notes: draft.notes
       });
       setFeedback(tr("Protocol bijgewerkt.", "Protocol updated."));
@@ -112,7 +110,6 @@ const ProtocolView = ({
       id: createId(),
       name,
       compounds: draft.compounds,
-      supplements: draft.supplements,
       notes: draft.notes,
       createdAt: now,
       updatedAt: now
@@ -131,8 +128,8 @@ const ProtocolView = ({
             <h3 className="text-base font-semibold text-slate-100">{tr("Protocolbeheer", "Protocol management")}</h3>
             <p className="text-sm text-slate-300">
               {tr(
-                "Bewaar compounds en supplementen als herbruikbare protocollen.",
-                "Store compounds and supplements as reusable protocols."
+                "Bewaar compounds als herbruikbare protocollen.",
+                "Store compounds as reusable protocols."
               )}
             </p>
           </div>
@@ -222,7 +219,7 @@ const ProtocolView = ({
                     <h4 className="text-base font-semibold text-slate-100">{protocol.name}</h4>
                     <p className="mt-1 text-sm text-slate-300">{getProtocolCompoundsText(protocol) || "-"}</p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {tr("Supplementen", "Supplements")}: {protocol.supplements.length} · {tr("Rapporten", "Reports")}: {usageCount}
+                      {tr("Rapporten", "Reports")}: {usageCount}
                     </p>
                   </div>
                   {activeProtocolId === protocol.id ? (

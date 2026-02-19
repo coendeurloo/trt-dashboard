@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
 import { trLocale } from "../i18n";
-import { AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, StoredAppData } from "../types";
+import {
+  AppSettings,
+  LabReport,
+  MarkerValue,
+  Protocol,
+  ReportAnnotations,
+  StoredAppData,
+  SupplementPeriod,
+  SymptomCheckIn
+} from "../types";
 import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
@@ -369,7 +378,11 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         return {
           ...prev,
           reports: merged,
-          protocols: mergeProtocolsById(prev.protocols, incoming.protocols)
+          protocols: mergeProtocolsById(prev.protocols, incoming.protocols),
+          supplementTimeline: [...prev.supplementTimeline, ...incoming.supplementTimeline].sort(
+            (left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name)
+          ),
+          checkIns: [...prev.checkIns, ...incoming.checkIns].sort((left, right) => left.date.localeCompare(right.date))
         };
       });
 
@@ -383,6 +396,111 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       };
     },
     [appData.reports, isShareMode, tr]
+  );
+
+  const addSupplementPeriod = useCallback(
+    (period: SupplementPeriod) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        supplementTimeline: [...prev.supplementTimeline, period].sort(
+          (left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name)
+        )
+      }));
+    },
+    [isShareMode]
+  );
+
+  const updateSupplementPeriod = useCallback(
+    (id: string, updates: Partial<SupplementPeriod>) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        supplementTimeline: prev.supplementTimeline
+          .map((period) => (period.id === id ? { ...period, ...updates, id: period.id } : period))
+          .sort((left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
+      }));
+    },
+    [isShareMode]
+  );
+
+  const stopSupplement = useCallback(
+    (id: string, endDate?: string) => {
+      if (isShareMode) {
+        return;
+      }
+      const fallbackDate = new Date().toISOString().slice(0, 10);
+      setAppData((prev) => ({
+        ...prev,
+        supplementTimeline: prev.supplementTimeline.map((period) =>
+          period.id === id
+            ? {
+                ...period,
+                endDate: endDate && endDate.trim().length > 0 ? endDate : fallbackDate
+              }
+            : period
+        )
+      }));
+    },
+    [isShareMode]
+  );
+
+  const deleteSupplementPeriod = useCallback(
+    (id: string) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        supplementTimeline: prev.supplementTimeline.filter((period) => period.id !== id)
+      }));
+    },
+    [isShareMode]
+  );
+
+  const addCheckIn = useCallback(
+    (checkIn: SymptomCheckIn) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        checkIns: [...prev.checkIns, checkIn].sort((left, right) => left.date.localeCompare(right.date))
+      }));
+    },
+    [isShareMode]
+  );
+
+  const updateCheckIn = useCallback(
+    (id: string, updates: Partial<SymptomCheckIn>) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        checkIns: prev.checkIns
+          .map((checkIn) => (checkIn.id === id ? { ...checkIn, ...updates, id: checkIn.id } : checkIn))
+          .sort((left, right) => left.date.localeCompare(right.date))
+      }));
+    },
+    [isShareMode]
+  );
+
+  const deleteCheckIn = useCallback(
+    (id: string) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        checkIns: prev.checkIns.filter((checkIn) => checkIn.id !== id)
+      }));
+    },
+    [isShareMode]
   );
 
   const exportJson = useCallback(() => {
@@ -424,6 +542,13 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     getProtocolUsageCount,
     setBaseline,
     remapMarker,
+    addSupplementPeriod,
+    updateSupplementPeriod,
+    stopSupplement,
+    deleteSupplementPeriod,
+    addCheckIn,
+    updateCheckIn,
+    deleteCheckIn,
     importData,
     exportJson
   };

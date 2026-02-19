@@ -1,11 +1,11 @@
 import { convertBySystem } from "./unitConversion";
-import { LabReport, Protocol, UnitSystem } from "./types";
+import { LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolInjectionFrequency,
-  getProtocolSupplementsText,
+  getReportSupplementsText,
   getReportProtocol
 } from "./protocolUtils";
 
@@ -20,7 +20,13 @@ const escapeCsv = (value: string | number | null): string => {
   return stringValue;
 };
 
-export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSystem: UnitSystem, protocols: Protocol[]): string => {
+export const buildCsv = (
+  reports: LabReport[],
+  selectedMarkers: string[],
+  unitSystem: UnitSystem,
+  protocols: Protocol[],
+  supplementTimeline: SupplementPeriod[]
+): string => {
   const markerSet = new Set(selectedMarkers);
   const headers = [
     "Test Date",
@@ -75,7 +81,7 @@ export const buildCsv = (reports: LabReport[], selectedMarkers: string[], unitSy
           escapeCsv(getProtocolCompoundsText(protocol)),
           escapeCsv(injectionFrequencyLabel(getProtocolInjectionFrequency(protocol), "en")),
           escapeCsv(protocol?.name ?? report.annotations.protocol),
-          escapeCsv(getProtocolSupplementsText(protocol)),
+          escapeCsv(getReportSupplementsText(report, supplementTimeline)),
           escapeCsv(report.annotations.symptoms),
           escapeCsv(report.annotations.notes)
         ].join(",")

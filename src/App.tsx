@@ -7,11 +7,10 @@ import {
   Cog,
   Gauge,
   Info,
-  Moon,
+  Pill,
   Plus,
   Sparkles,
   SlidersHorizontal,
-  Sun,
   X
 } from "lucide-react";
 import {
@@ -26,13 +25,14 @@ import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
 import { getDemoProtocols, getDemoReports } from "./demoData";
+import { getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
-import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
-import labtrackerLogoLight from "./assets/labtracker-logo-light.png";
-import labtrackerLogoDark from "./assets/labtracker-logo-dark.png";
+import { getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
+import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
+import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
-import { getMostRecentlyUsedProtocolId } from "./protocolUtils";
+import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound } from "./protocolUtils";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
@@ -47,6 +47,7 @@ import ProtocolImpactView from "./views/ProtocolImpactView";
 import ProtocolView from "./views/ProtocolView";
 import ReportsView from "./views/ReportsView";
 import SettingsView from "./views/SettingsView";
+import SupplementsView from "./views/SupplementsView";
 import {
   AppSettings,
   ExtractionDraft,
@@ -93,6 +94,10 @@ const App = () => {
     getProtocolUsageCount,
     setBaseline,
     remapMarker,
+    addSupplementPeriod,
+    updateSupplementPeriod,
+    stopSupplement,
+    deleteSupplementPeriod,
     importData,
     exportJson
   } = useAppData({
@@ -195,6 +200,7 @@ const App = () => {
   } = useDerivedData({
     appData,
     protocols: appData.protocols,
+    supplementTimeline: appData.supplementTimeline,
     samplingControlsEnabled,
     protocolWindowSize,
     doseResponseInput
@@ -230,6 +236,7 @@ const App = () => {
     language: appData.settings.language,
     visibleReports,
     protocols: appData.protocols,
+    supplementTimeline: appData.supplementTimeline,
     samplingControlsEnabled,
     protocolImpactSummary,
     alerts,
@@ -378,10 +385,15 @@ const App = () => {
     }
     const demoProtocols = getDemoProtocols();
     const demoReports = getDemoReports();
+    const demoSupplementTimeline = getDemoSupplementTimeline();
     setAppData((prev) => ({
       ...prev,
       reports: demoReports,
-      protocols: [...prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demoProtocols]
+      protocols: [...prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demoProtocols],
+      supplementTimeline: [
+        ...prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-")),
+        ...demoSupplementTimeline
+      ]
     }));
     setActiveTab("dashboard");
   };
@@ -393,7 +405,8 @@ const App = () => {
     setAppData((prev) => ({
       ...prev,
       reports: prev.reports.filter((report) => report.extraction.model !== "demo-data"),
-      protocols: prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-"))
+      protocols: prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")),
+      supplementTimeline: prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-"))
     }));
     setActiveTab("dashboard");
   };
@@ -518,7 +531,7 @@ const App = () => {
   };
 
   const exportCsv = (selectedMarkers: string[]) => {
-    const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem, appData.protocols);
+    const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -537,7 +550,7 @@ const App = () => {
   };
 
   const chartPointsForMarker = (markerName: string): MarkerSeriesPoint[] =>
-    buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols);
+    buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline);
 
   const markerPercentChange = (marker: string): number | null => {
     const points = chartPointsForMarker(marker);
@@ -558,7 +571,13 @@ const App = () => {
     if (!latest) {
       return null;
     }
-    const baselinePoint = buildMarkerSeries([baselineReport], marker, appData.settings.unitSystem)[0];
+    const baselinePoint = buildMarkerSeries(
+      [baselineReport],
+      marker,
+      appData.settings.unitSystem,
+      appData.protocols,
+      appData.supplementTimeline
+    )[0];
     if (!baselinePoint) {
       return null;
     }
@@ -593,6 +612,16 @@ const App = () => {
     });
     return count;
   }, [visibleReports]);
+  const hasReports = reports.length > 0;
+  const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
+  const activeProtocol = useMemo(
+    () => appData.protocols.find((protocol) => protocol.id === activeProtocolId) ?? null,
+    [appData.protocols, activeProtocolId]
+  );
+  const activeProtocolCompound = useMemo(
+    () => getPrimaryProtocolCompound(activeProtocol),
+    [activeProtocol]
+  );
 
   const generateShareLink = async () => {
     if (typeof window === "undefined") {
@@ -622,6 +651,52 @@ const App = () => {
         : tr("Professionele bloedwaardetracking met bewerkbare extractie en trendvisualisatie.", "Professional blood work tracking with editable extraction and visual trends.");
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
   const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
+  const visibleTabKeys = useMemo(() => new Set(visibleTabs.map((tab) => tab.key as TabKey)), [visibleTabs]);
+  const renderTabButton = (key: TabKey) => {
+    if (!visibleTabKeys.has(key)) {
+      return null;
+    }
+
+    const icon =
+      key === "dashboard" ? (
+        <BarChart3 className="h-4 w-4" />
+      ) : key === "protocol" ? (
+        <ClipboardList className="h-4 w-4" />
+      ) : key === "supplements" ? (
+        <Pill className="h-4 w-4" />
+      ) : key === "protocolImpact" ? (
+        <Gauge className="h-4 w-4" />
+      ) : key === "doseResponse" ? (
+        <SlidersHorizontal className="h-4 w-4" />
+      ) : key === "alerts" ? (
+        <AlertTriangle className="h-4 w-4" />
+      ) : key === "reports" ? (
+        <ClipboardList className="h-4 w-4" />
+      ) : key === "analysis" ? (
+        <Sparkles className="h-4 w-4" />
+      ) : (
+        <Cog className="h-4 w-4" />
+      );
+
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => requestTabChange(key)}
+        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+          activeTab === key ? "bg-cyan-500/15 text-cyan-200" : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
+        }`}
+      >
+        {icon}
+        <span>{getTabLabel(key, appData.settings.language)}</span>
+        {key === "analysis" ? (
+          <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300 ring-1 ring-cyan-500/40">
+            Pro
+          </span>
+        ) : null}
+      </button>
+    );
+  };
   const requestTabChange = (nextTab: TabKey) => {
     if (nextTab === activeTab) {
       return;
@@ -700,46 +775,61 @@ const App = () => {
               alt="LabTracker"
               className="brand-logo mx-auto w-full max-w-[230px]"
             />
-            <p className="brand-subtitle mt-2 text-center text-xs text-slate-200/90">{t(appData.settings.language, "subtitle")}</p>
+            {hasReports && activeProtocolCompound ? (
+              <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2.5">
+                <p className="truncate text-[11px] font-medium text-slate-400">
+                  <span className="text-slate-600">{tr("Protocol", "Protocol")} · </span>
+                  {activeProtocolCompound.name} {activeProtocolCompound.doseMg}
+                </p>
+                {outOfRangeCount > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-amber-400">
+                    {tr(
+                      `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} buiten bereik`,
+                      `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} out of range`
+                    )}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-[11px] text-emerald-400">
+                    {tr("Alle markers binnen bereik", "All markers in range")}
+                  </p>
+                )}
+              </div>
+            ) : null}
           </div>
 
-          <nav className="space-y-1.5">
-            {visibleTabs.map((tab) => {
-              const icon =
-                tab.key === "dashboard" ? (
-                  <BarChart3 className="h-4 w-4" />
-                ) : tab.key === "protocol" ? (
-                  <ClipboardList className="h-4 w-4" />
-                ) : tab.key === "protocolImpact" ? (
-                  <Gauge className="h-4 w-4" />
-                ) : tab.key === "doseResponse" ? (
-                  <SlidersHorizontal className="h-4 w-4" />
-                ) : tab.key === "alerts" ? (
-                  <AlertTriangle className="h-4 w-4" />
-                ) : tab.key === "reports" ? (
-                  <ClipboardList className="h-4 w-4" />
-                ) : tab.key === "analysis" ? (
-                  <Sparkles className="h-4 w-4" />
-                ) : (
-                  <Cog className="h-4 w-4" />
-                );
+          <nav className="space-y-0.5">
+            {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") ? (
+              <>
+                <p className="mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Core</p>
+                {renderTabButton("dashboard")}
+                {renderTabButton("reports")}
+                {renderTabButton("alerts")}
+              </>
+            ) : null}
 
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => requestTabChange(tab.key as TabKey)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-                    activeTab === tab.key
-                      ? "bg-cyan-500/15 text-cyan-200"
-                      : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
-                  }`}
-                >
-                  {icon}
-                  {getTabLabel(tab.key as TabKey, appData.settings.language)}
-                </button>
-              );
-            })}
+            {visibleTabKeys.has("protocol") ||
+            visibleTabKeys.has("supplements") ||
+            visibleTabKeys.has("protocolImpact") ||
+            visibleTabKeys.has("doseResponse") ? (
+              <>
+                <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Protocol</p>
+                {renderTabButton("protocol")}
+                {renderTabButton("supplements")}
+                {renderTabButton("protocolImpact")}
+                {renderTabButton("doseResponse")}
+              </>
+            ) : null}
+
+            {visibleTabKeys.has("analysis") ? (
+              <>
+                <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Pro</p>
+                {renderTabButton("analysis")}
+              </>
+            ) : null}
+
+            {visibleTabKeys.has("settings") ? (
+              <div className="mt-3 border-t border-slate-800 pt-3">{renderTabButton("settings")}</div>
+            ) : null}
           </nav>
 
           {isShareMode ? (
@@ -773,67 +863,12 @@ const App = () => {
             </div>
           ) : null}
 
-          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Snel overzicht", "Quick stats")}</p>
-            <div className="mt-2 space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">{t(appData.settings.language, "reports")}</span>
-                <span className="font-semibold text-slate-100">{reports.length}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">{t(appData.settings.language, "markersTracked")}</span>
-                <span className="font-semibold text-slate-100">{allMarkers.length}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">{t(appData.settings.language, "outOfRange")}</span>
-                <span className="font-semibold text-amber-300">{outOfRangeCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">{t(appData.settings.language, "trtStabilityShort")}</span>
-                <span className="font-semibold text-cyan-200">{trtStability.score === null ? "-" : `${trtStability.score}`}</span>
-              </div>
-            </div>
-          </div>
         </aside>
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
-          <header className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-2.5 sm:p-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
-                {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                <label className="rounded-md border border-slate-600 px-2.5 py-1.25 text-sm text-slate-200">
-                  <span className="sr-only">{t(appData.settings.language, "language")}</span>
-                  <select
-                    value={appData.settings.language}
-                    onChange={(event) => updateSettings({ language: event.target.value as AppSettings["language"] })}
-                    className="bg-transparent text-sm text-inherit outline-none"
-                    aria-label={t(appData.settings.language, "language")}
-                  >
-                    {APP_LANGUAGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value} className="text-slate-900">
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className={`rounded-md px-2.5 py-1.25 text-sm ${
-                    appData.settings.theme === "dark" ? "bg-slate-800 text-slate-100" : "bg-slate-200 text-slate-900"
-                  }`}
-                  onClick={() => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" })}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    {appData.settings.theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}{" "}
-                    {t(appData.settings.language, "theme")}
-                  </span>
-                </button>
-              </div>
-            </div>
+          <header className="px-1 py-0.5">
+            <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+            {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
           </header>
 
           <AnimatePresence mode="wait">
@@ -842,15 +877,17 @@ const App = () => {
                 key="draft"
                 draft={draft}
                 annotations={draftAnnotations}
-                protocols={appData.protocols}
-                selectedProtocolId={selectedProtocolId}
+              protocols={appData.protocols}
+              supplementTimeline={appData.supplementTimeline}
+              selectedProtocolId={selectedProtocolId}
                 language={appData.settings.language}
                 showSamplingTiming={samplingControlsEnabled}
                 onDraftChange={setDraft}
                 onAnnotationsChange={setDraftAnnotations}
-                onSelectedProtocolIdChange={setSelectedProtocolId}
-                onProtocolCreate={addProtocol}
-                onSave={saveDraftAsReport}
+              onSelectedProtocolIdChange={setSelectedProtocolId}
+              onProtocolCreate={addProtocol}
+              onAddSupplementPeriod={addSupplementPeriod}
+              onSave={saveDraftAsReport}
                 onCancel={() => {
                   setDraft(null);
                   setSelectedProtocolId(null);
@@ -873,8 +910,8 @@ const App = () => {
                     <p>
                       {isDemoMode
                         ? tr(
-                            "Je bekijkt demodata. Dit zijn voorbeeldgegevens om te laten zien hoe de app werkt.",
-                            "You're viewing demo data. This is sample data to show how the app works."
+                            "Je verkent de app met demodata — kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
+                            "You're exploring with demo data — feel free to look around. When you're ready, start fresh with your own labs."
                           )
                         : tr(
                             "Demodata is nog geladen. Wis het wanneer je klaar bent.",
@@ -888,7 +925,7 @@ const App = () => {
                       className={clearDemoButtonClassName}
                       onClick={clearDemoData}
                     >
-                      {tr("Wis demo & begin opnieuw", "Clear demo & start fresh")}
+                      {tr("Begin opnieuw", "Start fresh")}
                     </button>
                     {isDemoMode ? (
                       <button
@@ -915,6 +952,7 @@ const App = () => {
               trendByMarker={trendByMarker}
               alertsByMarker={alertsByMarker}
               trtStability={trtStability}
+              outOfRangeCount={outOfRangeCount}
               settings={appData.settings}
               language={appData.settings.language}
               isShareMode={isShareMode}
@@ -950,6 +988,18 @@ const App = () => {
               onUpdateProtocol={updateProtocol}
               onDeleteProtocol={deleteProtocol}
               getProtocolUsageCount={getProtocolUsageCount}
+            />
+          ) : null}
+
+          {activeTab === "supplements" ? (
+            <SupplementsView
+              language={appData.settings.language}
+              timeline={appData.supplementTimeline}
+              isShareMode={isShareMode}
+              onAddSupplementPeriod={addSupplementPeriod}
+              onUpdateSupplementPeriod={updateSupplementPeriod}
+              onStopSupplement={stopSupplement}
+              onDeleteSupplementPeriod={deleteSupplementPeriod}
             />
           ) : null}
 
@@ -997,6 +1047,7 @@ const App = () => {
             <ReportsView
               reports={reports}
               protocols={appData.protocols}
+              supplementTimeline={appData.supplementTimeline}
               settings={appData.settings}
               language={appData.settings.language}
               samplingControlsEnabled={samplingControlsEnabled}

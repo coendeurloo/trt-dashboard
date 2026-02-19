@@ -1,7 +1,7 @@
 import { AppSettings } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
-export const APP_SCHEMA_VERSION = 3;
+export const APP_SCHEMA_VERSION = 4;
 export const FEEDBACK_EMAIL = "trtlabtracker@gmail.com";
 
 export const PRIMARY_MARKERS = [
@@ -241,6 +241,7 @@ export const MARKER_ALIAS_LOOKUP = Object.entries(RAW_ALIASES).reduce(
 export const TAB_ITEMS = [
   { key: "dashboard", label: "Dashboard" },
   { key: "protocol", label: "Protocols" },
+  { key: "supplements", label: "Supplements" },
   { key: "doseResponse", label: "Dose Simulator" },
   { key: "analysis", label: "AI Lab Analysis" },
   { key: "protocolImpact", label: "Protocol Impact" },

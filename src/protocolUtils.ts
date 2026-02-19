@@ -1,5 +1,6 @@
-import { frequencyPerWeekFromSelectionOrProtocol, injectionFrequencyLabel, supplementEntriesToText } from "./protocolStandards";
-import { AppLanguage, CompoundEntry, LabReport, Protocol } from "./types";
+import { frequencyPerWeekFromSelectionOrProtocol, injectionFrequencyLabel } from "./protocolStandards";
+import { AppLanguage, CompoundEntry, LabReport, Protocol, SupplementPeriod } from "./types";
+import { getEffectiveSupplements, supplementPeriodsToText } from "./supplementUtils";
 
 export const PROTOCOL_ROUTE_OPTIONS = ["", "IM", "SubQ", "Oral", "Other"] as const;
 
@@ -61,12 +62,8 @@ export const getProtocolCompoundsText = (protocol: Protocol | null): string => {
     .join(" + ");
 };
 
-export const getProtocolSupplementsText = (protocol: Protocol | null): string => {
-  if (!protocol || protocol.supplements.length === 0) {
-    return "";
-  }
-  return supplementEntriesToText(protocol.supplements);
-};
+export const getReportSupplementsText = (report: LabReport, timeline: SupplementPeriod[]): string =>
+  supplementPeriodsToText(getEffectiveSupplements(report, timeline));
 
 export const getProtocolDisplayLabel = (protocol: Protocol | null): string => {
   if (!protocol) {

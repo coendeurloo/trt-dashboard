@@ -1,12 +1,12 @@
 import { sortReportsChronological } from "./utils";
-import { AppLanguage, LabReport, Protocol, UnitSystem } from "./types";
+import { AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolFrequencyPerWeek,
   getProtocolInjectionFrequency,
-  getProtocolSupplementsText,
+  getReportSupplementsText,
   getReportProtocol
 } from "./protocolUtils";
 import { convertBySystem } from "./unitConversion";
@@ -28,6 +28,7 @@ interface ClaudeResponse {
 interface AnalyzeLabDataOptions {
   reports: LabReport[];
   protocols: Protocol[];
+  supplementTimeline?: SupplementPeriod[];
   unitSystem: UnitSystem;
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
@@ -176,7 +177,12 @@ const deriveAbnormalFromReference = (
   return "normal";
 };
 
-const buildPayload = (reports: LabReport[], protocols: Protocol[], unitSystem: UnitSystem): AnalysisReportRow[] => {
+const buildPayload = (
+  reports: LabReport[],
+  protocols: Protocol[],
+  supplementTimeline: SupplementPeriod[],
+  unitSystem: UnitSystem
+): AnalysisReportRow[] => {
   const sorted = sortReportsChronological(reports);
   return sorted.map((report) => ({
     ...(() => {
@@ -190,7 +196,7 @@ const buildPayload = (reports: LabReport[], protocols: Protocol[], unitSystem: U
           frequency: injectionFrequencyLabel(injectionFrequency, "en"),
           frequencyPerWeek: getProtocolFrequencyPerWeek(protocol),
           protocol: protocol?.name ?? "",
-          supps: getProtocolSupplementsText(protocol),
+          supps: getReportSupplementsText(report, supplementTimeline),
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
           timing: report.annotations.samplingTiming
@@ -543,6 +549,7 @@ const buildSignals = (
 export const analyzeLabDataWithClaude = async ({
   reports,
   protocols,
+  supplementTimeline = [],
   unitSystem,
   language = "nl",
   analysisType = "full",
@@ -556,7 +563,7 @@ export const analyzeLabDataWithClaude = async ({
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const payload = buildPayload(reports, protocols, unitSystem);
+  const payload = buildPayload(reports, protocols, supplementTimeline, unitSystem);
   const derivedSignals = buildDerivedSignals(payload);
   const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);

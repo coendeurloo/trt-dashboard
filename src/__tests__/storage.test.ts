@@ -20,6 +20,7 @@ describe("storage.coerceStoredAppData", () => {
           annotations: {
             protocolId: null,
             protocol: "",
+            supplementOverrides: null,
             symptoms: "",
             notes: "",
             samplingTiming: "unknown"
@@ -59,6 +60,7 @@ describe("storage.coerceStoredAppData", () => {
           annotations: {
             protocolId: null,
             protocol: "",
+            supplementOverrides: null,
             symptoms: "",
             notes: "",
             samplingTiming: "unknown"

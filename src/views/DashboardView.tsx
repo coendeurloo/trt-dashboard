@@ -1,4 +1,5 @@
-import { SlidersHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
@@ -11,7 +12,7 @@ import ComparisonChart from "../components/ComparisonChart";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { stabilityColor } from "../chartHelpers";
-import { getMarkerDisplayName, trLocale } from "../i18n";
+import { getMarkerDisplayName, t, trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport, TimeRangeKey } from "../types";
 
 interface DashboardViewProps {
@@ -23,6 +24,7 @@ interface DashboardViewProps {
   trendByMarker: Record<string, MarkerTrendSummary>;
   alertsByMarker: Record<string, MarkerAlert[]>;
   trtStability: TrtStabilityResult;
+  outOfRangeCount: number;
   settings: AppSettings;
   language: AppLanguage;
   isShareMode: boolean;
@@ -47,6 +49,39 @@ interface DashboardViewProps {
   onUploadClick: () => void;
 }
 
+interface ToggleSwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  tooltip?: string;
+}
+
+const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) => (
+  <label className="group relative inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 hover:text-slate-100 sm:text-sm">
+    <button
+      type="button"
+      aria-pressed={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
+        checked ? "border-cyan-500/60 bg-cyan-500/20" : "border-slate-600 bg-slate-700"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform duration-200 ${
+          checked ? "translate-x-3 bg-cyan-400" : "translate-x-0.5 bg-slate-500"
+        }`}
+      />
+    </button>
+    {label}
+    {tooltip ? (
+      <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+        {tooltip}
+      </span>
+    ) : null}
+  </label>
+);
+
 const DashboardView = ({
   reports,
   visibleReports,
@@ -56,6 +91,7 @@ const DashboardView = ({
   trendByMarker,
   alertsByMarker,
   trtStability,
+  outOfRangeCount,
   settings,
   language,
   isShareMode,
@@ -81,6 +117,14 @@ const DashboardView = ({
 }: DashboardViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
+  const [showChartOptions, setShowChartOptions] = useState(outOfRangeCount > 0);
+
+  useEffect(() => {
+    if (outOfRangeCount > 0) {
+      setShowChartOptions(true);
+    }
+  }, [outOfRangeCount]);
+
   const referenceRangesTooltip = tr(
     "Toont per marker het normale referentiebereik als band in de grafiek.",
     "Shows each marker's normal reference range as a band on the chart."
@@ -108,6 +152,23 @@ const DashboardView = ({
 
   return (
     <section className="space-y-3 fade-in">
+      {hasReports ? (
+        <div className="flex flex-wrap gap-4 rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-sm">
+          <span className="text-slate-400">
+            {t(language, "reports")}: <strong className="text-slate-100">{reports.length}</strong>
+          </span>
+          <span className="text-slate-400">
+            {t(language, "markersTracked")}: <strong className="text-slate-100">{allMarkers.length}</strong>
+          </span>
+          <span className="text-slate-400">
+            {t(language, "outOfRange")}: <strong className="text-amber-300">{outOfRangeCount}</strong>
+          </span>
+          <span className="text-slate-400">
+            {t(language, "trtStabilityShort")}: <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong>
+          </span>
+        </div>
+      ) : null}
+
       {hasReports ? (
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -161,86 +222,60 @@ const DashboardView = ({
             </button>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowChartOptions((current) => !current)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition ${
+                showChartOptions ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
             >
-              <input
-                type="checkbox"
-                checked={settings.showReferenceRanges}
-                onChange={(event) => onUpdateSettings({ showReferenceRanges: event.target.checked })}
-              />
-              {tr("Referentiebereiken", "Reference ranges")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {referenceRangesTooltip}
-              </span>
-            </label>
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings.showAbnormalHighlights}
-                onChange={(event) => onUpdateSettings({ showAbnormalHighlights: event.target.checked })}
-              />
-              {tr("Afwijkende waarden markeren", "Abnormal highlights")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {abnormalHighlightsTooltip}
-              </span>
-            </label>
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings.showAnnotations}
-                onChange={(event) => onUpdateSettings({ showAnnotations: event.target.checked })}
-              />
-              {tr("Dosisfase-overlay", "Dose-phase overlays")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {dosePhaseOverlaysTooltip}
-              </span>
-            </label>
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings.showTrtTargetZone}
-                onChange={(event) => onUpdateSettings({ showTrtTargetZone: event.target.checked })}
-              />
-              {tr("Doelzone", "Optimal zone")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {trtOptimalZoneTooltip}
-              </span>
-            </label>
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings.showLongevityTargetZone}
-                onChange={(event) => onUpdateSettings({ showLongevityTargetZone: event.target.checked })}
-              />
-              {tr("Longevity-doelzone", "Longevity zone")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {longevityZoneTooltip}
-              </span>
-            </label>
-            <label
-              className="group relative inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings.yAxisMode === "data"}
-                onChange={(event) => onUpdateSettings({ yAxisMode: event.target.checked ? "data" : "zero" })}
-              />
-              {tr("Gebruik data-bereik Y-as", "Use data-range Y-axis")}
-              <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                {yAxisDataRangeTooltip}
-              </span>
-            </label>
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {tr("Grafiekopties", "Chart options")}
+              {showChartOptions ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
           </div>
+
+          {showChartOptions ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <ToggleSwitch
+                checked={settings.showReferenceRanges}
+                onChange={(checked) => onUpdateSettings({ showReferenceRanges: checked })}
+                label={tr("Referentiebereiken", "Reference ranges")}
+                tooltip={referenceRangesTooltip}
+              />
+              <ToggleSwitch
+                checked={settings.showAbnormalHighlights}
+                onChange={(checked) => onUpdateSettings({ showAbnormalHighlights: checked })}
+                label={tr("Afwijkende waarden markeren", "Abnormal highlights")}
+                tooltip={abnormalHighlightsTooltip}
+              />
+              <ToggleSwitch
+                checked={settings.showAnnotations}
+                onChange={(checked) => onUpdateSettings({ showAnnotations: checked })}
+                label={tr("Dosisfase-overlay", "Dose-phase overlays")}
+                tooltip={dosePhaseOverlaysTooltip}
+              />
+              <ToggleSwitch
+                checked={settings.showTrtTargetZone}
+                onChange={(checked) => onUpdateSettings({ showTrtTargetZone: checked })}
+                label={tr("Doelzone", "Optimal zone")}
+                tooltip={trtOptimalZoneTooltip}
+              />
+              <ToggleSwitch
+                checked={settings.showLongevityTargetZone}
+                onChange={(checked) => onUpdateSettings({ showLongevityTargetZone: checked })}
+                label={tr("Longevity-doelzone", "Longevity zone")}
+                tooltip={longevityZoneTooltip}
+              />
+              <ToggleSwitch
+                checked={settings.yAxisMode === "data"}
+                onChange={(checked) => onUpdateSettings({ yAxisMode: checked ? "data" : "zero" })}
+                label={tr("Gebruik data-bereik Y-as", "Use data-range Y-axis")}
+                tooltip={yAxisDataRangeTooltip}
+              />
+            </div>
+          ) : null}
 
           {samplingControlsEnabled ? (
             <div className="mt-2 flex flex-wrap gap-1.5">

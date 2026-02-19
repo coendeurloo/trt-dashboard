@@ -1,3 +1,4 @@
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatAxisTick } from "../chartHelpers";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
@@ -37,35 +38,35 @@ const ProtocolImpactDeltaRail = ({
     deltaPct === null
       ? tr("Onbekend", "Unknown")
       : `${deltaPct > 0 ? "+" : ""}${formatAxisTick(deltaPct)}%`;
-  const directionArrow = trend === "up" ? "↗" : trend === "down" ? "↘" : "→";
+  const deltaToneClass = trend === "up" ? "text-cyan-300" : trend === "down" ? "text-rose-300" : "text-slate-200";
   const ariaSummary = `${tr("Voor", "Before")}: ${formatAxisTick(beforeValue)} ${unit}; ${tr("Na", "After")}: ${formatAxisTick(afterValue)} ${unit}; ${tr("Verandering", "Change")}: ${deltaLabel}.`;
 
   return (
     <div className="protocol-impact-delta-rail" role="img" aria-label={ariaSummary}>
-      <div className="protocol-impact-delta-side">
-        <span className="protocol-impact-delta-caption">⬅ {tr("Voor", "Before")}</span>
-        <span className="protocol-impact-delta-value">
-          <span className="protocol-impact-delta-number">{formatAxisTick(beforeValue)}</span>
-          <span className="protocol-impact-delta-unit">{unit}</span>
-        </span>
+      <div className="grid grid-cols-2 divide-x divide-slate-700/60 rounded-xl bg-slate-900/70 px-2 py-3">
+        <div className="flex flex-col items-center px-3">
+          <span className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+            {tr("Voor", "Before")}
+          </span>
+          <span className="text-xl font-bold tabular-nums text-slate-200">{formatAxisTick(beforeValue)}</span>
+          <span className="mt-0.5 text-[11px] text-slate-500">{unit}</span>
+        </div>
+
+        <div className="flex flex-col items-center px-3">
+          <span className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+            {tr("Na", "After")}
+          </span>
+          <span className="text-xl font-bold tabular-nums text-slate-200">{formatAxisTick(afterValue)}</span>
+          <span className="mt-0.5 text-[11px] text-slate-500">{unit}</span>
+        </div>
       </div>
 
-      <div className="protocol-impact-delta-center">
-        <span className="protocol-impact-delta-direction-dot" aria-hidden="true">
-          <span className="protocol-impact-delta-arrow">{directionArrow}</span>
-        </span>
-        <span className="protocol-impact-delta-badge" title={`${tr("Eenheidssysteem", "Unit system")}: ${unitSystem.toUpperCase()}`}>
+      <div className="mt-2.5 flex items-center justify-center" title={`${tr("Eenheidssysteem", "Unit system")}: ${unitSystem.toUpperCase()}`}>
+        <span className={`protocol-impact-delta-percent-circle ${deltaToneClass}`}>
+          {trend === "up" ? <TrendingUp className="h-3 w-3" /> : null}
+          {trend === "down" ? <TrendingDown className="h-3 w-3" /> : null}
+          {trend === "flat" ? <Minus className="h-3 w-3" /> : null}
           {deltaLabel}
-        </span>
-      </div>
-
-      <div className="protocol-impact-delta-side protocol-impact-delta-side-right">
-        <span className="protocol-impact-delta-caption">
-          {tr("Na", "After")} ➡
-        </span>
-        <span className="protocol-impact-delta-value">
-          <span className="protocol-impact-delta-number">{formatAxisTick(afterValue)}</span>
-          <span className="protocol-impact-delta-unit">{unit}</span>
         </span>
       </div>
     </div>

@@ -24,6 +24,7 @@ const mkReport = (id: string, date: string): LabReport => ({
   annotations: {
     protocolId: null,
     protocol: "2x/week",
+    supplementOverrides: null,
     symptoms: "",
     notes: "",
     samplingTiming: "trough"

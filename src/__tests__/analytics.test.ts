@@ -22,6 +22,7 @@ const mkReport = (id: string, date: string, dose: number, markers: Array<{ marke
   annotations: {
     protocolId: dose > 0 ? `p-${dose}` : null,
     protocol: "2x/week",
+    supplementOverrides: null,
     symptoms: "",
     notes: "",
     samplingTiming: "trough"

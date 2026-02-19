@@ -132,7 +132,9 @@ describe("ProtocolImpactView", () => {
 
   it("renders narrative event title", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Testosterone Enanthate dose change from 120 mg/week to 115 mg/week on 17 Jul 2024.")).toBeTruthy();
+    expect(screen.getByText("17 Jul 2024 · Protocol update")).toBeTruthy();
+    expect(screen.getByText("Dose")).toBeTruthy();
+    expect(screen.getByText("120 mg/week → 115 mg/week")).toBeTruthy();
   });
 
   it("does not show reliability low/high badge text", () => {
@@ -161,10 +163,10 @@ describe("ProtocolImpactView", () => {
   });
 
   it("shows top-4 effects by default in the grid", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-
-    expect(screen.getAllByText("Increased by +20%.").length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByRole("button", { name: "Show more effects" })).toBeNull();
+    const { container } = render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.getByText("Biggest measured changes")).toBeTruthy();
+    const cards = container.querySelectorAll(".protocol-impact-effects-grid li");
+    expect(cards.length).toBe(4);
   });
 
   it("does not show context tooltip chip on marker row", () => {
@@ -179,9 +181,8 @@ describe("ProtocolImpactView", () => {
 
   it("keeps all markers details collapsed by default", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    const details = screen.getByText("All markers").closest("details");
-    expect(details).toBeTruthy();
-    expect((details as HTMLDetailsElement).open).toBe(false);
+    expect(screen.getByRole("button", { name: /All markers/i })).toBeTruthy();
+    expect(screen.queryByText(/Δ%:/)).toBeNull();
   });
 
   it("renders medical note at the bottom, collapsed by default", () => {

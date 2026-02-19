@@ -2,13 +2,14 @@ import { useState } from "react";
 import { analyzeLabDataWithClaude } from "../aiAnalysis";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, recordAnalysisUsage } from "../betaLimits";
-import { AppLanguage, AppSettings, LabReport, Protocol } from "../types";
+import { AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
   language: AppLanguage;
   visibleReports: LabReport[];
   protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
   samplingControlsEnabled: boolean;
   protocolImpactSummary: ProtocolImpactSummary;
   alerts: MarkerAlert[];
@@ -24,6 +25,7 @@ export const useAnalysis = ({
   language,
   visibleReports,
   protocols,
+  supplementTimeline,
   samplingControlsEnabled,
   protocolImpactSummary,
   alerts,
@@ -65,6 +67,7 @@ export const useAnalysis = ({
       const result = await analyzeLabDataWithClaude({
         reports: visibleReports,
         protocols,
+        supplementTimeline,
         unitSystem: settings.unitSystem,
         language,
         analysisType,

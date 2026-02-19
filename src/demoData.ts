@@ -1,5 +1,5 @@
 import { format, subMonths } from "date-fns";
-import { LabReport, MarkerValue, Protocol, ReportAnnotations } from "./types";
+import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "./types";
 import { createId, deriveAbnormalFlag } from "./utils";
 
 export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
@@ -105,6 +105,7 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 const defaultAnnotations = (): ReportAnnotations => ({
   protocolId: null,
   protocol: "",
+  supplementOverrides: null,
   symptoms: "",
   notes: "",
   samplingTiming: "unknown"
@@ -152,12 +153,6 @@ export const getDemoProtocols = (): Protocol[] => {
           route: "SubQ"
         }
       ],
-      supplements: [
-        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
-        { name: "Omega-3", dose: "2 g", frequency: "daily" },
-        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
-        { name: "Zinc", dose: "25 mg", frequency: "daily" }
-      ],
       notes: "Stable TRT cruise",
       createdAt: now,
       updatedAt: now
@@ -172,12 +167,6 @@ export const getDemoProtocols = (): Protocol[] => {
           frequency: "2x_week",
           route: "SubQ"
         }
-      ],
-      supplements: [
-        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
-        { name: "Omega-3", dose: "2 g", frequency: "daily" },
-        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
-        { name: "Zinc", dose: "25 mg", frequency: "daily" }
       ],
       notes: "Adjusted down for balance",
       createdAt: now,
@@ -194,12 +183,6 @@ export const getDemoProtocols = (): Protocol[] => {
           route: "SubQ"
         }
       ],
-      supplements: [
-        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
-        { name: "Omega-3", dose: "2 g", frequency: "daily" },
-        { name: "Magnesium Glycinate", dose: "400 mg", frequency: "before_bed" },
-        { name: "Zinc", dose: "20 mg", frequency: "daily" }
-      ],
       notes: "Split frequency for smoother levels",
       createdAt: now,
       updatedAt: now
@@ -215,15 +198,56 @@ export const getDemoProtocols = (): Protocol[] => {
           route: "IM"
         }
       ],
-      supplements: [
-        { name: "Vitamin D3", dose: "4000 IU", frequency: "daily" },
-        { name: "Omega-3", dose: "2 g", frequency: "daily" },
-        { name: "Magnesium Glycinate", dose: "350 mg", frequency: "before_bed" },
-        { name: "Zinc", dose: "20 mg", frequency: "daily" }
-      ],
       notes: "Compound switch trial with stable weekly total",
       createdAt: now,
       updatedAt: now
+    }
+  ];
+};
+
+export const getDemoSupplementTimeline = (): SupplementPeriod[] => {
+  const reports = getDemoReports();
+  const dateAt = (index: number): string => reports[index]?.testDate ?? new Date().toISOString().slice(0, 10);
+  return [
+    {
+      id: "demo-supp-vitd3",
+      name: "Vitamin D3",
+      dose: "4000 IU",
+      frequency: "daily",
+      startDate: dateAt(0),
+      endDate: null
+    },
+    {
+      id: "demo-supp-omega3",
+      name: "Omega-3",
+      dose: "2 g",
+      frequency: "daily",
+      startDate: dateAt(1),
+      endDate: null
+    },
+    {
+      id: "demo-supp-mag",
+      name: "Magnesium Glycinate",
+      dose: "400 mg",
+      frequency: "daily",
+      startDate: dateAt(1),
+      endDate: null
+    },
+    {
+      id: "demo-supp-zinc",
+      name: "Zinc",
+      dose: "25 mg",
+      frequency: "daily",
+      startDate: dateAt(1),
+      endDate: dateAt(3)
+    },
+    {
+      id: "demo-supp-nac",
+      name: "NAC",
+      dose: "600 mg",
+      frequency: "daily",
+      startDate: dateAt(2),
+      endDate: null
     }
   ];
 };

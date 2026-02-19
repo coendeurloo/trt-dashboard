@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
+import { formatDate } from "../utils";
 import ProtocolImpactDeltaRail from "./ProtocolImpactDeltaRail";
 
 interface ProtocolImpactEventCardProps {
@@ -19,18 +21,31 @@ const ProtocolImpactEventCard = ({
   language
 }: ProtocolImpactEventCardProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
-  const markerEffectSummary = (row: ProtocolImpactMarkerRow): string => {
-    if (row.insufficientData || row.deltaPct === null || row.trend === "insufficient") {
-      return tr("Nog te weinig gemeten data.", "Not enough measured data yet.");
+  const [showAllMarkers, setShowAllMarkers] = useState(false);
+
+  const sameCompoundSet = (left: string[], right: string[]) => {
+    const normalize = (value: string) => value.trim().toLowerCase();
+    const leftSet = new Set(left.map(normalize).filter(Boolean));
+    const rightSet = new Set(right.map(normalize).filter(Boolean));
+    if (leftSet.size !== rightSet.size) {
+      return false;
     }
-    if (row.trend === "flat") {
-      return tr(
-        `Vrijwel stabiel (${row.deltaPct > 0 ? "+" : ""}${formatAxisTick(row.deltaPct)}%).`,
-        `Mostly stable (${row.deltaPct > 0 ? "+" : ""}${formatAxisTick(row.deltaPct)}%).`
-      );
+    return Array.from(leftSet).every((value) => rightSet.has(value));
+  };
+
+  const doseChanged = event.fromDose !== event.toDose;
+  const frequencyChanged = event.fromFrequency !== event.toFrequency;
+  const compoundChanged = !sameCompoundSet(event.fromCompounds, event.toCompounds);
+  const baselineLabel = tr("Baseline", "Baseline");
+  const notSetLabel = tr("Niet ingesteld", "Not set");
+
+  const formatDose = (value: number | null): string => (value === null ? notSetLabel : `${formatAxisTick(value)} mg/week`);
+  const formatFrequency = (value: number | null): string => (value === null ? notSetLabel : `${formatAxisTick(value)}/week`);
+  const formatCompounds = (values: string[], isFrom: boolean): string => {
+    if (values.length === 0) {
+      return isFrom ? baselineLabel : notSetLabel;
     }
-    const verb = row.trend === "up" ? tr("Gestegen met", "Increased by") : tr("Gedaald met", "Decreased by");
-    return `${verb} ${row.deltaPct > 0 ? "+" : ""}${formatAxisTick(row.deltaPct)}%.`;
+    return values.join(" + ");
   };
   const markerIcon = (marker: string): string => {
     const key = marker.toLowerCase();
@@ -79,26 +94,33 @@ const ProtocolImpactEventCard = ({
   }, [event.topImpacts, rows]);
 
   const hasInsufficientRows = rows.some((row) => row.comparisonBasis === "insufficient");
-  const hasEventReportFallbackRows = rows.some((row) => row.comparisonBasis === "event_reports");
 
   return (
     <article className="protocol-impact-event-shell rounded-2xl border p-4">
       <header className="space-y-2">
-        <h4 className="break-words text-lg font-semibold text-slate-100">{event.headlineNarrative ?? event.storyChange}</h4>
-        <p className="protocol-impact-story-block text-sm text-slate-300">
-          {tr(
-            "Gemeten vergelijking: pre-change window versus post-change window rond deze wijziging.",
-            "Measured comparison: pre-change window vs post-change window around this event."
-          )}
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+          {formatDate(event.changeDate)} · {tr("Protocol update", "Protocol update")}
         </p>
-        {hasEventReportFallbackRows ? (
-          <p className="protocol-impact-story-block text-sm text-slate-300">
-            {tr(
-              "Voor sommige markers is de dichtstbijzijnde pre/post eventmeting gebruikt omdat het lag-window leeg was.",
-              "For some markers, the nearest pre/post event measurement was used because the lag window was empty."
-            )}
-          </p>
-        ) : null}
+        <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
+          {doseChanged ? (
+            <>
+              <span className="text-slate-500">{tr("Dosis", "Dose")}</span>
+              <span className="text-slate-200">{formatDose(event.fromDose)} → {formatDose(event.toDose)}</span>
+            </>
+          ) : null}
+          {frequencyChanged ? (
+            <>
+              <span className="text-slate-500">{tr("Frequentie", "Frequency")}</span>
+              <span className="text-slate-200">{formatFrequency(event.fromFrequency)} → {formatFrequency(event.toFrequency)}</span>
+            </>
+          ) : null}
+          {compoundChanged ? (
+            <>
+              <span className="text-slate-500">{tr("Compound", "Compound")}</span>
+              <span className="text-slate-200">{formatCompounds(event.fromCompounds, true)} → {formatCompounds(event.toCompounds, false)}</span>
+            </>
+          ) : null}
+        </div>
         {hasInsufficientRows ? (
           <p className="protocol-impact-story-block text-sm text-amber-200">
             {tr(
@@ -121,7 +143,18 @@ const ProtocolImpactEventCard = ({
       </div>
 
       <section className="mt-4 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">📈 {tr("Grootste gemeten veranderingen", "Biggest measured changes")}</p>
+        <div className="mb-4 flex items-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Grootste gemeten veranderingen", "Biggest measured changes")}</p>
+          <span className="group relative ml-2 cursor-help text-slate-600 hover:text-slate-400">
+            <Info className="h-3.5 w-3.5" />
+            <span className="pointer-events-none absolute left-0 top-full z-40 mt-1 w-80 rounded-xl border border-slate-700 bg-slate-950/95 p-3 text-[11px] leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+              {tr(
+                "Vergelijkt het pre-change venster met het post-change venster rond deze wijziging. Voor sommige markers is de dichtstbijzijnde meting gebruikt als een venster leeg was.",
+                "Comparing the pre-change measurement window to the post-change window around this event. For some markers, the nearest available measurement was used because the window was empty."
+              )}
+            </span>
+          </span>
+        </div>
 
         {displayTopRows.length === 0 ? (
           <p className="text-sm text-slate-400">{tr("Nog geen duidelijke effecten; meer metingen nodig.", "No clear effects yet; more measurements are needed.")}</p>
@@ -138,11 +171,10 @@ const ProtocolImpactEventCard = ({
                         </span>
                         {getMarkerDisplayName(row.marker, settings.language)}
                       </p>
-                      <p className="protocol-impact-effect-summary mt-0.5 text-sm text-slate-300">{markerEffectSummary(row)}</p>
                     </div>
                   </div>
 
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <ProtocolImpactDeltaRail
                       beforeValue={row.beforeAvg}
                       afterValue={row.afterAvg}
@@ -161,22 +193,41 @@ const ProtocolImpactEventCard = ({
         )}
       </section>
 
-      <details className="protocol-impact-tech-details mt-4 rounded-xl border p-3 text-xs text-slate-300">
-        <summary className="cursor-pointer list-none font-medium text-slate-200">{tr("Alle markers", "All markers")}</summary>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {rows.map((row) => (
-            <div key={`${event.id}-detail-${row.marker}`} className="rounded-lg border border-slate-700/70 bg-slate-950/25 p-2.5">
-              <p className="text-sm font-medium text-slate-100">{getMarkerDisplayName(row.marker, settings.language)}</p>
-              <p className="mt-1 text-slate-300">
-                {tr("Voor", "Before")}: {row.beforeAvg === null ? "-" : formatAxisTick(row.beforeAvg)} {row.unit} · {tr("Na", "After")}: {row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg)} {row.unit}
-              </p>
-              <p className="text-slate-400">
-                Δ%: {row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`} · Lag: {row.lagDays} · n: {row.nBefore}/{row.nAfter}
-              </p>
+      <div className="protocol-impact-tech-details mt-6 rounded-2xl border border-slate-700/60 bg-slate-900/40">
+        <button
+          type="button"
+          onClick={() => setShowAllMarkers((current) => !current)}
+          className="flex w-full items-center justify-between px-5 py-4 text-sm font-medium text-slate-300 hover:text-slate-100"
+        >
+          <span>
+            {tr("Alle markers", "All markers")}
+            <span className="ml-1.5 text-slate-600">({rows.length})</span>
+          </span>
+          {showAllMarkers ? (
+            <ChevronUp className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+
+        {showAllMarkers ? (
+          <div className="border-t border-slate-700/60 px-5 py-4">
+            <div className="grid gap-2 md:grid-cols-2">
+              {rows.map((row) => (
+                <div key={`${event.id}-detail-${row.marker}`} className="rounded-lg border border-slate-700/70 bg-slate-950/25 p-2.5">
+                  <p className="text-sm font-medium text-slate-100">{getMarkerDisplayName(row.marker, settings.language)}</p>
+                  <p className="mt-1 text-slate-300">
+                    {tr("Voor", "Before")}: {row.beforeAvg === null ? "-" : formatAxisTick(row.beforeAvg)} {row.unit} · {tr("Na", "After")}: {row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg)} {row.unit}
+                  </p>
+                  <p className="text-slate-400">
+                    Δ%: {row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`} · Lag: {row.lagDays} · n: {row.nBefore}/{row.nAfter}
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </details>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 };

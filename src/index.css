@@ -497,7 +497,7 @@ body.light .dose-stat-card {
   border-color: rgba(100, 116, 139, 0.45);
   background: rgba(2, 6, 23, 0.24);
   min-width: 0;
-  min-height: 220px;
+  min-height: 200px;
 }
 
 .protocol-impact-effects-grid {
@@ -505,7 +505,7 @@ body.light .dose-stat-card {
 }
 
 .protocol-impact-effect-head {
-  min-height: 74px;
+  min-height: 0;
 }
 
 .protocol-impact-effect-title {
@@ -553,16 +553,27 @@ body.light .dose-stat-card {
 }
 
 .protocol-impact-delta-rail {
-  display: grid;
-  gap: 0.55rem;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
   border: 1px solid rgba(100, 116, 139, 0.42);
   border-radius: 0.7rem;
   padding: 0.55rem 0.62rem;
   background: rgba(15, 23, 42, 0.45);
-  min-height: 96px;
+  min-height: 82px;
   overflow: hidden;
+}
+
+.protocol-impact-delta-percent-circle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: rgba(8, 47, 73, 0.3);
+  padding: 0.32rem 0.68rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .protocol-impact-delta-rail-empty {
@@ -633,8 +644,8 @@ body.light .dose-stat-card {
 }
 
 .protocol-impact-delta-direction-dot {
-  width: 2rem;
-  height: 2rem;
+  width: 2.2rem;
+  height: 2.2rem;
   border-radius: 999px;
   border: 1px solid rgba(56, 189, 248, 0.45);
   background: radial-gradient(circle at 32% 28%, rgba(125, 211, 252, 0.45), rgba(2, 132, 199, 0.24));
@@ -642,23 +653,22 @@ body.light .dose-stat-card {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.protocol-impact-delta-arrow {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #e2e8f0;
+.protocol-impact-delta-direction-dot-up {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: radial-gradient(circle at 32% 28%, rgba(125, 211, 252, 0.45), rgba(2, 132, 199, 0.24));
 }
 
-.protocol-impact-delta-badge {
-  border: 1px solid rgba(148, 163, 184, 0.42);
-  border-radius: 999px;
-  font-size: 0.78rem;
-  line-height: 1;
-  padding: 0.22rem 0.52rem;
-  color: #e2e8f0;
-  background: rgba(30, 41, 59, 0.65);
-  white-space: nowrap;
+.protocol-impact-delta-direction-dot-down {
+  border-color: rgba(251, 113, 133, 0.45);
+  background: radial-gradient(circle at 32% 28%, rgba(253, 164, 175, 0.35), rgba(159, 18, 57, 0.25));
+}
+
+.protocol-impact-delta-direction-dot-flat {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: radial-gradient(circle at 32% 28%, rgba(203, 213, 225, 0.32), rgba(30, 41, 59, 0.3));
 }
 
 .protocol-impact-tech-details {
@@ -749,6 +759,11 @@ body.light .protocol-impact-delta-rail {
   background: rgba(255, 255, 255, 0.88);
 }
 
+body.light .protocol-impact-delta-percent-circle {
+  border-color: rgba(14, 116, 144, 0.32);
+  background: rgba(224, 242, 254, 0.88);
+}
+
 body.light .protocol-impact-delta-caption {
   color: #64748b;
 }
@@ -767,14 +782,14 @@ body.light .protocol-impact-delta-direction-dot {
   box-shadow: inset 0 0 0 1px rgba(14, 116, 144, 0.14);
 }
 
-body.light .protocol-impact-delta-arrow {
-  color: #0f172a;
+body.light .protocol-impact-delta-direction-dot-down {
+  border-color: rgba(225, 29, 72, 0.45);
+  background: radial-gradient(circle at 30% 25%, rgba(254, 205, 211, 0.88), rgba(251, 113, 133, 0.67));
 }
 
-body.light .protocol-impact-delta-badge {
+body.light .protocol-impact-delta-direction-dot-flat {
   border-color: rgba(148, 163, 184, 0.55);
-  background: rgba(226, 232, 240, 0.95);
-  color: #1e293b;
+  background: radial-gradient(circle at 30% 25%, rgba(226, 232, 240, 0.92), rgba(148, 163, 184, 0.52));
 }
 
 body.light .protocol-impact-tech-details {
@@ -798,18 +813,12 @@ body.light .protocol-impact-footer-note {
   }
 
   .protocol-impact-delta-rail {
-    grid-template-columns: 1fr;
-    gap: 0.45rem;
     min-height: 0;
   }
 
   .protocol-impact-delta-side-right {
-    align-items: flex-start;
-    text-align: left;
-  }
-
-  .protocol-impact-delta-center {
-    width: 100%;
+    align-items: flex-end;
+    text-align: right;
   }
 
   .protocol-impact-delta-direction-dot {

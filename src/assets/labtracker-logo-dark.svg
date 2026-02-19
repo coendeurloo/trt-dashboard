@@ -1,33 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" role="img" aria-label="LabTracker logo dark">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" fill="none">
   <defs>
-    <linearGradient id="flaskBlueDark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7be0ff" />
-      <stop offset="100%" stop-color="#2ea8ff" />
+    <linearGradient id="wave" x1="10" y1="0" x2="70" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#10b981"/>
     </linearGradient>
-    <linearGradient id="liquidWarmDark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffbf66" />
-      <stop offset="100%" stop-color="#ff6f91" />
+    <linearGradient id="border" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0c2233"/>
+      <stop offset="100%" stop-color="#081a1f"/>
+    </linearGradient>
+    <linearGradient id="textgrad" x1="96" y1="0" x2="300" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#10b981"/>
     </linearGradient>
   </defs>
 
-  <g transform="translate(26 34)">
-    <circle cx="116" cy="26" r="10" fill="#74d5ff" />
-    <circle cx="152" cy="8" r="8" fill="#ffe27a" />
-    <circle cx="172" cy="38" r="8" fill="#7cf0ba" />
+  <!-- Icon mark -->
+  <rect x="0.75" y="0.75" width="78.5" height="78.5" rx="17" fill="url(#bg)" stroke="url(#border)" stroke-width="1.5"/>
+  <!-- Wave: exact chosen path scaled to this icon size (x: 10→70, midY: 40) -->
+  <path d="M10,40 C21.4,40 13.4,20 24.8,20 C36.2,20 28.2,40 39.6,40 C51,40 43,60 54.4,60 C65.8,60 57.8,40 69.2,40"
+    stroke="url(#wave)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
 
-    <path d="M124 18 L124 84 C124 92 126 98 131 104 L188 180 C203 200 188 228 164 228 L64 228 C40 228 25 200 40 180 L97 104 C102 98 104 92 104 84 L104 18 Z"
-      fill="url(#flaskBlueDark)" opacity="0.95" stroke="#8bd8ff" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Wordmark — vertically centered in top half -->
+  <text x="96" y="34" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#f1f5f9">Lab</tspan><tspan fill="url(#textgrad)">Tracker</tspan>
+  </text>
 
-    <path d="M55 183 C76 167 103 175 128 160 C149 148 168 155 186 171 L186 198 C186 214 173 228 157 228 L75 228 C59 228 46 214 46 198 Z"
-      fill="url(#liquidWarmDark)" opacity="0.98" />
-
-    <circle cx="82" cy="188" r="4" fill="#fff5e6" />
-    <circle cx="142" cy="185" r="5" fill="#fff0d1" />
-    <circle cx="166" cy="205" r="3.6" fill="#fff0d1" />
-  </g>
-
-  <g transform="translate(254 102)">
-    <text x="0" y="0" font-size="72" font-family="'Avenir Next','Segoe UI',sans-serif" font-weight="700" fill="#e6f4ff">LabTracker</text>
-    <text x="0" y="44" font-size="24" font-family="'Avenir Next','Segoe UI',sans-serif" fill="#bcd8ee">Track markers, protocol context, and trends.</text>
-  </g>
+  <!-- Subtitle — two lines, tight tracking, muted -->
+  <text x="97" y="52" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="2.8" fill="#4a5568">BLOOD WORK</text>
+  <text x="97" y="66" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="2.8" fill="#4a5568">INTELLIGENCE</text>
 </svg>

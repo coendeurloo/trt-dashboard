@@ -2,8 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./src/assets/labtracker-logo-dark.png" />
-    <img src="./src/assets/labtracker-logo-light.png" alt="LabTracker logo" width="520" />
+    <source media="(prefers-color-scheme: dark)" srcset="./src/assets/labtracker-logo-dark.svg" />
+    <img src="./src/assets/labtracker-logo-light.svg" alt="LabTracker logo" width="520" />
   </picture>
 </p>
 
