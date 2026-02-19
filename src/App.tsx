@@ -27,7 +27,7 @@ import UploadPanel from "./components/UploadPanel";
 import { getDemoProtocols, getDemoReports } from "./demoData";
 import { getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
-import { getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
+import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import { exportElementToPdf } from "./pdfExport";
@@ -868,8 +868,35 @@ const App = () => {
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
           <header className="px-1 py-0.5">
-            <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
-            {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+                {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
+                  <span>{tr("Taal", "Language")}:</span>
+                  <select
+                    value={appData.settings.language}
+                    onChange={(event) => updateSettings({ language: event.target.value as AppSettings["language"] })}
+                    className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 outline-none"
+                  >
+                    {APP_LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" })}
+                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+                >
+                  {tr("Thema", "Theme")}: {appData.settings.theme === "dark" ? tr("Donker", "Dark") : tr("Licht", "Light")}
+                </button>
+              </div>
+            </div>
           </header>
 
           <AnimatePresence mode="wait">

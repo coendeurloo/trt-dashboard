@@ -5,7 +5,22 @@ interface ClaudeMessagePayload {
   model: string;
   max_tokens: number;
   temperature?: number;
-  messages: Array<{ role: string; content: string }>;
+  messages: Array<{
+    role: string;
+    content:
+      | string
+      | Array<
+          | { type: "text"; text: string }
+          | {
+              type: "document";
+              source: {
+                type: "base64";
+                media_type: "application/pdf";
+                data: string;
+              };
+            }
+        >;
+  }>;
 }
 
 interface ProxyRequestBody {
@@ -108,7 +123,15 @@ const inferRequestType = (body: ProxyRequestBody): "analysis" | "extraction" => 
     return body.requestType;
   }
   const firstMessage = body.payload?.messages?.[0];
-  const prompt = typeof firstMessage?.content === "string" ? firstMessage.content : "";
+  const prompt =
+    typeof firstMessage?.content === "string"
+      ? firstMessage.content
+      : Array.isArray(firstMessage?.content)
+        ? firstMessage.content
+            .filter((block): block is { type: "text"; text: string } => block?.type === "text" && typeof block.text === "string")
+            .map((block) => block.text)
+            .join("\n")
+        : "";
   if (/LAB TEXT START|Extract blood lab data/i.test(prompt)) {
     return "extraction";
   }

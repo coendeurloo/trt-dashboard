@@ -173,7 +173,7 @@ describe("protocol impact model", () => {
     const row = event?.rows.find((item) => item.marker === "Testosterone");
 
     expect(row?.beforeSource).toBe("window");
-    expect(row?.beforeAvg).toBe(490);
+    expect(row?.beforeAvg).toBeCloseTo(490, 1);
     expect(row?.comparisonBasis).toBe("local_pre_post");
   });
 

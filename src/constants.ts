@@ -27,7 +27,7 @@ export const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "light",
+  theme: "dark",
   unitSystem: "eu",
   language: "en",
   tooltipDetailMode: "compact",
@@ -114,6 +114,7 @@ const RAW_ALIASES: Record<string, string[]> = {
   "Free T3": ["free t3", "ft3", "vrij t3", "vrije t3", "vrije trijodothyronine"],
   Creatinine: ["creatinine", "creatinine serum", "serum creatinine", "kreatinine", "creatinine bloed"],
   CRP: ["crp", "c-reactive protein", "c reactive protein", "c-reactief proteine", "c reactief proteine"],
+  Cortisol: ["cortisol", "am cortisol", "cortisol am", "cortisol am cortisol", "cortisol (am)"],
   Cholesterol: ["cholesterol", "cholesterol totaal", "total cholesterol", "cholesterol total"],
   "Cholesterol/HDL Ratio": [
     "cholesterol/hdl-cholesterol ratio",

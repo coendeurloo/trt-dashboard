@@ -144,6 +144,20 @@ interface MarkerMeasurement {
 const normalizeUnitToken = (unit: string): string => unit.toLowerCase().replace(/\s+/g, "");
 const isOneOf = (value: string, candidates: string[]): boolean => candidates.includes(value);
 const scaleNullable = (value: number | null, factor: number): number | null => (value === null ? null : value * factor);
+const roundToStoragePrecision = (value: number): number => {
+  const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  return Object.is(rounded, -0) ? 0 : rounded;
+};
+const roundNullableToStoragePrecision = (value: number | null): number | null =>
+  value === null ? null : roundToStoragePrecision(value);
+const roundMeasurementForStorage = (
+  measurement: Omit<MarkerMeasurement, "canonicalMarker">
+): Omit<MarkerMeasurement, "canonicalMarker"> => ({
+  value: roundToStoragePrecision(measurement.value),
+  unit: measurement.unit,
+  referenceMin: roundNullableToStoragePrecision(measurement.referenceMin),
+  referenceMax: roundNullableToStoragePrecision(measurement.referenceMax)
+});
 
 const isHematocritRatioUnit = (normalizedUnit: string): boolean => {
   return normalizedUnit === "l/l" || normalizedUnit === "ll" || normalizedUnit === "ratio" || normalizedUnit === "fraction";
@@ -332,16 +346,16 @@ export const normalizeMarkerMeasurement = (measurement: MarkerMeasurement): Omit
 
   const markerNormalized = normalizeMarkerUnits(measurement, normalizedUnit);
   if (markerNormalized) {
-    return markerNormalized;
+    return roundMeasurementForStorage(markerNormalized);
   }
 
   if (measurement.canonicalMarker !== "Hematocrit") {
-    return {
+    return roundMeasurementForStorage({
       value: measurement.value,
       unit: measurement.unit,
       referenceMin: measurement.referenceMin,
       referenceMax: measurement.referenceMax
-    };
+    });
   }
 
   const hasRatioHint =
@@ -351,20 +365,20 @@ export const normalizeMarkerMeasurement = (measurement: MarkerMeasurement): Omit
     (measurement.referenceMax !== null && measurement.referenceMax <= 1.5);
 
   if (!hasRatioHint) {
-    return {
+    return roundMeasurementForStorage({
       value: measurement.value,
       unit: "%",
       referenceMin: measurement.referenceMin,
       referenceMax: measurement.referenceMax
-    };
+    });
   }
 
-  return {
+  return roundMeasurementForStorage({
     value: toPercentIfRatio(measurement.value) ?? measurement.value,
     unit: "%",
     referenceMin: toPercentIfRatio(measurement.referenceMin),
     referenceMax: toPercentIfRatio(measurement.referenceMax)
-  };
+  });
 };
 
 export const convertBySystem = (

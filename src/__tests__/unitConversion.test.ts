@@ -11,6 +11,7 @@ describe("unitConversion", () => {
     expect(canonicalizeMarker("Testosterone (Direct)")).toBe("Free Testosterone");
     expect(canonicalizeMarker("Sex Horm Binding Glob, Serum")).toBe("SHBG");
     expect(canonicalizeMarker("Bioavailable Testosterone")).toBe("Bioavailable Testosterone");
+    expect(canonicalizeMarker("Cortisol (AM)")).toBe("Cortisol");
   });
 
   it("convertBySystem converts key markers EU<->US", () => {
@@ -51,5 +52,19 @@ describe("unitConversion", () => {
 
     expect(totalT.unit).toBe("nmol/L");
     expect(totalT.value).toBeCloseTo(31.2, 1);
+  });
+
+  it("rounds normalized values and references to max 3 decimals for storage", () => {
+    const rounded = normalizeMarkerMeasurement({
+      canonicalMarker: "Free Testosterone",
+      value: 0.41200000000000003,
+      unit: "nmol/L",
+      referenceMin: 0.11500000000000002,
+      referenceMax: 0.5770000000000001
+    });
+
+    expect(rounded.value).toBe(0.412);
+    expect(rounded.referenceMin).toBe(0.115);
+    expect(rounded.referenceMax).toBe(0.577);
   });
 });
