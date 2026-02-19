@@ -7,6 +7,8 @@ type LocalizedText = {
   es?: string;
   pt?: string;
   de?: string;
+  ru?: string;
+  zh?: string;
 };
 
 export const APP_LANGUAGE_OPTIONS: Array<{ value: AppLanguage; label: string }> = [
@@ -14,6 +16,8 @@ export const APP_LANGUAGE_OPTIONS: Array<{ value: AppLanguage; label: string }> 
   { value: "es", label: "Español" },
   { value: "pt", label: "Português" },
   { value: "de", label: "Deutsch" },
+  { value: "ru", label: "Русский" },
+  { value: "zh", label: "中文" },
   { value: "nl", label: "Nederlands" }
 ];
 

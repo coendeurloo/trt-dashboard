@@ -1,6 +1,6 @@
 export type ThemeMode = "light" | "dark";
 export type UnitSystem = "eu" | "us";
-export type AppLanguage = "en" | "es" | "pt" | "de" | "nl";
+export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type TabKey =
   | "dashboard"
   | "protocol"
