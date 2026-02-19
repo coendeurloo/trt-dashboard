@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
+import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
 import { PRIMARY_MARKERS } from "./constants";
 import { ExtractionDebugInfo, ExtractionDraft, ExtractionWarningCode, MarkerValue } from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
@@ -163,11 +164,13 @@ const OCR_MAX_PAGES = 12;
 const OCR_RENDER_SCALE = 2;
 const OCR_RETRY_RENDER_SCALE = 1.4;
 const OCR_REMOTE_WORKER_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/worker.min.js";
+const OCR_REMOTE_CORE_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js-core@v7.0.0/tesseract-core.wasm.js";
 const OCR_REMOTE_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
 const OCR_MAX_INIT_ATTEMPTS = 2;
 const OCR_INIT_BACKOFF_MS = 250;
 const OCR_PAGE_TIMEOUT_MS = 15_000;
 const OCR_TOTAL_TIMEOUT_MS = 75_000;
+const OCR_LANG_FALLBACK = "eng";
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
 const SPATIAL_CLUSTER_GAP = 42;
 const SPATIAL_COLUMN_BAND_WIDTH = 120;
@@ -494,19 +497,31 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
   };
   type TesseractModule = {
     createWorker?: (...args: unknown[]) => Promise<OcrWorker>;
+    recognize?: (
+      image: HTMLCanvasElement,
+      langs?: string,
+      options?: Record<string, unknown>
+    ) => Promise<{ data?: { text?: string } }>;
     default?: {
       createWorker?: (...args: unknown[]) => Promise<OcrWorker>;
+      recognize?: (
+        image: HTMLCanvasElement,
+        langs?: string,
+        options?: Record<string, unknown>
+      ) => Promise<{ data?: { text?: string } }>;
     };
   };
 
   let createWorker: TesseractModule["createWorker"];
+  let recognizeDirect: TesseractModule["recognize"];
   try {
     const module = (await import("tesseract.js")) as TesseractModule;
     createWorker = module.createWorker ?? module.default?.createWorker;
+    recognizeDirect = module.recognize ?? module.default?.recognize;
   } catch {
     return {
       text: "",
-      used: false,
+      used: true,
       pagesAttempted: 0,
       pagesSucceeded: 0,
       pagesFailed: 0,
@@ -516,15 +531,7 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
   }
 
   if (!createWorker) {
-    return {
-      text: "",
-      used: false,
-      pagesAttempted: 0,
-      pagesSucceeded: 0,
-      pagesFailed: 0,
-      initFailed: true,
-      timedOut: false
-    };
+    recognizeDirect = undefined;
   }
 
   let doc: unknown;
@@ -534,7 +541,7 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
     console.warn("PDF OCR document load failed", error);
     return {
       text: "",
-      used: false,
+      used: true,
       pagesAttempted: 0,
       pagesSucceeded: 0,
       pagesFailed: 0,
@@ -547,7 +554,7 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
   if (pageLimit === 0) {
     return {
       text: "",
-      used: false,
+      used: true,
       pagesAttempted: 0,
       pagesSucceeded: 0,
       pagesFailed: 0,
@@ -558,88 +565,142 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
 
   let worker: OcrWorker | null = null;
   const workerInitAttempts: Array<Record<string, unknown>> = [
-    { workerPath: tesseractWorker },
-    {},
+    {
+      workerPath: tesseractWorker,
+      corePath: tesseractCore,
+      langPath: OCR_REMOTE_LANG_PATH,
+      cacheMethod: "none",
+      workerBlobURL: false
+    },
     {
       workerPath: OCR_REMOTE_WORKER_PATH,
-      langPath: OCR_REMOTE_LANG_PATH
+      corePath: OCR_REMOTE_CORE_PATH,
+      langPath: OCR_REMOTE_LANG_PATH,
+      cacheMethod: "none",
+      workerBlobURL: false
+    },
+    {
+      cacheMethod: "none",
+      workerBlobURL: false
     }
   ];
-  for (const options of workerInitAttempts) {
-    for (let attempt = 1; attempt <= OCR_MAX_INIT_ATTEMPTS; attempt += 1) {
-      try {
-        worker = await createWorker(OCR_LANGS, 1, options);
-        break;
-      } catch (error) {
-        console.warn(`PDF OCR worker init attempt failed (${attempt}/${OCR_MAX_INIT_ATTEMPTS})`, error);
-        if (attempt < OCR_MAX_INIT_ATTEMPTS) {
-          await sleep(OCR_INIT_BACKOFF_MS * attempt);
+  const languageAttempts = OCR_LANGS.includes("+") ? [OCR_LANGS, OCR_LANG_FALLBACK] : [OCR_LANGS];
+
+  if (createWorker) {
+    for (const lang of languageAttempts) {
+      for (const options of workerInitAttempts) {
+        for (let attempt = 1; attempt <= OCR_MAX_INIT_ATTEMPTS; attempt += 1) {
+          try {
+            worker = await createWorker(lang, 1, options);
+            break;
+          } catch (error) {
+            console.warn(
+              `PDF OCR worker init attempt failed (${attempt}/${OCR_MAX_INIT_ATTEMPTS}) for langs=${lang}`,
+              error
+            );
+            if (attempt < OCR_MAX_INIT_ATTEMPTS) {
+              await sleep(OCR_INIT_BACKOFF_MS * attempt);
+            }
+          }
+        }
+        if (worker) {
+          break;
         }
       }
-    }
-    if (worker) {
-      break;
+      if (worker) {
+        break;
+      }
     }
   }
-  if (!worker) {
-    return {
-      text: "",
-      used: true,
-      pagesAttempted: pageLimit,
-      pagesSucceeded: 0,
-      pagesFailed: pageLimit,
-      initFailed: true,
-      timedOut: false
-    };
-  }
+
   const chunks: string[] = [];
   let pagesSucceeded = 0;
   let pagesFailed = 0;
   let timedOut = false;
 
-  try {
-    await worker.setParameters?.({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: "6"
-    });
-
-    const recognizePageAtScale = async (pageNumber: number, scale: number): Promise<string> => {
-      const page = await (doc as { getPage: (page: number) => Promise<unknown> }).getPage(pageNumber);
-      const pdfPage = page as {
-        getViewport: (options: { scale: number }) => { width: number; height: number };
-        render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
-          promise: Promise<unknown>;
-        };
+  const getPageCanvas = async (pageNumber: number, scale: number): Promise<HTMLCanvasElement | null> => {
+    const page = await (doc as { getPage: (page: number) => Promise<unknown> }).getPage(pageNumber);
+    const pdfPage = page as {
+      getViewport: (options: { scale: number }) => { width: number; height: number };
+      render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
+        promise: Promise<unknown>;
       };
-      const viewport = pdfPage.getViewport({ scale });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.floor(viewport.width));
-      canvas.height = Math.max(1, Math.floor(viewport.height));
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) {
-        return "";
-      }
-      await pdfPage.render({ canvasContext: context, viewport }).promise;
+    };
+    const viewport = pdfPage.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(viewport.width));
+    canvas.height = Math.max(1, Math.floor(viewport.height));
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) {
+      return null;
+    }
+    await pdfPage.render({ canvasContext: context, viewport }).promise;
+    return canvas;
+  };
+
+  const runPageOcr = async (pageNumber: number, scale: number): Promise<string> => {
+    const canvas = await getPageCanvas(pageNumber, scale);
+    if (!canvas) {
+      return "";
+    }
+
+    if (worker) {
       const recognized = await worker.recognize(canvas);
       return cleanWhitespace(recognized.data?.text ?? "");
-    };
+    }
 
+    if (!recognizeDirect) {
+      return "";
+    }
+
+    for (const lang of languageAttempts) {
+      try {
+        const recognized = await recognizeDirect(canvas, lang, {
+          workerPath: OCR_REMOTE_WORKER_PATH,
+          corePath: OCR_REMOTE_CORE_PATH,
+          langPath: OCR_REMOTE_LANG_PATH,
+          cacheMethod: "none",
+          workerBlobURL: false
+        });
+        const text = cleanWhitespace(recognized.data?.text ?? "");
+        if (text) {
+          return text;
+        }
+      } catch (error) {
+        console.warn(`PDF OCR direct recognize failed for langs=${lang}`, error);
+      }
+    }
+
+    return "";
+  };
+
+  if (worker) {
+    try {
+      await worker.setParameters?.({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: "6"
+      });
+    } catch (error) {
+      console.warn("PDF OCR worker setParameters failed", error);
+    }
+  }
+
+  try {
     for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
       let ocrText = "";
       try {
-        ocrText = await withTimeout(
-          recognizePageAtScale(pageNum, OCR_RENDER_SCALE),
-          OCR_PAGE_TIMEOUT_MS,
-          `OCR timeout on page ${pageNum}`
-        );
+        ocrText = await withTimeout(runPageOcr(pageNum, OCR_RENDER_SCALE), OCR_PAGE_TIMEOUT_MS, `OCR timeout on page ${pageNum}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         if (/timeout/i.test(message)) {
           timedOut = true;
         }
+      }
+
+      if (!ocrText) {
         try {
           ocrText = await withTimeout(
-            recognizePageAtScale(pageNum, OCR_RETRY_RENDER_SCALE),
+            runPageOcr(pageNum, OCR_RETRY_RENDER_SCALE),
             OCR_PAGE_TIMEOUT_MS,
             `OCR retry timeout on page ${pageNum}`
           );
@@ -648,21 +709,24 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
           if (/timeout/i.test(retryMessage)) {
             timedOut = true;
           }
-          console.warn(`PDF OCR page failed (${pageNum})`, retryError);
         }
       }
+
       if (ocrText) {
         chunks.push(ocrText);
         pagesSucceeded += 1;
       } else {
         pagesFailed += 1;
+        console.warn(`PDF OCR page failed (${pageNum})`);
       }
     }
   } catch (error) {
     console.warn("PDF OCR fallback failed", error);
     pagesFailed = Math.max(pagesFailed, pageLimit - pagesSucceeded);
   } finally {
-    await worker.terminate().catch(() => undefined);
+    if (worker) {
+      await worker.terminate().catch(() => undefined);
+    }
   }
 
   if (chunks.length === 0 && pagesSucceeded === 0 && pagesFailed === 0) {
@@ -2756,7 +2820,7 @@ const buildLocalExtractionWarnings = (
     pushWarning("PDF_TEXT_LAYER_EMPTY");
   }
 
-  if (ocrResult.used && ocrResult.initFailed) {
+  if (ocrResult.initFailed) {
     pushWarning("PDF_OCR_INIT_FAILED");
   } else if (ocrResult.used && ocrResult.pagesFailed > 0) {
     pushWarning("PDF_OCR_PARTIAL");
