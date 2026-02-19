@@ -1,7 +1,7 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
-import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, t, trLocale } from "../i18n";
+import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { ShareOptions } from "../share";
 import { AppLanguage, AppSettings } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
@@ -28,10 +28,44 @@ interface SettingsViewProps {
   onExportCsv: (selectedMarkers: string[]) => void;
   onExportPdf: () => void;
   onImportData: (incoming: unknown, mode: "merge" | "replace") => ImportResult;
+  onClearAllData: () => void;
   onAddMarkerSuggestions: (suggestions: MarkerMergeSuggestion[]) => void;
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
 }
+
+interface ToggleSwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  tooltip?: string;
+}
+
+const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) => (
+  <label className="group relative inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-slate-100 sm:text-sm">
+    <button
+      type="button"
+      aria-pressed={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
+        checked ? "border-cyan-500/60 bg-cyan-500/20" : "border-slate-600 bg-slate-700"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform duration-200 ${
+          checked ? "translate-x-3 bg-cyan-400" : "translate-x-0.5 bg-slate-500"
+        }`}
+      />
+    </button>
+    {label}
+    {tooltip ? (
+      <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+        {tooltip}
+      </span>
+    ) : null}
+  </label>
+);
 
 const SettingsView = ({
   settings,
@@ -49,6 +83,7 @@ const SettingsView = ({
   onExportCsv,
   onExportPdf,
   onImportData,
+  onClearAllData,
   onAddMarkerSuggestions,
   onShareOptionsChange,
   onGenerateShareLink
@@ -61,6 +96,9 @@ const SettingsView = ({
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [csvMarkerSelection, setCsvMarkerSelection] = useState<string[]>(allMarkers);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -116,7 +154,7 @@ const SettingsView = ({
           "Describe which markers were missing or incorrect."
         ].join("\n");
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }, [isNl]);
+  }, [isNl, tr]);
 
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -148,10 +186,15 @@ const SettingsView = ({
     }
   };
 
+  const closeDeleteModal = () => {
+    setShowDeleteConfirm(false);
+    setDeleteInput("");
+  };
+
   return (
     <section className="space-y-3 fade-in">
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h3>
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
             <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Thema", "Theme")}</span>
@@ -166,7 +209,7 @@ const SettingsView = ({
           </label>
 
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">{t(language, "language")}</span>
+            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Taal", "Language")}</span>
             <select
               className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
               value={settings.language}
@@ -204,7 +247,7 @@ const SettingsView = ({
             </select>
           </label>
 
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
+          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
             <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Tooltip-detail", "Tooltip detail")}</span>
             <select
               className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
@@ -215,68 +258,198 @@ const SettingsView = ({
               <option value="full">{tr("Uitgebreid (alle context)", "Extended (full context)")}</option>
             </select>
           </label>
-
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">
-              {tr("Geavanceerde meetmoment-filters", "Advanced sampling filters")}
-            </span>
-            <div className="mt-2 flex items-center gap-2 text-slate-200">
-              <input
-                type="checkbox"
-                checked={samplingControlsEnabled}
-                onChange={(event) => onUpdateSettings({ enableSamplingControls: event.target.checked })}
-              />
-              <span>{tr("Toon sampling filter + baseline vergelijking op dashboard", "Show sampling filter + baseline comparison on dashboard")}</span>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              {tr(
-                "Standaard uit. Als uitgeschakeld worden trough/peak- en baseline-opties verborgen.",
-                "Off by default. When disabled, trough/peak and baseline options are hidden."
-              )}
-            </p>
-          </label>
-
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Afgeleide marker", "Derived marker")}</span>
-            <div className="mt-2 flex items-center gap-2 text-slate-200">
-              <input
-                type="checkbox"
-                checked={settings.enableCalculatedFreeTestosterone}
-                onChange={(event) => onUpdateSettings({ enableCalculatedFreeTestosterone: event.target.checked })}
-              />
-              <span>{tr("Bereken Vrij Testosteron (afgeleid)", "Enable calculated Free Testosterone (derived)")}</span>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              {tr(
-                "Berekend uit totaal testosteron + SHBG (+ albumine). Vervangt gemeten vrij testosteron nooit en vult alleen ontbrekende punten aan.",
-                "Computed from Total T + SHBG (+ Albumin). Never replaces measured Free T; it only fills missing points."
-              )}
-            </p>
-          </label>
         </div>
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Feedback", "Feedback")}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr(
-            "Problemen met het verwerken van PDF's? Laat ons weten welke labformaten niet werken.",
-            "Having trouble with PDF parsing? Let us know which lab formats don't work."
-          )}
-        </p>
-        <a
-          href={settingsFeedbackMailto}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
-        >
-          <AlertTriangle className="h-4 w-4" />
-          {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
-        </a>
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Data", "Data")}</h2>
+
+        <div className="mt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Backup & Herstel", "Backup & Restore")}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr(
+              "Maak een JSON-backup van al je data. Je kunt die later importeren als merge of volledige restore.",
+              "Create a JSON backup of all your data. You can later import it as a merge or full restore."
+            )}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+              onClick={onExportJson}
+            >
+              <Download className="h-4 w-4" /> {tr("Backup maken (JSON)", "Create backup (JSON)")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+              onClick={() => {
+                setImportMode("merge");
+                importFileInputRef.current?.click();
+              }}
+            >
+              <FileText className="h-4 w-4" /> {tr("Importeer backup (samenvoegen)", "Import backup (merge)")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-red-800/60 bg-red-900/30 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-900/50 hover:text-red-200"
+              onClick={() => {
+                setImportMode("replace");
+                importFileInputRef.current?.click();
+              }}
+            >
+              <FileText className="h-4 w-4" /> {tr("Herstel backup (vervangen)", "Restore backup (replace)")}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-600">
+            {tr(
+              "Herstel (vervangen) overschrijft alle huidige data. Maak eerst een backup indien nodig.",
+              "Restore (replace) overwrites all current data. Create a backup first if needed."
+            )}
+          </p>
+          <input ref={importFileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportBackupFile} />
+          {importStatus ? (
+            <div
+              className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+                importStatus.type === "success"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                  : "border-rose-500/30 bg-rose-500/10 text-rose-200"
+              }`}
+            >
+              {importStatus.message}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-6 border-t border-slate-800 pt-6">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Export", "Export")}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr(
+              "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
+              "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
+            )}
+          </p>
+
+          <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {allMarkers.map((marker) => {
+                const selected = csvMarkerSelection.includes(marker);
+                return (
+                  <button
+                    key={marker}
+                    type="button"
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
+                    }`}
+                    onClick={() => {
+                      setCsvMarkerSelection((current) => {
+                        if (current.includes(marker)) {
+                          return current.filter((item) => item !== marker);
+                        }
+                        return [...current, marker];
+                      });
+                    }}
+                  >
+                    {getMarkerDisplayName(marker, language)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+              onClick={onExportJson}
+            >
+              <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+              onClick={() => onExportCsv(csvMarkerSelection)}
+            >
+              <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+              onClick={onExportPdf}
+            >
+              <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-800 pt-6">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Delen", "Share")}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr(
+              "Genereer een read-only snapshotlink zonder API keys. De gedeelde weergave staat geen bewerken toe.",
+              "Generate a read-only snapshot link without API keys. Shared view does not allow editing."
+            )}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
+              <input
+                type="checkbox"
+                checked={shareOptions.hideNotes}
+                onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideNotes: event.target.checked }))}
+              />
+              {tr("Verberg notities", "Hide notes")}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
+              <input
+                type="checkbox"
+                checked={shareOptions.hideProtocol}
+                onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideProtocol: event.target.checked }))}
+              />
+              {tr("Verberg protocol", "Hide protocol")}
+            </label>
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
+              <input
+                type="checkbox"
+                checked={shareOptions.hideSymptoms}
+                onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideSymptoms: event.target.checked }))}
+              />
+              {tr("Verberg symptomen", "Hide symptoms")}
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+              onClick={onGenerateShareLink}
+            >
+              <Link2 className="h-4 w-4" /> {tr("Genereer deellink", "Generate share link")}
+            </button>
+            {shareLink ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(shareLink);
+                  } catch {
+                    // no-op
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
+              </button>
+            ) : null}
+          </div>
+          {shareLink ? (
+            <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h3>
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
             "Beheer markernaam-normalisatie zonder je dashboard te verstoren. Je kunt markers handmatig samenvoegen of hernoemen.",
@@ -358,193 +531,141 @@ const SettingsView = ({
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Backup & Herstel", "Backup & Restore")}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr(
-            "Maak een JSON-backup van al je data. Je kunt die later importeren als merge of volledige restore.",
-            "Create a JSON backup of all your data. You can later import it as a merge or full restore."
-          )}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
-            onClick={onExportJson}
-          >
-            <Download className="h-4 w-4" /> {tr("Backup maken (JSON)", "Create backup (JSON)")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-            onClick={() => {
-              setImportMode("merge");
-              importFileInputRef.current?.click();
-            }}
-          >
-            <FileText className="h-4 w-4" /> {tr("Importeer backup (samenvoegen)", "Import backup (merge)")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
-            onClick={() => {
-              setImportMode("replace");
-              importFileInputRef.current?.click();
-            }}
-          >
-            <FileText className="h-4 w-4" /> {tr("Herstel backup (vervangen)", "Restore backup (replace)")}
-          </button>
-        </div>
+        <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="flex w-full items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-100">{tr("Geavanceerd", "Advanced")}</h2>
+          {showAdvanced ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+        </button>
 
-        <input ref={importFileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportBackupFile} />
+        {showAdvanced ? (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                {tr("Geavanceerde meetmoment-filters", "Advanced sampling filters")}
+              </h3>
+              <div className="mt-2">
+                <ToggleSwitch
+                  checked={samplingControlsEnabled}
+                  onChange={(checked) => onUpdateSettings({ enableSamplingControls: checked })}
+                  label={tr("Toon sampling filter + baseline vergelijking op dashboard", "Show sampling filter + baseline comparison on dashboard")}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {tr(
+                  "Standaard uit. Als uitgeschakeld worden trough/peak- en baseline-opties verborgen.",
+                  "Off by default. When disabled, trough/peak and baseline options are hidden."
+                )}
+              </p>
+            </div>
 
-        {importStatus ? (
-          <div
-            className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
-              importStatus.type === "success"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                : "border-rose-500/30 bg-rose-500/10 text-rose-200"
-            }`}
-          >
-            {importStatus.message}
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Afgeleide marker", "Derived marker")}</h3>
+              <div className="mt-2">
+                <ToggleSwitch
+                  checked={settings.enableCalculatedFreeTestosterone}
+                  onChange={(checked) => onUpdateSettings({ enableCalculatedFreeTestosterone: checked })}
+                  label={tr("Bereken Vrij Testosteron (afgeleid)", "Enable calculated Free Testosterone (derived)")}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {tr(
+                  "Berekend uit totaal testosteron + SHBG (+ albumine). Vervangt gemeten vrij testosteron nooit en vult alleen ontbrekende punten aan.",
+                  "Computed from Total T + SHBG (+ Albumin). Never replaces measured Free T; it only fills missing points."
+                )}
+              </p>
+            </div>
           </div>
         ) : null}
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Deelmodus", "Share mode")}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr(
-            "Genereer een read-only snapshotlink zonder API keys. De gedeelde weergave staat geen bewerken toe.",
-            "Generate a read-only snapshot link without API keys. Shared view does not allow editing."
-          )}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={shareOptions.hideNotes}
-              onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideNotes: event.target.checked }))}
-            />
-            {tr("Verberg notities", "Hide notes")}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={shareOptions.hideProtocol}
-              onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideProtocol: event.target.checked }))}
-            />
-            {tr("Verberg protocol", "Hide protocol")}
-          </label>
-          <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={shareOptions.hideSymptoms}
-              onChange={(event) => onShareOptionsChange((current) => ({ ...current, hideSymptoms: event.target.checked }))}
-            />
-            {tr("Verberg symptomen", "Hide symptoms")}
-          </label>
-        </div>
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
+          <h3 className="text-sm font-semibold text-red-400">{tr("Verwijder alle data", "Delete all data")}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr(
+              "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
+              "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
+            )}
+          </p>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
-            onClick={onGenerateShareLink}
+            onClick={() => setShowDeleteConfirm(true)}
+            className="mt-3 rounded-lg border border-red-800/60 bg-red-900/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
           >
-            <Link2 className="h-4 w-4" /> {tr("Genereer deellink", "Generate share link")}
-          </button>
-          {shareLink ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(shareLink);
-                } catch {
-                  // no-op
-                }
-              }}
-            >
-              <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
-            </button>
-          ) : null}
-        </div>
-        {shareLink ? (
-          <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
-        ) : null}
-      </div>
-
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h3 className="text-base font-semibold text-slate-100">{tr("Export", "Export")}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr(
-            "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
-            "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
-          )}
-        </p>
-
-        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {allMarkers.map((marker) => {
-              const selected = csvMarkerSelection.includes(marker);
-              return (
-                <button
-                  key={marker}
-                  type="button"
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
-                  }`}
-                  onClick={() => {
-                    setCsvMarkerSelection((current) => {
-                      if (current.includes(marker)) {
-                        return current.filter((item) => item !== marker);
-                      }
-                      return [...current, marker];
-                    });
-                  }}
-                >
-                  {getMarkerDisplayName(marker, language)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-            onClick={onExportJson}
-          >
-            <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-            onClick={() => onExportCsv(csvMarkerSelection)}
-          >
-            <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-            onClick={onExportPdf}
-          >
-            <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
+            {tr("Verwijder alle data", "Delete all data")}
           </button>
         </div>
-      </div>
 
-      <div className="medical-disclaimer rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-        <p className="font-semibold">{tr("Medische disclaimer", "Medical disclaimer")}</p>
-        <p className="mt-1">
+        <p className="mt-6 text-xs text-slate-600">
           {tr(
             "Deze tool is alleen voor persoonlijke tracking en geeft geen medisch advies.",
             "This tool is for personal tracking only and does not provide medical advice."
           )}
         </p>
       </div>
+
+      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Feedback", "Feedback")}</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          {tr(
+            "Problemen met het verwerken van PDF's? Laat ons weten welke labformaten niet werken.",
+            "Having trouble with PDF parsing? Let us know which lab formats don't work."
+          )}
+        </p>
+        <a
+          href={settingsFeedbackMailto}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
+        </a>
+      </div>
+
+      {showDeleteConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="text-base font-semibold text-red-400">{tr("Alle data verwijderen?", "Delete all data?")}</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              {tr(
+                "Dit verwijdert permanent al je rapporten, markers, protocollen, supplementen en instellingen. Je kunt dit alleen herstellen met een eerdere backup.",
+                "This will permanently delete all your reports, markers, protocols, supplements, and settings. There is no way to recover this data unless you have a backup."
+              )}
+            </p>
+
+            <p className="mt-4 text-xs font-medium text-slate-500">
+              {tr("Typ", "Type")} <span className="font-bold text-slate-300">DELETE</span> {tr("om te bevestigen", "to confirm")}
+            </p>
+            <input
+              type="text"
+              value={deleteInput}
+              onChange={(event) => setDeleteInput(event.target.value)}
+              placeholder="DELETE"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-red-700 focus:outline-none"
+            />
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={closeDeleteModal} className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200">
+                {tr("Annuleren", "Cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={deleteInput !== "DELETE"}
+                onClick={() => {
+                  onClearAllData();
+                  setImportStatus(null);
+                  closeDeleteModal();
+                }}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {tr("Verwijder alles", "Delete everything")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 };

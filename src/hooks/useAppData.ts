@@ -398,6 +398,13 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     [appData.reports, isShareMode, tr]
   );
 
+  const clearAllData = useCallback(() => {
+    if (isShareMode) {
+      return;
+    }
+    setAppData(coerceStoredAppData({}));
+  }, [isShareMode]);
+
   const addSupplementPeriod = useCallback(
     (period: SupplementPeriod) => {
       if (isShareMode) {
@@ -550,6 +557,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     updateCheckIn,
     deleteCheckIn,
     importData,
+    clearAllData,
     exportJson
   };
 };

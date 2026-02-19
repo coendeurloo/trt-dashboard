@@ -46,6 +46,25 @@ describe("pdfParsing fallback layers", () => {
     expect(row?.referenceMax).toBe(170);
   });
 
+  it("parses hematology rows with 10*9/L and 10*12/L units", () => {
+    const wbc = __pdfParsingInternals.parseSingleRow("WBC 6.9 4.0-10.0 10*9/L", 0.7, genericProfile);
+    const rbc = __pdfParsingInternals.parseSingleRow("RBC 5.19 4.20-5.40 10*12/L", 0.7, genericProfile);
+
+    expect(wbc).not.toBeNull();
+    expect(wbc?.markerName).toBe("WBC");
+    expect(wbc?.value).toBeCloseTo(6.9, 2);
+    expect(wbc?.unit).toBe("10^9/L");
+    expect(wbc?.referenceMin).toBe(4);
+    expect(wbc?.referenceMax).toBe(10);
+
+    expect(rbc).not.toBeNull();
+    expect(rbc?.markerName).toBe("RBC");
+    expect(rbc?.value).toBeCloseTo(5.19, 2);
+    expect(rbc?.unit).toBe("10^12/L");
+    expect(rbc?.referenceMin).toBe(4.2);
+    expect(rbc?.referenceMax).toBe(5.4);
+  });
+
   it("parses two-line rows with marker header + result line", () => {
     const row = __pdfParsingInternals.parseTwoLineRow("Estradiol", "Result Normal 96 H 12 - 56 pg/mL", genericProfile);
 
@@ -263,6 +282,155 @@ describe("pdfParsing fallback layers", () => {
     expect(markerNames).toContain("Testosterone (Total)");
   });
 
+  it("drops narrative risk/caution fragments from LifeLabs-style commentary lines", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "for intermediate and high risk individuals is 2 mmol/L.",
+        "low risk individuals with LDL cholesterol 5 mmol/L",
+        "if dexamethasone has been given 130 nmol/L.",
+        "This high sensitivity CRP method is sensitive to 0.3 mg/L",
+        "DHEA Sulphate 5.1 umol/L <15.0",
+        "LDL Cholesterol 3.36 mmol/L 1.50-3.00",
+        "Sex Hormone Binding Globulin 44.1 nmol/L 10.0-70.0"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const markerNames = rows.map((row) => row.markerName);
+    expect(markerNames).toContain("DHEA Sulphate");
+    expect(markerNames).toContain("SHBG");
+    expect(markerNames).toContain("LDL Cholesterol");
+    expect(markerNames).not.toContain("is");
+    expect(markerNames.some((name) => /intermediate and high risk individuals/i.test(name))).toBe(false);
+    expect(markerNames.some((name) => /low risk individuals/i.test(name))).toBe(false);
+    expect(markerNames.some((name) => /if dexamethasone has been given/i.test(name))).toBe(false);
+    expect(markerNames.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
+  });
+
+  it("drops single-token stopword markers like is", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      ["is 2.00 mmol/L", "LDL Cholesterol 3.36 mmol/L 1.50-3.00"].join("\n"),
+      genericProfile
+    );
+
+    const markerNames = rows.map((row) => row.markerName);
+    expect(markerNames).not.toContain("is");
+    expect(markerNames).toContain("LDL Cholesterol");
+  });
+
+  it("keeps real CRP marker but drops CRP narrative sensitivity fragment", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "This high sensitivity CRP method is sensitive to 0.3 mg/L and is suitable",
+        "C Reactive Protein (High Sensitivity) 1.0 mg/L <4.8"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const markerNames = rows.map((row) => row.markerName);
+    expect(markerNames.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
+    expect(markerNames).toContain("C Reactive Protein (High Sensitivity)");
+  });
+
+  it("keeps first-page differential markers with 10*9/L units", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "Neutrophils 3.3 2.0-7.5 10*9/L",
+        "Monocytes 0.5 0.1-0.8 10*9/L",
+        "Eosinophils 0.3 0.0-0.7 10*9/L"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const markers = rows.map((row) => row.markerName);
+    expect(markers).toContain("Neutrophils");
+    expect(markers).toContain("Monocytes");
+    expect(markers).toContain("Eosinophils");
+    rows.forEach((row) => {
+      expect(row.unit).toBe("10^9/L");
+    });
+  });
+
+  it("parses LifeLabs first-page hematology block without dropping WBC differential rows", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Collected on: Oct 20 2018 07:10",
+        "Hematology",
+        "WBC 6.9 4.0-10.0 10*9/L",
+        "RBC 5.19 4.20-5.40 10*12/L",
+        "Hemoglobin 157 135-170 g/L",
+        "Hematocrit 0.47 0.40-0.50 L/L",
+        "Platelet Count A 137 150-400 10*9/L",
+        "Differential",
+        "Neutrophils 3.3 2.0-7.5 10*9/L",
+        "Lymphocytes 2.7 1.0-4.0 10*9/L",
+        "Monocytes 0.5 0.1-0.8 10*9/L",
+        "Eosinophils 0.3 0.0-0.7 10*9/L",
+        "Basophils 0.1 0.0-0.2 10*9/L"
+      ].join("\n"),
+      "Bloodwork 6 - clean.pdf"
+    );
+
+    const names = draft.markers.map((marker) => marker.marker);
+    expect(names).toContain("WBC");
+    expect(names).toContain("Monocytes");
+    expect(names).toContain("Neutrophils");
+    expect(names.some((name) => name.includes("Platelet Count"))).toBe(true);
+    expect(draft.markers.some((marker) => marker.unit === "10^9/L")).toBe(true);
+  });
+
+  it("parses LifeLabs table rows while dropping commentary fragments", () => {
+    const rows = __pdfParsingInternals.parseLifeLabsTableRows(
+      [
+        "Test Flag Result Reference Range - Units",
+        "WBC 6.9 4.0-10.0 10*9/L",
+        "Monocytes 0.5 0.1-0.8 10*9/L",
+        "LDL Cholesterol A 3.36 1.50-3.00 mmol/L",
+        "The optimal LDL cholesterol level for intermediate and high risk individuals is <= 2.00 mmol/L.",
+        "This high sensitivity CRP method is sensitive to 0.3 mg/L and is suitable",
+        "TSH 2.09 0.32-5.04 mU/L",
+        "Estradiol 113 <157 pmol/L",
+        "DHEA Sulphate 5.1 <15.0 umol/L",
+        "Sex Hormone Binding Globulin 44.1 10.0-70.0 nmol/L"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const names = rows.map((row) => row.markerName);
+    expect(names).toContain("WBC");
+    expect(names).toContain("Monocytes");
+    expect(names).toContain("LDL Cholesterol");
+    expect(names).toContain("TSH");
+    expect(names).toContain("Estradiol");
+    expect(names).toContain("DHEA Sulphate");
+    expect(names).toContain("SHBG");
+    expect(names).not.toContain("is");
+    expect(names.some((name) => /high risk individuals/i.test(name))).toBe(false);
+    expect(names.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
+  });
+
+  it("trims long caution prefixes when a real marker appears at the end", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      ["tions, please interpret results with caution DHEA Sulphate 5.1 umol/L <15.0"].join("\n"),
+      genericProfile
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]?.markerName).toBe("DHEA Sulphate");
+    expect(rows[0]?.value).toBeCloseTo(5.1, 2);
+  });
+
+  it("renames hypoalbuminemia-prefixed SHBG row to SHBG", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      ["caution in presence of significant hypoalbuminemia Sex Hormone Binding Globulin 44.1 nmol/L 10.0-70.0"].join("\n"),
+      genericProfile
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]?.markerName).toBe("SHBG");
+    expect(rows[0]?.value).toBeCloseTo(44.1, 2);
+  });
+
   it("parses three-line marker labels for split lab rows", () => {
     const rows = __pdfParsingInternals.parseLineRows(
       [
@@ -273,7 +441,7 @@ describe("pdfParsing fallback layers", () => {
       genericProfile
     );
 
-    const parsed = rows.find((row) => row.markerName.includes("Sex Horm Binding Glob"));
+    const parsed = rows.find((row) => row.markerName === "SHBG");
     expect(parsed).toBeDefined();
     expect(parsed?.value).toBeCloseTo(34.7, 2);
     expect(parsed?.unit).toBe("nmol/L");
@@ -298,5 +466,49 @@ describe("pdfParsing fallback layers", () => {
     expect(canonicalMarkers.has("FSH")).toBe(false);
     expect(canonicalMarkers.has("Testosterone")).toBe(true);
     expect(canonicalMarkers.has("SHBG")).toBe(true);
+  });
+
+  it("filters noisy Claude rows while keeping structured marker rows", () => {
+    const normalized = [
+      __pdfParsingInternals.normalizeMarker({
+        marker: "is",
+        value: "2.0",
+        unit: "mmol/L",
+        referenceMin: null,
+        referenceMax: null,
+        confidence: 0.8
+      }),
+      __pdfParsingInternals.normalizeMarker({
+        marker: "This high sensitivity CRP method is sensitive to",
+        value: "0.3",
+        unit: "mg/L",
+        referenceMin: null,
+        referenceMax: null,
+        confidence: 0.8
+      }),
+      __pdfParsingInternals.normalizeMarker({
+        marker: "Testosterone",
+        value: "22.5",
+        unit: "nmol/L",
+        referenceMin: 8.4,
+        referenceMax: 28.8,
+        confidence: 0.8
+      }),
+      __pdfParsingInternals.normalizeMarker({
+        marker: "Sex Hormone Binding Globulin",
+        value: "44.1",
+        unit: "nmol/L",
+        referenceMin: 10,
+        referenceMax: 70,
+        confidence: 0.8
+      })
+    ].filter((row): row is NonNullable<typeof row> => row !== null);
+
+    const cleaned = __pdfParsingInternals.filterMarkerValuesForQuality(normalized);
+    const markers = cleaned.map((row) => row.marker);
+    expect(markers).toContain("Testosterone");
+    expect(markers).toContain("SHBG");
+    expect(markers).not.toContain("is");
+    expect(markers.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
   });
 });

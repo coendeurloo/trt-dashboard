@@ -81,9 +81,9 @@ interface ParserProfile {
 
 const NOISE_SYMBOL_PATTERN = /[ñò↑↓]/g;
 const SECTION_PREFIX_PATTERN =
-  /^(?:nuchter|hematology|clinical chemistry|hormones|vitamins|tumor markers|cardial markers|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
+  /^(?:nuchter|hematology|clinical chemistry|general chemistry|hormones|vitamins|tumor markers|tumour markers|cardial markers|lipids|muscle enzymes|random urine chemistry|urine \(micro\)albumin|adrenal function|reproductive and gonadal|serum proteins|hemoglobin a1c|haemoglobin a1c|differential|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
 const METHOD_SUFFIX_PATTERN = /\b(?:ECLIA|PHOT|ENZ|NEPH|ISSAM)\b$/i;
-const UNIT_TOKEN_PATTERN = /^[A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*$/;
+const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|×)?(?:9|12)\/l|[A-Za-z%µμ/][A-Za-z0-9%µμ/.*^\-²]*)$/i;
 const LEADING_UNIT_FRAGMENT_PATTERN =
   /^(?:mmol|nmol|pmol|pg|ng|g|mg|µmol|umol|u|mu|miu|fl|fmol|l)\s*\/\s*[a-z0-9µμ%]+\s*/i;
 const IMPORTANT_MARKERS = new Set([
@@ -109,10 +109,54 @@ const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+ra
 const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
+const MARKER_ANCHOR_PATTERN =
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp)\b/i;
+const COMMENTARY_FRAGMENT_PATTERN =
+  /\b(?:for intermediate and high risk individuals|low risk individuals|please interpret results with caution|if dexamethasone has been given|for further information please contact|new method effective|shown to interfere|changes in serial psa levels|this high sensitivity crp method is sensitive to|in presence of significant hypoalbuminemia|is suitable for coronary artery disease assessment)\b/i;
+const GUIDANCE_RESULT_PATTERN =
+  /\b(?:for\s+(?:intermediate|high|low)\s+risk\s+individuals|individuals?\s+with\s+ldl\s+cholesterol|if\s+dexamethasone\s+has\s+been\s+given|this\s+high\s+sensitivity\s+crp\s+method\s+is\s+sensitive\s+to|for\s+further\s+information\s+please\s+contact)\b/i;
+const COMMENTARY_GUARD_PATTERN =
+  /\b(?:high\s+risk\s+individuals?|low\s+risk\s+individuals?|sensitive\s+to|for\s+further\s+information|target\s+reduction|please\s+interpret|new\s+method\s+effective)\b/i;
 const HISTORY_CALCULATOR_NOISE_PATTERN =
   /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|free\s+testosterone\s*-\s*calculated|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay|calculated\s+value)\b|https?:\/\/|www\./i;
 const SPATIAL_PRIORITY_MARKER_PATTERN =
   /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|dht|dihydrotestosterone|prolactin|psa)\b/i;
+const SINGLE_TOKEN_MARKER_STOPWORDS = new Set([
+  "is",
+  "to",
+  "for",
+  "with",
+  "and",
+  "of",
+  "this",
+  "that",
+  "method",
+  "interpretation",
+  "new"
+]);
+const SHORT_MARKER_ALLOWLIST = new Set([
+  "WBC",
+  "RBC",
+  "MCV",
+  "MCH",
+  "MCHC",
+  "RDW",
+  "ALT",
+  "AST",
+  "CK",
+  "PSA",
+  "TSH",
+  "LH",
+  "FSH",
+  "DHT",
+  "CRP"
+]);
+const LIFELABS_TABLE_HEADER_PATTERN = /\bTest\s+Flag\s+Result\s+Reference\s+Range\s*-\s*Units\b/i;
+const LIFELABS_TABLE_END_PATTERN =
+  /^(?:FINAL RESULTS|This report contains confidential information intended for view|Note to physicians:|Note to patients:)\b/i;
+const LIFELABS_CONTINUATION_PATTERN =
+  /^(?:for|if|this|that|see|indicates|therapeutic|units for|kidney function|assumption|clinical state|accuracy|adults?:|children:|persistently|target reduction|new method|changes in serial|interpretation:|no reference range|a1c\s*[<>]=?)\b/i;
+type MarkerCandidateSource = "fallback" | "claude";
 const OCR_LANGS = "eng+nld";
 const OCR_MAX_PAGES = 12;
 const OCR_RENDER_SCALE = 2;
@@ -254,6 +298,104 @@ const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionD
   return candidateScore > baseScore ? candidate : base;
 };
 
+const sanitizeMarkerName = (rawMarker: string): string => applyProfileMarkerFixes(cleanMarkerName(rawMarker));
+
+const scoreMarkerCandidate = (
+  markerName: string,
+  unit: string,
+  referenceMin: number | null,
+  referenceMax: number | null
+): number => {
+  const marker = cleanWhitespace(markerName);
+  if (!marker) {
+    return 0;
+  }
+
+  let score = 45;
+  const tokens = marker.split(" ").filter(Boolean);
+  const lower = marker.toLowerCase();
+
+  if (MARKER_ANCHOR_PATTERN.test(marker)) {
+    score += 30;
+  } else {
+    score -= 15;
+  }
+
+  if (unit) {
+    score += 15;
+  }
+  if (referenceMin !== null || referenceMax !== null) {
+    score += 10;
+  }
+
+  if (COMMENTARY_GUARD_PATTERN.test(marker) || GUIDANCE_RESULT_PATTERN.test(marker)) {
+    score -= 70;
+  }
+
+  if (tokens.length === 1) {
+    const token = lower.trim();
+    if (SINGLE_TOKEN_MARKER_STOPWORDS.has(token)) {
+      score -= 80;
+    }
+    if (tokens[0].length <= 2 && !SHORT_MARKER_ALLOWLIST.has(tokens[0].toUpperCase())) {
+      score -= 40;
+    }
+  }
+
+  if (/^(?:for|if|this|that|please|interpret|new)\b/i.test(marker)) {
+    score -= 35;
+  }
+
+  if (tokens.length >= 8 && !MARKER_ANCHOR_PATTERN.test(marker)) {
+    score -= 35;
+  }
+
+  if (/\b(?:individuals?|guidelines?|sensitive\s+to|further\s+information|target\s+reduction)\b/i.test(marker)) {
+    score -= 40;
+  }
+
+  return Math.max(0, Math.min(100, score));
+};
+
+const isAcceptableMarkerCandidate = (
+  markerName: string,
+  unit: string,
+  referenceMin: number | null,
+  referenceMax: number | null,
+  source: MarkerCandidateSource
+): boolean => {
+  const marker = sanitizeMarkerName(markerName);
+  if (!marker) {
+    return false;
+  }
+
+  if (looksLikeNoiseMarker(marker)) {
+    return false;
+  }
+
+  const tokens = marker.split(" ").filter(Boolean);
+  if (tokens.length === 1) {
+    const token = tokens[0];
+    if (SINGLE_TOKEN_MARKER_STOPWORDS.has(token.toLowerCase())) {
+      return false;
+    }
+    if (token.length <= 2 && !SHORT_MARKER_ALLOWLIST.has(token.toUpperCase())) {
+      return false;
+    }
+  }
+
+  const score = scoreMarkerCandidate(marker, unit, referenceMin, referenceMax);
+  const knownMarker = MARKER_ANCHOR_PATTERN.test(marker) || SHORT_MARKER_ALLOWLIST.has(marker.toUpperCase());
+  const hasStrongStructure = Boolean(unit) && (referenceMin !== null || referenceMax !== null);
+
+  if (source === "claude" && !knownMarker && !hasStrongStructure) {
+    return false;
+  }
+
+  const threshold = source === "claude" ? (knownMarker ? 50 : 72) : knownMarker ? 36 : 54;
+  return score >= threshold;
+};
+
 const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<string> => {
   if (!isBrowserRuntime()) {
     return "";
@@ -334,20 +476,30 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
     return null;
   }
 
-  const canonicalMarker = canonicalizeMarker(raw.marker);
+  const cleanedMarker = sanitizeMarkerName(raw.marker);
+  const unit = raw.unit?.trim() || "";
   const referenceMin = safeNumber(raw.referenceMin ?? null);
   const referenceMax = safeNumber(raw.referenceMax ?? null);
+
+  if (!cleanedMarker || !isAcceptableMarkerCandidate(cleanedMarker, unit, referenceMin, referenceMax, "claude")) {
+    return null;
+  }
+  if (GUIDANCE_RESULT_PATTERN.test(raw.marker) || GUIDANCE_RESULT_PATTERN.test(cleanedMarker)) {
+    return null;
+  }
+
+  const canonicalMarker = canonicalizeMarker(cleanedMarker);
   const normalized = normalizeMarkerMeasurement({
     canonicalMarker,
     value,
-    unit: raw.unit?.trim() || "",
+    unit,
     referenceMin,
     referenceMax
   });
 
   return {
     id: createId(),
-    marker: raw.marker.trim(),
+    marker: cleanedMarker,
     canonicalMarker,
     value: normalized.value,
     unit: normalized.unit,
@@ -375,7 +527,9 @@ const cleanWhitespace = (value: string): string => {
     .replace(/ng\s*\/\s*dl/gi, "ng/dL")
     .replace(/ng\s*\/\s*mg/gi, "ng/mg")
     .replace(/pg\s*\/\s*ml/gi, "pg/mL")
-    .replace(/pg\s*\/\s*mg/gi, "pg/mg");
+    .replace(/pg\s*\/\s*mg/gi, "pg/mg")
+    .replace(/10\s*[x×*]\s*9\s*\/\s*l/gi, "10^9/L")
+    .replace(/10\s*[x×*]\s*12\s*\/\s*l/gi, "10^12/L");
 };
 
 const normalizeUnit = (unit: string): string => {
@@ -440,10 +594,10 @@ const normalizeUnit = (unit: string): string => {
   if (/^u\/ml$/i.test(compact)) {
     return "U/mL";
   }
-  if (/^10\^?9\/l$/i.test(compact) || /^10\*9\/l$/i.test(compact)) {
+  if (/^10(?:\^|\*|x|×)?9\/l$/i.test(compact)) {
     return "10^9/L";
   }
-  if (/^10\^?12\/l$/i.test(compact) || /^10\*12\/l$/i.test(compact)) {
+  if (/^10(?:\^|\*|x|×)?12\/l$/i.test(compact)) {
     return "10^12/L";
   }
   if (/^u\/l$/i.test(compact)) {
@@ -471,11 +625,16 @@ const normalizeUnit = (unit: string): string => {
 };
 
 const isLikelyUnit = (token: string): boolean => {
+  const compact = token.replace(/\s+/g, "").replace(/μ/g, "µ");
+  if (/^10(?:\^|\*|x|×)?(?:9|12)\/l$/i.test(compact)) {
+    return true;
+  }
+
   if (!UNIT_TOKEN_PATTERN.test(token)) {
     return false;
   }
 
-  if (token.includes("/") || token.includes("%") || token.startsWith("10x")) {
+  if (token.includes("/") || token.includes("%")) {
     return true;
   }
 
@@ -832,12 +991,15 @@ const cleanMarkerName = (rawMarker: string): string => {
     return "MCH";
   }
 
-  const anchor = marker.match(
-    /\b(testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|psa|tsh|cholesterol|creatinine|glucose|hemoglobine|hemoglobin|albumine|albumin|mchc|mch|mcv|hdl|ldl|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|triglycerides?|red blood cells?|erythrocyten|ferritin|ferritine|egfr|ckd-epi|foliumzuur|homocysteine|transferrin|transferrine|non hdl)\b/i
-  );
+  const anchor = marker.match(MARKER_ANCHOR_PATTERN);
   if (anchor && anchor.index !== undefined && anchor.index > 0) {
     const prefix = marker.slice(0, anchor.index);
-    if (prefix.length > 20 || /\b(?:risk|risico|report|resultaat|patient|uitslag|diagnostiek)\b/i.test(prefix)) {
+    if (
+      prefix.length > 20 ||
+      /\b(?:risk|risico|report|resultaat|patient|uitslag|diagnostiek|caution|interpret|method|given|individuals|effective|assessment|presence)\b/i.test(
+        prefix
+      )
+    ) {
       marker = marker.slice(anchor.index).trim();
     }
   }
@@ -854,6 +1016,9 @@ const applyProfileMarkerFixes = (markerName: string): string => {
 
   marker = marker.replace(/^Result\s+/i, "");
   marker = marker.replace(/\bT otal\b/g, "Total");
+  marker = marker.replace(/^.*\bSex Hormone Binding Globulin\b/i, "SHBG");
+  marker = marker.replace(/^Sex Horm Binding Glob(?:,?\s*Serum)?$/i, "SHBG");
+  marker = marker.replace(/^Sex Hormone Binding Globulin$/i, "SHBG");
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
   marker = marker.replace(/\s{2,}/g, " ").trim();
@@ -864,6 +1029,17 @@ const applyProfileMarkerFixes = (markerName: string): string => {
 const looksLikeNoiseMarker = (marker: string): boolean => {
   if (!marker || marker.length < 2) {
     return true;
+  }
+
+  const tokens = marker.split(" ").filter(Boolean);
+  if (tokens.length === 1) {
+    const token = tokens[0];
+    if (SINGLE_TOKEN_MARKER_STOPWORDS.has(token.toLowerCase())) {
+      return true;
+    }
+    if (token.length <= 2 && !SHORT_MARKER_ALLOWLIST.has(token.toUpperCase())) {
+      return true;
+    }
   }
 
   if (!/[A-Za-zÀ-ž]{2}/.test(marker)) {
@@ -886,6 +1062,22 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
+  if (COMMENTARY_FRAGMENT_PATTERN.test(marker) && !MARKER_ANCHOR_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (GUIDANCE_RESULT_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (COMMENTARY_GUARD_PATTERN.test(marker) && !MARKER_ANCHOR_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (/\b(?:individuals?|guideline|guidelines?)\b/i.test(marker)) {
+    return true;
+  }
+
   if (/\b(?:per\s+week|baseline|various\s+protocols?|roche\s*(?:cobas\s*)?assay)\b/i.test(marker)) {
     return true;
   }
@@ -902,6 +1094,19 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   }
 
   if (/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*[<>]?$/.test(marker)) {
+    return true;
+  }
+
+  const tokenCount = tokens.length;
+  if (tokenCount >= 8 && !MARKER_ANCHOR_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (
+    /^(?:for|if|this|that|please|interpret|new|changes|when|in)\b/i.test(marker) &&
+    tokenCount > 3 &&
+    !MARKER_ANCHOR_PATTERN.test(marker)
+  ) {
     return true;
   }
 
@@ -966,6 +1171,10 @@ const parseRowByRightAnchoredUnit = (
 ): ParsedFallbackRow | null => {
   const cleanedRow = cleanWhitespace(rawRow);
   if (!cleanedRow) {
+    return null;
+  }
+
+  if (GUIDANCE_RESULT_PATTERN.test(cleanedRow)) {
     return null;
   }
 
@@ -1039,12 +1248,17 @@ const parseSingleRow = (
   confidence: number,
   profile: ParserProfile = DEFAULT_PROFILE
 ): ParsedFallbackRow | null => {
+  const cleanedInput = cleanWhitespace(rawRow);
+  if (GUIDANCE_RESULT_PATTERN.test(cleanedInput)) {
+    return null;
+  }
+
   const rightAnchored = parseRowByRightAnchoredUnit(rawRow, confidence + 0.04, profile);
   if (rightAnchored) {
     return rightAnchored;
   }
 
-  const cleanedRow = cleanWhitespace(rawRow);
+  const cleanedRow = cleanedInput;
   if (!cleanedRow) {
     return null;
   }
@@ -1104,6 +1318,26 @@ const looksLikeNonResultLine = (line: string): boolean => {
 };
 
 const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DEFAULT_PROFILE): boolean => {
+  if (!isAcceptableMarkerCandidate(row.markerName, row.unit, row.referenceMin, row.referenceMax, "fallback")) {
+    return false;
+  }
+
+  if (GUIDANCE_RESULT_PATTERN.test(row.markerName)) {
+    return false;
+  }
+
+  if (/\b(?:individuals?|guideline|guidelines?)\b/i.test(row.markerName) && !MARKER_ANCHOR_PATTERN.test(row.markerName)) {
+    return false;
+  }
+
+  if (COMMENTARY_FRAGMENT_PATTERN.test(row.markerName) && !MARKER_ANCHOR_PATTERN.test(row.markerName)) {
+    return false;
+  }
+
+  if (/^(?:for|if|this|that|please|interpret|new|changes)\b/i.test(row.markerName) && !MARKER_ANCHOR_PATTERN.test(row.markerName)) {
+    return false;
+  }
+
   if (
     /\b(?:in patients|in men with|according to|values obtained|comparison of serial|cannot be used interchangeably|performed using|developed and validated|educational purposes|methodology|reference interval is based on|psa below|psa above)\b/i.test(
       row.markerName
@@ -1137,6 +1371,72 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DE
   }
   const canonical = canonicalizeMarker(row.markerName);
   return IMPORTANT_MARKERS.has(canonical);
+};
+
+const parseLifeLabsTableRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  if (!LIFELABS_TABLE_HEADER_PATTERN.test(text)) {
+    return [];
+  }
+
+  const rows: ParsedFallbackRow[] = [];
+  const lines = text
+    .split("\n")
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean);
+
+  let inTable = false;
+  for (const line of lines) {
+    if (LIFELABS_TABLE_HEADER_PATTERN.test(line)) {
+      inTable = true;
+      continue;
+    }
+    if (!inTable) {
+      continue;
+    }
+    if (LIFELABS_TABLE_END_PATTERN.test(line)) {
+      inTable = false;
+      continue;
+    }
+    if (!/\d/.test(line)) {
+      continue;
+    }
+    if (LIFELABS_CONTINUATION_PATTERN.test(line) || /https?:\/\/|www\./i.test(line)) {
+      continue;
+    }
+
+    const strictMatch = line.match(
+      /^([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{1,90}?)\s+(?:(?:A|H|L)\s+)?([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+((?:[<>≤≥]\s*-?\d+(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?\s*[-–]\s*-?\d+(?:[.,]\d+)?))\s+([A-Za-z%µμ0-9*^/.\-]+)$/i
+    );
+
+    if (strictMatch) {
+      const markerName = sanitizeMarkerName(strictMatch[1]);
+      const value = safeNumber(strictMatch[2]);
+      const unit = normalizeUnit(strictMatch[4]);
+      const parsedReference = extractReferenceAndUnit(`${strictMatch[3]} ${strictMatch[4]}`);
+
+      if (
+        value !== null &&
+        isAcceptableMarkerCandidate(markerName, unit, parsedReference.referenceMin, parsedReference.referenceMax, "fallback")
+      ) {
+        rows.push({
+          markerName,
+          value,
+          unit,
+          referenceMin: parsedReference.referenceMin,
+          referenceMax: parsedReference.referenceMax,
+          confidence: 0.8
+        });
+        continue;
+      }
+    }
+
+    const parsed = parseSingleRow(line, 0.77, profile);
+    if (parsed && shouldKeepParsedRow(parsed, profile)) {
+      rows.push(parsed);
+    }
+  }
+
+  return rows;
 };
 
 const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile): ParsedFallbackRow | null => {
@@ -1885,6 +2185,9 @@ const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
       referenceMin: row.referenceMin,
       referenceMax: row.referenceMax
     });
+    if (!isAcceptableMarkerCandidate(row.markerName, normalized.unit, normalized.referenceMin, normalized.referenceMax, "fallback")) {
+      continue;
+    }
     if (!isPlausibleNonSpatialMeasurement(canonicalMarker, normalized.unit, normalized.value)) {
       continue;
     }
@@ -1921,6 +2224,14 @@ const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
   return Array.from(byKey.values());
 };
 
+const filterMarkerValuesForQuality = (rows: MarkerValue[]): MarkerValue[] =>
+  rows.filter((row) => {
+    if (!isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "fallback")) {
+      return false;
+    }
+    return isPlausibleNonSpatialMeasurement(row.canonicalMarker, row.unit, row.value);
+  });
+
 const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): MarkerValue[] => {
   const byKey = new Map<string, MarkerValue>();
 
@@ -1946,6 +2257,7 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
 
 const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft => {
   const profile = detectParserProfile(text, fileName);
+  const lifeLabsRows = parseLifeLabsTableRows(text, profile);
   const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
   const columnRows = parseColumnRows(text, profile);
   const lineRows = parseLineRows(text, profile);
@@ -1955,8 +2267,8 @@ const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatial
 
   const nonSpatialRows =
     indexedRows.length > 0
-      ? [...columnRows, ...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
-      : [...columnRows, ...lineRows, ...looseRows, ...huisartsRows];
+      ? [...lifeLabsRows, ...columnRows, ...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
+      : [...lifeLabsRows, ...columnRows, ...lineRows, ...looseRows, ...huisartsRows];
   const nonSpatialMarkers = dedupeRows(nonSpatialRows);
   const nonSpatialImportantCoverage = countImportantCoverage(nonSpatialMarkers);
   const shouldApplySpatialBoost =
@@ -2113,7 +2425,7 @@ const callClaudeExtraction = async (
   const parsed = JSON.parse(json) as ClaudeExtraction;
   const rawMarkers = Array.isArray(parsed.markers) ? parsed.markers : [];
   const claudeMarkers = rawMarkers.map(normalizeMarker).filter((row): row is MarkerValue => Boolean(row));
-  const markers = mergeMarkerSets(claudeMarkers, fallbackDraft.markers);
+  const markers = filterMarkerValuesForQuality(mergeMarkerSets(claudeMarkers, fallbackDraft.markers));
 
   const confidence =
     markers.length > 0
@@ -2189,11 +2501,16 @@ export const __pdfParsingInternals = {
   detectParserProfile,
   extractDateCandidate,
   shouldUseOcrFallback,
+  scoreMarkerCandidate,
+  isAcceptableMarkerCandidate,
   parseSingleRow,
   parseTwoLineRow,
   parseLineRows,
+  parseLifeLabsTableRows,
   parseColumnRows,
   parseSpatialRows,
   parseHistoryCurrentColumnRows,
-  fallbackExtract
+  fallbackExtract,
+  normalizeMarker,
+  filterMarkerValuesForQuality
 };

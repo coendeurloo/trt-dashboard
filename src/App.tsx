@@ -99,6 +99,7 @@ const App = () => {
     stopSupplement,
     deleteSupplementPeriod,
     importData,
+    clearAllData,
     exportJson
   } = useAppData({
     sharedData: sharedSnapshot ? sharedSnapshot.data : null,
@@ -1100,6 +1101,7 @@ const App = () => {
               onExportCsv={exportCsv}
               onExportPdf={exportPdf}
               onImportData={importData}
+              onClearAllData={clearAllData}
               onAddMarkerSuggestions={appendMarkerSuggestions}
               onShareOptionsChange={setShareOptions}
               onGenerateShareLink={generateShareLink}
