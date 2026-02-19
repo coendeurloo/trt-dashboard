@@ -166,6 +166,7 @@ const OCR_RETRY_RENDER_SCALE = 1.4;
 const OCR_REMOTE_WORKER_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/worker.min.js";
 const OCR_REMOTE_CORE_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js-core@v7.0.0/tesseract-core.wasm.js";
 const OCR_REMOTE_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
+const OCR_REMOTE_LANG_PATH_ALT = "https://cdn.jsdelivr.net/npm/@tesseract.js-data";
 const OCR_MAX_INIT_ATTEMPTS = 2;
 const OCR_INIT_BACKOFF_MS = 250;
 const OCR_PAGE_TIMEOUT_MS = 15_000;
@@ -570,18 +571,39 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
       corePath: tesseractCore,
       langPath: OCR_REMOTE_LANG_PATH,
       cacheMethod: "none",
+      workerBlobURL: true
+    },
+    {
+      workerPath: tesseractWorker,
+      corePath: tesseractCore,
+      langPath: OCR_REMOTE_LANG_PATH,
+      cacheMethod: "none",
       workerBlobURL: false
+    },
+    {
+      workerPath: tesseractWorker,
+      corePath: tesseractCore,
+      langPath: OCR_REMOTE_LANG_PATH_ALT,
+      cacheMethod: "none",
+      workerBlobURL: true
     },
     {
       workerPath: OCR_REMOTE_WORKER_PATH,
       corePath: OCR_REMOTE_CORE_PATH,
       langPath: OCR_REMOTE_LANG_PATH,
       cacheMethod: "none",
+      workerBlobURL: true
+    },
+    {
+      workerPath: OCR_REMOTE_WORKER_PATH,
+      corePath: OCR_REMOTE_CORE_PATH,
+      langPath: OCR_REMOTE_LANG_PATH_ALT,
+      cacheMethod: "none",
       workerBlobURL: false
     },
     {
       cacheMethod: "none",
-      workerBlobURL: false
+      workerBlobURL: true
     }
   ];
   const languageAttempts = OCR_LANGS.includes("+") ? [OCR_LANGS, OCR_LANG_FALLBACK] : [OCR_LANGS];
@@ -2883,7 +2905,21 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
       timedOut: false
     };
 
-    if (textResult.pageCount === 0 || shouldUseOcrFallback(textResult, fallbackDraft)) {
+    const shouldAttemptOcr =
+      textResult.pageCount === 0 ||
+      textResult.textItemCount === 0 ||
+      shouldUseOcrFallback(textResult, fallbackDraft);
+
+    if (shouldAttemptOcr) {
+      ocrResult = {
+        text: "",
+        used: true,
+        pagesAttempted: textResult.pageCount > 0 ? Math.min(textResult.pageCount, OCR_MAX_PAGES) : 0,
+        pagesSucceeded: 0,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      };
       ocrResult = await withTimeout(
         extractPdfTextViaOcr(arrayBuffer),
         OCR_TOTAL_TIMEOUT_MS,
