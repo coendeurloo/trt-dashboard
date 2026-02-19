@@ -31,6 +31,12 @@ interface ClaudeExtraction {
   markers?: RawMarker[];
 }
 
+interface GeminiExtractionResponse {
+  model?: string;
+  testDate?: string;
+  markers?: RawMarker[];
+}
+
 interface ParsedFallbackRow {
   markerName: string;
   value: number;
@@ -2648,154 +2654,123 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
 const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft =>
   fallbackExtractDetailed(text, fileName, spatialRows).draft;
 
-const meetsQualityThreshold = (draft: ExtractionDraft): boolean => {
-  const hasEnoughMarkers = draft.markers.length >= 5;
-  const hasConfidence = draft.extraction.confidence >= 0.65;
-  const primaryMatches = new Set(
-    draft.markers
-      .map((marker) => marker.canonicalMarker)
-      .filter((canonical) => (PRIMARY_MARKERS as readonly string[]).includes(canonical))
-  ).size;
-  const hasPrimaryCoverage = primaryMatches >= 2;
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const hasValidDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.testDate) && draft.testDate !== todayIso;
-  return hasEnoughMarkers && hasConfidence && hasPrimaryCoverage && hasValidDate;
-};
-
-const callClaudeExtraction = async (
+const callGeminiExtraction = async (
   pdfText: string,
   fileName: string,
-  fallbackDraft: ExtractionDraft,
-  rawPdfBuffer: ArrayBuffer,
-  textResult: PdfTextExtractionResult
-): Promise<ExtractionDraft> => {
-  const prompt = buildClaudeExtractionPrompt(fileName, pdfText);
-  const canAttachPdf = rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= 3_500_000;
-  const shouldAttachPdf =
-    canAttachPdf &&
-    (textResult.textItemCount < 250 ||
-      textResult.nonWhitespaceChars < 1500 ||
-      fallbackDraft.markers.length < 10 ||
-      fallbackDraft.extraction.confidence < 0.72);
-  const messageContent: Array<
-    | { type: "text"; text: string }
-    | {
-        type: "document";
-        source: {
-          type: "base64";
-          media_type: "application/pdf";
-          data: string;
-        };
-      }
-  > = [{ type: "text", text: prompt }];
+  rawPdfBuffer: ArrayBuffer
+): Promise<ExtractionDraft | null> => {
+  const shouldAttachPdf = rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= 7_000_000;
+  const routePayload = {
+    fileName,
+    pdfText,
+    pdfBase64: shouldAttachPdf ? arrayBufferToBase64(rawPdfBuffer) : null
+  };
 
-  if (shouldAttachPdf) {
-    messageContent.unshift({
-      type: "document",
-      source: {
-        type: "base64",
-        media_type: "application/pdf",
-        data: arrayBufferToBase64(rawPdfBuffer)
-      }
+  let response: Response | null = null;
+  try {
+    response = await fetch("/api/gemini/extract", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(routePayload)
     });
+  } catch {
+    response = null;
   }
 
-  const tryModel = async (
-    model: string
-  ): Promise<{
-    status: number;
-    body: ClaudeResponse;
-  }> => {
-    let response: Response;
+  let body: GeminiExtractionResponse = {};
+  if (response?.ok) {
     try {
-      response = await fetch("/api/claude/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          requestType: "extraction",
-          payload: {
-            model,
-            max_tokens: 2200,
-            messages: [
-              {
-                role: "user",
-                content: shouldAttachPdf ? messageContent : prompt
-              }
-            ]
-          }
-        })
-      });
-    } catch {
-      throw new Error("PROXY_UNREACHABLE");
-    }
-
-    const text = await response.text();
-    let body: ClaudeResponse = {};
-    try {
-      body = text ? (JSON.parse(text) as ClaudeResponse) : {};
+      body = (await response.json()) as GeminiExtractionResponse;
     } catch {
       body = {};
     }
-    return { status: response.status, body };
-  };
+  } else {
+    const directGeminiKey = String(import.meta.env.VITE_GEMINI_API_KEY ?? "").trim();
+    if (!directGeminiKey) {
+      return null;
+    }
 
-  let body: ClaudeResponse | null = null;
-  let selectedModel = "unknown";
-  let lastStatus = 0;
-  let lastErrorMessage = "";
+    const parts: Array<Record<string, unknown>> = [{ text: buildClaudeExtractionPrompt(fileName, pdfText) }];
+    if (routePayload.pdfBase64) {
+      parts.push({
+        inline_data: {
+          mime_type: "application/pdf",
+          data: routePayload.pdfBase64
+        }
+      });
+    }
 
-  for (const model of EXTRACTION_MODEL_CANDIDATES) {
-    let result: { status: number; body: ClaudeResponse };
+    let directResponse: Response;
     try {
-      result = await tryModel(model);
-    } catch (error) {
-      if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
-        throw new Error("PDF_PROXY_UNREACHABLE");
-      }
-      throw error;
+      directResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json"
+            },
+            contents: [
+              {
+                role: "user",
+                parts
+              }
+            ]
+          })
+        }
+      );
+    } catch {
+      return null;
     }
 
-    lastStatus = result.status;
-    if (result.status >= 200 && result.status < 300) {
-      body = result.body;
-      selectedModel = model;
-      break;
+    if (!directResponse.ok) {
+      return null;
     }
 
-    const errorMessage = result.body.error?.message ?? "";
-    if (result.status === 429) {
-      const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
-      const retryAfter = typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
-      throw new Error(`PDF_RATE_LIMITED:${retryAfter}`);
+    let rawBody: unknown;
+    try {
+      rawBody = await directResponse.json();
+    } catch {
+      return null;
     }
-    lastErrorMessage = errorMessage;
-    const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
-    if (missingModel) {
-      continue;
+
+    const candidateText =
+      (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
+      "";
+    const jsonBlock = extractJsonBlock(candidateText);
+    if (!jsonBlock) {
+      return null;
     }
-    throw new Error(`PDF_EXTRACTION_FAILED:${result.status}:${errorMessage || ""}`);
+    try {
+      const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
+      body = {
+        model: "gemini-2.0-flash",
+        testDate: parsed.testDate,
+        markers: Array.isArray(parsed.markers) ? parsed.markers : []
+      };
+    } catch {
+      return null;
+    }
   }
 
-  if (!body) {
-    throw new Error(`PDF_EXTRACTION_FAILED:${lastStatus}:${lastErrorMessage || ""}`);
-  }
+  const rawMarkers = Array.isArray(body.markers) ? body.markers : [];
+  const geminiMarkers = rawMarkers
+    .map(normalizeMarker)
+    .filter((row): row is MarkerValue => Boolean(row))
+    .filter((row) =>
+      isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude")
+    );
 
-  const textContent = body.content?.find((block) => block.type === "text")?.text;
-  if (!textContent) {
-    throw new Error("PDF_EMPTY_RESPONSE");
+  const markers = filterMarkerValuesForQuality(geminiMarkers);
+  if (markers.length === 0) {
+    return null;
   }
-
-  const json = extractJsonBlock(textContent);
-  if (!json) {
-    throw new Error("Could not find JSON block in Claude response");
-  }
-
-  const parsed = JSON.parse(json) as ClaudeExtraction;
-  const rawMarkers = Array.isArray(parsed.markers) ? parsed.markers : [];
-  const claudeMarkers = rawMarkers.map(normalizeMarker).filter((row): row is MarkerValue => Boolean(row));
-  const markers = filterMarkerValuesForQuality(mergeMarkerSets(claudeMarkers, fallbackDraft.markers));
 
   const confidence =
     markers.length > 0
@@ -2805,15 +2780,15 @@ const callClaudeExtraction = async (
   return {
     sourceFileName: fileName,
     testDate:
-      parsed.testDate && /^\d{4}-\d{2}-\d{2}$/.test(parsed.testDate)
-        ? parsed.testDate
-        : fallbackDraft.testDate,
+      body.testDate && /^\d{4}-\d{2}-\d{2}$/.test(body.testDate)
+        ? body.testDate
+        : extractDateCandidate(pdfText),
     markers,
     extraction: {
-      provider: "claude",
-      model: `${selectedModel}+fallback-merge`,
+      provider: "gemini",
+      model: `${body.model ?? "gemini-2.0-flash"}+api`,
       confidence,
-      needsReview: confidence < 0.65 || markers.length === 0
+      needsReview: confidence < 0.7 || markers.length < 4
     }
   };
 };
@@ -2893,8 +2868,6 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
     }
 
     let extractionText = textResult.text;
-    let fallbackOutcome = fallbackExtractDetailed(extractionText, file.name, textResult.spatialRows);
-    let fallbackDraft = fallbackOutcome.draft;
     let ocrResult: OcrResult = {
       text: "",
       used: false,
@@ -2908,7 +2881,8 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
     const shouldAttemptOcr =
       textResult.pageCount === 0 ||
       textResult.textItemCount === 0 ||
-      shouldUseOcrFallback(textResult, fallbackDraft);
+      (textResult.nonWhitespaceChars < Math.max(600, textResult.pageCount * 180) &&
+        textResult.lineCount < Math.max(20, textResult.pageCount * 10));
 
     if (shouldAttemptOcr) {
       ocrResult = {
@@ -2939,57 +2913,45 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
 
       if (ocrResult.text) {
         extractionText = `${extractionText}\n${ocrResult.text}`.trim();
-        const ocrOutcome = fallbackExtractDetailed(extractionText, file.name, textResult.spatialRows);
-        const selected = chooseBetterFallbackDraft(fallbackDraft, ocrOutcome.draft);
-        if (selected === ocrOutcome.draft) {
-          fallbackOutcome = ocrOutcome;
-          fallbackDraft = {
-            ...selected,
-            extraction: {
-              ...selected.extraction,
-              model: `${selected.extraction.model}+ocr`
-            }
-          };
-        } else {
-          fallbackDraft = selected;
-        }
       }
     }
 
-    const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, fallbackDraft);
+    const geminiDraft = await callGeminiExtraction(extractionText, file.name, arrayBuffer);
+    const parsingDraft: ExtractionDraft =
+      geminiDraft ??
+      {
+        sourceFileName: file.name,
+        testDate: extractDateCandidate(extractionText),
+        markers: [],
+        extraction: {
+          provider: "fallback",
+          model: "gemini-empty-response",
+          confidence: 0,
+          needsReview: true
+        }
+      };
+
+    const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, parsingDraft);
     const debugMeta: ExtractionDebugInfo = {
       textItems: textResult.textItemCount,
       ocrUsed: ocrResult.used,
       ocrPages: ocrResult.pagesSucceeded,
-      keptRows: fallbackOutcome.diagnostics.keptRows,
-      rejectedRows: fallbackOutcome.diagnostics.rejectedRows,
-      topRejectReasons: fallbackOutcome.diagnostics.topRejectReasons
+      keptRows: parsingDraft.markers.length,
+      rejectedRows: 0,
+      topRejectReasons: {}
     };
 
-    const localDraft = withExtractionMetadata(
+    return withExtractionMetadata(
       {
-        ...fallbackDraft,
+        ...parsingDraft,
         extraction: {
-          ...fallbackDraft.extraction,
-          provider: "fallback",
-          needsReview: fallbackDraft.extraction.needsReview || warningMeta.warnings.length > 0 || fallbackDraft.markers.length === 0
+          ...parsingDraft.extraction,
+          needsReview: parsingDraft.extraction.needsReview || warningMeta.warnings.length > 0 || parsingDraft.markers.length === 0
         }
       },
       warningMeta,
       debugMeta
     );
-
-    if (meetsQualityThreshold(localDraft)) {
-      return {
-        ...localDraft,
-        extraction: {
-          ...localDraft.extraction,
-          needsReview: true
-        }
-      };
-    }
-
-    return localDraft;
   } catch (error) {
     console.warn("Unexpected PDF parsing failure", error);
     return {

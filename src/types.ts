@@ -119,7 +119,7 @@ export interface LabReport {
   annotations: ReportAnnotations;
   isBaseline?: boolean;
   extraction: {
-    provider: "claude" | "fallback";
+    provider: "claude" | "gemini" | "fallback";
     model: string;
     confidence: number;
     needsReview: boolean;
@@ -180,7 +180,7 @@ export interface ExtractionDraft {
   testDate: string;
   markers: MarkerValue[];
   extraction: {
-    provider: "claude" | "fallback";
+    provider: "claude" | "gemini" | "fallback";
     model: string;
     confidence: number;
     needsReview: boolean;

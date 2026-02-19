@@ -334,7 +334,12 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
     annotations: normalizeAnnotations(report.annotations),
     isBaseline: Boolean(report.isBaseline),
     extraction: {
-      provider: report.extraction?.provider === "claude" ? "claude" : "fallback",
+      provider:
+        report.extraction?.provider === "claude"
+          ? "claude"
+          : report.extraction?.provider === "gemini"
+            ? "gemini"
+            : "fallback",
       model: String(report.extraction?.model ?? "legacy-import"),
       confidence:
         typeof report.extraction?.confidence === "number" && Number.isFinite(report.extraction.confidence)
