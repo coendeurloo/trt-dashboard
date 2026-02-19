@@ -431,6 +431,17 @@ describe("pdfParsing fallback layers", () => {
     expect(rows[0]?.value).toBeCloseTo(44.1, 2);
   });
 
+  it("normalizes Cortisol AM Cortisol to Cortisol (AM)", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      ["Cortisol AM Cortisol 449 nmol/L 125-536"].join("\n"),
+      genericProfile
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]?.markerName).toBe("Cortisol (AM)");
+    expect(rows[0]?.value).toBe(449);
+  });
+
   it("parses three-line marker labels for split lab rows", () => {
     const rows = __pdfParsingInternals.parseLineRows(
       [
@@ -510,5 +521,110 @@ describe("pdfParsing fallback layers", () => {
     expect(markers).toContain("SHBG");
     expect(markers).not.toContain("is");
     expect(markers.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
+  });
+
+  it("produces fallback diagnostics with rejection reasons", () => {
+    const outcome = __pdfParsingInternals.fallbackExtractDetailed(
+      [
+        "Collected: 03/11/2025",
+        "Testosterone 22.5 nmol/L 8.4 - 28.8",
+        "is 2.0 mmol/L",
+        "This high sensitivity CRP method is sensitive to 0.3 mg/L",
+        "SHBG 44.1 nmol/L 10 - 70"
+      ].join("\n"),
+      "diagnostic.pdf"
+    );
+
+    expect(outcome.draft.markers.length).toBeGreaterThanOrEqual(2);
+    expect(outcome.diagnostics.parsedRowCount).toBeGreaterThanOrEqual(outcome.diagnostics.keptRows);
+    expect(outcome.diagnostics.rejectedRows).toBeGreaterThanOrEqual(0);
+    expect(typeof outcome.diagnostics.topRejectReasons).toBe("object");
+  });
+
+  it("adds warning codes for empty text layer and OCR initialization failure", () => {
+    const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
+      {
+        text: "",
+        pageCount: 3,
+        textItemCount: 0,
+        lineCount: 0,
+        nonWhitespaceChars: 0,
+        spatialRows: []
+      },
+      true,
+      {
+        text: "",
+        used: true,
+        pagesAttempted: 3,
+        pagesSucceeded: 0,
+        pagesFailed: 3,
+        initFailed: true,
+        timedOut: false
+      },
+      {
+        sourceFileName: "empty.pdf",
+        testDate: "2025-01-01",
+        markers: [],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.2,
+          needsReview: true
+        }
+      }
+    );
+
+    expect(warningMeta.warningCode).toBe("PDF_TEXT_EXTRACTION_FAILED");
+    expect(warningMeta.warnings).toContain("PDF_TEXT_LAYER_EMPTY");
+    expect(warningMeta.warnings).toContain("PDF_OCR_INIT_FAILED");
+    expect(warningMeta.warnings).toContain("PDF_LOW_CONFIDENCE_LOCAL");
+  });
+
+  it("adds partial OCR warning when some pages fail", () => {
+    const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
+      {
+        text: "some text",
+        pageCount: 3,
+        textItemCount: 42,
+        lineCount: 12,
+        nonWhitespaceChars: 300,
+        spatialRows: []
+      },
+      false,
+      {
+        text: "marker text",
+        used: true,
+        pagesAttempted: 3,
+        pagesSucceeded: 2,
+        pagesFailed: 1,
+        initFailed: false,
+        timedOut: false
+      },
+      {
+        sourceFileName: "partial.pdf",
+        testDate: "2025-01-01",
+        markers: [
+          {
+            id: "m1",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 20,
+            unit: "nmol/L",
+            referenceMin: 8,
+            referenceMax: 30,
+            abnormal: "normal",
+            confidence: 0.7
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.7,
+          needsReview: false
+        }
+      }
+    );
+
+    expect(warningMeta.warnings).toContain("PDF_OCR_PARTIAL");
   });
 });

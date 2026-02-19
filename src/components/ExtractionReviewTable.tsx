@@ -62,6 +62,44 @@ const ExtractionReviewTable = ({
   const [addTimelineStartDate, setAddTimelineStartDate] = useState(draft.testDate);
   const [addTimelineEndDate, setAddTimelineEndDate] = useState("");
 
+  const warningCodes = Array.from(new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])]));
+  const debugInfo = draft.extraction.debug;
+  const warningMessages = warningCodes
+    .map((code) => {
+      if (code === "PDF_TEXT_LAYER_EMPTY") {
+        return tr(
+          "Deze PDF heeft geen bruikbare tekstlaag. OCR is gebruikt; controleer de uitgelezen markers extra goed.",
+          "This PDF has no usable text layer. OCR was used; review extracted markers carefully."
+        );
+      }
+      if (code === "PDF_TEXT_EXTRACTION_FAILED") {
+        return tr(
+          "De tekstextractie uit dit PDF-bestand mislukte. De app is doorgeschakeld naar een veilige fallback.",
+          "Text extraction failed for this PDF. The app switched to a safe fallback."
+        );
+      }
+      if (code === "PDF_OCR_INIT_FAILED") {
+        return tr(
+          "OCR kon niet worden gestart voor dit bestand. Voeg ontbrekende markers handmatig toe.",
+          "OCR could not be started for this file. Add missing markers manually."
+        );
+      }
+      if (code === "PDF_OCR_PARTIAL") {
+        return tr(
+          "OCR was slechts gedeeltelijk succesvol. Sommige markers kunnen ontbreken of onjuist zijn.",
+          "OCR was only partially successful. Some markers may be missing or incorrect."
+        );
+      }
+      if (code === "PDF_LOW_CONFIDENCE_LOCAL") {
+        return tr(
+          "De parserzekerheid is laag. Controleer datum, markerwaarden en referentiebereiken voordat je opslaat.",
+          "Parser confidence is low. Check date, marker values, and reference ranges before saving."
+        );
+      }
+      return null;
+    })
+    .filter((value): value is string => Boolean(value));
+
   const selectedProtocol = useMemo(
     () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
     [protocols, selectedProtocolId]
@@ -300,6 +338,29 @@ const ExtractionReviewTable = ({
           </button>
         </div>
       </div>
+
+      {warningMessages.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100">
+          <p className="font-medium">{tr("Parserwaarschuwingen", "Parser warnings")}</p>
+          <ul className="mt-1 space-y-1 text-xs sm:text-sm">
+            {warningMessages.map((message) => (
+              <li key={message}>• {message}</li>
+            ))}
+          </ul>
+          <div className="mt-2 rounded-md border border-amber-500/20 bg-slate-950/30 p-2 text-xs text-amber-100/95">
+            <p className="font-medium">{tr("Checklist vóór opslaan", "Checklist before saving")}</p>
+            <p>• {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
+            <p>• {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
+            <p>• {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
+          </div>
+          {debugInfo ? (
+            <p className="mt-2 text-[11px] text-amber-100/80">
+              {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
+              {debugInfo.rejectedRows}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
         <div>

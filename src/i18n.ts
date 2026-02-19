@@ -125,6 +125,26 @@ export const UI_TEXT = {
   pdfProcessFailed: {
     nl: "Kon dit PDF-bestand niet verwerken.",
     en: "Could not process this PDF file."
+  },
+  pdfTextLayerEmptyWarning: {
+    nl: "Deze PDF heeft geen bruikbare tekstlaag. We hebben OCR gebruikt; controleer de extractie zorgvuldig.",
+    en: "This PDF has no usable text layer. OCR was used; please review extraction carefully."
+  },
+  pdfTextExtractionFailedWarning: {
+    nl: "De tekstextractie uit dit PDF-bestand mislukte. We zijn doorgeschakeld naar een veilige fallback.",
+    en: "Text extraction failed for this PDF. We switched to a safe fallback."
+  },
+  pdfOcrInitFailedWarning: {
+    nl: "OCR kon niet worden gestart voor dit bestand. Voeg waar nodig markers handmatig toe.",
+    en: "OCR could not be started for this file. Add markers manually where needed."
+  },
+  pdfOcrPartialWarning: {
+    nl: "OCR was slechts gedeeltelijk succesvol. Sommige markers kunnen ontbreken.",
+    en: "OCR was only partially successful. Some markers may be missing."
+  },
+  pdfLowConfidenceLocalWarning: {
+    nl: "De parserzekerheid is laag. Controleer datum, markerwaarden en referenties voor je opslaat.",
+    en: "Parser confidence is low. Check date, marker values, and references before saving."
   }
 } as const;
 

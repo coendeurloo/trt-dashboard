@@ -123,7 +123,26 @@ export interface LabReport {
     model: string;
     confidence: number;
     needsReview: boolean;
+    warningCode?: ExtractionWarningCode;
+    warnings?: string[];
+    debug?: ExtractionDebugInfo;
   };
+}
+
+export type ExtractionWarningCode =
+  | "PDF_TEXT_LAYER_EMPTY"
+  | "PDF_TEXT_EXTRACTION_FAILED"
+  | "PDF_OCR_INIT_FAILED"
+  | "PDF_OCR_PARTIAL"
+  | "PDF_LOW_CONFIDENCE_LOCAL";
+
+export interface ExtractionDebugInfo {
+  textItems: number;
+  ocrUsed: boolean;
+  ocrPages: number;
+  keptRows: number;
+  rejectedRows: number;
+  topRejectReasons: Record<string, number>;
 }
 
 export interface AppSettings {
@@ -165,5 +184,8 @@ export interface ExtractionDraft {
     model: string;
     confidence: number;
     needsReview: boolean;
+    warningCode?: ExtractionWarningCode;
+    warnings?: string[];
+    debug?: ExtractionDebugInfo;
   };
 }

@@ -1,7 +1,8 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
 import { PRIMARY_MARKERS } from "./constants";
-import { ExtractionDraft, MarkerValue } from "./types";
+import { ExtractionDebugInfo, ExtractionDraft, ExtractionWarningCode, MarkerValue } from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
 
@@ -160,9 +161,38 @@ type MarkerCandidateSource = "fallback" | "claude";
 const OCR_LANGS = "eng+nld";
 const OCR_MAX_PAGES = 12;
 const OCR_RENDER_SCALE = 2;
+const OCR_RETRY_RENDER_SCALE = 1.4;
+const OCR_REMOTE_WORKER_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/worker.min.js";
+const OCR_REMOTE_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
+const OCR_MAX_INIT_ATTEMPTS = 2;
+const OCR_INIT_BACKOFF_MS = 250;
+const OCR_PAGE_TIMEOUT_MS = 15_000;
+const OCR_TOTAL_TIMEOUT_MS = 75_000;
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
 const SPATIAL_CLUSTER_GAP = 42;
 const SPATIAL_COLUMN_BAND_WIDTH = 120;
+
+interface OcrResult {
+  text: string;
+  used: boolean;
+  pagesAttempted: number;
+  pagesSucceeded: number;
+  pagesFailed: number;
+  initFailed: boolean;
+  timedOut: boolean;
+}
+
+interface DedupeDiagnostics {
+  parsedRowCount: number;
+  keptRows: number;
+  rejectedRows: number;
+  topRejectReasons: Record<string, number>;
+}
+
+interface FallbackExtractOutcome {
+  draft: ExtractionDraft;
+  diagnostics: DedupeDiagnostics;
+}
 const DEFAULT_PROFILE: ParserProfile = {
   id: "adaptive",
   requireUnit: true,
@@ -298,6 +328,54 @@ const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionD
   return candidateScore > baseScore ? candidate : base;
 };
 
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+  let timeoutHandle: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (typeof timeoutHandle === "number") {
+      window.clearTimeout(timeoutHandle);
+    }
+  }
+};
+
+const buildClaudeExtractionPrompt = (fileName: string, pdfText: string): string =>
+  [
+    "Extract blood lab data from this report and return ONLY valid JSON in the exact shape below:",
+    '{"testDate":"YYYY-MM-DD","markers":[{"marker":"string","value":0,"unit":"string","referenceMin":null,"referenceMax":null,"confidence":0.0}]}',
+    "Hard rules:",
+    "- Extract only true lab result rows (marker + value + unit context).",
+    "- Ignore narrative/guideline/commentary text (e.g. recommendations, risk notes, interpretation paragraphs, method caveats).",
+    "- Do NOT create markers from sentence fragments like 'is', 'sensitive to', 'high risk individuals', or similar prose.",
+    "- Use sample collection date when available; avoid print/report timestamps.",
+    "- Keep values numeric only (no comparators or symbols in value).",
+    "- If reference range is missing, use null.",
+    "- confidence must be between 0.0 and 1.0.",
+    `Source filename: ${fileName}`,
+    "LAB TEXT START",
+    pdfText,
+    "LAB TEXT END"
+  ].join("\n");
+
 const sanitizeMarkerName = (rawMarker: string): string => applyProfileMarkerFixes(cleanMarkerName(rawMarker));
 
 const scoreMarkerCandidate = (
@@ -396,23 +474,28 @@ const isAcceptableMarkerCandidate = (
   return score >= threshold;
 };
 
-const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult> => {
   if (!isBrowserRuntime()) {
-    return "";
+    return {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: true,
+      timedOut: false
+    };
   }
 
+  type OcrWorker = {
+    recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string } }>;
+    setParameters?: (params: Record<string, string>) => Promise<unknown>;
+    terminate: () => Promise<unknown>;
+  };
   type TesseractModule = {
-    createWorker?: (...args: unknown[]) => Promise<{
-      recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string } }>;
-      setParameters?: (params: Record<string, string>) => Promise<unknown>;
-      terminate: () => Promise<unknown>;
-    }>;
+    createWorker?: (...args: unknown[]) => Promise<OcrWorker>;
     default?: {
-      createWorker?: (...args: unknown[]) => Promise<{
-        recognize: (image: HTMLCanvasElement) => Promise<{ data?: { text?: string } }>;
-        setParameters?: (params: Record<string, string>) => Promise<unknown>;
-        terminate: () => Promise<unknown>;
-      }>;
+      createWorker?: (...args: unknown[]) => Promise<OcrWorker>;
     };
   };
 
@@ -421,21 +504,98 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<string> =
     const module = (await import("tesseract.js")) as TesseractModule;
     createWorker = module.createWorker ?? module.default?.createWorker;
   } catch {
-    return "";
+    return {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: true,
+      timedOut: false
+    };
   }
 
   if (!createWorker) {
-    return "";
+    return {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: true,
+      timedOut: false
+    };
   }
 
-  const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pageLimit = Math.min(doc.numPages, OCR_MAX_PAGES);
+  let doc: unknown;
+  try {
+    doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  } catch (error) {
+    console.warn("PDF OCR document load failed", error);
+    return {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: true,
+      timedOut: false
+    };
+  }
+
+  const pageLimit = Math.min((doc as { numPages: number }).numPages, OCR_MAX_PAGES);
   if (pageLimit === 0) {
-    return "";
+    return {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: true,
+      timedOut: false
+    };
   }
 
-  const worker = await createWorker(OCR_LANGS, 1, {});
+  let worker: OcrWorker | null = null;
+  const workerInitAttempts: Array<Record<string, unknown>> = [
+    { workerPath: tesseractWorker },
+    {},
+    {
+      workerPath: OCR_REMOTE_WORKER_PATH,
+      langPath: OCR_REMOTE_LANG_PATH
+    }
+  ];
+  for (const options of workerInitAttempts) {
+    for (let attempt = 1; attempt <= OCR_MAX_INIT_ATTEMPTS; attempt += 1) {
+      try {
+        worker = await createWorker(OCR_LANGS, 1, options);
+        break;
+      } catch (error) {
+        console.warn(`PDF OCR worker init attempt failed (${attempt}/${OCR_MAX_INIT_ATTEMPTS})`, error);
+        if (attempt < OCR_MAX_INIT_ATTEMPTS) {
+          await sleep(OCR_INIT_BACKOFF_MS * attempt);
+        }
+      }
+    }
+    if (worker) {
+      break;
+    }
+  }
+  if (!worker) {
+    return {
+      text: "",
+      used: true,
+      pagesAttempted: pageLimit,
+      pagesSucceeded: 0,
+      pagesFailed: pageLimit,
+      initFailed: true,
+      timedOut: false
+    };
+  }
   const chunks: string[] = [];
+  let pagesSucceeded = 0;
+  let pagesFailed = 0;
+  let timedOut = false;
 
   try {
     await worker.setParameters?.({
@@ -443,31 +603,81 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<string> =
       tessedit_pageseg_mode: "6"
     });
 
-    for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
-      const page = await doc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
+    const recognizePageAtScale = async (pageNumber: number, scale: number): Promise<string> => {
+      const page = await (doc as { getPage: (page: number) => Promise<unknown> }).getPage(pageNumber);
+      const pdfPage = page as {
+        getViewport: (options: { scale: number }) => { width: number; height: number };
+        render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
+          promise: Promise<unknown>;
+        };
+      };
+      const viewport = pdfPage.getViewport({ scale });
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.floor(viewport.width));
       canvas.height = Math.max(1, Math.floor(viewport.height));
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) {
-        continue;
+        return "";
       }
-
-      await page.render({ canvasContext: context, viewport }).promise;
+      await pdfPage.render({ canvasContext: context, viewport }).promise;
       const recognized = await worker.recognize(canvas);
-      const ocrText = cleanWhitespace(recognized.data?.text ?? "");
+      return cleanWhitespace(recognized.data?.text ?? "");
+    };
+
+    for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
+      let ocrText = "";
+      try {
+        ocrText = await withTimeout(
+          recognizePageAtScale(pageNum, OCR_RENDER_SCALE),
+          OCR_PAGE_TIMEOUT_MS,
+          `OCR timeout on page ${pageNum}`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/timeout/i.test(message)) {
+          timedOut = true;
+        }
+        try {
+          ocrText = await withTimeout(
+            recognizePageAtScale(pageNum, OCR_RETRY_RENDER_SCALE),
+            OCR_PAGE_TIMEOUT_MS,
+            `OCR retry timeout on page ${pageNum}`
+          );
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : "";
+          if (/timeout/i.test(retryMessage)) {
+            timedOut = true;
+          }
+          console.warn(`PDF OCR page failed (${pageNum})`, retryError);
+        }
+      }
       if (ocrText) {
         chunks.push(ocrText);
+        pagesSucceeded += 1;
+      } else {
+        pagesFailed += 1;
       }
     }
   } catch (error) {
     console.warn("PDF OCR fallback failed", error);
+    pagesFailed = Math.max(pagesFailed, pageLimit - pagesSucceeded);
   } finally {
     await worker.terminate().catch(() => undefined);
   }
 
-  return chunks.join("\n");
+  if (chunks.length === 0 && pagesSucceeded === 0 && pagesFailed === 0) {
+    pagesFailed = pageLimit;
+  }
+
+  return {
+    text: chunks.join("\n"),
+    used: true,
+    pagesAttempted: pageLimit,
+    pagesSucceeded,
+    pagesFailed,
+    initFailed: false,
+    timedOut
+  };
 };
 
 const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
@@ -1016,6 +1226,9 @@ const applyProfileMarkerFixes = (markerName: string): string => {
 
   marker = marker.replace(/^Result\s+/i, "");
   marker = marker.replace(/\bT otal\b/g, "Total");
+  marker = marker.replace(/^Cortisol\s+AM\s+Cortisol$/i, "Cortisol (AM)");
+  marker = marker.replace(/^AM\s+Cortisol$/i, "Cortisol (AM)");
+  marker = marker.replace(/^Cortisol\s+AM$/i, "Cortisol (AM)");
   marker = marker.replace(/^.*\bSex Hormone Binding Globulin\b/i, "SHBG");
   marker = marker.replace(/^Sex Horm Binding Glob(?:,?\s*Serum)?$/i, "SHBG");
   marker = marker.replace(/^Sex Hormone Binding Globulin$/i, "SHBG");
@@ -2173,8 +2386,20 @@ const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow
   return rows;
 };
 
-const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
+const incrementReason = (reasons: Map<string, number>, reason: string) => {
+  reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+};
+
+const summarizeReasons = (reasons: Map<string, number>): Record<string, number> =>
+  Object.fromEntries(
+    Array.from(reasons.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 6)
+  );
+
+const dedupeRowsDetailed = (rows: ParsedFallbackRow[]): { markers: MarkerValue[]; diagnostics: DedupeDiagnostics } => {
   const byKey = new Map<string, MarkerValue>();
+  const rejectionReasons = new Map<string, number>();
 
   for (const row of rows) {
     const canonicalMarker = canonicalizeMarker(row.markerName);
@@ -2186,9 +2411,11 @@ const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
       referenceMax: row.referenceMax
     });
     if (!isAcceptableMarkerCandidate(row.markerName, normalized.unit, normalized.referenceMin, normalized.referenceMax, "fallback")) {
+      incrementReason(rejectionReasons, "quality_filter");
       continue;
     }
     if (!isPlausibleNonSpatialMeasurement(canonicalMarker, normalized.unit, normalized.value)) {
+      incrementReason(rejectionReasons, "implausible_measurement");
       continue;
     }
     const confidence = IMPORTANT_MARKERS.has(canonicalMarker)
@@ -2216,13 +2443,33 @@ const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => {
     ].join("|");
 
     const existing = byKey.get(key);
-    if (!existing || markerRecord.confidence > existing.confidence) {
+    if (!existing) {
       byKey.set(key, markerRecord);
+      continue;
     }
+
+    if (markerRecord.confidence > existing.confidence) {
+      byKey.set(key, markerRecord);
+      incrementReason(rejectionReasons, "duplicate_replaced");
+      continue;
+    }
+
+    incrementReason(rejectionReasons, "duplicate_dropped");
   }
 
-  return Array.from(byKey.values());
+  const markers = Array.from(byKey.values());
+  return {
+    markers,
+    diagnostics: {
+      parsedRowCount: rows.length,
+      keptRows: markers.length,
+      rejectedRows: Math.max(0, rows.length - markers.length),
+      topRejectReasons: summarizeReasons(rejectionReasons)
+    }
+  };
 };
+
+const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => dedupeRowsDetailed(rows).markers;
 
 const filterMarkerValuesForQuality = (rows: MarkerValue[]): MarkerValue[] =>
   rows.filter((row) => {
@@ -2255,7 +2502,7 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
   return Array.from(byKey.values());
 };
 
-const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft => {
+const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): FallbackExtractOutcome => {
   const profile = detectParserProfile(text, fileName);
   const lifeLabsRows = parseLifeLabsTableRows(text, profile);
   const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
@@ -2269,7 +2516,8 @@ const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatial
     indexedRows.length > 0
       ? [...lifeLabsRows, ...columnRows, ...lineRows, ...indexedRows, ...looseRows, ...huisartsRows]
       : [...lifeLabsRows, ...columnRows, ...lineRows, ...looseRows, ...huisartsRows];
-  const nonSpatialMarkers = dedupeRows(nonSpatialRows);
+  const nonSpatialDedupe = dedupeRowsDetailed(nonSpatialRows);
+  const nonSpatialMarkers = nonSpatialDedupe.markers;
   const nonSpatialImportantCoverage = countImportantCoverage(nonSpatialMarkers);
   const shouldApplySpatialBoost =
     spatialRows.length > 0 &&
@@ -2277,7 +2525,8 @@ const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatial
 
   const spatialParsedRows = shouldApplySpatialBoost ? parseSpatialRows(spatialRows, profile) : [];
   const combinedRows = [...historyRows, ...nonSpatialRows, ...spatialParsedRows];
-  const markers = dedupeRows(combinedRows);
+  const combinedDedupe = dedupeRowsDetailed(combinedRows);
+  const markers = combinedDedupe.markers;
 
   const averageConfidence =
     markers.length > 0 ? markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length : 0;
@@ -2287,17 +2536,31 @@ const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatial
   const confidence = markers.length > 0 ? Math.min(0.9, averageConfidence * 0.8 + unitCoverage * 0.2) : 0.1;
 
   return {
-    sourceFileName: fileName,
-    testDate: extractDateCandidate(text),
-    markers,
-    extraction: {
-      provider: "fallback",
-      model: `fallback-layered:${profile.id}`,
-      confidence,
-      needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7 || (hormoneSignal && importantCoverage < 2)
+    draft: {
+      sourceFileName: fileName,
+      testDate: extractDateCandidate(text),
+      markers,
+      extraction: {
+        provider: "fallback",
+        model: `fallback-layered:${profile.id}`,
+        confidence,
+        needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7 || (hormoneSignal && importantCoverage < 2)
+      }
+    },
+    diagnostics: {
+      parsedRowCount: combinedRows.length,
+      keptRows: combinedDedupe.diagnostics.keptRows,
+      rejectedRows: combinedDedupe.diagnostics.rejectedRows,
+      topRejectReasons:
+        Object.keys(combinedDedupe.diagnostics.topRejectReasons).length > 0
+          ? combinedDedupe.diagnostics.topRejectReasons
+          : nonSpatialDedupe.diagnostics.topRejectReasons
     }
   };
 };
+
+const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft =>
+  fallbackExtractDetailed(text, fileName, spatialRows).draft;
 
 const meetsQualityThreshold = (draft: ExtractionDraft): boolean => {
   const hasEnoughMarkers = draft.markers.length >= 5;
@@ -2316,24 +2579,40 @@ const meetsQualityThreshold = (draft: ExtractionDraft): boolean => {
 const callClaudeExtraction = async (
   pdfText: string,
   fileName: string,
-  fallbackDraft: ExtractionDraft
+  fallbackDraft: ExtractionDraft,
+  rawPdfBuffer: ArrayBuffer,
+  textResult: PdfTextExtractionResult
 ): Promise<ExtractionDraft> => {
-  const prompt = [
-    "Extract blood lab data from the text below.",
-    "Return ONLY valid JSON in this exact shape:",
-    '{"testDate":"YYYY-MM-DD","markers":[{"marker":"string","value":0,"unit":"string","referenceMin":null,"referenceMax":null,"confidence":0.0}]}',
-    "Rules:",
-    "- Include one marker object per result line.",
-    "- Keep values numeric only.",
-    "- If reference range missing, use null.",
-    "- confidence is 0.0 to 1.0 per row.",
-    "- Detect sample collection date, not report print date.",
-    "- Do not include explanations.",
-    `Source filename: ${fileName}`,
-    "LAB TEXT START",
-    pdfText,
-    "LAB TEXT END"
-  ].join("\n");
+  const prompt = buildClaudeExtractionPrompt(fileName, pdfText);
+  const canAttachPdf = rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= 3_500_000;
+  const shouldAttachPdf =
+    canAttachPdf &&
+    (textResult.textItemCount < 250 ||
+      textResult.nonWhitespaceChars < 1500 ||
+      fallbackDraft.markers.length < 10 ||
+      fallbackDraft.extraction.confidence < 0.72);
+  const messageContent: Array<
+    | { type: "text"; text: string }
+    | {
+        type: "document";
+        source: {
+          type: "base64";
+          media_type: "application/pdf";
+          data: string;
+        };
+      }
+  > = [{ type: "text", text: prompt }];
+
+  if (shouldAttachPdf) {
+    messageContent.unshift({
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: arrayBufferToBase64(rawPdfBuffer)
+      }
+    });
+  }
 
   const tryModel = async (
     model: string
@@ -2352,8 +2631,13 @@ const callClaudeExtraction = async (
           requestType: "extraction",
           payload: {
             model,
-            max_tokens: 1800,
-            messages: [{ role: "user", content: prompt }]
+            max_tokens: 2200,
+            messages: [
+              {
+                role: "user",
+                content: shouldAttachPdf ? messageContent : prompt
+              }
+            ]
           }
         })
       });
@@ -2448,52 +2732,187 @@ const callClaudeExtraction = async (
   };
 };
 
-export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
-  const arrayBuffer = await file.arrayBuffer();
-  const textResult = await extractPdfText(arrayBuffer);
-  let extractionText = textResult.text;
-  let fallbackDraft = fallbackExtract(extractionText, file.name, textResult.spatialRows);
+const buildLocalExtractionWarnings = (
+  textResult: PdfTextExtractionResult,
+  textExtractionFailed: boolean,
+  ocrResult: OcrResult,
+  draft: ExtractionDraft
+): { warningCode?: ExtractionWarningCode; warnings: string[] } => {
+  const warnings: string[] = [];
+  let warningCode: ExtractionWarningCode | undefined;
 
-  if (shouldUseOcrFallback(textResult, fallbackDraft)) {
-    const ocrText = await extractPdfTextViaOcr(arrayBuffer);
-    if (ocrText) {
-      extractionText = `${extractionText}\n${ocrText}`.trim();
-      const ocrDraft = fallbackExtract(extractionText, file.name, textResult.spatialRows);
-      const selected = chooseBetterFallbackDraft(fallbackDraft, ocrDraft);
-      fallbackDraft =
-        selected === ocrDraft
-          ? {
-              ...selected,
-              extraction: {
-                ...selected.extraction,
-                model: `${selected.extraction.model}+ocr`
-              }
-            }
-          : fallbackDraft;
+  const pushWarning = (code: ExtractionWarningCode) => {
+    warnings.push(code);
+    if (!warningCode) {
+      warningCode = code;
     }
+  };
+
+  if (textExtractionFailed) {
+    pushWarning("PDF_TEXT_EXTRACTION_FAILED");
   }
 
-  if (meetsQualityThreshold(fallbackDraft)) {
+  if (textResult.textItemCount === 0) {
+    pushWarning("PDF_TEXT_LAYER_EMPTY");
+  }
+
+  if (ocrResult.used && ocrResult.initFailed) {
+    pushWarning("PDF_OCR_INIT_FAILED");
+  } else if (ocrResult.used && ocrResult.pagesFailed > 0) {
+    pushWarning("PDF_OCR_PARTIAL");
+  }
+
+  if (draft.extraction.confidence < 0.65 || draft.markers.length < 6) {
+    pushWarning("PDF_LOW_CONFIDENCE_LOCAL");
+  }
+
+  return {
+    warningCode,
+    warnings: Array.from(new Set(warnings))
+  };
+};
+
+const withExtractionMetadata = (
+  draft: ExtractionDraft,
+  warningMeta: { warningCode?: ExtractionWarningCode; warnings: string[] },
+  debug: ExtractionDebugInfo
+): ExtractionDraft => ({
+  ...draft,
+  extraction: {
+    ...draft.extraction,
+    warningCode: warningMeta.warningCode,
+    warnings: warningMeta.warnings.length > 0 ? warningMeta.warnings : undefined,
+    debug
+  }
+});
+
+export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    let textResult: PdfTextExtractionResult;
+    let textExtractionFailed = false;
+    try {
+      textResult = await extractPdfText(arrayBuffer);
+    } catch (error) {
+      textExtractionFailed = true;
+      console.warn("PDF text extraction failed; continuing with OCR-only fallback.", error);
+      textResult = {
+        text: "",
+        pageCount: 0,
+        textItemCount: 0,
+        lineCount: 0,
+        nonWhitespaceChars: 0,
+        spatialRows: []
+      };
+    }
+
+    let extractionText = textResult.text;
+    let fallbackOutcome = fallbackExtractDetailed(extractionText, file.name, textResult.spatialRows);
+    let fallbackDraft = fallbackOutcome.draft;
+    let ocrResult: OcrResult = {
+      text: "",
+      used: false,
+      pagesAttempted: 0,
+      pagesSucceeded: 0,
+      pagesFailed: 0,
+      initFailed: false,
+      timedOut: false
+    };
+
+    if (textResult.pageCount === 0 || shouldUseOcrFallback(textResult, fallbackDraft)) {
+      ocrResult = await withTimeout(
+        extractPdfTextViaOcr(arrayBuffer),
+        OCR_TOTAL_TIMEOUT_MS,
+        "OCR total timeout"
+      ).catch((error) => {
+        console.warn("PDF OCR total timeout or crash", error);
+        return {
+          text: "",
+          used: true,
+          pagesAttempted: textResult.pageCount > 0 ? Math.min(textResult.pageCount, OCR_MAX_PAGES) : 0,
+          pagesSucceeded: 0,
+          pagesFailed: textResult.pageCount > 0 ? Math.min(textResult.pageCount, OCR_MAX_PAGES) : 0,
+          initFailed: false,
+          timedOut: true
+        } satisfies OcrResult;
+      });
+
+      if (ocrResult.text) {
+        extractionText = `${extractionText}\n${ocrResult.text}`.trim();
+        const ocrOutcome = fallbackExtractDetailed(extractionText, file.name, textResult.spatialRows);
+        const selected = chooseBetterFallbackDraft(fallbackDraft, ocrOutcome.draft);
+        if (selected === ocrOutcome.draft) {
+          fallbackOutcome = ocrOutcome;
+          fallbackDraft = {
+            ...selected,
+            extraction: {
+              ...selected.extraction,
+              model: `${selected.extraction.model}+ocr`
+            }
+          };
+        } else {
+          fallbackDraft = selected;
+        }
+      }
+    }
+
+    const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, fallbackDraft);
+    const debugMeta: ExtractionDebugInfo = {
+      textItems: textResult.textItemCount,
+      ocrUsed: ocrResult.used,
+      ocrPages: ocrResult.pagesSucceeded,
+      keptRows: fallbackOutcome.diagnostics.keptRows,
+      rejectedRows: fallbackOutcome.diagnostics.rejectedRows,
+      topRejectReasons: fallbackOutcome.diagnostics.topRejectReasons
+    };
+
+    const localDraft = withExtractionMetadata(
+      {
+        ...fallbackDraft,
+        extraction: {
+          ...fallbackDraft.extraction,
+          provider: "fallback",
+          needsReview: fallbackDraft.extraction.needsReview || warningMeta.warnings.length > 0 || fallbackDraft.markers.length === 0
+        }
+      },
+      warningMeta,
+      debugMeta
+    );
+
+    if (meetsQualityThreshold(localDraft)) {
+      return {
+        ...localDraft,
+        extraction: {
+          ...localDraft.extraction,
+          needsReview: true
+        }
+      };
+    }
+
+    return localDraft;
+  } catch (error) {
+    console.warn("Unexpected PDF parsing failure", error);
     return {
-      ...fallbackDraft,
+      sourceFileName: file.name,
+      testDate: new Date().toISOString().slice(0, 10),
+      markers: [],
       extraction: {
-        ...fallbackDraft.extraction,
         provider: "fallback",
-        needsReview: true
+        model: "fallback-unexpected-error",
+        confidence: 0,
+        needsReview: true,
+        warningCode: "PDF_TEXT_EXTRACTION_FAILED",
+        warnings: ["PDF_TEXT_EXTRACTION_FAILED"],
+        debug: {
+          textItems: 0,
+          ocrUsed: false,
+          ocrPages: 0,
+          keptRows: 0,
+          rejectedRows: 0,
+          topRejectReasons: {}
+        }
       }
     };
-  }
-
-  try {
-    return await callClaudeExtraction(extractionText, file.name, fallbackDraft);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("PDF_RATE_LIMITED")) {
-      const retryAfter = Number(error.message.split(":")[1] ?? "0");
-      const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0;
-      // Keep extraction resilient for users: when throttled, continue with local parser.
-      console.warn(`Claude extraction rate-limited; falling back to local parser${seconds ? ` for ~${seconds}s` : ""}.`);
-    }
-    return fallbackDraft;
   }
 };
 
@@ -2510,7 +2929,9 @@ export const __pdfParsingInternals = {
   parseColumnRows,
   parseSpatialRows,
   parseHistoryCurrentColumnRows,
+  fallbackExtractDetailed,
   fallbackExtract,
   normalizeMarker,
-  filterMarkerValuesForQuality
+  filterMarkerValuesForQuality,
+  buildLocalExtractionWarnings
 };

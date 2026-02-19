@@ -340,7 +340,59 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         typeof report.extraction?.confidence === "number" && Number.isFinite(report.extraction.confidence)
           ? report.extraction.confidence
           : 0.8,
-      needsReview: Boolean(report.extraction?.needsReview)
+      needsReview: Boolean(report.extraction?.needsReview),
+      warningCode:
+        report.extraction?.warningCode === "PDF_TEXT_LAYER_EMPTY" ||
+        report.extraction?.warningCode === "PDF_TEXT_EXTRACTION_FAILED" ||
+        report.extraction?.warningCode === "PDF_OCR_INIT_FAILED" ||
+        report.extraction?.warningCode === "PDF_OCR_PARTIAL" ||
+        report.extraction?.warningCode === "PDF_LOW_CONFIDENCE_LOCAL"
+          ? report.extraction.warningCode
+          : undefined,
+      warnings: Array.isArray(report.extraction?.warnings)
+        ? report.extraction.warnings
+            .map((warning) => String(warning).trim())
+            .filter(Boolean)
+            .slice(0, 8)
+        : undefined,
+      debug:
+        report.extraction?.debug &&
+        typeof report.extraction.debug === "object" &&
+        !Array.isArray(report.extraction.debug)
+          ? {
+              textItems:
+                typeof report.extraction.debug.textItems === "number" && Number.isFinite(report.extraction.debug.textItems)
+                  ? Math.max(0, Math.round(report.extraction.debug.textItems))
+                  : 0,
+              ocrUsed: Boolean(report.extraction.debug.ocrUsed),
+              ocrPages:
+                typeof report.extraction.debug.ocrPages === "number" && Number.isFinite(report.extraction.debug.ocrPages)
+                  ? Math.max(0, Math.round(report.extraction.debug.ocrPages))
+                  : 0,
+              keptRows:
+                typeof report.extraction.debug.keptRows === "number" && Number.isFinite(report.extraction.debug.keptRows)
+                  ? Math.max(0, Math.round(report.extraction.debug.keptRows))
+                  : 0,
+              rejectedRows:
+                typeof report.extraction.debug.rejectedRows === "number" && Number.isFinite(report.extraction.debug.rejectedRows)
+                  ? Math.max(0, Math.round(report.extraction.debug.rejectedRows))
+                  : 0,
+              topRejectReasons:
+                report.extraction.debug.topRejectReasons &&
+                typeof report.extraction.debug.topRejectReasons === "object" &&
+                !Array.isArray(report.extraction.debug.topRejectReasons)
+                    ? Object.fromEntries(
+                        Object.entries(report.extraction.debug.topRejectReasons)
+                          .map(([reason, count]) => [
+                            String(reason),
+                            Number.isFinite(Number(count)) ? Math.max(0, Math.round(Number(count))) : 0
+                          ] as const)
+                          .filter((entry) => entry[1] > 0)
+                          .slice(0, 6)
+                      )
+                  : {}
+            }
+          : undefined
     }
   };
 
