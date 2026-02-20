@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Trash2, X } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
@@ -61,6 +61,7 @@ const ExtractionReviewTable = ({
   const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("daily");
   const [addTimelineStartDate, setAddTimelineStartDate] = useState(draft.testDate);
   const [addTimelineEndDate, setAddTimelineEndDate] = useState("");
+  const [showWarningDetails, setShowWarningDetails] = useState(false);
 
   const warningCodes = Array.from(new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])]));
   const debugInfo = draft.extraction.debug;
@@ -138,7 +139,6 @@ const ExtractionReviewTable = ({
       "I uploaded a lab PDF and the extraction didn't work correctly.",
       "",
       `File: ${draft.sourceFileName}`,
-      `Extraction method: ${draft.extraction.provider}`,
       `Confidence: ${draft.extraction.confidence}`,
       `Markers extracted: ${draft.markers.length}`,
       "",
@@ -312,7 +312,7 @@ const ExtractionReviewTable = ({
         <div>
           <h2 className="text-lg font-semibold text-slate-100">{tr("Controleer geëxtraheerde data", "Review extracted data")}</h2>
           <p className="text-sm text-slate-300">
-            {draft.sourceFileName} | {draft.extraction.provider.toUpperCase()} {tr("betrouwbaarheid", "confidence")} {" "}
+            {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
             <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
           </p>
         </div>
@@ -341,23 +341,46 @@ const ExtractionReviewTable = ({
 
       {warningMessages.length > 0 ? (
         <div className="mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100">
-          <p className="font-medium">{tr("Parserwaarschuwingen", "Parser warnings")}</p>
-          <ul className="mt-1 space-y-1 text-xs sm:text-sm">
-            {warningMessages.map((message) => (
-              <li key={message}>• {message}</li>
-            ))}
-          </ul>
-          <div className="mt-2 rounded-md border border-amber-500/20 bg-slate-950/30 p-2 text-xs text-amber-100/95">
-            <p className="font-medium">{tr("Checklist vóór opslaan", "Checklist before saving")}</p>
-            <p>• {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
-            <p>• {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
-            <p>• {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
-          </div>
-          {debugInfo ? (
-            <p className="mt-2 text-[11px] text-amber-100/80">
-              {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
-              {debugInfo.rejectedRows}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="inline-flex items-center gap-1.5 font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              {tr("Parserwaarschuwingen", "Parser warnings")} ({warningMessages.length})
             </p>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-500/20"
+              onClick={() => setShowWarningDetails((current) => !current)}
+            >
+              {showWarningDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {showWarningDetails ? tr("Minder tonen", "Show less") : tr("Checklist tonen", "Show checklist")}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-amber-100/95 sm:text-sm">
+            {tr(
+              "Controleer markernaam, waarde en referentiebereik voordat je opslaat.",
+              "Review marker name, value, and reference range before saving."
+            )}
+          </p>
+          {showWarningDetails ? (
+            <>
+              <ul className="mt-2 space-y-1 text-xs sm:text-sm">
+                {warningMessages.map((message) => (
+                  <li key={message}>• {message}</li>
+                ))}
+              </ul>
+              <div className="mt-2 rounded-md border border-amber-500/20 bg-slate-950/30 p-2 text-xs text-amber-100/95">
+                <p className="font-medium">{tr("Checklist vóór opslaan", "Checklist before saving")}</p>
+                <p>• {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
+                <p>• {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
+                <p>• {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
+              </div>
+              {debugInfo ? (
+                <p className="mt-2 text-[11px] text-amber-100/80">
+                  {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
+                  {debugInfo.rejectedRows}
+                </p>
+              ) : null}
+            </>
           ) : null}
         </div>
       ) : null}
@@ -435,216 +458,7 @@ const ExtractionReviewTable = ({
         ) : null}
       </div>
 
-      {showCreateProtocol ? (
-        <div className="review-context-card mt-3 rounded-xl border border-cyan-500/30 bg-slate-900/50 p-3">
-          <ProtocolEditor value={protocolDraft} language={language} onChange={setProtocolDraft} />
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={() => {
-                setShowCreateProtocol(false);
-                setProtocolDraft(blankProtocolDraft());
-                setProtocolFeedback("");
-              }}
-            >
-              <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-              onClick={saveProtocolFromDraft}
-            >
-              <Save className="h-4 w-4" /> {tr("Opslaan en selecteren", "Save and select")}
-            </button>
-          </div>
-          {protocolFeedback ? <p className="mt-2 text-sm text-amber-200">{protocolFeedback}</p> : null}
-        </div>
-      ) : null}
-
-      <div className="review-context-card mt-3 rounded-xl border border-slate-700 bg-slate-900/45 p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <label className="block text-xs uppercase tracking-wide text-slate-400">
-            {tr("Supplementen op moment van test", "Supplements at time of test")}
-          </label>
-          {annotations.supplementOverrides ? (
-            <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
-              {tr("Aangepaste override", "Custom override")}
-            </span>
-          ) : (
-            <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-              {tr("Auto-match op datum", "Auto-matched by test date")}
-            </span>
-          )}
-        </div>
-
-        <p className="text-sm text-slate-300">
-          {supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active at this date.")}
-        </p>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-            onClick={() => setShowSupplementOverrideEditor((current) => !current)}
-          >
-            {showSupplementOverrideEditor
-              ? tr("Verberg aanpassen", "Hide customization")
-              : tr("Deze kloppen niet - aanpassen", "These weren't my supplements - customize")}
-          </button>
-          {annotations.supplementOverrides ? (
-            <button
-              type="button"
-              className="rounded-md border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100"
-              onClick={resetSupplementsToAuto}
-            >
-              {tr("Terug naar auto-match", "Reset to auto-match")}
-            </button>
-          ) : null}
-        </div>
-
-        {showSupplementOverrideEditor ? (
-          <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
-            <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">{tr("Supplement", "Supplement")}</label>
-                <input
-                  value={supplementNameInput}
-                  onChange={(event) => setSupplementNameInput(event.target.value)}
-                  placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                />
-                {supplementSuggestions.length > 0 ? (
-                  <div className="mt-1 rounded-md border border-slate-700 bg-slate-900/95 p-1">
-                    {supplementSuggestions.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className="block w-full rounded px-2 py-1 text-left text-sm text-slate-200 hover:bg-slate-800"
-                        onClick={() => setSupplementNameInput(option)}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">{tr("Dosis", "Dose")}</label>
-                <input
-                  value={supplementDoseInput}
-                  onChange={(event) => setSupplementDoseInput(event.target.value)}
-                  placeholder={tr("bijv. 4000 IU", "e.g. 4000 IU")}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">{tr("Frequentie", "Frequency")}</label>
-                <select
-                  value={supplementFrequencyInput}
-                  onChange={(event) => setSupplementFrequencyInput(event.target.value)}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                >
-                  {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {tr(option.label.nl, option.label.en)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
-                  onClick={addSupplementOverride}
-                >
-                  <Plus className="mr-1 inline-block h-4 w-4" />
-                  {tr("Toevoegen", "Add")}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {overrideSupplements.length === 0 ? (
-                <p className="text-sm text-slate-400">{tr("Nog geen overrides toegevoegd.", "No overrides added yet.")}</p>
-              ) : (
-                overrideSupplements.map((supplement) => (
-                  <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
-                    <p className="text-sm text-slate-200">
-                      <span className="font-medium">{supplement.name}</span>
-                      {supplement.dose ? ` · ${supplement.dose}` : ""}
-                      {` · ${supplementFrequencyLabel(supplement.frequency, language)}`}
-                    </p>
-                    <button
-                      type="button"
-                      className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
-                      onClick={() => removeSupplementOverride(supplement.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {overrideSupplements.length > 0 ? (
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
-                <p className="mb-2 text-sm font-medium text-slate-200">{tr("Voeg deze ook toe aan je supplement-tijdlijn", "Add these to your supplement timeline")}</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-400">{tr("Startdatum", "Start date")}</label>
-                    <input
-                      type="date"
-                      value={addTimelineStartDate}
-                      onChange={(event) => setAddTimelineStartDate(event.target.value)}
-                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-400">{tr("Einddatum (optioneel)", "End date (optional)")}</label>
-                    <input
-                      type="date"
-                      value={addTimelineEndDate}
-                      onChange={(event) => setAddTimelineEndDate(event.target.value)}
-                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="mt-2 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
-                  onClick={addOverridesToTimeline}
-                >
-                  {tr("Toevoegen aan tijdlijn", "Add to timeline")}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Symptomen", "Symptoms")}</label>
-          <textarea
-            value={annotations.symptoms}
-            onChange={(event) => onAnnotationsChange({ ...annotations, symptoms: event.target.value })}
-            className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Energie, libido, stemming, slaap", "Energy, libido, mood, sleep")}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Notities", "Notes")}</label>
-          <textarea
-            value={annotations.notes}
-            onChange={(event) => onAnnotationsChange({ ...annotations, notes: event.target.value })}
-            className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            placeholder={tr("Aanvullende observaties", "Additional observations")}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">
             <tr>
@@ -767,6 +581,234 @@ const ExtractionReviewTable = ({
           <AlertTriangle className="h-3.5 w-3.5" />
           {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
         </a>
+      </div>
+
+      <div className="review-context-card mt-3 space-y-3 rounded-xl border border-slate-700 bg-slate-900/45 p-3">
+          {showCreateProtocol ? (
+            <div className="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-3">
+              <ProtocolEditor value={protocolDraft} language={language} onChange={setProtocolDraft} />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                  onClick={() => {
+                    setShowCreateProtocol(false);
+                    setProtocolDraft(blankProtocolDraft());
+                    setProtocolFeedback("");
+                  }}
+                >
+                  <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+                  onClick={saveProtocolFromDraft}
+                >
+                  <Save className="h-4 w-4" /> {tr("Opslaan en selecteren", "Save and select")}
+                </button>
+              </div>
+              {protocolFeedback ? <p className="mt-2 text-sm text-amber-200">{protocolFeedback}</p> : null}
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-slate-700 bg-slate-900/45 p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                {tr("Supplementen op moment van test", "Supplements at time of test")}
+              </label>
+              {annotations.supplementOverrides ? (
+                <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+                  {tr("Aangepaste override", "Custom override")}
+                </span>
+              ) : (
+                <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                  {tr("Auto-match op datum", "Auto-matched by test date")}
+                </span>
+              )}
+            </div>
+
+            <p className="text-sm text-slate-300">
+              {supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active at this date.")}
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+                onClick={() => setShowSupplementOverrideEditor((current) => !current)}
+              >
+                {showSupplementOverrideEditor
+                  ? tr("Verberg aanpassen", "Hide customization")
+                  : tr("Deze kloppen niet - aanpassen", "These weren't my supplements - customize")}
+              </button>
+              {annotations.supplementOverrides ? (
+                <button
+                  type="button"
+                  className="rounded-md border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100"
+                  onClick={resetSupplementsToAuto}
+                >
+                  {tr("Terug naar auto-match", "Reset to auto-match")}
+                </button>
+              ) : null}
+            </div>
+
+            {showSupplementOverrideEditor ? (
+              <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
+            <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Supplement", "Supplement")}</label>
+                <input
+                  value={supplementNameInput}
+                  onChange={(event) => setSupplementNameInput(event.target.value)}
+                  placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+                {supplementSuggestions.length > 0 ? (
+                  <div className="mt-1 rounded-md border border-slate-700 bg-slate-900/95 p-1">
+                    {supplementSuggestions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className="block w-full rounded px-2 py-1 text-left text-sm text-slate-200 hover:bg-slate-800"
+                        onClick={() => setSupplementNameInput(option)}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Dosis", "Dose")}</label>
+                <input
+                  value={supplementDoseInput}
+                  onChange={(event) => setSupplementDoseInput(event.target.value)}
+                  placeholder={tr("bijv. 4000 IU", "e.g. 4000 IU")}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">{tr("Frequentie", "Frequency")}</label>
+                <select
+                  value={supplementFrequencyInput}
+                  onChange={(event) => setSupplementFrequencyInput(event.target.value)}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                >
+                  {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {tr(option.label.nl, option.label.en)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                  onClick={addSupplementOverride}
+                >
+                  <Plus className="mr-1 inline-block h-4 w-4" />
+                  {tr("Toevoegen", "Add")}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {overrideSupplements.length === 0 ? (
+                <p className="text-sm text-slate-400">{tr("Nog geen overrides toegevoegd.", "No overrides added yet.")}</p>
+              ) : (
+                overrideSupplements.map((supplement) => (
+                  <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
+                    <p className="text-sm text-slate-200">
+                      <span className="font-medium">{supplement.name}</span>
+                      {supplement.dose ? ` · ${supplement.dose}` : ""}
+                      {` · ${supplementFrequencyLabel(supplement.frequency, language)}`}
+                    </p>
+                    <button
+                      type="button"
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
+                      onClick={() => removeSupplementOverride(supplement.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {overrideSupplements.length > 0 ? (
+              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-200">{tr("Voeg deze ook toe aan je supplement-tijdlijn", "Add these to your supplement timeline")}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">{tr("Startdatum", "Start date")}</label>
+                    <input
+                      type="date"
+                      value={addTimelineStartDate}
+                      onChange={(event) => setAddTimelineStartDate(event.target.value)}
+                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">{tr("Einddatum (optioneel)", "End date (optional)")}</label>
+                    <input
+                      type="date"
+                      value={addTimelineEndDate}
+                      onChange={(event) => setAddTimelineEndDate(event.target.value)}
+                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="mt-2 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+                  onClick={addOverridesToTimeline}
+                >
+                  {tr("Toevoegen aan tijdlijn", "Add to timeline")}
+                </button>
+              </div>
+            ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Symptomen", "Symptoms")}</label>
+              <textarea
+                value={annotations.symptoms}
+                onChange={(event) => onAnnotationsChange({ ...annotations, symptoms: event.target.value })}
+                className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                placeholder={tr("Energie, libido, stemming, slaap", "Energy, libido, mood, sleep")}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Notities", "Notes")}</label>
+              <textarea
+                value={annotations.notes}
+                onChange={(event) => onAnnotationsChange({ ...annotations, notes: event.target.value })}
+                className="h-24 w-full resize-none rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                placeholder={tr("Aanvullende observaties", "Additional observations")}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-700/80 pt-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-slate-400"
+              onClick={onCancel}
+            >
+              <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-cyan-400"
+              onClick={onSave}
+            >
+              <Save className="h-4 w-4" /> {tr("Rapport opslaan", "Save report")}
+            </button>
+          </div>
       </div>
     </motion.div>
   );

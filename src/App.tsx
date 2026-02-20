@@ -3,10 +3,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   BarChart3,
+  CheckCircle2,
   ClipboardList,
   Cog,
   Gauge,
   Info,
+  Loader2,
   Pill,
   Plus,
   Sparkles,
@@ -158,6 +160,12 @@ const App = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadSummary, setUploadSummary] = useState<{
+    fileName: string;
+    markerCount: number;
+    confidence: number;
+    warnings: number;
+  } | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
@@ -448,13 +456,24 @@ const App = () => {
   const handleUpload = async (file: File) => {
     setIsProcessing(true);
     setUploadError("");
+    setUploadSummary(null);
 
     try {
       const extracted = await extractLabData(file);
+      const warningCount = new Set([
+        ...(extracted.extraction.warnings ?? []),
+        ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
+      ]).size;
       setDraft(extracted);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
+      setUploadSummary({
+        fileName: extracted.sourceFileName,
+        markerCount: extracted.markers.length,
+        confidence: extracted.extraction.confidence,
+        warnings: warningCount
+      });
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
     } finally {
@@ -525,6 +544,7 @@ const App = () => {
     addReport(report);
     appendMarkerSuggestions(suggestions);
 
+    setUploadSummary(null);
     setDraft(null);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
@@ -917,6 +937,7 @@ const App = () => {
               onAddSupplementPeriod={addSupplementPeriod}
               onSave={saveDraftAsReport}
                 onCancel={() => {
+                  setUploadSummary(null);
                   setDraft(null);
                   setSelectedProtocolId(null);
                 }}
@@ -958,10 +979,18 @@ const App = () => {
                     {isDemoMode ? (
                       <button
                         type="button"
-                        className={uploadOwnPdfButtonClassName}
+                        className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
                         onClick={clearDemoAndUpload}
+                        disabled={isProcessing}
                       >
-                        {tr("Upload je eigen PDF", "Upload your own PDF")}
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                            {tr("PDF wordt verwerkt...", "Processing PDF...")}
+                          </>
+                        ) : (
+                          tr("Upload je eigen PDF", "Upload your own PDF")
+                        )}
                       </button>
                     ) : null}
                   </div>
@@ -1138,6 +1167,103 @@ const App = () => {
       </div>
 
       <AnimatePresence>
+        {isProcessing ? (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-900/95 p-5 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl border border-cyan-400/35 bg-cyan-500/10 p-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-slate-100">
+                    {tr("Je PDF wordt verwerkt", "Your PDF is being processed")}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {tr(
+                      "Markerwaarden, eenheden en referentiebereiken worden nu uitgelezen. Dit kan tot ongeveer 30 seconden duren.",
+                      "Markers, units, and reference ranges are being extracted. This can take up to about 30 seconds."
+                    )}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
+        {uploadSummary ? (
+          <motion.div
+            className="fixed inset-0 z-[69] flex items-center justify-center bg-slate-950/60 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setUploadSummary(null)}
+          >
+            <motion.div
+              className="w-full max-w-xl rounded-2xl border border-cyan-500/35 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-100">
+                      {uploadSummary.markerCount > 0
+                        ? tr("PDF succesvol verwerkt", "PDF processed successfully")
+                        : tr("PDF geüpload, maar geen markers gevonden", "PDF uploaded, but no markers were found")}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-300">{uploadSummary.fileName}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:border-slate-500"
+                  onClick={() => setUploadSummary(null)}
+                >
+                  {tr("Sluiten", "Close")}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Markers gevonden", "Markers found")}</p>
+                  <p className="mt-0.5 text-lg font-semibold text-cyan-300">{uploadSummary.markerCount}</p>
+                </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-100">{Math.round(uploadSummary.confidence * 100)}%</p>
+                </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Waarschuwingen", "Warnings")}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-100">{uploadSummary.warnings}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                {tr(
+                  "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. OCR/AI kan kleine fouten maken.",
+                  "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
+                )}
+                {uploadSummary.warnings > 0 ? ` ${tr("Er zijn parserwaarschuwingen gevonden.", "Parser warnings were detected.")}` : ""}
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
         {pendingTabChange ? (
           <motion.div
             className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/70 p-4"

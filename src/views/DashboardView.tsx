@@ -117,6 +117,9 @@ const DashboardView = ({
 }: DashboardViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
+  const hasSingleReport = reports.length === 1;
+  const firstReportVisible = hasSingleReport && visibleReports.length > 0;
+  const firstReportFilteredOut = hasSingleReport && visibleReports.length === 0;
   const [showChartOptions, setShowChartOptions] = useState(outOfRangeCount > 0);
 
   useEffect(() => {
@@ -149,6 +152,13 @@ const DashboardView = ({
     "Past de Y-as aan op het bereik van je data. Uit = Y-as start op nul voor betere absolute vergelijking.",
     "Scales the Y-axis to your data range. Off = Y-axis starts at zero for better absolute comparison."
   );
+  const showAllTimeForFirstReport = () => {
+    onUpdateSettings({
+      timeRange: "all",
+      samplingFilter: "all",
+      compareToBaseline: false
+    });
+  };
 
   return (
     <section className="space-y-3 fade-in">
@@ -377,6 +387,28 @@ const DashboardView = ({
             </div>
 
             {dashboardView === "primary" ? <div className="mb-1" /> : null}
+
+            {firstReportVisible ? (
+              <div className="mb-3 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p>
+                    {tr(
+                      "Sterke start: je eerste rapport staat erin. Voeg nog 1 rapport toe om trendgrafieken en vergelijkingen over tijd te zien.",
+                      "Great start: your first report is saved. Add one more report to unlock trend charts and over-time comparisons."
+                    )}
+                  </p>
+                  {!isShareMode ? (
+                    <button
+                      type="button"
+                      onClick={onUploadClick}
+                      className="rounded-md border border-cyan-400/50 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-cyan-100 hover:border-cyan-300 hover:text-cyan-50 sm:text-sm"
+                    >
+                      {tr("Upload tweede rapport", "Upload second report")}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
 
@@ -384,12 +416,44 @@ const DashboardView = ({
           <WelcomeHero language={language} onLoadDemo={onLoadDemo} onUploadClick={onUploadClick} />
         ) : visibleReports.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">
-            <p className="text-base font-semibold text-slate-200">{tr("Geen data in huidige filter", "No data in current filter")}</p>
-            <p className="mt-1 text-sm text-slate-400">
-              {samplingControlsEnabled
-                ? tr("Pas tijdsbereik of meetmoment-filter aan om data te tonen.", "Change time range or sampling filter to show data.")
-                : tr("Pas het tijdsbereik aan om data te tonen.", "Change time range to show data.")}
-            </p>
+            {firstReportFilteredOut ? (
+              <div className="mx-auto max-w-xl px-4">
+                <p className="text-base font-semibold text-slate-100">{tr("Eerste rapport opgeslagen", "First report saved")}</p>
+                <p className="mt-1 text-sm text-slate-300">
+                  {tr(
+                    "Je eerste rapport is opgeslagen, maar valt buiten je huidige filter. Zet je bereik op ‘All time’ of upload een tweede rapport om trends te zien.",
+                    "Your first report is saved, but it falls outside your current filter. Set your range to All time or upload a second report to start seeing trends."
+                  )}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={showAllTimeForFirstReport}
+                    className="rounded-md border border-slate-500 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:border-cyan-400 hover:text-cyan-200 sm:text-sm"
+                  >
+                    {tr("Toon alles", "Show all time")}
+                  </button>
+                  {!isShareMode ? (
+                    <button
+                      type="button"
+                      onClick={onUploadClick}
+                      className="rounded-md border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 hover:border-cyan-300 hover:text-cyan-50 sm:text-sm"
+                    >
+                      {tr("Upload tweede rapport", "Upload second report")}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-base font-semibold text-slate-200">{tr("Geen data in huidige filter", "No data in current filter")}</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {samplingControlsEnabled
+                    ? tr("Pas tijdsbereik of meetmoment-filter aan om data te tonen.", "Change time range or sampling filter to show data.")
+                    : tr("Pas het tijdsbereik aan om data te tonen.", "Change time range to show data.")}
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
