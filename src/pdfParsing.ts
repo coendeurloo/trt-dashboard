@@ -1,4 +1,5 @@
 import * as pdfjsLib from "pdfjs-dist";
+import * as Tesseract from "tesseract.js";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
 import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
@@ -187,6 +188,7 @@ const OCR_RENDER_SCALE = 2;
 const OCR_RETRY_RENDER_SCALE = 1.4;
 const OCR_REMOTE_WORKER_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/worker.min.js";
 const OCR_REMOTE_CORE_PATH = "https://cdn.jsdelivr.net/npm/tesseract.js-core@v7.0.0/tesseract-core.wasm.js";
+const OCR_REMOTE_TESSERACT_BUNDLE = "https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/tesseract.min.js";
 const OCR_REMOTE_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
 const OCR_REMOTE_LANG_PATH_ALT = "https://cdn.jsdelivr.net/npm/@tesseract.js-data";
 const OCR_MAX_INIT_ATTEMPTS = 2;
@@ -476,6 +478,34 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutMes
   }
 };
 
+const normalizeOcrText = (value: string): string =>
+  value
+    .replace(/\u00a0/g, " ")
+    .replace(NOISE_SYMBOL_PATTERN, " ")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .map((line) =>
+      line
+        .replace(/([0-9])(?=(?:Uw waarde:|Normale waarde:|Datum:))/g, "$1 ")
+        .replace(/([µμ])\s+g\s*\/\s*l/gi, "µg/L")
+        .replace(/([µμ])\s+mol\s*\/\s*l/gi, "µmol/L")
+        .replace(/u?mol\s*\/\s*l/gi, (entry) => (/^umol/i.test(entry.replace(/\s+/g, "")) ? "umol/L" : entry))
+        .replace(/ug\s*\/\s*l/gi, "ug/L")
+        .replace(/ug\s*\/\s*dl/gi, "ug/dL")
+        .replace(/mcg\s*\/\s*dl/gi, "mcg/dL")
+        .replace(/mcg\s*\/\s*ml/gi, "mcg/mL")
+        .replace(/ng\s*\/\s*ml/gi, "ng/mL")
+        .replace(/ng\s*\/\s*dl/gi, "ng/dL")
+        .replace(/ng\s*\/\s*mg/gi, "ng/mg")
+        .replace(/pg\s*\/\s*ml/gi, "pg/mL")
+        .replace(/pg\s*\/\s*mg/gi, "pg/mg")
+        .replace(/10\s*[x×*]\s*9\s*\/\s*l/gi, "10^9/L")
+        .replace(/10\s*[x×*]\s*12\s*\/\s*l/gi, "10^12/L")
+    )
+    .filter(Boolean)
+    .join("\n");
+
 const isLikelyLabDataLine = (line: string): boolean => {
   const normalized = cleanWhitespace(line);
   if (!normalized || normalized.length < 6) {
@@ -735,13 +765,73 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
     };
   };
 
+  const resolveTesseractBindings = (moduleLike: unknown): {
+    createWorker?: TesseractModule["createWorker"];
+    recognizeDirect?: TesseractModule["recognize"];
+  } => {
+    if (!moduleLike || typeof moduleLike !== "object") {
+      return {};
+    }
+    const module = moduleLike as TesseractModule;
+    return {
+      createWorker: module.createWorker ?? module.default?.createWorker,
+      recognizeDirect: module.recognize ?? module.default?.recognize
+    };
+  };
+
+  const loadTesseractCdnBundle = async (): Promise<void> => {
+    if (!isBrowserRuntime()) {
+      return;
+    }
+    const existing = document.querySelector('script[data-labtracker-tesseract="1"]') as HTMLScriptElement | null;
+    if (existing?.dataset.ready === "1") {
+      return;
+    }
+    if (existing) {
+      await new Promise<void>((resolve, reject) => {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Failed to load Tesseract bundle")), { once: true });
+      });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = OCR_REMOTE_TESSERACT_BUNDLE;
+    script.async = true;
+    script.dataset.labtrackerTesseract = "1";
+    await new Promise<void>((resolve, reject) => {
+      script.onload = () => {
+        script.dataset.ready = "1";
+        resolve();
+      };
+      script.onerror = () => reject(new Error("Failed to load Tesseract bundle"));
+      document.head.appendChild(script);
+    });
+  };
+
   let createWorker: TesseractModule["createWorker"];
   let recognizeDirect: TesseractModule["recognize"];
-  try {
-    const module = (await import("tesseract.js")) as TesseractModule;
-    createWorker = module.createWorker ?? module.default?.createWorker;
-    recognizeDirect = module.recognize ?? module.default?.recognize;
-  } catch {
+  const staticBindings = resolveTesseractBindings(Tesseract);
+  createWorker = staticBindings.createWorker;
+  recognizeDirect = staticBindings.recognizeDirect;
+
+  if (!createWorker && !recognizeDirect) {
+    const globalBindings = resolveTesseractBindings((window as unknown as { Tesseract?: unknown }).Tesseract);
+    createWorker = globalBindings.createWorker;
+    recognizeDirect = globalBindings.recognizeDirect;
+  }
+
+  if (!createWorker && !recognizeDirect) {
+    try {
+      await loadTesseractCdnBundle();
+      const cdnBindings = resolveTesseractBindings((window as unknown as { Tesseract?: unknown }).Tesseract);
+      createWorker = cdnBindings.createWorker;
+      recognizeDirect = cdnBindings.recognizeDirect;
+    } catch (error) {
+      console.warn("PDF OCR CDN fallback failed", error);
+    }
+  }
+
+  if (!createWorker && !recognizeDirect) {
     return {
       text: "",
       used: true,
@@ -751,10 +841,6 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
       initFailed: true,
       timedOut: false
     };
-  }
-
-  if (!createWorker) {
-    recognizeDirect = undefined;
   }
 
   let doc: unknown;
@@ -890,7 +976,7 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
 
     if (worker) {
       const recognized = await worker.recognize(canvas);
-      return cleanWhitespace(recognized.data?.text ?? "");
+      return normalizeOcrText(recognized.data?.text ?? "");
     }
 
     if (!recognizeDirect) {
@@ -899,6 +985,16 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
 
     for (const lang of languageAttempts) {
       try {
+        const recognized = await recognizeDirect(canvas, lang);
+        const defaultText = normalizeOcrText(recognized.data?.text ?? "");
+        if (defaultText) {
+          return defaultText;
+        }
+      } catch (error) {
+        console.warn(`PDF OCR direct recognize failed (default config) for langs=${lang}`, error);
+      }
+
+      try {
         const recognized = await recognizeDirect(canvas, lang, {
           workerPath: OCR_REMOTE_WORKER_PATH,
           corePath: OCR_REMOTE_CORE_PATH,
@@ -906,12 +1002,12 @@ const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer): Promise<OcrResult
           cacheMethod: "none",
           workerBlobURL: false
         });
-        const text = cleanWhitespace(recognized.data?.text ?? "");
-        if (text) {
-          return text;
+        const configuredText = normalizeOcrText(recognized.data?.text ?? "");
+        if (configuredText) {
+          return configuredText;
         }
       } catch (error) {
-        console.warn(`PDF OCR direct recognize failed for langs=${lang}`, error);
+        console.warn(`PDF OCR direct recognize failed (configured) for langs=${lang}`, error);
       }
     }
 
@@ -3170,8 +3266,10 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const costMode: AICostMode = options.costMode ?? "balanced";
     const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
     const forceAi = Boolean(options.forceAi);
-    const arrayBuffer = await file.arrayBuffer();
-    const fileHash = await hashArrayBuffer(arrayBuffer);
+    const originalArrayBuffer = await file.arrayBuffer();
+    const sourceBytes = new Uint8Array(originalArrayBuffer);
+    const cloneArrayBuffer = (): ArrayBuffer => sourceBytes.slice().buffer as ArrayBuffer;
+    const fileHash = await hashArrayBuffer(cloneArrayBuffer());
     const traceId = createId();
 
     const makeEmptyDraft = (model: string): ExtractionDraft => ({
@@ -3196,7 +3294,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     let textResult: PdfTextExtractionResult;
     let textExtractionFailed = false;
     try {
-      textResult = await extractPdfText(arrayBuffer);
+      textResult = await extractPdfText(cloneArrayBuffer());
     } catch (error) {
       textExtractionFailed = true;
       console.warn("[extractLabData] PDF text extraction failed; continuing with OCR-only fallback.", error);
@@ -3273,7 +3371,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         timedOut: false
       };
       ocrResult = await withTimeout(
-        extractPdfTextViaOcr(arrayBuffer),
+        extractPdfTextViaOcr(cloneArrayBuffer()),
         OCR_TOTAL_TIMEOUT_MS,
         "OCR total timeout"
       ).catch((error) => {
@@ -3335,6 +3433,8 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       }
     }
 
+    const aiRawPdfBuffer = cloneArrayBuffer();
+
     const combinedText = [textResult.text, ocrResult.text].filter(Boolean).join("\n").trim();
     const bestLocalDraft = ocrFallback && textFallback
       ? chooseBetterFallbackDraft(textFallback.draft, ocrFallback.draft)
@@ -3367,9 +3467,21 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     let aiRescueTriggered = false;
     let aiRescueReason = "";
 
+    const hardLowYieldScannedPdf =
+      textResult.textItemCount === 0 &&
+      ocrResult.used &&
+      parsingDraft.markers.length < 6 &&
+      parsingDraft.extraction.confidence < 0.75;
     const shouldAutoUseAi =
-      costMode === "max_accuracy" || (costMode === "balanced" && aiAutoImproveEnabled && !localQualityGood);
-    const shouldUseAi = forceAi || shouldAutoUseAi;
+      costMode === "max_accuracy" ||
+      (costMode === "balanced" && !localQualityGood && (aiAutoImproveEnabled || hardLowYieldScannedPdf));
+    const mustUseAiRescue =
+      !forceAi &&
+      costMode !== "ultra_low_cost" &&
+      textResult.textItemCount === 0 &&
+      ocrResult.used &&
+      ocrResult.initFailed;
+    const shouldUseAi = forceAi || shouldAutoUseAi || mustUseAiRescue;
 
     if (!shouldUseAi && !localQualityGood) {
       aiWarnings.push("PDF_AI_SKIPPED_COST_MODE");
@@ -3383,7 +3495,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       };
 
       aiAttemptedModes.push("text_only");
-      const textOnlyResult = await callGeminiExtraction(combinedText, file.name, arrayBuffer, {
+      const textOnlyResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
         mode: "text_only",
         fileHash,
         traceId
@@ -3391,6 +3503,10 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       let aiResult = textOnlyResult;
       registerAttempt(textOnlyResult);
       const textOnlyInsufficient = textOnlyResult.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT";
+      const aiTextOnlyPoorResult =
+        !textOnlyResult.draft ||
+        textOnlyResult.draft.markers.length < 6 ||
+        textOnlyResult.draft.extraction.confidence < 0.65;
 
       if (textOnlyResult.warningCode && textOnlyResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
         aiWarnings.push(textOnlyResult.warningCode);
@@ -3403,18 +3519,18 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         textItems: textResult.textItemCount,
         compactTextLength: compactAiText.length,
         ocrResult,
-        aiTextOnlySucceeded: Boolean(textOnlyResult.draft)
+        aiTextOnlySucceeded: !aiTextOnlyPoorResult
       });
 
       if (!textOnlyResult.draft) {
         if (rescueDecision.shouldRescue) {
           aiRescueTriggered = true;
           aiRescueReason = rescueDecision.reason;
-          if (arrayBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
+          if (aiRawPdfBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
             aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_SIZE");
           } else {
             aiAttemptedModes.push("pdf_rescue");
-            const rescueResult = await callGeminiExtraction(combinedText, file.name, arrayBuffer, {
+            const rescueResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
               mode: "pdf_rescue",
               fileHash,
               traceId
@@ -3454,7 +3570,9 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
             : bestLocalRoute;
         aiReason = forceAi
           ? "manual_improve"
-          : aiResult.aiReason ?? (parsingDraft.extraction.provider === "gemini" ? "auto_low_quality" : "local_high_quality");
+          : mustUseAiRescue
+            ? "auto_low_quality"
+            : aiResult.aiReason ?? (parsingDraft.extraction.provider === "gemini" ? "auto_low_quality" : "local_high_quality");
       } else if (aiResult.warningCode === "PDF_AI_SKIPPED_BUDGET") {
         aiReason = "disabled_by_budget";
       } else if (costMode === "ultra_low_cost" && !forceAi) {
