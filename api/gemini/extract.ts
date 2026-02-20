@@ -172,8 +172,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
-    let responseText = "";
     let selectedModel = "";
+    let extractedMarkers: GeminiMarker[] = [];
+    let extractedTestDate: string | undefined;
     let lastErrorStatus = 500;
     let lastErrorText = "";
     for (const model of GEMINI_MODELS) {
@@ -199,17 +200,50 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
       );
 
-      responseText = await response.text();
+      const responseText = await response.text();
       if (response.ok) {
+        let rawPayload: unknown = {};
+        try {
+          rawPayload = responseText ? (JSON.parse(responseText) as unknown) : {};
+        } catch {
+          rawPayload = {};
+        }
+
+        const candidateText =
+          (rawPayload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
+          "";
+
+        const jsonBlock = extractJsonBlock(candidateText);
+        if (!jsonBlock) {
+          lastErrorStatus = 502;
+          lastErrorText = "Gemini returned no JSON extraction payload";
+          continue;
+        }
+
+        let extraction: GeminiExtractionPayload;
+        try {
+          extraction = JSON.parse(jsonBlock) as GeminiExtractionPayload;
+        } catch {
+          lastErrorStatus = 502;
+          lastErrorText = "Gemini returned invalid JSON payload";
+          continue;
+        }
+
+        const markers = Array.isArray(extraction.markers) ? extraction.markers : [];
+        if (markers.length === 0) {
+          lastErrorStatus = 502;
+          lastErrorText = "Gemini returned an empty marker list";
+          continue;
+        }
+
         selectedModel = model;
+        extractedMarkers = markers;
+        extractedTestDate = extraction.testDate;
         break;
       }
 
       lastErrorStatus = response.status;
       lastErrorText = responseText.slice(0, 800);
-      if (response.status !== 404) {
-        break;
-      }
     }
 
     if (!selectedModel) {
@@ -219,35 +253,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    let rawPayload: unknown = {};
-    try {
-      rawPayload = responseText ? (JSON.parse(responseText) as unknown) : {};
-    } catch {
-      rawPayload = {};
-    }
-
-    const candidateText =
-      (rawPayload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
-      "";
-
-    const jsonBlock = extractJsonBlock(candidateText);
-    if (!jsonBlock) {
-      sendJson(res, 502, { error: { message: "Gemini returned no JSON extraction payload" } });
-      return;
-    }
-
-    let extraction: GeminiExtractionPayload;
-    try {
-      extraction = JSON.parse(jsonBlock) as GeminiExtractionPayload;
-    } catch {
-      sendJson(res, 502, { error: { message: "Gemini returned invalid JSON payload" } });
-      return;
-    }
-
     sendJson(res, 200, {
       model: selectedModel,
-      testDate: extraction.testDate,
-      markers: Array.isArray(extraction.markers) ? extraction.markers : []
+      testDate: extractedTestDate,
+      markers: extractedMarkers
     });
   } catch (error) {
     sendJson(res, 500, {
