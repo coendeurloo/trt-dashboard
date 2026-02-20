@@ -11,7 +11,8 @@ import {
   ExtractionDraft,
   ExtractionRoute,
   ExtractionWarningCode,
-  MarkerValue
+  MarkerValue,
+  ParserDebugMode
 } from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
@@ -53,6 +54,7 @@ interface ExtractLabDataOptions {
   costMode?: AICostMode;
   aiAutoImproveEnabled?: boolean;
   forceAi?: boolean;
+  parserDebugMode?: ParserDebugMode;
 }
 
 interface GeminiRequestOptions {
@@ -3265,7 +3267,10 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
   try {
     const costMode: AICostMode = options.costMode ?? "balanced";
     const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
-    const forceAi = Boolean(options.forceAi);
+    const parserDebugMode: ParserDebugMode = options.parserDebugMode ?? "text_ocr_ai";
+    const allowOcr = parserDebugMode !== "text_only";
+    const allowAi = parserDebugMode === "text_ocr_ai";
+    const forceAi = Boolean(options.forceAi) && allowAi;
     const originalArrayBuffer = await file.arrayBuffer();
     const sourceBytes = new Uint8Array(originalArrayBuffer);
     const cloneArrayBuffer = (): ArrayBuffer => sourceBytes.slice().buffer as ArrayBuffer;
@@ -3356,7 +3361,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
 
     const emptyDraft = makeEmptyDraft("fallback-empty");
     const baseDraft = textFallback?.draft ?? emptyDraft;
-    const needsOcr = textExtractionFailed || shouldUseOcrFallback(textResult, baseDraft);
+    const needsOcr = allowOcr && (textExtractionFailed || shouldUseOcrFallback(textResult, baseDraft));
     const canRunOcr = needsOcr && isBrowserRuntime();
 
     if (canRunOcr) {
@@ -3477,13 +3482,16 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       (costMode === "balanced" && !localQualityGood && (aiAutoImproveEnabled || hardLowYieldScannedPdf));
     const mustUseAiRescue =
       !forceAi &&
+      allowAi &&
       costMode !== "ultra_low_cost" &&
       textResult.textItemCount === 0 &&
       ocrResult.used &&
       ocrResult.initFailed;
-    const shouldUseAi = forceAi || shouldAutoUseAi || mustUseAiRescue;
+    const shouldUseAi = allowAi && (forceAi || shouldAutoUseAi || mustUseAiRescue);
 
-    if (!shouldUseAi && !localQualityGood) {
+    if (!allowAi && !localQualityGood) {
+      aiWarnings.push("PDF_AI_DISABLED_BY_PARSER_MODE");
+    } else if (!shouldUseAi && !localQualityGood) {
       aiWarnings.push("PDF_AI_SKIPPED_COST_MODE");
     }
 

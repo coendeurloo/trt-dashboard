@@ -5,7 +5,7 @@ import { FEEDBACK_EMAIL } from "../constants";
 import { trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
-import { AppLanguage, ExtractionDraft, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
+import { AppLanguage, ExtractionDraft, MarkerValue, ParserDebugMode, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 import {
   canonicalizeSupplement,
   SUPPLEMENT_FREQUENCY_OPTIONS,
@@ -22,6 +22,7 @@ export interface ExtractionReviewTableProps {
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
   selectedProtocolId: string | null;
+  parserDebugMode?: ParserDebugMode;
   language: AppLanguage;
   showSamplingTiming: boolean;
   onDraftChange: (draft: ExtractionDraft) => void;
@@ -41,6 +42,7 @@ const ExtractionReviewTable = ({
   protocols,
   supplementTimeline,
   selectedProtocolId,
+  parserDebugMode = "text_ocr_ai",
   language,
   showSamplingTiming,
   onDraftChange,
@@ -68,6 +70,15 @@ const ExtractionReviewTable = ({
   const [showWarningDetails, setShowWarningDetails] = useState(false);
 
   const warningCodes = Array.from(new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])]));
+  const parserModeLabel = (() => {
+    if (parserDebugMode === "text_only") {
+      return tr("tekst-only", "text-only");
+    }
+    if (parserDebugMode === "text_ocr") {
+      return tr("tekst + OCR", "text + OCR");
+    }
+    return tr("tekst + OCR + AI", "text + OCR + AI");
+  })();
   const debugInfo = draft.extraction.debug;
   const warningMessages = warningCodes
     .map((code) => {
@@ -141,6 +152,12 @@ const ExtractionReviewTable = ({
         return tr(
           "AI-verbetering is overgeslagen door rate limits. Probeer later opnieuw.",
           "AI refinement was skipped due to rate limits. Try again later."
+        );
+      }
+      if (code === "PDF_AI_DISABLED_BY_PARSER_MODE") {
+        return tr(
+          "AI-verbetering is uitgeschakeld door de gekozen parser-debugmodus.",
+          "AI refinement is disabled by the selected parser debug mode."
         );
       }
       return null;
@@ -360,18 +377,9 @@ const ExtractionReviewTable = ({
           <p className="text-sm text-slate-300">
             {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
             <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
-            {draft.extraction.debug?.extractionRoute ? (
-              <span
-                className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
-                  draft.extraction.debug.extractionRoute.startsWith("local")
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                }`}
-              >
-                {draft.extraction.debug.extractionRoute.startsWith("local") ? "🔒 " : "☁️ "}
-                {draft.extraction.debug.extractionRoute}
-              </span>
-            ) : null}
+            <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
+              {tr("parsermodus", "parser mode")}: {parserModeLabel}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2">

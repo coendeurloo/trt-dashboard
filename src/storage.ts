@@ -468,11 +468,16 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.aiCostMode === "balanced" || rest.aiCostMode === "ultra_low_cost" || rest.aiCostMode === "max_accuracy"
       ? rest.aiCostMode
       : DEFAULT_SETTINGS.aiCostMode;
+  const parserDebugMode =
+    rest.parserDebugMode === "text_only" || rest.parserDebugMode === "text_ocr" || rest.parserDebugMode === "text_ocr_ai"
+      ? rest.parserDebugMode
+      : DEFAULT_SETTINGS.parserDebugMode;
   return {
     ...DEFAULT_SETTINGS,
     ...rest,
     aiCostMode,
-    aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled
+    aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
+    parserDebugMode
   };
 };
 

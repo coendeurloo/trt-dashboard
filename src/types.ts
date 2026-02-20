@@ -2,6 +2,7 @@ export type ThemeMode = "light" | "dark";
 export type UnitSystem = "eu" | "us";
 export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type AICostMode = "balanced" | "ultra_low_cost" | "max_accuracy";
+export type ParserDebugMode = "text_only" | "text_ocr" | "text_ocr_ai";
 export type TabKey =
   | "dashboard"
   | "protocol"
@@ -145,7 +146,8 @@ export type ExtractionWarningCode =
   | "PDF_AI_PDF_RESCUE_FAILED"
   | "PDF_AI_SKIPPED_COST_MODE"
   | "PDF_AI_SKIPPED_BUDGET"
-  | "PDF_AI_SKIPPED_RATE_LIMIT";
+  | "PDF_AI_SKIPPED_RATE_LIMIT"
+  | "PDF_AI_DISABLED_BY_PARSER_MODE";
 
 export type ExtractionAIReason =
   | "auto_low_quality"
@@ -200,6 +202,7 @@ export interface AppSettings {
   customRangeEnd: string;
   aiCostMode: AICostMode;
   aiAutoImproveEnabled: boolean;
+  parserDebugMode: ParserDebugMode;
 }
 
 export interface StoredAppData {

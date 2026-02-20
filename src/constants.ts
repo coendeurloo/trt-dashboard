@@ -46,7 +46,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customRangeStart: "",
   customRangeEnd: "",
   aiCostMode: "balanced",
-  aiAutoImproveEnabled: false
+  aiAutoImproveEnabled: false,
+  parserDebugMode: "text_ocr_ai"
 };
 
 const RAW_ALIASES: Record<string, string[]> = {

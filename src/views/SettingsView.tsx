@@ -103,6 +103,7 @@ const SettingsView = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const showParserDebugControls = true;
 
   useEffect(() => {
     if (editableMarkers.length === 0) {
@@ -297,80 +298,85 @@ const SettingsView = ({
             </select>
           </label>
 
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("AI kostenmodus", "AI cost mode")}</span>
-            <select
-              className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
-              value={settings.aiCostMode}
-              onChange={(event) => onUpdateSettings({ aiCostMode: event.target.value as AppSettings["aiCostMode"] })}
-            >
-              <option value="balanced">{tr("Gebalanceerd", "Balanced")}</option>
-              <option value="ultra_low_cost">{tr("Ultra lage kosten", "Ultra low cost")}</option>
-              <option value="max_accuracy">{tr("Maximale nauwkeurigheid", "Max extraction accuracy")}</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              {tr(
-                "Gebalanceerd: alleen AI bij lage kwaliteit. Ultra laag: alleen handmatig verbeteren. Max nauwkeurigheid: AI agressiever inzetten.",
-                "Balanced: AI only on low quality. Ultra low: AI only when manually requested. Max accuracy: use AI more aggressively."
-              )}
-            </p>
-          </label>
+          {showParserDebugControls ? (
+            <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3 text-sm md:col-span-2">
+              <span className="block text-xs uppercase tracking-wide text-cyan-300">
+                {tr("Parser debug (intern)", "Parser debug (internal)")}
+              </span>
 
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}</span>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="text-sm text-slate-300">
+              <label className="mt-2 block rounded-md border border-slate-700 bg-slate-900/50 p-3 text-sm">
+                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("PDF parsermodus", "PDF parser mode")}</span>
+                <select
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+                  value={settings.parserDebugMode}
+                  onChange={(event) => onUpdateSettings({ parserDebugMode: event.target.value as AppSettings["parserDebugMode"] })}
+                >
+                  <option value="text_only">{tr("Alleen tekstlaag", "Text layer only")}</option>
+                  <option value="text_ocr">{tr("Tekstlaag + OCR", "Text layer + OCR")}</option>
+                  <option value="text_ocr_ai">{tr("Tekstlaag + OCR + AI", "Text layer + OCR + AI")}</option>
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  {tr(
+                    "Debug-only keuze voor parserpad. Niet bedoeld voor eindgebruikers.",
+                    "Debug-only parser pipeline selector. Not meant for end users."
+                  )}
+                </p>
+              </label>
+
+              <label className="mt-2 block rounded-md border border-slate-700 bg-slate-900/50 p-3 text-sm">
+                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("AI kostenmodus", "AI cost mode")}</span>
+                <select
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+                  value={settings.aiCostMode}
+                  onChange={(event) => onUpdateSettings({ aiCostMode: event.target.value as AppSettings["aiCostMode"] })}
+                >
+                  <option value="balanced">{tr("Gebalanceerd", "Balanced")}</option>
+                  <option value="ultra_low_cost">{tr("Ultra lage kosten", "Ultra low cost")}</option>
+                  <option value="max_accuracy">{tr("Maximale nauwkeurigheid", "Max extraction accuracy")}</option>
+                </select>
+              </label>
+
+              <div className="mt-2 rounded-md border border-slate-700 bg-slate-900/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-slate-300">{tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}</p>
+                  <button
+                    type="button"
+                    className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                      settings.aiAutoImproveEnabled ? "border-cyan-500/60 bg-cyan-500/25" : "border-slate-600 bg-slate-700"
+                    }`}
+                    onClick={() => onUpdateSettings({ aiAutoImproveEnabled: !settings.aiAutoImproveEnabled })}
+                    aria-label={tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}
+                    aria-pressed={settings.aiAutoImproveEnabled}
+                  >
+                    <span
+                      className={`h-4 w-4 rounded-full transition ${
+                        settings.aiAutoImproveEnabled ? "translate-x-5 bg-cyan-300" : "translate-x-1 bg-slate-300"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-2 text-xs text-slate-400">
                 {tr(
-                  "Alleen relevant in gebalanceerde modus wanneer de lokale parser lage kwaliteit detecteert.",
-                  "Only used in balanced mode when local extraction quality is low."
+                  `AI Analysis gebruikt maximaal ${AI_ANALYSIS_MARKER_CAP} markers per rapport in promptcontext (alleen voor AI Analysis, niet voor parser-output).`,
+                  `AI Analysis uses a maximum of ${AI_ANALYSIS_MARKER_CAP} markers per report in prompt context (AI Analysis only, not parser output).`
                 )}
               </p>
-              <button
-                type="button"
-                className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
-                  settings.aiAutoImproveEnabled ? "border-cyan-500/60 bg-cyan-500/25" : "border-slate-600 bg-slate-700"
-                }`}
-                onClick={() => onUpdateSettings({ aiAutoImproveEnabled: !settings.aiAutoImproveEnabled })}
-                aria-label={tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}
-                aria-pressed={settings.aiAutoImproveEnabled}
-              >
-                <span
-                  className={`h-4 w-4 rounded-full transition ${
-                    settings.aiAutoImproveEnabled ? "translate-x-5 bg-cyan-300" : "translate-x-1 bg-slate-300"
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {tr(
-                `AI Analysis gebruikt maximaal ${AI_ANALYSIS_MARKER_CAP} markers per rapport in de promptcontext (configureerbaar via env).`,
-                `AI Analysis uses a maximum of ${AI_ANALYSIS_MARKER_CAP} markers per report in prompt context (configurable via env).`
-              )}
-            </p>
-          </label>
 
-          <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-cyan-300">
-              {tr("AI parser kostenoverzicht (intern)", "AI parser cost overview (internal)")}
-            </span>
-            <div className="mt-2 grid gap-2 text-sm text-slate-200 sm:grid-cols-2 lg:grid-cols-3">
-              <p>{tr("Uploads", "Uploads")}: {aiCostMetrics.totalUploads}</p>
-              <p>{tr("AI calls", "AI calls")}: {aiCostMetrics.aiCalls}</p>
-              <p>{tr("AI call-rate", "AI call rate")}: {(aiCostMetrics.aiCallRate * 100).toFixed(1)}%</p>
-              <p>{tr("Lokale succesrate", "Local success rate")}: {(aiCostMetrics.localSuccessRate * 100).toFixed(1)}%</p>
-              <p>{tr("Gem. input tokens/call", "Avg input tokens/call")}: {aiCostMetrics.avgInputTokens}</p>
-              <p>{tr("Gem. output tokens/call", "Avg output tokens/call")}: {aiCostMetrics.avgOutputTokens}</p>
+              <div className="mt-2 grid gap-2 text-sm text-slate-200 sm:grid-cols-2 lg:grid-cols-3">
+                <p>{tr("Uploads", "Uploads")}: {aiCostMetrics.totalUploads}</p>
+                <p>{tr("AI calls", "AI calls")}: {aiCostMetrics.aiCalls}</p>
+                <p>{tr("AI call-rate", "AI call rate")}: {(aiCostMetrics.aiCallRate * 100).toFixed(1)}%</p>
+                <p>{tr("Lokale succesrate", "Local success rate")}: {(aiCostMetrics.localSuccessRate * 100).toFixed(1)}%</p>
+                <p>{tr("Gem. input tokens/call", "Avg input tokens/call")}: {aiCostMetrics.avgInputTokens}</p>
+                <p>{tr("Gem. output tokens/call", "Avg output tokens/call")}: {aiCostMetrics.avgOutputTokens}</p>
+              </div>
+              <p className="mt-1 text-sm font-medium text-cyan-200">
+                {tr("Geschatte kosten per 100 uploads", "Estimated cost per 100 uploads")}: €{aiCostMetrics.estimatedCostPer100Uploads.toFixed(2)}
+              </p>
             </div>
-            <p className="mt-2 text-sm font-medium text-cyan-200">
-              {tr("Geschatte kosten per 100 uploads", "Estimated cost per 100 uploads")}: €{aiCostMetrics.estimatedCostPer100Uploads.toFixed(2)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              {tr(
-                "Schatting op basis van gelogde tokens in opgeslagen rapporten (input €0,08/1M, output €0,30/1M).",
-                "Estimate based on token usage logged in saved reports (input €0.08/1M, output €0.30/1M)."
-              )}
-            </p>
-          </div>
+          ) : null}
         </div>
       </div>
 

@@ -466,7 +466,8 @@ const App = () => {
     try {
       const extracted = await extractLabData(file, {
         costMode: appData.settings.aiCostMode,
-        aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled
+        aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled,
+        parserDebugMode: appData.settings.parserDebugMode
       });
       const warningCount = new Set([
         ...(extracted.extraction.warnings ?? []),
@@ -501,7 +502,8 @@ const App = () => {
       const improved = await extractLabData(lastUploadedFile, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: true,
-        forceAi: true
+        forceAi: true,
+        parserDebugMode: appData.settings.parserDebugMode
       });
       const warningCount = new Set([
         ...(improved.extraction.warnings ?? []),
@@ -997,6 +999,7 @@ const App = () => {
                 protocols={appData.protocols}
                 supplementTimeline={appData.supplementTimeline}
                 selectedProtocolId={selectedProtocolId}
+                parserDebugMode={appData.settings.parserDebugMode}
                 language={appData.settings.language}
                 showSamplingTiming={samplingControlsEnabled}
                 onDraftChange={setDraft}
@@ -1005,7 +1008,7 @@ const App = () => {
                 onProtocolCreate={addProtocol}
                 onAddSupplementPeriod={addSupplementPeriod}
                 isImprovingWithAi={isImprovingExtraction}
-                onImproveWithAi={lastUploadedFile ? improveDraftWithAi : undefined}
+                onImproveWithAi={lastUploadedFile && appData.settings.parserDebugMode === "text_ocr_ai" ? improveDraftWithAi : undefined}
                 onSave={saveDraftAsReport}
                 onCancel={() => {
                   setUploadSummary(null);

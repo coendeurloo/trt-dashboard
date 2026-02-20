@@ -88,11 +88,11 @@ const ANALYSIS_MODEL_CANDIDATES = [
 
 const MAX_FULL_REPORTS = 2;
 const parseMarkerCap = (): number => {
-  const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 30);
+  const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 80);
   if (!Number.isFinite(raw)) {
-    return 30;
+    return 80;
   }
-  return Math.min(150, Math.max(20, Math.round(raw)));
+  return Math.min(200, Math.max(30, Math.round(raw)));
 };
 const MAX_MARKERS_PER_REPORT = parseMarkerCap();
 export const AI_ANALYSIS_MARKER_CAP = MAX_MARKERS_PER_REPORT;
@@ -212,6 +212,23 @@ const markerDeviationFromRange = (marker: AnalysisMarkerRow): number => {
 };
 
 const SIGNAL_MARKER_SET = new Set<string>(SIGNAL_MARKERS);
+const MUST_INCLUDE_MARKERS = new Set<string>([
+  "Testosterone",
+  "Free Testosterone",
+  "Estradiol",
+  "Hematocrit",
+  "SHBG",
+  "Apolipoprotein B",
+  "LDL Cholesterol",
+  "HDL Cholesterol",
+  "Triglyceriden",
+  "Cholesterol",
+  "TSH",
+  "Free T4",
+  "DHEA Sulfate",
+  "Prolactin",
+  "PSA"
+]);
 
 const markerPromptPriorityScore = (marker: AnalysisMarkerRow): number => {
   let score = SIGNAL_MARKER_SET.has(marker.m) ? 100 : 0;
@@ -230,16 +247,41 @@ const markerPromptPriorityScore = (marker: AnalysisMarkerRow): number => {
   return score;
 };
 
-const selectPromptMarkers = (markers: AnalysisMarkerRow[]): AnalysisMarkerRow[] =>
-  [...markers]
-    .sort((left, right) => {
-      const scoreDelta = markerPromptPriorityScore(right) - markerPromptPriorityScore(left);
-      if (scoreDelta !== 0) {
-        return scoreDelta;
-      }
-      return left.m.localeCompare(right.m);
-    })
-    .slice(0, MAX_MARKERS_PER_REPORT);
+const selectPromptMarkers = (markers: AnalysisMarkerRow[]): AnalysisMarkerRow[] => {
+  if (markers.length <= MAX_MARKERS_PER_REPORT) {
+    return markers;
+  }
+
+  const sorted = [...markers].sort((left, right) => {
+    const scoreDelta = markerPromptPriorityScore(right) - markerPromptPriorityScore(left);
+    if (scoreDelta !== 0) {
+      return scoreDelta;
+    }
+    return left.m.localeCompare(right.m);
+  });
+
+  const includedKeys = new Set<string>();
+  const mustIncludeRows: AnalysisMarkerRow[] = [];
+  const optionalRows: AnalysisMarkerRow[] = [];
+
+  for (const marker of sorted) {
+    const key = normalizeText(marker.m);
+    if (includedKeys.has(key)) {
+      continue;
+    }
+    includedKeys.add(key);
+    if (MUST_INCLUDE_MARKERS.has(marker.m)) {
+      mustIncludeRows.push(marker);
+    } else {
+      optionalRows.push(marker);
+    }
+  }
+
+  if (mustIncludeRows.length >= MAX_MARKERS_PER_REPORT) {
+    return mustIncludeRows.slice(0, MAX_MARKERS_PER_REPORT);
+  }
+  return [...mustIncludeRows, ...optionalRows].slice(0, MAX_MARKERS_PER_REPORT);
+};
 
 const buildPayload = (
   reports: LabReport[],
