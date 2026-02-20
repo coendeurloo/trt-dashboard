@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { __pdfParsingInternals } from "../pdfParsing";
+import { ExtractionDraft } from "../types";
 
 const genericProfile = __pdfParsingInternals.detectParserProfile("", "random-report.pdf");
 
@@ -626,5 +627,161 @@ describe("pdfParsing fallback layers", () => {
     );
 
     expect(warningMeta.warnings).toContain("PDF_OCR_PARTIAL");
+  });
+
+  it("enables smart auto-rescue when local quality is low and text context is weak", () => {
+    const decision = __pdfParsingInternals.shouldAutoPdfRescue({
+      costMode: "balanced",
+      forceAi: false,
+      localMetrics: {
+        markerCount: 2,
+        unitCoverage: 0.5,
+        importantCoverage: 0,
+        confidence: 0.4
+      },
+      textItems: 0,
+      compactTextLength: 80,
+      ocrResult: {
+        text: "",
+        used: true,
+        pagesAttempted: 3,
+        pagesSucceeded: 0,
+        pagesFailed: 3,
+        initFailed: true,
+        timedOut: false
+      },
+      aiTextOnlySucceeded: false
+    });
+
+    expect(decision.shouldRescue).toBe(true);
+    expect(decision.reason).toBe("low_quality_and_weak_text_context");
+  });
+
+  it("skips smart auto-rescue in ultra low cost mode", () => {
+    const decision = __pdfParsingInternals.shouldAutoPdfRescue({
+      costMode: "ultra_low_cost",
+      forceAi: false,
+      localMetrics: {
+        markerCount: 1,
+        unitCoverage: 0.2,
+        importantCoverage: 0,
+        confidence: 0.25
+      },
+      textItems: 0,
+      compactTextLength: 20,
+      ocrResult: {
+        text: "",
+        used: true,
+        pagesAttempted: 2,
+        pagesSucceeded: 0,
+        pagesFailed: 2,
+        initFailed: false,
+        timedOut: true
+      },
+      aiTextOnlySucceeded: false
+    });
+
+    expect(decision.shouldRescue).toBe(false);
+    expect(decision.reason).toBe("cost_mode_ultra_low");
+  });
+
+  it("includes AI text-only insufficient warning code when passed by parser", () => {
+    const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
+      {
+        text: "marker row",
+        pageCount: 1,
+        textItemCount: 40,
+        lineCount: 20,
+        nonWhitespaceChars: 300,
+        spatialRows: []
+      },
+      false,
+      {
+        text: "",
+        used: false,
+        pagesAttempted: 0,
+        pagesSucceeded: 0,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      },
+      {
+        sourceFileName: "ai-warning.pdf",
+        testDate: "2025-01-01",
+        markers: [],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.1,
+          needsReview: true
+        }
+      },
+      ["PDF_AI_TEXT_ONLY_INSUFFICIENT"]
+    );
+
+    expect(warningMeta.warnings).toContain("PDF_AI_TEXT_ONLY_INSUFFICIENT");
+  });
+});
+
+describe("isLocalDraftGoodEnough", () => {
+  const { isLocalDraftGoodEnough } = __pdfParsingInternals;
+
+  const makeDraft = (markers: number, confidence: number, importantMarkers: string[] = []): ExtractionDraft => ({
+    sourceFileName: "test.pdf",
+    testDate: "2025-01-01",
+    markers: [
+      ...importantMarkers.map((name, index) => ({
+        id: `imp-${index}`,
+        marker: name,
+        canonicalMarker: name,
+        value: 10,
+        unit: "nmol/L",
+        referenceMin: 5,
+        referenceMax: 30,
+        abnormal: "normal" as const,
+        confidence
+      })),
+      ...Array.from({ length: Math.max(0, markers - importantMarkers.length) }, (_, index) => ({
+        id: `reg-${index}`,
+        marker: `Marker ${index}`,
+        canonicalMarker: `Marker ${index}`,
+        value: 10,
+        unit: "mmol/L",
+        referenceMin: 3,
+        referenceMax: 20,
+        abnormal: "normal" as const,
+        confidence
+      }))
+    ],
+    extraction: {
+      provider: "fallback",
+      model: "test",
+      confidence,
+      needsReview: false
+    }
+  });
+
+  it("accepts 8+ markers with 0.65+ confidence", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(10, 0.75))).toBe(true);
+  });
+
+  it("accepts 6 markers with 0.72+ confidence and 2 important markers", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(6, 0.75, ["Testosterone", "Hematocrit"]))).toBe(true);
+  });
+
+  it("accepts 4 markers with 0.80+ confidence and 2 important markers", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(4, 0.85, ["Testosterone", "Estradiol"]))).toBe(true);
+  });
+
+  it("rejects 3 markers even with high confidence", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(3, 0.95, ["Testosterone", "Estradiol"]))).toBe(false);
+  });
+
+  it("rejects 6 markers with low confidence", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(6, 0.5))).toBe(false);
+  });
+
+  it("rejects empty draft", () => {
+    expect(isLocalDraftGoodEnough(makeDraft(0, 0))).toBe(false);
   });
 });

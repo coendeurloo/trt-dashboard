@@ -34,7 +34,7 @@ import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import { exportElementToPdf } from "./pdfExport";
 import { extractLabData } from "./pdfParsing";
-import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound } from "./protocolUtils";
+import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
@@ -159,6 +159,7 @@ const App = () => {
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isImprovingExtraction, setIsImprovingExtraction] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSummary, setUploadSummary] = useState<{
     fileName: string;
@@ -167,6 +168,7 @@ const App = () => {
     warnings: number;
   } | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
+  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
@@ -236,7 +238,7 @@ const App = () => {
     analysisCopied,
     analysisKind,
     analyzingKind,
-    betaRemaining,
+    betaUsage,
     betaLimits,
     runAiAnalysis,
     copyAnalysis
@@ -362,6 +364,8 @@ const App = () => {
     setUploadError("");
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
+    setLastUploadedFile(null);
+    setIsImprovingExtraction(false);
     setDraft({
       sourceFileName: "Manual entry",
       testDate: new Date().toISOString().slice(0, 10),
@@ -457,14 +461,19 @@ const App = () => {
     setIsProcessing(true);
     setUploadError("");
     setUploadSummary(null);
+    setIsImprovingExtraction(false);
 
     try {
-      const extracted = await extractLabData(file);
+      const extracted = await extractLabData(file, {
+        costMode: appData.settings.aiCostMode,
+        aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled
+      });
       const warningCount = new Set([
         ...(extracted.extraction.warnings ?? []),
         ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
       ]).size;
       setDraft(extracted);
+      setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
@@ -478,6 +487,42 @@ const App = () => {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const improveDraftWithAi = async () => {
+    if (!lastUploadedFile) {
+      setUploadError(tr("Upload dit PDF-bestand opnieuw om AI-verbetering uit te voeren.", "Re-upload this PDF to run AI refinement."));
+      return;
+    }
+    setIsImprovingExtraction(true);
+    setUploadError("");
+    try {
+      const improved = await extractLabData(lastUploadedFile, {
+        costMode: appData.settings.aiCostMode,
+        aiAutoImproveEnabled: true,
+        forceAi: true
+      });
+      const warningCount = new Set([
+        ...(improved.extraction.warnings ?? []),
+        ...(improved.extraction.warningCode ? [improved.extraction.warningCode] : [])
+      ]).size;
+      setDraft((currentDraft) => {
+        if (!currentDraft) {
+          return improved;
+        }
+        return improved.markers.length >= currentDraft.markers.length ? improved : currentDraft;
+      });
+      setUploadSummary({
+        fileName: improved.sourceFileName,
+        markerCount: improved.markers.length,
+        confidence: improved.extraction.confidence,
+        warnings: warningCount
+      });
+    } catch (error) {
+      setUploadError(mapServiceErrorToMessage(error, "pdf"));
+    } finally {
+      setIsImprovingExtraction(false);
     }
   };
 
@@ -546,9 +591,11 @@ const App = () => {
 
     setUploadSummary(null);
     setDraft(null);
+    setLastUploadedFile(null);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
     setUploadError("");
+    setIsImprovingExtraction(false);
   };
 
   const exportCsv = (selectedMarkers: string[]) => {
@@ -643,6 +690,28 @@ const App = () => {
     () => getPrimaryProtocolCompound(activeProtocol),
     [activeProtocol]
   );
+  const activeAnalysisProtocolLabel = useMemo(() => {
+    if (visibleReports.length === 0) {
+      return tr("Geen protocol", "No protocol");
+    }
+    const latestReport = [...visibleReports].sort((left, right) => {
+      const byDate = right.testDate.localeCompare(left.testDate);
+      if (byDate !== 0) {
+        return byDate;
+      }
+      return right.createdAt.localeCompare(left.createdAt);
+    })[0];
+    if (!latestReport) {
+      return tr("Geen protocol", "No protocol");
+    }
+    const linked = getReportProtocol(latestReport, appData.protocols);
+    const linkedLabel = getProtocolDisplayLabel(linked).trim();
+    if (linkedLabel) {
+      return linkedLabel;
+    }
+    const annotationLabel = latestReport.annotations.protocol.trim();
+    return annotationLabel || tr("Geen protocol", "No protocol");
+  }, [appData.protocols, visibleReports, tr]);
 
   const generateShareLink = async () => {
     if (typeof window === "undefined") {
@@ -925,21 +994,25 @@ const App = () => {
                 key="draft"
                 draft={draft}
                 annotations={draftAnnotations}
-              protocols={appData.protocols}
-              supplementTimeline={appData.supplementTimeline}
-              selectedProtocolId={selectedProtocolId}
+                protocols={appData.protocols}
+                supplementTimeline={appData.supplementTimeline}
+                selectedProtocolId={selectedProtocolId}
                 language={appData.settings.language}
                 showSamplingTiming={samplingControlsEnabled}
                 onDraftChange={setDraft}
                 onAnnotationsChange={setDraftAnnotations}
-              onSelectedProtocolIdChange={setSelectedProtocolId}
-              onProtocolCreate={addProtocol}
-              onAddSupplementPeriod={addSupplementPeriod}
-              onSave={saveDraftAsReport}
+                onSelectedProtocolIdChange={setSelectedProtocolId}
+                onProtocolCreate={addProtocol}
+                onAddSupplementPeriod={addSupplementPeriod}
+                isImprovingWithAi={isImprovingExtraction}
+                onImproveWithAi={lastUploadedFile ? improveDraftWithAi : undefined}
+                onSave={saveDraftAsReport}
                 onCancel={() => {
                   setUploadSummary(null);
                   setDraft(null);
+                  setLastUploadedFile(null);
                   setSelectedProtocolId(null);
+                  setIsImprovingExtraction(false);
                 }}
               />
             ) : null}
@@ -1128,10 +1201,10 @@ const App = () => {
               analysisCopied={analysisCopied}
               analysisKind={analysisKind}
               analyzingKind={analyzingKind}
-              visibleReports={visibleReports}
-              samplingControlsEnabled={samplingControlsEnabled}
-              allMarkersCount={allMarkers.length}
-              betaRemaining={betaRemaining}
+              reportsInScope={visibleReports.length}
+              markersTracked={allMarkers.length}
+              activeProtocolLabel={activeAnalysisProtocolLabel}
+              betaUsage={betaUsage}
               betaLimits={betaLimits}
               settings={appData.settings}
               language={appData.settings.language}
@@ -1144,6 +1217,7 @@ const App = () => {
             <SettingsView
               settings={appData.settings}
               language={appData.settings.language}
+              reports={reports}
               samplingControlsEnabled={samplingControlsEnabled}
               allMarkers={allMarkers}
               editableMarkers={editableMarkers}

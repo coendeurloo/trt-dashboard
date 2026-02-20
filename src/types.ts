@@ -1,6 +1,7 @@
 export type ThemeMode = "light" | "dark";
 export type UnitSystem = "eu" | "us";
 export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
+export type AICostMode = "balanced" | "ultra_low_cost" | "max_accuracy";
 export type TabKey =
   | "dashboard"
   | "protocol"
@@ -126,6 +127,9 @@ export interface LabReport {
     warningCode?: ExtractionWarningCode;
     warnings?: string[];
     debug?: ExtractionDebugInfo;
+    costMode?: AICostMode;
+    aiUsed?: boolean;
+    aiReason?: ExtractionAIReason;
   };
 }
 
@@ -134,7 +138,30 @@ export type ExtractionWarningCode =
   | "PDF_TEXT_EXTRACTION_FAILED"
   | "PDF_OCR_INIT_FAILED"
   | "PDF_OCR_PARTIAL"
-  | "PDF_LOW_CONFIDENCE_LOCAL";
+  | "PDF_LOW_CONFIDENCE_LOCAL"
+  | "PDF_AI_TEXT_ONLY_INSUFFICIENT"
+  | "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE"
+  | "PDF_AI_PDF_RESCUE_SKIPPED_SIZE"
+  | "PDF_AI_PDF_RESCUE_FAILED"
+  | "PDF_AI_SKIPPED_COST_MODE"
+  | "PDF_AI_SKIPPED_BUDGET"
+  | "PDF_AI_SKIPPED_RATE_LIMIT";
+
+export type ExtractionAIReason =
+  | "auto_low_quality"
+  | "manual_improve"
+  | "disabled_by_budget"
+  | "cache_hit"
+  | "local_high_quality"
+  | "disabled_by_cost_mode";
+
+export type ExtractionRoute =
+  | "local-text"
+  | "local-ocr"
+  | "gemini-with-text"
+  | "gemini-with-ocr"
+  | "gemini-vision-only"
+  | "empty";
 
 export interface ExtractionDebugInfo {
   textItems: number;
@@ -143,6 +170,13 @@ export interface ExtractionDebugInfo {
   keptRows: number;
   rejectedRows: number;
   topRejectReasons: Record<string, number>;
+  aiInputTokens?: number;
+  aiOutputTokens?: number;
+  aiCacheHit?: boolean;
+  aiAttemptedModes?: string[];
+  aiRescueTriggered?: boolean;
+  aiRescueReason?: string;
+  extractionRoute?: ExtractionRoute;
 }
 
 export interface AppSettings {
@@ -164,6 +198,8 @@ export interface AppSettings {
   timeRange: TimeRangeKey;
   customRangeStart: string;
   customRangeEnd: string;
+  aiCostMode: AICostMode;
+  aiAutoImproveEnabled: boolean;
 }
 
 export interface StoredAppData {
@@ -187,5 +223,8 @@ export interface ExtractionDraft {
     warningCode?: ExtractionWarningCode;
     warnings?: string[];
     debug?: ExtractionDebugInfo;
+    costMode?: AICostMode;
+    aiUsed?: boolean;
+    aiReason?: ExtractionAIReason;
   };
 }

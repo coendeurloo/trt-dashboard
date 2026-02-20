@@ -29,6 +29,8 @@ export interface ExtractionReviewTableProps {
   onSelectedProtocolIdChange: (protocolId: string | null) => void;
   onProtocolCreate: (protocol: Protocol) => void;
   onAddSupplementPeriod: (period: SupplementPeriod) => void;
+  isImprovingWithAi?: boolean;
+  onImproveWithAi?: () => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -46,6 +48,8 @@ const ExtractionReviewTable = ({
   onSelectedProtocolIdChange,
   onProtocolCreate,
   onAddSupplementPeriod,
+  isImprovingWithAi = false,
+  onImproveWithAi,
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
@@ -95,6 +99,48 @@ const ExtractionReviewTable = ({
         return tr(
           "De parserzekerheid is laag. Controleer datum, markerwaarden en referentiebereiken voordat je opslaat.",
           "Parser confidence is low. Check date, marker values, and reference ranges before saving."
+        );
+      }
+      if (code === "PDF_AI_SKIPPED_COST_MODE") {
+        return tr(
+          "AI-verbetering is overgeslagen door je kosteninstellingen. Je kunt handmatig verbeteren indien nodig.",
+          "AI refinement was skipped by your cost settings. You can run manual improve if needed."
+        );
+      }
+      if (code === "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
+        return tr(
+          "AI op tekst-only vond onvoldoende markerregels. De parser probeerde extra herstelstappen waar mogelijk.",
+          "AI text-only extraction found too few marker rows. The parser attempted extra rescue steps when possible."
+        );
+      }
+      if (code === "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE") {
+        return tr(
+          "PDF-rescue is overgeslagen door de huidige kostenmodus (ultra laag).",
+          "PDF rescue was skipped by the current cost mode (ultra low)."
+        );
+      }
+      if (code === "PDF_AI_PDF_RESCUE_SKIPPED_SIZE") {
+        return tr(
+          "PDF-rescue is overgeslagen omdat dit bestand te groot is voor de veilige uploadlimiet.",
+          "PDF rescue was skipped because this file is too large for the safe upload limit."
+        );
+      }
+      if (code === "PDF_AI_PDF_RESCUE_FAILED") {
+        return tr(
+          "PDF-rescue met AI is mislukt. Controleer markers handmatig of probeer opnieuw met een kleiner bestand.",
+          "AI PDF rescue failed. Review markers manually or try again with a smaller file."
+        );
+      }
+      if (code === "PDF_AI_SKIPPED_BUDGET") {
+        return tr(
+          "AI-verbetering is overgeslagen omdat het dag- of maandbudget is bereikt.",
+          "AI refinement was skipped because the daily or monthly budget was reached."
+        );
+      }
+      if (code === "PDF_AI_SKIPPED_RATE_LIMIT") {
+        return tr(
+          "AI-verbetering is overgeslagen door rate limits. Probeer later opnieuw.",
+          "AI refinement was skipped due to rate limits. Try again later."
         );
       }
       return null;
@@ -314,6 +360,18 @@ const ExtractionReviewTable = ({
           <p className="text-sm text-slate-300">
             {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
             <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
+            {draft.extraction.debug?.extractionRoute ? (
+              <span
+                className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
+                  draft.extraction.debug.extractionRoute.startsWith("local")
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                {draft.extraction.debug.extractionRoute.startsWith("local") ? "🔒 " : "☁️ "}
+                {draft.extraction.debug.extractionRoute}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -378,6 +436,9 @@ const ExtractionReviewTable = ({
                 <p className="mt-2 text-[11px] text-amber-100/80">
                   {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
                   {debugInfo.rejectedRows}
+                  {debugInfo.aiAttemptedModes?.length ? ` · AI modes ${debugInfo.aiAttemptedModes.join("→")}` : ""}
+                  {debugInfo.aiRescueTriggered ? " · rescue on" : ""}
+                  {debugInfo.aiRescueReason ? ` · rescue reason ${debugInfo.aiRescueReason}` : ""}
                 </p>
               ) : null}
             </>
@@ -572,6 +633,16 @@ const ExtractionReviewTable = ({
         >
           <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
         </button>
+        {onImproveWithAi ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-60"
+            onClick={onImproveWithAi}
+            disabled={isImprovingWithAi}
+          >
+            {isImprovingWithAi ? tr("AI verbetert extractie...", "AI is improving extraction...") : tr("Verbeter extractie met AI", "Improve extraction with AI")}
+          </button>
+        ) : null}
         <a
           href={parsingFeedbackMailto}
           target="_blank"

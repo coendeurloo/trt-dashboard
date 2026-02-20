@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { analyzeLabDataWithClaude } from "../aiAnalysis";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
-import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, recordAnalysisUsage } from "../betaLimits";
+import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
 
 interface UseAnalysisOptions {
@@ -43,6 +43,22 @@ export const useAnalysis = ({
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
   const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
   const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
+  const [betaUsage, setBetaUsage] = useState(() => {
+    const usage = getUsage();
+    return {
+      dailyCount: usage.dailyCount,
+      monthlyCount: usage.monthlyCount
+    };
+  });
+
+  const refreshBetaUsage = () => {
+    const usage = getUsage();
+    setBetaUsage({
+      dailyCount: usage.dailyCount,
+      monthlyCount: usage.monthlyCount
+    });
+    setBetaRemaining(getRemainingAnalyses());
+  };
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
     if (analysisType === "latestComparison" && visibleReports.length < 2) {
@@ -50,11 +66,11 @@ export const useAnalysis = ({
       return;
     }
 
-    setBetaRemaining(getRemainingAnalyses());
+    refreshBetaUsage();
     const betaCheck = checkBetaLimit();
     if (!betaCheck.allowed) {
       setAnalysisError(betaCheck.reason ?? "Usage limit reached.");
-      setBetaRemaining(getRemainingAnalyses());
+      refreshBetaUsage();
       return;
     }
 
@@ -84,7 +100,7 @@ export const useAnalysis = ({
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
       recordAnalysisUsage();
-      setBetaRemaining(getRemainingAnalyses());
+      refreshBetaUsage();
     } catch (error) {
       setAnalysisError(mapErrorToMessage(error, "ai"));
     } finally {
@@ -119,6 +135,7 @@ export const useAnalysis = ({
     analysisCopied,
     analysisKind,
     analyzingKind,
+    betaUsage,
     betaRemaining,
     betaLimits: BETA_LIMITS,
     setAnalysisError,

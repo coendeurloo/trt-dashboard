@@ -351,7 +351,14 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         report.extraction?.warningCode === "PDF_TEXT_EXTRACTION_FAILED" ||
         report.extraction?.warningCode === "PDF_OCR_INIT_FAILED" ||
         report.extraction?.warningCode === "PDF_OCR_PARTIAL" ||
-        report.extraction?.warningCode === "PDF_LOW_CONFIDENCE_LOCAL"
+        report.extraction?.warningCode === "PDF_LOW_CONFIDENCE_LOCAL" ||
+        report.extraction?.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT" ||
+        report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE" ||
+        report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_SKIPPED_SIZE" ||
+        report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_FAILED" ||
+        report.extraction?.warningCode === "PDF_AI_SKIPPED_COST_MODE" ||
+        report.extraction?.warningCode === "PDF_AI_SKIPPED_BUDGET" ||
+        report.extraction?.warningCode === "PDF_AI_SKIPPED_RATE_LIMIT"
           ? report.extraction.warningCode
           : undefined,
       warnings: Array.isArray(report.extraction?.warnings)
@@ -395,8 +402,57 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
                           .filter((entry) => entry[1] > 0)
                           .slice(0, 6)
                       )
-                  : {}
+                  : {},
+              aiInputTokens:
+                typeof report.extraction.debug.aiInputTokens === "number" && Number.isFinite(report.extraction.debug.aiInputTokens)
+                  ? Math.max(0, Math.round(report.extraction.debug.aiInputTokens))
+                  : undefined,
+              aiOutputTokens:
+                typeof report.extraction.debug.aiOutputTokens === "number" && Number.isFinite(report.extraction.debug.aiOutputTokens)
+                  ? Math.max(0, Math.round(report.extraction.debug.aiOutputTokens))
+                  : undefined,
+              aiCacheHit:
+                typeof report.extraction.debug.aiCacheHit === "boolean" ? report.extraction.debug.aiCacheHit : undefined,
+              aiAttemptedModes:
+                Array.isArray(report.extraction.debug.aiAttemptedModes)
+                  ? report.extraction.debug.aiAttemptedModes
+                      .map((mode) => String(mode))
+                      .filter((mode) => mode === "text_only" || mode === "pdf_rescue")
+                  : undefined,
+              aiRescueTriggered:
+                typeof report.extraction.debug.aiRescueTriggered === "boolean"
+                  ? report.extraction.debug.aiRescueTriggered
+                  : undefined,
+              aiRescueReason:
+                typeof report.extraction.debug.aiRescueReason === "string"
+                  ? report.extraction.debug.aiRescueReason.slice(0, 200)
+                  : undefined,
+              extractionRoute:
+                report.extraction.debug.extractionRoute === "local-text" ||
+                report.extraction.debug.extractionRoute === "local-ocr" ||
+                report.extraction.debug.extractionRoute === "gemini-with-text" ||
+                report.extraction.debug.extractionRoute === "gemini-with-ocr" ||
+                report.extraction.debug.extractionRoute === "gemini-vision-only" ||
+                report.extraction.debug.extractionRoute === "empty"
+                  ? report.extraction.debug.extractionRoute
+                  : undefined
             }
+          : undefined,
+      costMode:
+        report.extraction?.costMode === "balanced" ||
+        report.extraction?.costMode === "ultra_low_cost" ||
+        report.extraction?.costMode === "max_accuracy"
+          ? report.extraction.costMode
+          : undefined,
+      aiUsed: typeof report.extraction?.aiUsed === "boolean" ? report.extraction.aiUsed : undefined,
+      aiReason:
+        report.extraction?.aiReason === "auto_low_quality" ||
+        report.extraction?.aiReason === "manual_improve" ||
+        report.extraction?.aiReason === "disabled_by_budget" ||
+        report.extraction?.aiReason === "cache_hit" ||
+        report.extraction?.aiReason === "local_high_quality" ||
+        report.extraction?.aiReason === "disabled_by_cost_mode"
+          ? report.extraction.aiReason
           : undefined
     }
   };
@@ -408,9 +464,15 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
   const { claudeApiKey: _legacyClaudeApiKey, ...rest } = (settings ?? {}) as Partial<AppSettings> & {
     claudeApiKey?: string;
   };
+  const aiCostMode =
+    rest.aiCostMode === "balanced" || rest.aiCostMode === "ultra_low_cost" || rest.aiCostMode === "max_accuracy"
+      ? rest.aiCostMode
+      : DEFAULT_SETTINGS.aiCostMode;
   return {
     ...DEFAULT_SETTINGS,
-    ...rest
+    ...rest,
+    aiCostMode,
+    aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled
   };
 };
 

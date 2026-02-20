@@ -44,7 +44,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   comparisonScale: "absolute",
   timeRange: "12m",
   customRangeStart: "",
-  customRangeEnd: ""
+  customRangeEnd: "",
+  aiCostMode: "balanced",
+  aiAutoImproveEnabled: false
 };
 
 const RAW_ALIASES: Record<string, string[]> = {

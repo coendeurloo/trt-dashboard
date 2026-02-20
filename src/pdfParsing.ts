@@ -3,19 +3,20 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
 import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
 import { PRIMARY_MARKERS } from "./constants";
-import { ExtractionDebugInfo, ExtractionDraft, ExtractionWarningCode, MarkerValue } from "./types";
+import {
+  AICostMode,
+  ExtractionAIReason,
+  ExtractionDebugInfo,
+  ExtractionDraft,
+  ExtractionRoute,
+  ExtractionWarningCode,
+  MarkerValue
+} from "./types";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
 
 (pdfjsLib as unknown as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc =
   pdfWorker;
-
-interface ClaudeResponse {
-  content?: Array<{ type: string; text?: string }>;
-  error?: {
-    message?: string;
-  };
-}
 
 interface RawMarker {
   marker: string;
@@ -35,6 +36,28 @@ interface GeminiExtractionResponse {
   model?: string;
   testDate?: string;
   markers?: RawMarker[];
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+  };
+  cacheHit?: boolean;
+  error?: {
+    code?: string;
+    message?: string;
+    detail?: string;
+  };
+}
+
+interface ExtractLabDataOptions {
+  costMode?: AICostMode;
+  aiAutoImproveEnabled?: boolean;
+  forceAi?: boolean;
+}
+
+interface GeminiRequestOptions {
+  mode: "text_only" | "pdf_rescue";
+  fileHash: string;
+  traceId: string;
 }
 
 interface ParsedFallbackRow {
@@ -101,13 +124,6 @@ const IMPORTANT_MARKERS = new Set([
   "Hematocrit",
   "SHBG"
 ]);
-const EXTRACTION_MODEL_CANDIDATES = [
-  "claude-sonnet-4-20250514",
-  "claude-3-7-sonnet-20250219",
-  "claude-3-7-sonnet-latest",
-  "claude-3-5-sonnet-latest"
-] as const;
-
 const DATE_CONTEXT_HINT_PATTERN =
   /\b(?:sample\s*(?:draw|collection|date)|collection\s*times?|date\s*collected|collected|afname(?:datum)?|monster\s*afname|materiaal\s*afname|sample\s*taken)\b/i;
 const RECEIPT_CONTEXT_HINT_PATTERN = /\b(?:arrival|received|ontvangst|materiaal\s*ontvangst)\b/i;
@@ -178,10 +194,12 @@ const OCR_INIT_BACKOFF_MS = 250;
 const OCR_PAGE_TIMEOUT_MS = 15_000;
 const OCR_TOTAL_TIMEOUT_MS = 75_000;
 const OCR_LANG_FALLBACK = "eng";
+const LOCAL_AI_EXTRACTION_CACHE_KEY = "labtracker_ai_extraction_cache_v1";
+const LOCAL_AI_EXTRACTION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const LOCAL_AI_EXTRACTION_CACHE_MAX_ENTRIES = 30;
+const MAX_PDF_RESCUE_BYTES = 7_000_000;
 const GEMINI_MODEL_CANDIDATES = [
-  "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
-  "gemini-flash-latest",
   "gemini-2.0-flash"
 ] as const;
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
@@ -344,6 +362,90 @@ const chooseBetterFallbackDraft = (base: ExtractionDraft, candidate: ExtractionD
   return candidateScore > baseScore ? candidate : base;
 };
 
+interface LocalQualityMetrics {
+  markerCount: number;
+  unitCoverage: number;
+  importantCoverage: number;
+  confidence: number;
+}
+
+const getLocalQualityMetrics = (draft: ExtractionDraft): LocalQualityMetrics => {
+  const markerCount = draft.markers.length;
+  const unitCoverage = markerCount > 0 ? draft.markers.filter((marker) => marker.unit).length / markerCount : 0;
+  const importantCoverage = countImportantCoverage(draft.markers);
+  return {
+    markerCount,
+    unitCoverage,
+    importantCoverage,
+    confidence: draft.extraction.confidence
+  };
+};
+
+const isLocalQualityHighEnough = (metrics: LocalQualityMetrics): boolean =>
+  metrics.markerCount >= 14 && metrics.importantCoverage >= 2 && metrics.unitCoverage >= 0.7 && metrics.confidence >= 0.62;
+
+const isLocalDraftGoodEnough = (draft: ExtractionDraft): boolean => {
+  const markerCount = draft.markers.length;
+  const importantCount = countImportantCoverage(draft.markers);
+  const confidence = draft.extraction.confidence;
+
+  if (markerCount >= 8 && confidence >= 0.65) {
+    return true;
+  }
+  if (markerCount >= 6 && confidence >= 0.72 && importantCount >= 2) {
+    return true;
+  }
+  if (markerCount >= 4 && confidence >= 0.8 && importantCount >= 2) {
+    return true;
+  }
+  return false;
+};
+
+interface AutoPdfRescueDecision {
+  shouldRescue: boolean;
+  reason: string;
+}
+
+const shouldAutoPdfRescue = (params: {
+  costMode: AICostMode;
+  forceAi: boolean;
+  localMetrics: LocalQualityMetrics;
+  textItems: number;
+  compactTextLength: number;
+  ocrResult: OcrResult;
+  aiTextOnlySucceeded: boolean;
+}): AutoPdfRescueDecision => {
+  if (params.aiTextOnlySucceeded) {
+    return { shouldRescue: false, reason: "text_only_sufficient" };
+  }
+
+  if (params.forceAi) {
+    return { shouldRescue: true, reason: "manual_force_ai" };
+  }
+
+  if (params.costMode === "ultra_low_cost") {
+    return { shouldRescue: false, reason: "cost_mode_ultra_low" };
+  }
+
+  const localQualityLow = params.localMetrics.markerCount < 6 || params.localMetrics.confidence < 0.62;
+  if (!localQualityLow) {
+    return { shouldRescue: false, reason: "local_quality_not_low" };
+  }
+
+  const weakTextInput =
+    params.textItems === 0 ||
+    params.compactTextLength < 220 ||
+    params.ocrResult.initFailed ||
+    params.ocrResult.timedOut ||
+    (params.ocrResult.used && params.ocrResult.pagesSucceeded === 0);
+
+  if (!weakTextInput) {
+    return { shouldRescue: false, reason: "text_context_not_weak" };
+  }
+
+  return { shouldRescue: true, reason: "low_quality_and_weak_text_context" };
+};
+
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
@@ -374,7 +476,115 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutMes
   }
 };
 
-const buildClaudeExtractionPrompt = (fileName: string, pdfText: string): string =>
+const isLikelyLabDataLine = (line: string): boolean => {
+  const normalized = cleanWhitespace(line);
+  if (!normalized || normalized.length < 6) {
+    return false;
+  }
+  const hasNumeric = /\b\d+(?:[.,]\d+)?\b/.test(normalized);
+  const hasUnitHint = /(mmol\/L|nmol\/L|pmol\/L|pg\/mL|ng\/dL|g\/L|mg\/L|µg\/L|umol\/L|U\/L|mU\/L|IU\/L|%|10\*9\/L|10\*12\/L)/i.test(
+    normalized
+  );
+  const hasRange = /(?:<|>|<=|>=|\d+\s*[-–]\s*\d+)/.test(normalized);
+  const looksNarrative = /(guideline|interpretation|individuals|sensitive to|for further information|target reduction|http|www\.)/i.test(normalized);
+  return (hasNumeric && (hasUnitHint || hasRange)) && !looksNarrative;
+};
+
+const compactTextForAi = (pdfText: string): string => {
+  const rows = pdfText
+    .split(/\r?\n/)
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean)
+    .filter((line) => isLikelyLabDataLine(line))
+    .slice(0, 250);
+  return rows.join("\n");
+};
+
+const toHex = (buffer: ArrayBuffer): string =>
+  Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+const hashArrayBuffer = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const digest = await crypto.subtle.digest("SHA-256", arrayBuffer);
+    return toHex(digest);
+  }
+  const bytes = new Uint8Array(arrayBuffer);
+  let hash = 2166136261;
+  for (let index = 0; index < bytes.length; index += 1) {
+    hash ^= bytes[index];
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv-${Math.abs(hash)}`;
+};
+
+interface CachedAiExtractionEntry {
+  createdAt: number;
+  fileHash: string;
+  mode: GeminiRequestOptions["mode"];
+  response: GeminiExtractionResponse;
+}
+
+const readAiExtractionCache = (): CachedAiExtractionEntry[] => {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_AI_EXTRACTION_CACHE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as CachedAiExtractionEntry[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const cutoff = Date.now() - LOCAL_AI_EXTRACTION_CACHE_TTL_MS;
+    return parsed
+      .filter((entry) => entry && typeof entry === "object")
+      .filter((entry) => typeof entry.createdAt === "number" && entry.createdAt >= cutoff)
+      .slice(0, LOCAL_AI_EXTRACTION_CACHE_MAX_ENTRIES);
+  } catch {
+    return [];
+  }
+};
+
+const writeAiExtractionCache = (entries: CachedAiExtractionEntry[]): void => {
+  try {
+    window.localStorage.setItem(
+      LOCAL_AI_EXTRACTION_CACHE_KEY,
+      JSON.stringify(entries.slice(0, LOCAL_AI_EXTRACTION_CACHE_MAX_ENTRIES))
+    );
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const getCachedAiExtraction = (fileHash: string, mode: GeminiRequestOptions["mode"]): GeminiExtractionResponse | null => {
+  const entries = readAiExtractionCache();
+  const match = entries.find((entry) => entry.fileHash === fileHash && entry.mode === mode);
+  if (!match) {
+    return null;
+  }
+  return {
+    ...match.response,
+    cacheHit: true
+  };
+};
+
+const putCachedAiExtraction = (fileHash: string, mode: GeminiRequestOptions["mode"], response: GeminiExtractionResponse): void => {
+  const entries = readAiExtractionCache();
+  const next: CachedAiExtractionEntry = {
+    createdAt: Date.now(),
+    fileHash,
+    mode,
+    response: {
+      ...response,
+      cacheHit: false
+    }
+  };
+  const deduped = [next, ...entries.filter((entry) => !(entry.fileHash === fileHash && entry.mode === mode))];
+  writeAiExtractionCache(deduped);
+};
+
+const buildAiExtractionPrompt = (fileName: string, pdfText: string): string =>
   [
     "Extract blood lab data from this report and return ONLY valid JSON in the exact shape below:",
     '{"testDate":"YYYY-MM-DD","markers":[{"marker":"string","value":0,"unit":"string","referenceMin":null,"referenceMax":null,"confidence":0.0}]}',
@@ -2660,24 +2870,68 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
 const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft =>
   fallbackExtractDetailed(text, fileName, spatialRows).draft;
 
+interface GeminiExtractionAttemptResult {
+  draft: ExtractionDraft | null;
+  warningCode?: ExtractionWarningCode;
+  aiReason?: ExtractionAIReason;
+  usage?: { inputTokens: number; outputTokens: number };
+  cacheHit?: boolean;
+}
+
 const callGeminiExtraction = async (
   pdfText: string,
   fileName: string,
-  rawPdfBuffer: ArrayBuffer
-): Promise<ExtractionDraft | null> => {
-  const shouldAttachPdf = rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= 7_000_000;
+  rawPdfBuffer: ArrayBuffer,
+  requestOptions: GeminiRequestOptions
+): Promise<GeminiExtractionAttemptResult> => {
+  const compactText = compactTextForAi(pdfText);
+  const shouldAttachPdf =
+    requestOptions.mode === "pdf_rescue" && rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= MAX_PDF_RESCUE_BYTES;
   const pdfBase64 = shouldAttachPdf ? arrayBufferToBase64(rawPdfBuffer) : null;
-  const routePayloads: Array<{ fileName: string; pdfText: string; pdfBase64: string | null }> = [
-    { fileName, pdfText, pdfBase64 },
-    { fileName, pdfText: "", pdfBase64 }
-  ];
-  if (!pdfBase64 && pdfText) {
-    routePayloads.push({ fileName, pdfText, pdfBase64: null });
+
+  const cached = getCachedAiExtraction(requestOptions.fileHash, requestOptions.mode);
+  if (cached?.markers?.length) {
+    const rawMarkers = Array.isArray(cached.markers) ? cached.markers : [];
+    const cachedMarkers = filterMarkerValuesForQuality(
+      rawMarkers
+        .map(normalizeMarker)
+        .filter((row): row is MarkerValue => Boolean(row))
+        .filter((row) => isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude"))
+    );
+    if (cachedMarkers.length > 0) {
+      const confidence = cachedMarkers.reduce((sum, row) => sum + row.confidence, 0) / Math.max(cachedMarkers.length, 1);
+      return {
+        draft: {
+          sourceFileName: fileName,
+          testDate: cached.testDate && /^\d{4}-\d{2}-\d{2}$/.test(cached.testDate) ? cached.testDate : extractDateCandidate(pdfText),
+          markers: cachedMarkers,
+          extraction: {
+            provider: "gemini",
+            model: `${cached.model ?? "gemini-2.5-flash-lite"}+api`,
+            confidence,
+            needsReview: confidence < 0.7 || cachedMarkers.length < 4
+          }
+        },
+        aiReason: "cache_hit",
+        cacheHit: true,
+        usage: {
+          inputTokens: cached.usage?.inputTokens ?? 0,
+          outputTokens: cached.usage?.outputTokens ?? 0
+        }
+      };
+    }
   }
 
-  const fetchGeminiRoute = async (
-    payload: { fileName: string; pdfText: string; pdfBase64: string | null }
-  ): Promise<GeminiExtractionResponse | null> => {
+  const payload = {
+    fileName,
+    pdfText: compactText,
+    pdfBase64,
+    mode: requestOptions.mode,
+    fileHash: requestOptions.fileHash,
+    traceId: requestOptions.traceId
+  };
+
+  const fetchGeminiRoute = async (): Promise<{ body: GeminiExtractionResponse | null; warningCode?: ExtractionWarningCode }> => {
     let response: Response | null = null;
     try {
       response = await fetch("/api/gemini/extract", {
@@ -2688,160 +2942,169 @@ const callGeminiExtraction = async (
         body: JSON.stringify(payload)
       });
     } catch {
-      return null;
-    }
-
-    if (!response.ok) {
-      return null;
+      return { body: null };
     }
 
     const contentType = response.headers.get("content-type") ?? "";
-    if (!/application\/json/i.test(contentType)) {
-      return null;
+    const canParseJson = /application\/json/i.test(contentType);
+    const body = canParseJson ? ((await response.json()) as GeminiExtractionResponse) : null;
+    if (response.ok) {
+      return { body };
     }
 
-    try {
-      return (await response.json()) as GeminiExtractionResponse;
-    } catch {
-      return null;
+    if (response.status === 429 && body?.error?.code === "AI_BUDGET_EXCEEDED") {
+      return { body: null, warningCode: "PDF_AI_SKIPPED_BUDGET" };
     }
+    if (response.status === 429) {
+      return { body: null, warningCode: "PDF_AI_SKIPPED_RATE_LIMIT" };
+    }
+    if (response.status === 422 && body?.error?.code === "AI_EMPTY_MARKERS") {
+      return {
+        body: null,
+        warningCode: requestOptions.mode === "text_only" ? "PDF_AI_TEXT_ONLY_INSUFFICIENT" : "PDF_AI_PDF_RESCUE_FAILED"
+      };
+    }
+    return { body: null };
   };
 
   const callGeminiDirect = async (): Promise<GeminiExtractionResponse | null> => {
+    if (!import.meta.env.DEV) {
+      return null;
+    }
     const directGeminiKey = String(import.meta.env.VITE_GEMINI_API_KEY ?? "").trim();
     if (!directGeminiKey) {
       return null;
     }
 
-    for (const payload of routePayloads) {
-      const parts: Array<Record<string, unknown>> = [{ text: buildClaudeExtractionPrompt(fileName, payload.pdfText) }];
-      if (payload.pdfBase64) {
-        parts.push({
-          inline_data: {
-            mime_type: "application/pdf",
-            data: payload.pdfBase64
+    const parts: Array<Record<string, unknown>> = [{ text: buildAiExtractionPrompt(fileName, compactText) }];
+    if (pdfBase64) {
+      parts.push({
+        inline_data: {
+          mime_type: "application/pdf",
+          data: pdfBase64
+        }
+      });
+    }
+
+    for (const model of GEMINI_MODEL_CANDIDATES) {
+      let directResponse: Response;
+      try {
+        directResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json"
+            },
+            body: JSON.stringify({
+              generationConfig: {
+                temperature: 0,
+                maxOutputTokens: 900,
+                responseMimeType: "application/json"
+              },
+              contents: [
+                {
+                  role: "user",
+                  parts
+                }
+              ]
+            })
           }
-        });
+        );
+      } catch {
+        continue;
       }
 
-      for (const model of GEMINI_MODEL_CANDIDATES) {
-        let directResponse: Response;
-        try {
-          directResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(directGeminiKey)}`,
-            {
-              method: "POST",
-              headers: {
-                "content-type": "application/json"
-              },
-              body: JSON.stringify({
-                generationConfig: {
-                  temperature: 0.1,
-                  responseMimeType: "application/json"
-                },
-                contents: [
-                  {
-                    role: "user",
-                    parts
-                  }
-                ]
-              })
-            }
-          );
-        } catch {
+      if (!directResponse.ok) {
+        if (directResponse.status === 404) {
           continue;
         }
+        break;
+      }
 
-        if (!directResponse.ok) {
-          if (directResponse.status === 404) {
-            continue;
-          }
-          break;
-        }
+      let rawBody: unknown;
+      try {
+        rawBody = await directResponse.json();
+      } catch {
+        continue;
+      }
 
-        let rawBody: unknown;
-        try {
-          rawBody = await directResponse.json();
-        } catch {
-          continue;
+      const candidateText =
+        (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const jsonBlock = extractJsonBlock(candidateText);
+      if (!jsonBlock) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
+        if (Array.isArray(parsed.markers) && parsed.markers.length > 0) {
+          return {
+            model,
+            testDate: parsed.testDate,
+            markers: parsed.markers
+          };
         }
-
-        const candidateText =
-          (rawBody as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text ??
-          "";
-        const jsonBlock = extractJsonBlock(candidateText);
-        if (!jsonBlock) {
-          continue;
-        }
-        try {
-          const parsed = JSON.parse(jsonBlock) as GeminiExtractionResponse;
-          if (Array.isArray(parsed.markers) && parsed.markers.length > 0) {
-            return {
-              model,
-              testDate: parsed.testDate,
-              markers: parsed.markers
-            };
-          }
-        } catch {
-          continue;
-        }
+      } catch {
+        continue;
       }
     }
 
     return null;
   };
 
-  let body: GeminiExtractionResponse | null = null;
-  for (const payload of routePayloads) {
-    const routeBody = await fetchGeminiRoute(payload);
-    if (routeBody && Array.isArray(routeBody.markers) && routeBody.markers.length > 0) {
-      body = routeBody;
-      break;
-    }
+  const routeResult = await fetchGeminiRoute();
+  let body = routeResult.body;
+  if (!body) {
+    body = await callGeminiDirect();
   }
 
   if (!body) {
-    const directBody = await callGeminiDirect();
-    if (directBody?.markers?.length) {
-      body = directBody;
-    }
-  }
-
-  if (!body) {
-    return null;
+    return {
+      draft: null,
+      warningCode: routeResult.warningCode
+    };
   }
 
   const rawMarkers = Array.isArray(body.markers) ? body.markers : [];
   const geminiMarkers = rawMarkers
     .map(normalizeMarker)
     .filter((row): row is MarkerValue => Boolean(row))
-    .filter((row) =>
-      isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude")
-    );
+    .filter((row) => isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude"));
 
   const markers = filterMarkerValuesForQuality(geminiMarkers);
   if (markers.length === 0) {
-    return null;
+    return {
+      draft: null,
+      warningCode: routeResult.warningCode
+    };
   }
 
-  const confidence =
-    markers.length > 0
-      ? markers.reduce((sum, row) => sum + row.confidence, 0) / Math.max(markers.length, 1)
-      : 0;
+  const confidence = markers.reduce((sum, row) => sum + row.confidence, 0) / Math.max(markers.length, 1);
+  const usage = {
+    inputTokens: Math.max(0, Math.round(body.usage?.inputTokens ?? 0)),
+    outputTokens: Math.max(0, Math.round(body.usage?.outputTokens ?? 0))
+  };
+
+  putCachedAiExtraction(requestOptions.fileHash, requestOptions.mode, {
+    ...body,
+    usage
+  });
 
   return {
-    sourceFileName: fileName,
-    testDate:
-      body.testDate && /^\d{4}-\d{2}-\d{2}$/.test(body.testDate)
-        ? body.testDate
-        : extractDateCandidate(pdfText),
-    markers,
-    extraction: {
-      provider: "gemini",
-      model: `${body.model ?? "gemini-2.0-flash"}+api`,
-      confidence,
-      needsReview: confidence < 0.7 || markers.length < 4
-    }
+    draft: {
+      sourceFileName: fileName,
+      testDate: body.testDate && /^\d{4}-\d{2}-\d{2}$/.test(body.testDate) ? body.testDate : extractDateCandidate(pdfText),
+      markers,
+      extraction: {
+        provider: "gemini",
+        model: `${body.model ?? "gemini-2.5-flash-lite"}+api`,
+        confidence,
+        needsReview: confidence < 0.7 || markers.length < 4
+      }
+    },
+    aiReason: body.cacheHit ? "cache_hit" : "auto_low_quality",
+    usage,
+    cacheHit: Boolean(body.cacheHit)
   };
 };
 
@@ -2849,7 +3112,8 @@ const buildLocalExtractionWarnings = (
   textResult: PdfTextExtractionResult,
   textExtractionFailed: boolean,
   ocrResult: OcrResult,
-  draft: ExtractionDraft
+  draft: ExtractionDraft,
+  aiWarnings: ExtractionWarningCode[] = []
 ): { warningCode?: ExtractionWarningCode; warnings: string[] } => {
   const warnings: string[] = [];
   let warningCode: ExtractionWarningCode | undefined;
@@ -2879,6 +3143,8 @@ const buildLocalExtractionWarnings = (
     pushWarning("PDF_LOW_CONFIDENCE_LOCAL");
   }
 
+  aiWarnings.forEach((code) => pushWarning(code));
+
   return {
     warningCode,
     warnings: Array.from(new Set(warnings))
@@ -2899,16 +3165,41 @@ const withExtractionMetadata = (
   }
 });
 
-export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
+export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
   try {
+    const costMode: AICostMode = options.costMode ?? "balanced";
+    const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
+    const forceAi = Boolean(options.forceAi);
     const arrayBuffer = await file.arrayBuffer();
+    const fileHash = await hashArrayBuffer(arrayBuffer);
+    const traceId = createId();
+
+    const makeEmptyDraft = (model: string): ExtractionDraft => ({
+      sourceFileName: file.name,
+      testDate: "",
+      markers: [],
+      extraction: {
+        provider: "fallback",
+        model,
+        confidence: 0,
+        needsReview: true
+      }
+    });
+
+    const emptyDiagnostics = (): DedupeDiagnostics => ({
+      parsedRowCount: 0,
+      keptRows: 0,
+      rejectedRows: 0,
+      topRejectReasons: {}
+    });
+
     let textResult: PdfTextExtractionResult;
     let textExtractionFailed = false;
     try {
       textResult = await extractPdfText(arrayBuffer);
     } catch (error) {
       textExtractionFailed = true;
-      console.warn("PDF text extraction failed; continuing with OCR-only fallback.", error);
+      console.warn("[extractLabData] PDF text extraction failed; continuing with OCR-only fallback.", error);
       textResult = {
         text: "",
         pageCount: 0,
@@ -2919,7 +3210,9 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
       };
     }
 
-    let extractionText = textResult.text;
+    let textFallback: FallbackExtractOutcome | null = null;
+    let ocrFallback: FallbackExtractOutcome | null = null;
+
     let ocrResult: OcrResult = {
       text: "",
       used: false,
@@ -2930,13 +3223,46 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
       timedOut: false
     };
 
-    const shouldAttemptOcr =
-      textResult.pageCount === 0 ||
-      textResult.textItemCount === 0 ||
-      (textResult.nonWhitespaceChars < Math.max(600, textResult.pageCount * 180) &&
-        textResult.lineCount < Math.max(20, textResult.pageCount * 10));
+    if (textResult.textItemCount > 0 && textResult.text.trim().length > 0) {
+      textFallback = fallbackExtractDetailed(textResult.text, file.name, textResult.spatialRows);
+      console.info(
+        `[extractLabData] Local text parse: ${textFallback.draft.markers.length} markers, confidence ${textFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(textFallback.draft.markers)}`
+      );
+      if (isLocalDraftGoodEnough(textFallback.draft) && !forceAi && costMode !== "max_accuracy") {
+        console.info("[extractLabData] Route: local-text (good enough)");
+        const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, textFallback.draft);
+        return withExtractionMetadata(
+          {
+            ...textFallback.draft,
+            extraction: {
+              ...textFallback.draft.extraction,
+              costMode,
+              aiUsed: false,
+              aiReason: "local_high_quality",
+              needsReview: textFallback.draft.extraction.needsReview || warningMeta.warnings.length > 0
+            }
+          },
+          warningMeta,
+          {
+            textItems: textResult.textItemCount,
+            ocrUsed: false,
+            ocrPages: 0,
+            keptRows: textFallback.diagnostics.keptRows,
+            rejectedRows: textFallback.diagnostics.rejectedRows,
+            topRejectReasons: textFallback.diagnostics.topRejectReasons,
+            extractionRoute: "local-text"
+          }
+        );
+      }
+    }
 
-    if (shouldAttemptOcr) {
+    const emptyDraft = makeEmptyDraft("fallback-empty");
+    const baseDraft = textFallback?.draft ?? emptyDraft;
+    const needsOcr = textExtractionFailed || shouldUseOcrFallback(textResult, baseDraft);
+    const canRunOcr = needsOcr && isBrowserRuntime();
+
+    if (canRunOcr) {
+      console.info("[extractLabData] Attempting OCR fallback...");
       ocrResult = {
         text: "",
         used: true,
@@ -2951,7 +3277,7 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
         OCR_TOTAL_TIMEOUT_MS,
         "OCR total timeout"
       ).catch((error) => {
-        console.warn("PDF OCR total timeout or crash", error);
+        console.warn("[extractLabData] OCR timeout or crash", error);
         return {
           text: "",
           used: true,
@@ -2963,34 +3289,205 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
         } satisfies OcrResult;
       });
 
-      if (ocrResult.text) {
-        extractionText = `${extractionText}\n${ocrResult.text}`.trim();
+      console.info(
+        `[extractLabData] OCR result: ${ocrResult.pagesSucceeded}/${ocrResult.pagesAttempted} pages, ${ocrResult.text.length} chars, initFailed=${ocrResult.initFailed}, timedOut=${ocrResult.timedOut}`
+      );
+
+      if (ocrResult.text.trim().length > 0) {
+        ocrFallback = fallbackExtractDetailed(ocrResult.text, file.name);
+        console.info(
+          `[extractLabData] Local OCR parse: ${ocrFallback.draft.markers.length} markers, confidence ${ocrFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(ocrFallback.draft.markers)}`
+        );
+
+        const bestLocal = textFallback
+          ? chooseBetterFallbackDraft(textFallback.draft, ocrFallback.draft)
+          : ocrFallback.draft;
+        const bestRoute: ExtractionRoute = ocrFallback && bestLocal === ocrFallback.draft ? "local-ocr" : "local-text";
+        const bestDiagnostics =
+          bestRoute === "local-ocr" ? ocrFallback.diagnostics : textFallback?.diagnostics ?? ocrFallback.diagnostics;
+
+        if (isLocalDraftGoodEnough(bestLocal) && !forceAi && costMode !== "max_accuracy") {
+          console.info(`[extractLabData] Route: ${bestRoute} (good enough)`);
+          const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, bestLocal);
+          return withExtractionMetadata(
+            {
+              ...bestLocal,
+              extraction: {
+                ...bestLocal.extraction,
+                costMode,
+                aiUsed: false,
+                aiReason: "local_high_quality",
+                needsReview: bestLocal.extraction.needsReview || warningMeta.warnings.length > 0
+              }
+            },
+            warningMeta,
+            {
+              textItems: textResult.textItemCount,
+              ocrUsed: true,
+              ocrPages: ocrResult.pagesSucceeded,
+              keptRows: bestDiagnostics.keptRows,
+              rejectedRows: bestDiagnostics.rejectedRows,
+              topRejectReasons: bestDiagnostics.topRejectReasons,
+              extractionRoute: bestRoute
+            }
+          );
+        }
       }
     }
 
-    const geminiDraft = await callGeminiExtraction(extractionText, file.name, arrayBuffer);
-    const parsingDraft: ExtractionDraft =
-      geminiDraft ??
-      {
-        sourceFileName: file.name,
-        testDate: extractDateCandidate(extractionText),
-        markers: [],
-        extraction: {
-          provider: "fallback",
-          model: "gemini-empty-response",
-          confidence: 0,
-          needsReview: true
-        }
+    const combinedText = [textResult.text, ocrResult.text].filter(Boolean).join("\n").trim();
+    const bestLocalDraft = ocrFallback && textFallback
+      ? chooseBetterFallbackDraft(textFallback.draft, ocrFallback.draft)
+      : (ocrFallback?.draft ?? textFallback?.draft ?? emptyDraft);
+    const bestLocalRoute: ExtractionRoute =
+      ocrFallback && bestLocalDraft === ocrFallback.draft
+        ? "local-ocr"
+        : textFallback
+          ? "local-text"
+          : "empty";
+    const bestLocalDiagnostics =
+      bestLocalRoute === "local-ocr"
+        ? ocrFallback?.diagnostics ?? emptyDiagnostics()
+        : bestLocalRoute === "local-text"
+          ? textFallback?.diagnostics ?? emptyDiagnostics()
+          : emptyDiagnostics();
+
+    let parsingDraft: ExtractionDraft = bestLocalDraft;
+    let extractionRoute: ExtractionRoute = bestLocalRoute;
+    const localMetrics = getLocalQualityMetrics(bestLocalDraft);
+    const localQualityGood = isLocalQualityHighEnough(localMetrics);
+    const compactAiText = compactTextForAi(combinedText);
+
+    const aiWarnings: ExtractionWarningCode[] = [];
+    let aiReason: ExtractionAIReason = localQualityGood ? "local_high_quality" : "disabled_by_cost_mode";
+    let aiInputTokens = 0;
+    let aiOutputTokens = 0;
+    let aiCacheHit = false;
+    const aiAttemptedModes: Array<GeminiRequestOptions["mode"]> = [];
+    let aiRescueTriggered = false;
+    let aiRescueReason = "";
+
+    const shouldAutoUseAi =
+      costMode === "max_accuracy" || (costMode === "balanced" && aiAutoImproveEnabled && !localQualityGood);
+    const shouldUseAi = forceAi || shouldAutoUseAi;
+
+    if (!shouldUseAi && !localQualityGood) {
+      aiWarnings.push("PDF_AI_SKIPPED_COST_MODE");
+    }
+
+    if (shouldUseAi) {
+      const registerAttempt = (result: GeminiExtractionAttemptResult) => {
+        aiInputTokens += result.usage?.inputTokens ?? 0;
+        aiOutputTokens += result.usage?.outputTokens ?? 0;
+        aiCacheHit = aiCacheHit || Boolean(result.cacheHit);
       };
 
-    const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, parsingDraft);
+      aiAttemptedModes.push("text_only");
+      const textOnlyResult = await callGeminiExtraction(combinedText, file.name, arrayBuffer, {
+        mode: "text_only",
+        fileHash,
+        traceId
+      });
+      let aiResult = textOnlyResult;
+      registerAttempt(textOnlyResult);
+      const textOnlyInsufficient = textOnlyResult.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT";
+
+      if (textOnlyResult.warningCode && textOnlyResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
+        aiWarnings.push(textOnlyResult.warningCode);
+      }
+
+      const rescueDecision = shouldAutoPdfRescue({
+        costMode,
+        forceAi,
+        localMetrics,
+        textItems: textResult.textItemCount,
+        compactTextLength: compactAiText.length,
+        ocrResult,
+        aiTextOnlySucceeded: Boolean(textOnlyResult.draft)
+      });
+
+      if (!textOnlyResult.draft) {
+        if (rescueDecision.shouldRescue) {
+          aiRescueTriggered = true;
+          aiRescueReason = rescueDecision.reason;
+          if (arrayBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
+            aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_SIZE");
+          } else {
+            aiAttemptedModes.push("pdf_rescue");
+            const rescueResult = await callGeminiExtraction(combinedText, file.name, arrayBuffer, {
+              mode: "pdf_rescue",
+              fileHash,
+              traceId
+            });
+            registerAttempt(rescueResult);
+            if (rescueResult.draft) {
+              aiResult = rescueResult;
+            } else if (rescueResult.warningCode) {
+              aiWarnings.push(rescueResult.warningCode);
+            } else {
+              aiWarnings.push("PDF_AI_PDF_RESCUE_FAILED");
+            }
+          }
+        } else {
+          aiRescueReason = rescueDecision.reason;
+          if (rescueDecision.reason === "cost_mode_ultra_low") {
+            aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE");
+          }
+        }
+      }
+
+      if (textOnlyInsufficient && !aiResult.draft) {
+        aiWarnings.push("PDF_AI_TEXT_ONLY_INSUFFICIENT");
+      } else if (aiResult.warningCode && aiResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
+        aiWarnings.push(aiResult.warningCode);
+      }
+
+      if (aiResult.draft) {
+        parsingDraft = chooseBetterFallbackDraft(bestLocalDraft, aiResult.draft);
+        extractionRoute =
+          parsingDraft.extraction.provider === "gemini"
+            ? ocrResult.used
+              ? "gemini-with-ocr"
+              : combinedText.length > 0
+                ? "gemini-with-text"
+                : "gemini-vision-only"
+            : bestLocalRoute;
+        aiReason = forceAi
+          ? "manual_improve"
+          : aiResult.aiReason ?? (parsingDraft.extraction.provider === "gemini" ? "auto_low_quality" : "local_high_quality");
+      } else if (aiResult.warningCode === "PDF_AI_SKIPPED_BUDGET") {
+        aiReason = "disabled_by_budget";
+      } else if (costMode === "ultra_low_cost" && !forceAi) {
+        aiReason = "disabled_by_cost_mode";
+      } else if (localQualityGood) {
+        aiReason = "local_high_quality";
+      } else {
+        aiReason = "auto_low_quality";
+      }
+    }
+
+    if (parsingDraft.markers.length > 0 && extractionRoute === "empty") {
+      extractionRoute = bestLocalRoute;
+    }
+
+    const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, parsingDraft, aiWarnings);
     const debugMeta: ExtractionDebugInfo = {
       textItems: textResult.textItemCount,
       ocrUsed: ocrResult.used,
       ocrPages: ocrResult.pagesSucceeded,
-      keptRows: parsingDraft.markers.length,
-      rejectedRows: 0,
-      topRejectReasons: {}
+      keptRows:
+        parsingDraft.extraction.provider === "gemini"
+          ? Math.max(parsingDraft.markers.length, bestLocalDiagnostics.keptRows)
+          : bestLocalDiagnostics.keptRows,
+      rejectedRows: bestLocalDiagnostics.rejectedRows,
+      topRejectReasons: bestLocalDiagnostics.topRejectReasons,
+      aiInputTokens,
+      aiOutputTokens,
+      aiCacheHit,
+      aiAttemptedModes: aiAttemptedModes.length > 0 ? aiAttemptedModes : undefined,
+      aiRescueTriggered: aiRescueTriggered || undefined,
+      aiRescueReason: aiRescueReason || undefined,
+      extractionRoute
     };
 
     return withExtractionMetadata(
@@ -2998,7 +3495,10 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
         ...parsingDraft,
         extraction: {
           ...parsingDraft.extraction,
-          needsReview: parsingDraft.extraction.needsReview || warningMeta.warnings.length > 0 || parsingDraft.markers.length === 0
+          needsReview: parsingDraft.extraction.needsReview || warningMeta.warnings.length > 0 || parsingDraft.markers.length === 0,
+          costMode,
+          aiUsed: parsingDraft.extraction.provider === "gemini",
+          aiReason
         }
       },
       warningMeta,
@@ -3017,13 +3517,17 @@ export const extractLabData = async (file: File): Promise<ExtractionDraft> => {
         needsReview: true,
         warningCode: "PDF_TEXT_EXTRACTION_FAILED",
         warnings: ["PDF_TEXT_EXTRACTION_FAILED"],
+        costMode: options.costMode ?? "balanced",
+        aiUsed: false,
+        aiReason: "disabled_by_cost_mode",
         debug: {
           textItems: 0,
           ocrUsed: false,
           ocrPages: 0,
           keptRows: 0,
           rejectedRows: 0,
-          topRejectReasons: {}
+          topRejectReasons: {},
+          extractionRoute: "empty"
         }
       }
     };
@@ -3047,5 +3551,7 @@ export const __pdfParsingInternals = {
   fallbackExtract,
   normalizeMarker,
   filterMarkerValuesForQuality,
-  buildLocalExtractionWarnings
+  buildLocalExtractionWarnings,
+  isLocalDraftGoodEnough,
+  shouldAutoPdfRescue
 };

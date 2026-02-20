@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ExtractionReviewTable from "../components/ExtractionReviewTable";
 import { ExtractionDraft, ReportAnnotations } from "../types";
@@ -117,5 +117,37 @@ describe("ExtractionReviewTable", () => {
     );
 
     expect(screen.getAllByRole("button", { name: /save report/i }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders specific message for AI text-only insufficient warning", () => {
+    render(
+      <ExtractionReviewTable
+        draft={{
+          ...draft,
+          extraction: {
+            ...draft.extraction,
+            warningCode: "PDF_AI_TEXT_ONLY_INSUFFICIENT",
+            warnings: ["PDF_AI_TEXT_ONLY_INSUFFICIENT"]
+          }
+        }}
+        annotations={annotations}
+        protocols={[]}
+        supplementTimeline={[]}
+        selectedProtocolId={null}
+        language="en"
+        showSamplingTiming={false}
+        onDraftChange={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onSelectedProtocolIdChange={vi.fn()}
+        onProtocolCreate={vi.fn()}
+        onAddSupplementPeriod={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    const checklistButton = screen.getByRole("button", { name: /show checklist/i });
+    fireEvent.click(checklistButton);
+    expect(screen.getByText(/AI text-only extraction found too few marker rows/i)).toBeTruthy();
   });
 });

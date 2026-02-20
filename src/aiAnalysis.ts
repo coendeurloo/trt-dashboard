@@ -32,6 +32,7 @@ interface AnalyzeLabDataOptions {
   unitSystem: UnitSystem;
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
+  deepMode?: boolean;
   context?: {
     samplingFilter: "all" | "trough" | "peak";
     protocolImpact: ProtocolImpactSummary;
@@ -85,7 +86,17 @@ const ANALYSIS_MODEL_CANDIDATES = [
   "claude-3-5-sonnet-latest"
 ] as const;
 
-const MAX_FULL_REPORTS = 4;
+const MAX_FULL_REPORTS = 2;
+const parseMarkerCap = (): number => {
+  const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 30);
+  if (!Number.isFinite(raw)) {
+    return 30;
+  }
+  return Math.min(150, Math.max(20, Math.round(raw)));
+};
+const MAX_MARKERS_PER_REPORT = parseMarkerCap();
+export const AI_ANALYSIS_MARKER_CAP = MAX_MARKERS_PER_REPORT;
+const MAX_CONTEXT_CHARS = 180;
 
 const SIGNAL_MARKERS = [
   "Testosterone",
@@ -177,6 +188,59 @@ const deriveAbnormalFromReference = (
   return "normal";
 };
 
+const truncateContextText = (value: string, maxChars = MAX_CONTEXT_CHARS): string => {
+  const compact = value.trim().replace(/\s+/g, " ");
+  if (compact.length <= maxChars) {
+    return compact;
+  }
+  return `${compact.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+};
+
+const markerDeviationFromRange = (marker: AnalysisMarkerRow): number => {
+  const [min, max] = marker.ref;
+  if (min !== null && marker.v < min) {
+    return Math.abs(min - marker.v) / Math.max(1, Math.abs(min));
+  }
+  if (max !== null && marker.v > max) {
+    return Math.abs(marker.v - max) / Math.max(1, Math.abs(max));
+  }
+  if (min !== null && max !== null && max > min) {
+    const center = (min + max) / 2;
+    return Math.abs(marker.v - center) / Math.max(1, Math.abs(center));
+  }
+  return 0;
+};
+
+const SIGNAL_MARKER_SET = new Set<string>(SIGNAL_MARKERS);
+
+const markerPromptPriorityScore = (marker: AnalysisMarkerRow): number => {
+  let score = SIGNAL_MARKER_SET.has(marker.m) ? 100 : 0;
+  const abnormal = deriveAbnormalFromReference(marker.v, marker.ref);
+  if (abnormal === "high" || abnormal === "low") {
+    score += 45;
+  } else if (abnormal === "unknown") {
+    score -= 5;
+  } else {
+    score += 5;
+  }
+  if (marker.ref[0] !== null || marker.ref[1] !== null) {
+    score += 10;
+  }
+  score += Math.min(25, markerDeviationFromRange(marker) * 25);
+  return score;
+};
+
+const selectPromptMarkers = (markers: AnalysisMarkerRow[]): AnalysisMarkerRow[] =>
+  [...markers]
+    .sort((left, right) => {
+      const scoreDelta = markerPromptPriorityScore(right) - markerPromptPriorityScore(left);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      return left.m.localeCompare(right.m);
+    })
+    .slice(0, MAX_MARKERS_PER_REPORT);
+
 const buildPayload = (
   reports: LabReport[],
   protocols: Protocol[],
@@ -196,14 +260,14 @@ const buildPayload = (
           frequency: injectionFrequencyLabel(injectionFrequency, "en"),
           frequencyPerWeek: getProtocolFrequencyPerWeek(protocol),
           protocol: protocol?.name ?? "",
-          supps: getReportSupplementsText(report, supplementTimeline),
-          symptoms: report.annotations.symptoms,
-          notes: report.annotations.notes,
+          supps: truncateContextText(getReportSupplementsText(report, supplementTimeline), 220),
+          symptoms: truncateContextText(report.annotations.symptoms),
+          notes: truncateContextText(report.annotations.notes),
           timing: report.annotations.samplingTiming
         }
       };
     })(),
-    markers: report.markers.map((marker) => {
+    markers: selectPromptMarkers(report.markers.map((marker) => {
       const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
       const convertedMin =
         marker.referenceMin === null
@@ -223,7 +287,7 @@ const buildPayload = (
           convertedMax === null ? null : toRounded(convertedMax)
         ]
       };
-    })
+    }))
   }));
 };
 
@@ -553,6 +617,7 @@ export const analyzeLabDataWithClaude = async ({
   unitSystem,
   language = "nl",
   analysisType = "full",
+  deepMode = false,
   context
 }: AnalyzeLabDataOptions): Promise<string> => {
   if (reports.length === 0) {
@@ -570,6 +635,7 @@ export const analyzeLabDataWithClaude = async ({
   const preferredOutputLanguage = "English";
   const recentPayload = payload.slice(-MAX_FULL_REPORTS);
   const olderReportCount = Math.max(0, payload.length - MAX_FULL_REPORTS);
+  const maxTokens = deepMode ? 1800 : 1200;
 
   const fullPrompt = [
     `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
@@ -643,7 +709,7 @@ export const analyzeLabDataWithClaude = async ({
           requestType: "analysis",
           payload: {
             model,
-            max_tokens: 3000,
+            max_tokens: maxTokens,
             temperature: 0.3,
             messages: [{ role: "user", content: prompt }]
           }
