@@ -279,6 +279,7 @@ const App = () => {
   }, [draft]);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", appData.settings.theme);
     if (appData.settings.theme === "dark") {
       document.documentElement.classList.add("dark");
       document.body.classList.remove("light");
@@ -982,9 +983,37 @@ const App = () => {
                 <button
                   type="button"
                   onClick={() => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" })}
-                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+                  className="theme-toggle"
+                  aria-label={tr("Schakel thema", "Toggle theme")}
+                  title={tr("Thema wisselen", "Toggle theme")}
                 >
-                  {tr("Thema", "Theme")}: {appData.settings.theme === "dark" ? tr("Donker", "Dark") : tr("Licht", "Light")}
+                  <span className="toggle-thumb">
+                    <svg
+                      className="theme-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <mask id="moon-mask">
+                        <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                        <circle className="moon-cutout" cx="24" cy="0" r="8" fill="black" />
+                      </mask>
+                      <circle className="sun-core" cx="12" cy="12" r="5" mask="url(#moon-mask)" fill="currentColor" />
+                      <g className="sun-beams" stroke="currentColor">
+                        <line x1="12" y1="1" x2="12" y2="4" />
+                        <line x1="12" y1="20" x2="12" y2="23" />
+                        <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+                        <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+                        <line x1="1" y1="12" x2="4" y2="12" />
+                        <line x1="20" y1="12" x2="23" y2="12" />
+                        <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+                        <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+                      </g>
+                    </svg>
+                  </span>
                 </button>
               </div>
             </div>

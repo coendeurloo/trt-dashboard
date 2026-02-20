@@ -54,15 +54,25 @@ interface ToggleSwitchProps {
   onChange: (checked: boolean) => void;
   label: string;
   tooltip?: string;
+  disabled?: boolean;
 }
 
-const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) => (
-  <label className="group relative inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 hover:text-slate-100 sm:text-sm">
+const ToggleSwitch = ({ checked, onChange, label, tooltip, disabled = false }: ToggleSwitchProps) => (
+  <label
+    className={`group relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.25 text-xs sm:text-sm ${
+      disabled ? "cursor-not-allowed bg-slate-800/60 text-slate-500" : "cursor-pointer bg-slate-800 text-slate-300 hover:text-slate-100"
+    }`}
+  >
     <button
       type="button"
       aria-pressed={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) {
+          onChange(!checked);
+        }
+      }}
       className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
         checked ? "border-cyan-500/60 bg-cyan-500/20" : "border-slate-600 bg-slate-700"
       }`}
@@ -137,8 +147,8 @@ const DashboardView = ({
     "Highlights values in color when they fall below or above the reference range."
   );
   const dosePhaseOverlaysTooltip = tr(
-    "Toont protocolfases (zoals dosiswijzigingen) als overlays, zodat je trends per fase kunt vergelijken.",
-    "Shows protocol phases (such as dose changes) as overlays so you can compare trends by phase."
+    "Toont duidelijke faseblokken en grenslijnen per protocolfase, zodat je veranderingen direct aan een fase kunt koppelen.",
+    "Shows clear phase blocks and boundaries per protocol phase, so you can link marker changes to a phase at a glance."
   );
   const trtOptimalZoneTooltip = tr(
     "Toont de ingestelde doelzone voor markers die daar een bekende streefband voor hebben.",
@@ -159,6 +169,8 @@ const DashboardView = ({
       compareToBaseline: false
     });
   };
+  const hasPhaseBlocks = dosePhaseBlocks.length > 0;
+  const overlayFocusEnabled = settings.showAnnotations;
 
   return (
     <section className="space-y-3 fade-in">
@@ -253,6 +265,7 @@ const DashboardView = ({
                 onChange={(checked) => onUpdateSettings({ showReferenceRanges: checked })}
                 label={tr("Referentiebereiken", "Reference ranges")}
                 tooltip={referenceRangesTooltip}
+                disabled={overlayFocusEnabled}
               />
               <ToggleSwitch
                 checked={settings.showAbnormalHighlights}
@@ -262,21 +275,35 @@ const DashboardView = ({
               />
               <ToggleSwitch
                 checked={settings.showAnnotations}
-                onChange={(checked) => onUpdateSettings({ showAnnotations: checked })}
-                label={tr("Dosisfase-overlay", "Dose-phase overlays")}
+                onChange={(checked) =>
+                  onUpdateSettings(
+                    checked
+                      ? {
+                          showAnnotations: true,
+                          showReferenceRanges: false,
+                          showTrtTargetZone: false,
+                          showLongevityTargetZone: false
+                        }
+                      : { showAnnotations: false }
+                  )
+                }
+                label={tr("Protocolfases", "Protocol phases")}
                 tooltip={dosePhaseOverlaysTooltip}
+                disabled={!hasPhaseBlocks}
               />
               <ToggleSwitch
                 checked={settings.showTrtTargetZone}
                 onChange={(checked) => onUpdateSettings({ showTrtTargetZone: checked })}
                 label={tr("Doelzone", "Optimal zone")}
                 tooltip={trtOptimalZoneTooltip}
+                disabled={overlayFocusEnabled}
               />
               <ToggleSwitch
                 checked={settings.showLongevityTargetZone}
                 onChange={(checked) => onUpdateSettings({ showLongevityTargetZone: checked })}
                 label={tr("Longevity-doelzone", "Longevity zone")}
                 tooltip={longevityZoneTooltip}
+                disabled={overlayFocusEnabled}
               />
               <ToggleSwitch
                 checked={settings.yAxisMode === "data"}
@@ -285,6 +312,22 @@ const DashboardView = ({
                 tooltip={yAxisDataRangeTooltip}
               />
             </div>
+          ) : null}
+          {showChartOptions && !hasPhaseBlocks ? (
+            <p className="mt-2 text-xs text-slate-500">
+              {tr(
+                "Geen protocolfase-overlays in dit datumbereik. Voeg meer rapporten toe of kies een ruimer bereik.",
+                "No protocol phase overlays in this date range. Add more reports or choose a wider range."
+              )}
+            </p>
+          ) : null}
+          {showChartOptions && overlayFocusEnabled ? (
+            <p className="mt-2 text-xs text-cyan-300/90">
+              {tr(
+                "Protocolfases-focus staat aan. Referentiebereik en doelzones zijn tijdelijk verborgen voor een heldere fasevergelijking.",
+                "Protocol phases focus is on. Reference ranges and target zones are temporarily hidden for a clearer phase comparison."
+              )}
+            </p>
           ) : null}
 
           {samplingControlsEnabled ? (

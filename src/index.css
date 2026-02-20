@@ -4,6 +4,9 @@
 
 :root {
   color-scheme: dark;
+  --toggle-track-bg: #cbd5e1;
+  --toggle-thumb-bg: #ffffff;
+  --toggle-icon-color: #f59e0b;
 }
 
 body {
@@ -25,6 +28,85 @@ body.light {
     radial-gradient(circle at 54% 82%, rgba(37, 99, 235, 0.1), transparent 52%),
     linear-gradient(180deg, #eaf4fb 0%, #f4f9fc 50%, #eff6fb 100%);
   color: #0f172a;
+}
+
+:root[data-theme="dark"] {
+  --toggle-track-bg: #334155;
+  --toggle-thumb-bg: #1e293b;
+  --toggle-icon-color: #f8fafc;
+}
+
+.theme-toggle {
+  position: relative;
+  width: 60px;
+  height: 30px;
+  border-radius: 999px;
+  background-color: var(--toggle-track-bg);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.4s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.7);
+  outline-offset: 2px;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background-color: var(--toggle-thumb-bg);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.4s ease;
+}
+
+:root[data-theme="dark"] .toggle-thumb {
+  transform: translateX(30px);
+}
+
+.theme-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--toggle-icon-color);
+  transition: color 0.4s ease;
+  overflow: visible;
+}
+
+.sun-core,
+.sun-beams,
+.moon-cutout {
+  transform-origin: center;
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.sun-beams {
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease;
+}
+
+.theme-toggle:hover .sun-beams {
+  transform: rotate(15deg);
+}
+
+:root[data-theme="dark"] .sun-core {
+  transform: scale(1.6);
+}
+
+:root[data-theme="dark"] .sun-beams {
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.5);
+}
+
+:root[data-theme="dark"] .moon-cutout {
+  transform: translateX(-10px) translateY(8px);
 }
 
 body.light .shadow-soft {

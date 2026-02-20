@@ -67,6 +67,12 @@ const EXTRA_DEMO_MARKERS_BY_MONTH: Record<number, Array<{ marker: string; value:
     { marker: "Ferritin", value: 210 },
     { marker: "Prolactin", value: 160 }
   ],
+  3: [
+    { marker: "Triglycerides", value: 1.08 },
+    { marker: "Apolipoprotein B", value: 0.83 },
+    { marker: "Ferritin", value: 205 },
+    { marker: "Prolactin", value: 156 }
+  ],
   2: [
     { marker: "Triglycerides", value: 1.06 },
     { marker: "Apolipoprotein B", value: 0.82 },
@@ -285,9 +291,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 30.4 },
-      { marker: "Free Testosterone", value: 0.45 },
-      { marker: "Estradiol", value: 118 },
+      { marker: "Testosterone", value: 31.2 },
+      { marker: "Free Testosterone", value: 0.5 },
+      { marker: "Estradiol", value: 134 },
       { marker: "SHBG", value: 38 },
       { marker: "Hematocrit", value: 0.46 },
       { marker: "PSA", value: 0.7 },
@@ -308,9 +314,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 24.8 },
-      { marker: "Free Testosterone", value: 0.49 },
-      { marker: "Estradiol", value: 128 },
+      { marker: "Testosterone", value: 29.8 },
+      { marker: "Free Testosterone", value: 0.47 },
+      { marker: "Estradiol", value: 126 },
       { marker: "SHBG", value: 37 },
       { marker: "Hematocrit", value: 0.47 },
       { marker: "PSA", value: 0.72 },
@@ -331,9 +337,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 20.2 },
-      { marker: "Free Testosterone", value: 0.42 },
-      { marker: "Estradiol", value: 103 },
+      { marker: "Testosterone", value: 18.9 },
+      { marker: "Free Testosterone", value: 0.37 },
+      { marker: "Estradiol", value: 96 },
       { marker: "SHBG", value: 36.5 },
       { marker: "Hematocrit", value: 0.475 },
       { marker: "PSA", value: 0.73 },
@@ -354,9 +360,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 18.1 },
-      { marker: "Free Testosterone", value: 0.38 },
-      { marker: "Estradiol", value: 95 },
+      { marker: "Testosterone", value: 17.1 },
+      { marker: "Free Testosterone", value: 0.33 },
+      { marker: "Estradiol", value: 88 },
       { marker: "SHBG", value: 36 },
       { marker: "Hematocrit", value: 0.48 },
       { marker: "PSA", value: 0.7 },
@@ -377,9 +383,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 17.4 },
-      { marker: "Free Testosterone", value: 0.36 },
-      { marker: "Estradiol", value: 84 },
+      { marker: "Testosterone", value: 15.3 },
+      { marker: "Free Testosterone", value: 0.3 },
+      { marker: "Estradiol", value: 76 },
       { marker: "SHBG", value: 36 },
       { marker: "Hematocrit", value: 0.46 },
       { marker: "PSA", value: 0.74 },
@@ -387,6 +393,29 @@ export const getDemoReports = (): LabReport[] => [
       { marker: "Cholesterol", value: 4.7 },
       { marker: "HDL Cholesterol", value: 1.19 },
       { marker: "LDL Cholesterol", value: 2.7 }
+    ]
+  }),
+  makeReport({
+    monthsAgo: 3,
+    sourceFileName: "demo-trt-month-8b.pdf",
+    annotations: {
+      ...defaultAnnotations(),
+      protocolId: DEMO_PROTOCOL_SPLIT_ID,
+      protocol: "Split protocol stabilized",
+      symptoms: "Fewer peaks, better sleep consistency",
+      samplingTiming: "trough"
+    },
+    markers: [
+      { marker: "Testosterone", value: 16.0 },
+      { marker: "Free Testosterone", value: 0.31 },
+      { marker: "Estradiol", value: 79 },
+      { marker: "SHBG", value: 35.5 },
+      { marker: "Hematocrit", value: 0.462 },
+      { marker: "PSA", value: 0.75 },
+      { marker: "Hemoglobin", value: 9.8 },
+      { marker: "Cholesterol", value: 4.68 },
+      { marker: "HDL Cholesterol", value: 1.2 },
+      { marker: "LDL Cholesterol", value: 2.68 }
     ]
   }),
   makeReport({

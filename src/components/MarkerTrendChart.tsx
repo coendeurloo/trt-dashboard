@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, getTargetZone } from "../analytics";
 import { AppLanguage, AppSettings } from "../types";
 import { formatDate } from "../utils";
@@ -47,6 +47,16 @@ const MarkerTrendChart = ({
   const phaseBlocksForSeries = phaseBlocks.filter(
     (block) => availableKeys.has(block.fromKey) || availableKeys.has(block.toKey)
   );
+  const phaseLegend = phaseBlocksForSeries
+    .map((block, index) => ({
+      key: block.id,
+      color: phaseColor(block.dosageMgPerWeek, index),
+      dosageMgPerWeek: block.dosageMgPerWeek,
+      label: block.dosageMgPerWeek === null ? tr("Fase zonder dosis", "Phase without dose") : `${block.dosageMgPerWeek} mg/wk`,
+      protocol: block.protocol || "-"
+    }))
+    .filter((item, index, array) => array.findIndex((candidate) => candidate.label === item.label && candidate.protocol === item.protocol) === index)
+    .slice(0, 4);
 
   if (points.length === 0) {
     return (
@@ -60,8 +70,19 @@ const MarkerTrendChart = ({
   }
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
+    <div className="space-y-2">
+      {settings.showAnnotations && phaseLegend.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {phaseLegend.map((item) => (
+            <span key={item.key} className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 text-slate-300">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
         <XAxis
           dataKey="key"
@@ -142,20 +163,34 @@ const MarkerTrendChart = ({
           }}
         />
 
-        {settings.showAnnotations
-          ? phaseBlocksForSeries.map((block, index) => (
-              <ReferenceArea
-                key={`${marker}-phase-${block.id}`}
-                x1={block.fromKey}
-                x2={block.toKey}
-                y1="dataMin"
-                y2="dataMax"
-                fill={phaseColor(block.dosageMgPerWeek, index)}
-                fillOpacity={0.08}
-                strokeOpacity={0}
-              />
-            ))
-          : null}
+          {settings.showAnnotations
+            ? phaseBlocksForSeries.map((block, index) => (
+                <ReferenceArea
+                  key={`${marker}-phase-${block.id}`}
+                  x1={block.fromKey}
+                  x2={block.toKey}
+                  fill={phaseColor(block.dosageMgPerWeek, index)}
+                  fillOpacity={0.28}
+                  stroke={phaseColor(block.dosageMgPerWeek, index)}
+                  strokeOpacity={0.5}
+                  strokeWidth={1}
+                  ifOverflow="extendDomain"
+                />
+              ))
+            : null}
+
+          {settings.showAnnotations
+            ? phaseBlocksForSeries.map((block) => (
+                <ReferenceLine
+                  key={`${marker}-phase-edge-${block.id}`}
+                  x={block.toKey}
+                  stroke="#94a3b8"
+                  strokeOpacity={0.26}
+                  strokeDasharray="4 3"
+                  strokeWidth={1}
+                />
+              ))
+            : null}
 
         {settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? (
           <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
@@ -196,8 +231,9 @@ const MarkerTrendChart = ({
           }}
           activeDot={{ r: 6 }}
         />
-      </LineChart>
-    </ResponsiveContainer>
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 };
 
