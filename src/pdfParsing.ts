@@ -204,6 +204,10 @@ const shouldAppendContinuationToPreviousMarker = (continuationLine: string, prev
   if (continuation === "volume" && /mpv-mean platelet$/.test(previous)) {
     return true;
   }
+  // Safe, explicit case: Vitamin D marker suffix split to next line.
+  if (continuation === "(d3+d2)" && /25-oh-?\s+vitamin\s+d$/i.test(previous)) {
+    return true;
+  }
 
   return false;
 };
@@ -1620,7 +1624,7 @@ const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
 const cleanMarkerName = (rawMarker: string): string => {
   let marker = cleanWhitespace(rawMarker)
     .replace(/^[^A-Za-zÀ-ž]+/, "")
-    .replace(/^(?:A|H|L)\s+(?=[A-Za-zÀ-ž])/i, "")
+    .replace(/^(?:A|H|L)\s+(?=[A-Za-zÀ-ž0-9])/i, "")
     .replace(/\s*\([^)]*dr\.[^)]*\)$/i, "")
     .replace(/\b(?:within|above|below)\s+(?:luteal|follicular|optimal|reference)?\s*range\b/gi, "")
     .trim();
@@ -1700,6 +1704,8 @@ const applyProfileMarkerFixes = (markerName: string): string => {
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
   marker = marker.replace(/^MPV-Mean Platelet$/i, "MPV-Mean Platelet Volume");
+  marker = marker.replace(/^25-?OH-?\s*Vitamin D\s*\(D3\s*\+\s*D2\)$/i, "25-OH- Vitamin D (D3+D2)");
+  marker = marker.replace(/^25-?OH-?\s*Vitamin D$/i, "25-OH- Vitamin D (D3+D2)");
   marker = marker.replace(/\s*\(volgens\s*$/i, "").trim();
   marker = marker.replace(/\s+\($/, "").trim();
   marker = marker.replace(/\s{2,}/g, " ").trim();
@@ -1728,6 +1734,9 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   }
 
   if (/^\d/.test(marker)) {
+    if (/^25-?oh-?\s*vitamin\s*d\b/i.test(marker)) {
+      return false;
+    }
     return true;
   }
   if (/\b\d{1,3}\/\d{2,3}\s+A?\b/i.test(marker)) {
@@ -3221,7 +3230,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
   const rows: ParsedFallbackRow[] = [];
   const normalized = cleanWhitespace(text);
   const rowPattern =
-    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%µμ][A-Za-z%µμ0-9*^/.\-]*))?(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
+    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z0-9][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%µμ][A-Za-z%µμ0-9*^/.\-]*))?(?=(?:\s+\(D3\s*\+\s*D2\))?\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
 
   for (const match of normalized.matchAll(rowPattern)) {
     let markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));

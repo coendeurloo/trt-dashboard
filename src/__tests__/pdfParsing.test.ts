@@ -531,7 +531,8 @@ describe("pdfParsing fallback layers", () => {
         "11/58 A PDW-Platelet Distribution Width 11.3 9.30-16.70 fL",
         "12/58 A White blood cells 7.05 4.0 - 9.8 10x9/L",
         "Vitamins",
-        "45/58 A 25-OH- Vitamin D (D3+D2) 60.10 30 - 100 ng/mL",
+        "45/58 A 25-OH- Vitamin D 60.10 30 - 100 ng/mL",
+        "(D3+D2)",
         "Tumor Markers",
         "46/58 A PSA 0.424 <4.0 ng/mL",
         "53/58 A Free Androgen Index 101.83 14.8 - 95.0",
@@ -544,12 +545,15 @@ describe("pdfParsing fallback layers", () => {
     );
 
     const tsh = draft.markers.find((marker) => marker.canonicalMarker === "TSH");
+    const vitaminD = draft.markers.find((marker) => /25-oh-?\s+vitamin\s+d/i.test(marker.marker));
     const hasNoiseMarker = draft.markers.some((marker) =>
       /\b(?:tumou?r markers?|cardial markers?|afternoon hours|morning hours|interval vitamins|12\/58|54\/58)\b/i.test(marker.marker)
     );
 
     expect(tsh).toBeDefined();
     expect(tsh?.rawValue).toBeCloseTo(2.2, 2);
+    expect(vitaminD).toBeDefined();
+    expect(vitaminD?.marker).toBe("25-OH- Vitamin D (D3+D2)");
     expect(hasNoiseMarker).toBe(false);
   });
 
