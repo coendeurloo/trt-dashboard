@@ -3573,6 +3573,68 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
   return Array.from(byKey.values());
 };
 
+const normalizeMarkerOrderLookupText = (value: string): string =>
+  cleanWhitespace(value)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildMarkerOrderCandidates = (marker: MarkerValue): string[] => {
+  const raw = cleanWhitespace(marker.marker);
+  const cleaned = cleanMarkerName(raw);
+  const profileFixed = applyProfileMarkerFixes(cleaned);
+  const canonical = cleanWhitespace(marker.canonicalMarker);
+
+  const candidates = [raw, cleaned, profileFixed, canonical]
+    .map((candidate) => normalizeMarkerOrderLookupText(candidate))
+    .filter((candidate) => candidate.length >= 3 && !looksLikeNoiseMarker(candidate));
+
+  return Array.from(new Set(candidates));
+};
+
+const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): MarkerValue[] => {
+  if (markers.length < 2) {
+    return markers;
+  }
+
+  const haystack = normalizeMarkerOrderLookupText(sourceText);
+  if (!haystack) {
+    return markers;
+  }
+
+  const indexCache = new Map<string, number>();
+  const findFirstIndex = (candidate: string): number => {
+    const cached = indexCache.get(candidate);
+    if (typeof cached === "number") {
+      return cached;
+    }
+    const index = haystack.indexOf(candidate);
+    indexCache.set(candidate, index);
+    return index;
+  };
+
+  return markers
+    .map((marker, originalIndex) => {
+      const firstSeenIndex = buildMarkerOrderCandidates(marker)
+        .map((candidate) => findFirstIndex(candidate))
+        .filter((index) => index >= 0)
+        .reduce((smallest, index) => Math.min(smallest, index), Number.POSITIVE_INFINITY);
+
+      return {
+        marker,
+        originalIndex,
+        firstSeenIndex: Number.isFinite(firstSeenIndex) ? firstSeenIndex : Number.POSITIVE_INFINITY
+      };
+    })
+    .sort((left, right) => {
+      if (left.firstSeenIndex !== right.firstSeenIndex) {
+        return left.firstSeenIndex - right.firstSeenIndex;
+      }
+      return left.originalIndex - right.originalIndex;
+    })
+    .map((entry) => entry.marker);
+};
+
 const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): FallbackExtractOutcome => {
   const profile = detectParserProfile(text, fileName);
   const genovaRows = parseGenovaHormoneRows(text, profile);
@@ -3626,7 +3688,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
   const spatialParsedRows = shouldApplySpatialBoost ? parseSpatialRows(spatialRows, profile) : [];
   const combinedRows = [...historyRows, ...nonSpatialRows, ...spatialParsedRows];
   const combinedDedupe = dedupeRowsDetailed(combinedRows);
-  const markers = combinedDedupe.markers;
+  const markers = orderMarkersBySourceText(combinedDedupe.markers, text);
 
   const averageConfidence =
     markers.length > 0 ? markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length : 0;
@@ -3688,11 +3750,14 @@ const callGeminiExtraction = async (
   const cached = getCachedAiExtraction(requestOptions.fileHash, requestOptions.mode);
   if (cached?.markers?.length) {
     const rawMarkers = Array.isArray(cached.markers) ? cached.markers : [];
-    const cachedMarkers = filterMarkerValuesForQuality(
+    const cachedMarkers = orderMarkersBySourceText(
+      filterMarkerValuesForQuality(
       rawMarkers
         .map(normalizeMarker)
         .filter((row): row is MarkerValue => Boolean(row))
         .filter((row) => isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude"))
+      ),
+      pdfText
     );
     if (cachedMarkers.length > 0) {
       const confidence = cachedMarkers.reduce((sum, row) => sum + row.confidence, 0) / Math.max(cachedMarkers.length, 1);
@@ -3870,7 +3935,7 @@ const callGeminiExtraction = async (
     .filter((row): row is MarkerValue => Boolean(row))
     .filter((row) => isAcceptableMarkerCandidate(row.marker, row.unit, row.referenceMin, row.referenceMax, "claude"));
 
-  const markers = filterMarkerValuesForQuality(geminiMarkers);
+  const markers = orderMarkersBySourceText(filterMarkerValuesForQuality(geminiMarkers), pdfText);
   if (markers.length === 0) {
     return {
       draft: null,
