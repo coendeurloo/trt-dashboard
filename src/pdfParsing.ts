@@ -1139,6 +1139,10 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
     unit: normalized.unit,
     referenceMin: normalized.referenceMin,
     referenceMax: normalized.referenceMax,
+    rawValue: value,
+    rawUnit: unit,
+    rawReferenceMin: referenceMin,
+    rawReferenceMax: referenceMax,
     abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
     confidence:
       typeof raw.confidence === "number"
@@ -3303,6 +3307,10 @@ const dedupeRowsDetailed = (rows: ParsedFallbackRow[]): { markers: MarkerValue[]
       unit: normalized.unit,
       referenceMin: normalized.referenceMin,
       referenceMax: normalized.referenceMax,
+      rawValue: row.value,
+      rawUnit: row.unit,
+      rawReferenceMin: row.referenceMin,
+      rawReferenceMax: row.referenceMax,
       abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
       confidence
     };

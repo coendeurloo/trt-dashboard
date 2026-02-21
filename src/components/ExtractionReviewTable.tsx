@@ -253,6 +253,13 @@ const ExtractionReviewTable = ({
     return tr("Onbekend", "Unknown");
   };
 
+  const displayValue = (row: MarkerValue): number => (typeof row.rawValue === "number" ? row.rawValue : row.value);
+  const displayUnit = (row: MarkerValue): string => row.rawUnit ?? row.unit;
+  const displayReferenceMin = (row: MarkerValue): number | null =>
+    row.rawReferenceMin !== undefined ? row.rawReferenceMin : row.referenceMin;
+  const displayReferenceMax = (row: MarkerValue): number | null =>
+    row.rawReferenceMax !== undefined ? row.rawReferenceMax : row.referenceMax;
+
   const addSupplementOverride = () => {
     const name = canonicalizeSupplement(supplementNameInput);
     if (!name) {
@@ -315,15 +322,23 @@ const ExtractionReviewTable = ({
           return row;
         }
         const next = updater(row);
+        const sourceValue = typeof next.rawValue === "number" ? next.rawValue : next.value;
+        const sourceUnit = next.rawUnit ?? next.unit;
+        const sourceReferenceMin = next.rawReferenceMin !== undefined ? next.rawReferenceMin : next.referenceMin;
+        const sourceReferenceMax = next.rawReferenceMax !== undefined ? next.rawReferenceMax : next.referenceMax;
         const normalized = normalizeMarkerMeasurement({
           canonicalMarker: next.canonicalMarker,
-          value: next.value,
-          unit: next.unit,
-          referenceMin: next.referenceMin,
-          referenceMax: next.referenceMax
+          value: sourceValue,
+          unit: sourceUnit,
+          referenceMin: sourceReferenceMin,
+          referenceMax: sourceReferenceMax
         });
         return {
           ...next,
+          rawValue: sourceValue,
+          rawUnit: sourceUnit,
+          rawReferenceMin: sourceReferenceMin,
+          rawReferenceMax: sourceReferenceMax,
           value: normalized.value,
           unit: normalized.unit,
           referenceMin: normalized.referenceMin,
@@ -347,6 +362,10 @@ const ExtractionReviewTable = ({
           unit: "",
           referenceMin: null,
           referenceMax: null,
+          rawValue: 0,
+          rawUnit: "",
+          rawReferenceMin: null,
+          rawReferenceMax: null,
           abnormal: "unknown",
           confidence: 0.4
         }
@@ -628,47 +647,47 @@ const ExtractionReviewTable = ({
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
-                    value={row.value}
+                    value={displayValue(row)}
                     align="right"
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
                         ...current,
-                        value: safeNumber(value) ?? current.value
+                        rawValue: safeNumber(value) ?? displayValue(current)
                       }))
                     }
                   />
                 </td>
                 <td className="px-3 py-2">
                   <EditableCell
-                    value={row.unit}
+                    value={displayUnit(row)}
                     editLabel={tr("Waarde bewerken", "Edit value")}
-                    onCommit={(value) => updateRow(row.id, (current) => ({ ...current, unit: value }))}
+                    onCommit={(value) => updateRow(row.id, (current) => ({ ...current, rawUnit: value }))}
                     placeholder={tr("Eenheid", "Unit")}
                   />
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
-                    value={row.referenceMin}
+                    value={displayReferenceMin(row)}
                     align="right"
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
                         ...current,
-                        referenceMin: value.trim() ? safeNumber(value) : null
+                        rawReferenceMin: value.trim() ? safeNumber(value) : null
                       }))
                     }
                   />
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
-                    value={row.referenceMax}
+                    value={displayReferenceMax(row)}
                     align="right"
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
                         ...current,
-                        referenceMax: value.trim() ? safeNumber(value) : null
+                        rawReferenceMax: value.trim() ? safeNumber(value) : null
                       }))
                     }
                   />

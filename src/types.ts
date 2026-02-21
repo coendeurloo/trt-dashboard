@@ -86,6 +86,10 @@ export interface MarkerValue {
   unit: string;
   referenceMin: number | null;
   referenceMax: number | null;
+  rawValue?: number;
+  rawUnit?: string;
+  rawReferenceMin?: number | null;
+  rawReferenceMax?: number | null;
   abnormal: "low" | "high" | "normal" | "unknown";
   confidence: number;
   isCalculated?: boolean;
