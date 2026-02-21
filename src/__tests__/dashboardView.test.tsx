@@ -103,7 +103,8 @@ const buildProps = () => {
       markerPercentChange: vi.fn(() => null),
       markerBaselineDelta: vi.fn(() => null),
       onLoadDemo: vi.fn(),
-      onUploadClick
+      onUploadClick,
+      isProcessing: false
     },
     onUpdateSettings,
     onUploadClick

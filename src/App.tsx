@@ -542,6 +542,22 @@ const App = () => {
     setActiveTab("dashboard");
   };
 
+  const scrollPageToTop = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+
+  const openHiddenUploadPicker = () => {
+    const input = hiddenUploadInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.value = "";
+    input.click();
+  };
+
   const scrollToUploadPanel = () => {
     void ensurePdfParsingModule();
     if (activeTab !== "dashboard") {
@@ -560,12 +576,20 @@ const App = () => {
       if (action !== "open-hidden-picker") {
         return;
       }
-      const input = hiddenUploadInputRef.current;
-      if (!input) {
-        return;
-      }
-      input.value = "";
-      input.click();
+      openHiddenUploadPicker();
+    });
+  };
+
+  const startSecondUpload = () => {
+    if (isShareMode || isProcessing) {
+      return;
+    }
+    void ensurePdfParsingModule();
+    if (activeTab !== "dashboard") {
+      setActiveTab("dashboard");
+    }
+    requestAnimationFrame(() => {
+      openHiddenUploadPicker();
     });
   };
 
@@ -612,6 +636,7 @@ const App = () => {
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
+      scrollPageToTop();
       setUploadSummary({
         fileName: extracted.sourceFileName,
         markerCount: extracted.markers.length,
@@ -667,6 +692,7 @@ const App = () => {
       const chosenDraft = !draft || improved.markers.length >= draft.markers.length ? improved : draft;
       setDraft(chosenDraft);
       captureOriginalDraftMarkerLabels(chosenDraft);
+      scrollPageToTop();
       setUploadSummary({
         fileName: improved.sourceFileName,
         markerCount: improved.markers.length,
@@ -728,6 +754,7 @@ const App = () => {
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
+      scrollPageToTop();
       setUploadSummary({
         fileName: extracted.sourceFileName,
         markerCount: extracted.markers.length,
@@ -1100,6 +1127,11 @@ const App = () => {
     }
     setActiveTab(nextTab);
   };
+
+  useEffect(() => {
+    scrollPageToTop();
+  }, [activeTab]);
+
   const cancelPendingTabChange = () => {
     setPendingTabChange(null);
   };
@@ -1452,7 +1484,8 @@ const App = () => {
               markerPercentChange={markerPercentChange}
               markerBaselineDelta={markerBaselineDelta}
               onLoadDemo={loadDemoData}
-              onUploadClick={scrollToUploadPanel}
+              onUploadClick={startSecondUpload}
+              isProcessing={isProcessing}
             />
           ) : null}
 
@@ -1699,6 +1732,15 @@ const App = () => {
                   "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
                 )}
                 {uploadSummary.warnings > 0 ? ` ${tr("Er zijn parserwaarschuwingen gevonden.", "Parser warnings were detected.")}` : ""}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/60 bg-cyan-500/15 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
+                  onClick={() => setUploadSummary(null)}
+                >
+                  {tr("Doorgaan", "Continue")}
+                </button>
               </div>
             </motion.div>
           </motion.div>

@@ -16,6 +16,7 @@ import {
   normalizeMarkerAliasOverrides,
   setMarkerAliasOverrides
 } from "../markerNormalization";
+import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
 
@@ -74,6 +75,9 @@ export const detectMarkerMergeSuggestions = (
       let bestScore = 0;
       for (const candidate of existingCanonicalMarkers) {
         if (candidate === source) {
+          continue;
+        }
+        if (!canMergeMarkersBySpecimen(source, candidate)) {
           continue;
         }
         const score = markerSimilarity(source, candidate);
@@ -282,6 +286,9 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         return;
       }
       const targetCanonical = canonicalizeMarker(cleanLabel);
+      if (!canMergeMarkersBySpecimen(sourceCanonical, targetCanonical)) {
+        return;
+      }
       setAppData((prev) => ({
         ...prev,
         reports: prev.reports.map((report) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
@@ -47,6 +47,7 @@ interface DashboardViewProps {
   markerBaselineDelta: (marker: string) => number | null;
   onLoadDemo: () => void;
   onUploadClick: () => void;
+  isProcessing: boolean;
 }
 
 interface ToggleSwitchProps {
@@ -123,7 +124,8 @@ const DashboardView = ({
   markerPercentChange,
   markerBaselineDelta,
   onLoadDemo,
-  onUploadClick
+  onUploadClick,
+  isProcessing
 }: DashboardViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
@@ -444,9 +446,19 @@ const DashboardView = ({
                     <button
                       type="button"
                       onClick={onUploadClick}
-                      className="rounded-md border border-cyan-400/50 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-cyan-100 hover:border-cyan-300 hover:text-cyan-50 sm:text-sm"
+                      disabled={isProcessing}
+                      className={`rounded-md border border-cyan-400/50 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-cyan-100 sm:text-sm ${
+                        isProcessing ? "cursor-not-allowed opacity-70" : "hover:border-cyan-300 hover:text-cyan-50"
+                      }`}
                     >
-                      {tr("Upload tweede rapport", "Upload second report")}
+                      {isProcessing ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {tr("Bezig met upload...", "Uploading...")}
+                        </span>
+                      ) : (
+                        tr("Upload tweede rapport", "Upload second report")
+                      )}
                     </button>
                   ) : null}
                 </div>
@@ -480,9 +492,19 @@ const DashboardView = ({
                     <button
                       type="button"
                       onClick={onUploadClick}
-                      className="rounded-md border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 hover:border-cyan-300 hover:text-cyan-50 sm:text-sm"
+                      disabled={isProcessing}
+                      className={`rounded-md border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 sm:text-sm ${
+                        isProcessing ? "cursor-not-allowed opacity-70" : "hover:border-cyan-300 hover:text-cyan-50"
+                      }`}
                     >
-                      {tr("Upload tweede rapport", "Upload second report")}
+                      {isProcessing ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {tr("Bezig met upload...", "Uploading...")}
+                        </span>
+                      ) : (
+                        tr("Upload tweede rapport", "Upload second report")
+                      )}
                     </button>
                   ) : null}
                 </div>

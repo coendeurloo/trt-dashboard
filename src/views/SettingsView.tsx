@@ -2,6 +2,7 @@ import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMem
 import { AlertTriangle, ChevronDown, ChevronUp, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
+import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
@@ -109,6 +110,10 @@ const SettingsView = ({
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const showParserDebugControls =
     import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
+  const mergeFromSpecimen = inferSpecimenFromCanonicalMarker(mergeFromMarker);
+  const mergeTargetOptions = editableMarkers.filter(
+    (marker) => marker !== mergeFromMarker && inferSpecimenFromCanonicalMarker(marker) === mergeFromSpecimen
+  );
 
   useEffect(() => {
     if (editableMarkers.length === 0) {
@@ -117,13 +122,28 @@ const SettingsView = ({
       return;
     }
     setMergeFromMarker((current) => (editableMarkers.includes(current) ? current : editableMarkers[0]));
-    setMergeIntoMarker((current) => {
-      if (editableMarkers.includes(current) && current !== (editableMarkers[0] ?? "")) {
-        return current;
-      }
-      return editableMarkers.find((marker) => marker !== (editableMarkers[0] ?? "")) ?? "";
-    });
   }, [editableMarkers]);
+
+  useEffect(() => {
+    setMergeIntoMarker((current) => (mergeTargetOptions.includes(current) ? current : mergeTargetOptions[0] ?? ""));
+  }, [mergeTargetOptions]);
+
+  useEffect(() => {
+    if (!mergeFromMarker || mergeTargetOptions.length > 0) {
+      return;
+    }
+    const fallbackSource = editableMarkers.find((marker) => {
+      if (marker === mergeFromMarker) {
+        return false;
+      }
+      return editableMarkers.some(
+        (candidate) => candidate !== marker && inferSpecimenFromCanonicalMarker(candidate) === inferSpecimenFromCanonicalMarker(marker)
+      );
+    });
+    if (fallbackSource) {
+      setMergeFromMarker(fallbackSource);
+    }
+  }, [editableMarkers, mergeFromMarker, mergeTargetOptions]);
 
   useEffect(() => {
     setCsvMarkerSelection((current) => {
@@ -653,9 +673,7 @@ const SettingsView = ({
             onChange={(event) => setMergeIntoMarker(event.target.value)}
           >
             <option value="">{tr("Selecteer target", "Select target")}</option>
-            {editableMarkers
-              .filter((marker) => marker !== mergeFromMarker)
-              .map((marker) => (
+            {mergeTargetOptions.map((marker) => (
                 <option key={`to-${marker}`} value={marker}>
                   {getMarkerDisplayName(marker, language)}
                 </option>
@@ -670,6 +688,12 @@ const SettingsView = ({
             {tr("Voer merge uit", "Merge markers")}
           </button>
         </div>
+        <p className="mt-2 text-xs text-slate-400">
+          {tr(
+            "Veilige merge: urine-markers en bloed-markers worden nooit samengevoegd.",
+            "Safe merge: urine markers and blood markers are never merged."
+          )}
+        </p>
 
         <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-900/40">
           <table className="min-w-full divide-y divide-slate-700 text-sm">
