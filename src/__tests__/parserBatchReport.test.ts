@@ -135,7 +135,16 @@ describe("parser batch report", () => {
       }).length;
 
       const warningCodes = (parsed.extraction.warnings ?? [])
-        .map((warning) => (typeof warning === "string" ? warning : warning?.code ?? ""))
+        .map((warning) => {
+          if (typeof warning === "string") {
+            return warning;
+          }
+          if (warning && typeof warning === "object" && "code" in warning) {
+            const code = (warning as { code?: unknown }).code;
+            return typeof code === "string" ? code : "";
+          }
+          return "";
+        })
         .filter(Boolean);
       const unknownLayout = warningCodes.includes("PDF_UNKNOWN_LAYOUT");
       const dateExpected = typeof expected.expectedDate === "string" && expected.expectedDate.length > 0;
