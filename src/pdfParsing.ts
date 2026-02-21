@@ -3579,15 +3579,33 @@ const normalizeMarkerOrderLookupText = (value: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+const normalizeMarkerOrderLookupTextLoose = (value: string): string =>
+  normalizeMarkerOrderLookupText(value)
+    .replace(/[()[\]{}]/g, " ")
+    .replace(/[+]/g, " ")
+    .replace(/[-_/.,:;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const buildMarkerOrderCandidates = (marker: MarkerValue): string[] => {
   const raw = cleanWhitespace(marker.marker);
   const cleaned = cleanMarkerName(raw);
   const profileFixed = applyProfileMarkerFixes(cleaned);
   const canonical = cleanWhitespace(marker.canonicalMarker);
+  const withoutParentheses = profileFixed.replace(/\([^)]*\)/g, " ");
+  const uppercaseToken = profileFixed.toUpperCase();
 
-  const candidates = [raw, cleaned, profileFixed, canonical]
-    .map((candidate) => normalizeMarkerOrderLookupText(candidate))
-    .filter((candidate) => candidate.length >= 3 && !looksLikeNoiseMarker(candidate));
+  const candidates = [raw, cleaned, profileFixed, canonical, withoutParentheses]
+    .flatMap((candidate) => [normalizeMarkerOrderLookupText(candidate), normalizeMarkerOrderLookupTextLoose(candidate)])
+    .filter((candidate) => {
+      if (!candidate || looksLikeNoiseMarker(candidate)) {
+        return false;
+      }
+      if (candidate.length >= 3) {
+        return true;
+      }
+      return SHORT_MARKER_ALLOWLIST.has(uppercaseToken) || SHORT_MARKER_ALLOWLIST.has(candidate.toUpperCase());
+    });
 
   return Array.from(new Set(candidates));
 };
@@ -3598,11 +3616,13 @@ const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): M
   }
 
   const haystack = normalizeMarkerOrderLookupText(sourceText);
+  const haystackLoose = normalizeMarkerOrderLookupTextLoose(sourceText);
   if (!haystack) {
     return markers;
   }
 
   const indexCache = new Map<string, number>();
+  const indexLooseCache = new Map<string, number>();
   const findFirstIndex = (candidate: string): number => {
     const cached = indexCache.get(candidate);
     if (typeof cached === "number") {
@@ -3612,11 +3632,26 @@ const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): M
     indexCache.set(candidate, index);
     return index;
   };
+  const findFirstIndexLoose = (candidate: string): number => {
+    const cached = indexLooseCache.get(candidate);
+    if (typeof cached === "number") {
+      return cached;
+    }
+    const index = haystackLoose.indexOf(candidate);
+    indexLooseCache.set(candidate, index);
+    return index;
+  };
 
   return markers
     .map((marker, originalIndex) => {
       const firstSeenIndex = buildMarkerOrderCandidates(marker)
-        .map((candidate) => findFirstIndex(candidate))
+        .map((candidate) => {
+          const strictIndex = findFirstIndex(candidate);
+          if (strictIndex >= 0) {
+            return strictIndex;
+          }
+          return findFirstIndexLoose(candidate);
+        })
         .filter((index) => index >= 0)
         .reduce((smallest, index) => Math.min(smallest, index), Number.POSITIVE_INFINITY);
 
