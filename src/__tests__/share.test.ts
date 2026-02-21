@@ -6,6 +6,7 @@ import { StoredAppData } from "../types";
 const makeSampleData = (): StoredAppData => ({
   schemaVersion: 4,
   settings: DEFAULT_SETTINGS,
+  markerAliasOverrides: {},
   protocols: [
     {
       id: "p1",

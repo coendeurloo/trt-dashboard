@@ -52,6 +52,7 @@ export const buildShareToken = (data: StoredAppData, options: ShareOptions): str
     protocols: options.hideProtocol ? [] : data.protocols,
     supplementTimeline: options.hideProtocol ? [] : data.supplementTimeline,
     checkIns: options.hideProtocol ? [] : data.checkIns,
+    markerAliasOverrides: data.markerAliasOverrides,
     settings: {
       ...DEFAULT_SETTINGS,
       ...data.settings
