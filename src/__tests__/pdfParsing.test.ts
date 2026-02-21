@@ -553,6 +553,43 @@ describe("pdfParsing fallback layers", () => {
     expect(hasNoiseMarker).toBe(false);
   });
 
+  it("keeps MPV as one marker and preserves PCT-plateletcrit in Latvian rows", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "E. Gulbja Laboratorija Testing Report Nr. 26862432 /2/Request complete",
+        "8/58 A Platelets 272 150 - 410 10x9/L",
+        "9/58 A MPV-Mean Platelet",
+        "Volume 9.5 9.1-12.6 fL",
+        "10/58 A PCT-plateletcrit 0.260 0.12-0.39 %",
+        "11/58 A PDW-Platelet 11.3 9.30-16.70 fL",
+        "Distribution Width",
+        "12/58 A White blood cells 7.05 4.0 - 9.8 10x9/L"
+      ].join("\n"),
+      "labrapport-250812-lab-latvia.pdf"
+    );
+
+    const mpv = draft.markers.find((marker) => /mpv-mean platelet volume/i.test(marker.marker));
+    const pct = draft.markers.find((marker) => /pct-plateletcrit/i.test(marker.marker));
+    const pdw = draft.markers.find((marker) => /pdw-platelet/i.test(marker.marker));
+    const whiteBloodCells = draft.markers.find((marker) => marker.canonicalMarker === "Leukocyten");
+    const hasLooseVolume = draft.markers.some((marker) => marker.marker.trim().toLowerCase() === "volume");
+    const hasLooseDistributionWidth = draft.markers.some((marker) => marker.marker.trim().toLowerCase() === "distribution width");
+    const hasIntervalHematology = draft.markers.some((marker) => /interval hematology/i.test(marker.marker));
+
+    expect(mpv).toBeDefined();
+    expect(mpv?.rawValue).toBeCloseTo(9.5, 2);
+    expect(pct).toBeDefined();
+    expect(pct?.rawValue).toBeCloseTo(0.26, 3);
+    expect(pdw).toBeDefined();
+    expect(pdw?.rawValue).toBeCloseTo(11.3, 2);
+    expect(pdw?.marker.toLowerCase()).toBe("pdw-platelet");
+    expect(whiteBloodCells).toBeDefined();
+    expect(whiteBloodCells?.rawValue).toBeCloseTo(7.05, 2);
+    expect(hasLooseVolume).toBe(false);
+    expect(hasLooseDistributionWidth).toBe(false);
+    expect(hasIntervalHematology).toBe(false);
+  });
+
   it("keeps Dutch marker labels in review and trims dangling '(volgens' fragment", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [

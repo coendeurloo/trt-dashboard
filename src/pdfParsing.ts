@@ -128,6 +128,7 @@ interface ParserProfile {
 const NOISE_SYMBOL_PATTERN = /[ñò↑↓]/g;
 const SECTION_PREFIX_PATTERN =
   /^(?:nuchter|hematology|clinical chemistry|general chemistry|hormones|vitamins|tumor markers|tumour markers|cardial markers|lipids|muscle enzymes|random urine chemistry|urine \(micro\)albumin|adrenal function|reproductive and gonadal|serum proteins|hemoglobin a1c|haemoglobin a1c|differential|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
+const INDEXED_ROW_PREFIX_PATTERN = /^\d{1,3}\/\d{2,3}\s+A?\s+/i;
 const METHOD_SUFFIX_PATTERN = /\b(?:ECLIA|PHOT|ENZ|NEPH|ISSAM)\b$/i;
 const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|×)?(?:9|12)\/l|[A-Za-z%µμ/][A-Za-z0-9%µμ/.*^\-²]*)$/i;
 const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>≤≥]?\s*-?\d+(?:[.,]\d+)?$/;
@@ -172,7 +173,8 @@ const SINGLE_TOKEN_MARKER_STOPWORDS = new Set([
   "that",
   "method",
   "interpretation",
-  "new"
+  "new",
+  "volume"
 ]);
 const SHORT_MARKER_ALLOWLIST = new Set([
   "WBC",
@@ -191,6 +193,20 @@ const SHORT_MARKER_ALLOWLIST = new Set([
   "DHT",
   "CRP"
 ]);
+
+const MARKER_CONTINUATION_SUFFIX_PATTERN = /\b(?:volume|distribution(?:\s+width)?|width|count|ratio|index|percentage)\b/i;
+
+const shouldAppendContinuationToPreviousMarker = (continuationLine: string, previousMarkerName: string): boolean => {
+  const continuation = cleanWhitespace(continuationLine).toLowerCase();
+  const previous = cleanWhitespace(previousMarkerName).toLowerCase();
+
+  // Safe, explicit case: MPV split over two lines -> "MPV-Mean Platelet" + "Volume".
+  if (continuation === "volume" && /mpv-mean platelet$/.test(previous)) {
+    return true;
+  }
+
+  return false;
+};
 const LIFELABS_TABLE_HEADER_PATTERN = /\bTest\s+Flag\s+Result\s+Reference\s+Range\s*-\s*Units\b/i;
 const LIFELABS_TABLE_END_PATTERN =
   /^(?:FINAL RESULTS|This report contains confidential information intended for view|Note to physicians:|Note to patients:)\b/i;
@@ -1617,6 +1633,7 @@ const cleanMarkerName = (rawMarker: string): string => {
     .replace(/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*[-–]\s*-?\d+(?:[.,]\d+)?\s+-?\d+(?:[.,]\d+)?\s+/i, "")
     .replace(/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*(?:<|>|≤|≥)\s*-?\d+(?:[.,]\d+)?\s+/i, "")
     .replace(/^uw metingen\s+/i, "")
+    .replace(/^interval\s+/i, "")
     .replace(/^zie\s*opm\.?\s*/i, "")
     .trim();
 
@@ -1682,6 +1699,7 @@ const applyProfileMarkerFixes = (markerName: string): string => {
   marker = marker.replace(/^Posta?\s*Spec\s*4\s*Sem'?$/i, "PSA");
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
+  marker = marker.replace(/^MPV-Mean Platelet$/i, "MPV-Mean Platelet Volume");
   marker = marker.replace(/\s*\(volgens\s*$/i, "").trim();
   marker = marker.replace(/\s+\($/, "").trim();
   marker = marker.replace(/\s{2,}/g, " ").trim();
@@ -1771,6 +1789,9 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
       marker
     )
   ) {
+    return true;
+  }
+  if (/^interval\s+(?:hematology|clinical chemistry|biochemistry|hormones?|vitamins?|lipids?)$/i.test(marker)) {
     return true;
   }
 
@@ -2121,7 +2142,8 @@ const parseLifeLabsTableRows = (text: string, profile: ParserProfile): ParsedFal
 };
 
 const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile): ParsedFallbackRow | null => {
-  const markerAndValue = line.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)$/);
+  const lineWithoutIndex = cleanWhitespace(line).replace(INDEXED_ROW_PREFIX_PATTERN, "").trim();
+  const markerAndValue = lineWithoutIndex.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)$/);
   if (markerAndValue) {
     const leftTokens = cleanWhitespace(markerAndValue[1]).split(" ").filter(Boolean);
     const leftNumericCount = leftTokens.filter((token) => isNumericToken(token)).length;
@@ -2149,11 +2171,11 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
     }
   }
 
-  if (/\d/.test(line)) {
+  if (/\d/.test(lineWithoutIndex)) {
     return null;
   }
 
-  const markerName = applyProfileMarkerFixes(cleanMarkerName(line));
+  const markerName = applyProfileMarkerFixes(cleanMarkerName(lineWithoutIndex));
   if (looksLikeNoiseMarker(markerName)) {
     return null;
   }
@@ -2163,7 +2185,8 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
     /^(?:result(?:\s+(?:normal|high|low))?|normal|abnormal|in\s+range|out\s+of\s+range|value)\s+/i,
     ""
   );
-  const dequalifiedNext = normalizedNext.replace(/^\(?[A-Z]{2,}(?:\/[A-Z]{2,})?\)?\s+/, "");
+  const indexedStrippedNext = normalizedNext.replace(INDEXED_ROW_PREFIX_PATTERN, "");
+  const dequalifiedNext = indexedStrippedNext.replace(/^\(?[A-Z]{2,}(?:\/[A-Z]{2,})?\)?\s+/, "");
   const directNext = parseSingleRow(`${markerName} ${dequalifiedNext}`, 0.64, profile);
   if (directNext) {
     return directNext;
@@ -2213,6 +2236,9 @@ const parseLineRows = (text: string, profile: ParserProfile): ParsedFallbackRow[
       continue;
     }
     const line = lines[index];
+    const nextLine = lines[index + 1];
+    const lineWithoutIndex = line.replace(INDEXED_ROW_PREFIX_PATTERN, "").trim();
+
     if (looksLikeNonResultLine(line)) {
       continue;
     }
@@ -2226,14 +2252,39 @@ const parseLineRows = (text: string, profile: ParserProfile): ParsedFallbackRow[
       continue;
     }
 
-    const nextLine = lines[index + 1];
     if (!nextLine) {
       continue;
     }
 
+    // Prevent orphan suffix fragments ("Distribution Width", "Volume", etc.) from stealing the next row's value.
+    if (
+      rows.length > 0 &&
+      INDEXED_ROW_PREFIX_PATTERN.test(nextLine) &&
+      !/\d/.test(lineWithoutIndex) &&
+      lineWithoutIndex.split(" ").filter(Boolean).length <= 4 &&
+      !MARKER_ANCHOR_PATTERN.test(lineWithoutIndex) &&
+      !/\bdifferential\b/i.test(lineWithoutIndex) &&
+      MARKER_CONTINUATION_SUFFIX_PATTERN.test(lineWithoutIndex)
+    ) {
+      const previousRow = rows[rows.length - 1];
+      if (previousRow) {
+        const suffix = cleanWhitespace(lineWithoutIndex);
+        if (
+          suffix &&
+          shouldAppendContinuationToPreviousMarker(suffix, previousRow.markerName) &&
+          !previousRow.markerName.toLowerCase().includes(suffix.toLowerCase())
+        ) {
+          previousRow.markerName = applyProfileMarkerFixes(cleanMarkerName(`${previousRow.markerName} ${suffix}`));
+        }
+      }
+      consumed.add(index);
+      continue;
+    }
+
     const thirdLine = lines[index + 2];
-    if (thirdLine && !/\d/.test(line) && !/\d/.test(nextLine) && /\d/.test(thirdLine)) {
-      const combinedMarker = applyProfileMarkerFixes(cleanMarkerName(`${line} ${nextLine}`));
+    const nextLineWithoutIndex = nextLine.replace(INDEXED_ROW_PREFIX_PATTERN, "").trim();
+    if (thirdLine && !/\d/.test(lineWithoutIndex) && !/\d/.test(nextLineWithoutIndex) && /\d/.test(thirdLine)) {
+      const combinedMarker = applyProfileMarkerFixes(cleanMarkerName(`${lineWithoutIndex} ${nextLineWithoutIndex}`));
       if (!looksLikeNoiseMarker(combinedMarker)) {
         const threeLine = parseSingleRow(`${combinedMarker} ${thirdLine}`, 0.63, profile);
         if (threeLine && shouldKeepParsedRow(threeLine, profile)) {
@@ -3173,7 +3224,10 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
     /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%µμ][A-Za-z%µμ0-9*^/.\-]*))?(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
 
   for (const match of normalized.matchAll(rowPattern)) {
-    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));
+    let markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));
+    if (/^volume$/i.test(markerName)) {
+      markerName = "PCT-plateletcrit";
+    }
     if (looksLikeNoiseMarker(markerName)) {
       continue;
     }
@@ -3224,6 +3278,36 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
             Math.abs(item.value - value) < 0.0001 &&
             (item.referenceMin ?? null) === (referenceMin ?? null) &&
             (item.referenceMax ?? null) === (referenceMax ?? null)
+        )
+      ) {
+        rows.push(row);
+      }
+    }
+  }
+
+  const pctPattern =
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+PCT-plateletcrit\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*%/i;
+  const pctMatch = normalized.match(pctPattern);
+  if (pctMatch) {
+    const value = safeNumber(pctMatch[1]);
+    const referenceMin = safeNumber(pctMatch[2]);
+    const referenceMax = safeNumber(pctMatch[3]);
+    if (value !== null) {
+      const row: ParsedFallbackRow = {
+        markerName: "PCT-plateletcrit",
+        value,
+        unit: "%",
+        referenceMin,
+        referenceMax,
+        confidence: 0.86
+      };
+      if (
+        shouldKeepParsedRow(row, profile) &&
+        !rows.some(
+          (item) =>
+            item.markerName.toLowerCase() === "pct-plateletcrit" &&
+            Math.abs(item.value - value) < 0.0001 &&
+            item.unit === "%"
         )
       ) {
         rows.push(row);
