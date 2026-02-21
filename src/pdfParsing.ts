@@ -131,7 +131,7 @@ const SECTION_PREFIX_PATTERN =
 const INDEXED_ROW_PREFIX_PATTERN = /^\d{1,3}\/\d{2,3}\s+A?\s+/i;
 const METHOD_SUFFIX_PATTERN = /\b(?:ECLIA|PHOT|ENZ|NEPH|ISSAM)\b$/i;
 const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|×)?(?:9|12)\/l|[A-Za-z%µμ/][A-Za-z0-9%µμ/.*^\-²]*)$/i;
-const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>≤≥]?\s*-?\d+(?:[.,]\d+)?$/;
+const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>≤≥]?\s*[+-]?\d+(?:[.,]\d+)?$/;
 const LEADING_UNIT_FRAGMENT_PATTERN =
   /^(?:mmol|nmol|pmol|pg|ng|g|mg|µmol|umol|u|mu|miu|fl|fmol|l)\s*\/\s*[a-z0-9µμ%]+\s*/i;
 const IMPORTANT_MARKERS = new Set([
@@ -151,7 +151,7 @@ const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const MARKER_ANCHOR_PATTERN =
-  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp)\b/i;
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine)\b/i;
 const COMMENTARY_FRAGMENT_PATTERN =
   /\b(?:for intermediate and high risk individuals|low risk individuals|please interpret results with caution|if dexamethasone has been given|for further information please contact|new method effective|shown to interfere|changes in serial psa levels|this high sensitivity crp method is sensitive to|in presence of significant hypoalbuminemia|is suitable for coronary artery disease assessment)\b/i;
 const GUIDANCE_RESULT_PATTERN =
@@ -1704,6 +1704,8 @@ const applyProfileMarkerFixes = (markerName: string): string => {
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
   marker = marker.replace(/^MPV-Mean Platelet$/i, "MPV-Mean Platelet Volume");
+  marker = marker.replace(/^IGF-?1\s*SDS\s*\*?\)?$/i, "IGF-1 SDS");
+  marker = marker.replace(/^IGF-?1\s*\(somatomedine\s*C\)\s*CLIA$/i, "IGF-1 (somatomedine C)");
   marker = marker.replace(/^25-?OH-?\s*Vitamin D\s*\(D3\s*\+\s*D2\)$/i, "25-OH- Vitamin D (D3+D2)");
   marker = marker.replace(/^25-?OH-?\s*Vitamin D$/i, "25-OH- Vitamin D (D3+D2)");
   marker = marker.replace(/\s*\(volgens\s*$/i, "").trim();
@@ -1767,6 +1769,10 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   }
 
   if (COMMENTARY_GUARD_PATTERN.test(marker) && !MARKER_ANCHOR_PATTERN.test(marker)) {
+    return true;
+  }
+
+  if (/^(?:voor\s+interpretatie|risicomanag\w*)\b/i.test(marker)) {
     return true;
   }
 
@@ -1974,7 +1980,7 @@ const parseSingleRow = (
     return null;
   }
 
-  const baseMatch = cleanedRow.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+|$)(.*)$/);
+  const baseMatch = cleanedRow.match(/^(.+?)\s+([<>≤≥]?\s*[+-]?\d+(?:[.,]\d+)?)(?:\s+|$)(.*)$/);
   if (!baseMatch) {
     return null;
   }
@@ -2074,10 +2080,15 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DE
   }
 
   if (profile.requireUnit && !row.unit) {
-    return false;
+    if (!/^IGF-?1\s*SDS\b/i.test(row.markerName)) {
+      return false;
+    }
   }
 
   if (row.unit || row.referenceMin !== null || row.referenceMax !== null) {
+    return true;
+  }
+  if (/^IGF-?1\s*SDS\b/i.test(row.markerName)) {
     return true;
   }
   const canonical = canonicalizeMarker(row.markerName, { unit: row.unit, mode: "balanced" });

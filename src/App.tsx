@@ -191,6 +191,7 @@ const App = () => {
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false);
   const [uploadStage, setUploadStage] = useState<ParserStage | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [uploadNotice, setUploadNotice] = useState("");
   const [uploadSummary, setUploadSummary] = useState<{
     fileName: string;
     markerCount: number;
@@ -600,10 +601,26 @@ const App = () => {
     });
   };
 
+  const buildDraftComparisonSignature = (candidate: ExtractionDraft): string => {
+    const markerSignature = candidate.markers
+      .map((marker) => {
+        const markerName = marker.marker.trim().toLowerCase();
+        const value = typeof marker.rawValue === "number" ? marker.rawValue : marker.value;
+        const unit = (marker.rawUnit ?? marker.unit ?? "").trim().toLowerCase();
+        const refMin = marker.rawReferenceMin ?? marker.referenceMin;
+        const refMax = marker.rawReferenceMax ?? marker.referenceMax;
+        return `${markerName}|${value}|${unit}|${refMin ?? ""}|${refMax ?? ""}`;
+      })
+      .sort()
+      .join("||");
+    return `${candidate.testDate}|${markerSignature}`;
+  };
+
   const handleUpload = async (file: File) => {
     setIsProcessing(true);
     setUploadStage("reading_text_layer");
     setUploadError("");
+    setUploadNotice("");
     setUploadSummary(null);
     setIsImprovingExtraction(false);
 
@@ -673,6 +690,7 @@ const App = () => {
     setIsImprovingExtraction(true);
     setUploadStage("running_ai_text");
     setUploadError("");
+    setUploadNotice("");
     try {
       const { extractLabData } = await ensurePdfParsingModule();
       const improved = await extractLabData(lastUploadedFile, {
@@ -689,10 +707,28 @@ const App = () => {
         ...(improved.extraction.warnings ?? []),
         ...(improved.extraction.warningCode ? [improved.extraction.warningCode] : [])
       ]).size;
+      const previousDraft = draft;
+      const sameAsCurrent =
+        previousDraft !== null &&
+        buildDraftComparisonSignature(improved) === buildDraftComparisonSignature(previousDraft);
+      const improvedLooksWorse =
+        previousDraft !== null &&
+        improved.markers.length < previousDraft.markers.length &&
+        improved.extraction.confidence <= previousDraft.extraction.confidence + 0.01;
       const chosenDraft = !draft || improved.markers.length >= draft.markers.length ? improved : draft;
       setDraft(chosenDraft);
       captureOriginalDraftMarkerLabels(chosenDraft);
       scrollPageToTop();
+      if (sameAsCurrent || improvedLooksWorse) {
+        setUploadNotice(
+          tr(
+            "AI gaf geen betere extractie voor dit rapport. De huidige versie is behouden.",
+            "AI did not improve extraction for this report. Your current version was kept."
+          )
+        );
+      } else {
+        setUploadNotice("");
+      }
       setUploadSummary({
         fileName: improved.sourceFileName,
         markerCount: improved.markers.length,
@@ -722,6 +758,7 @@ const App = () => {
     setIsProcessing(true);
     setUploadStage("running_ocr");
     setUploadError("");
+    setUploadNotice("");
     setUploadSummary(null);
     setIsImprovingExtraction(false);
 
@@ -1292,6 +1329,11 @@ const App = () => {
               {uploadError ? (
                 <div className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                   {uploadError}
+                </div>
+              ) : null}
+              {uploadNotice ? (
+                <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                  {uploadNotice}
                 </div>
               ) : null}
             </div>

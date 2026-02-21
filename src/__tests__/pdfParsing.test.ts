@@ -616,6 +616,45 @@ describe("pdfParsing fallback layers", () => {
     expect(free?.rawValue).toBeCloseTo(0.961, 3);
   });
 
+  it("drops Dutch cardiovascular risk commentary prefix and keeps triglyceriden marker clean", () => {
+    const rows = __pdfParsingInternals.parseLineRows(
+      [
+        "Non-HDL-Cholesterol 3.96 mmol/l",
+        "Voor interpretatie, zie NHG richtlijn cardiovasculair risicomanagement.",
+        "triglyceriden 0.49 mmol/l < 2.28",
+        "ASAT (GOT) 27 U/l < 50"
+      ].join("\n"),
+      genericProfile
+    );
+
+    const markerNames = rows.map((row) => row.markerName.toLowerCase());
+    expect(markerNames).toContain("triglyceriden");
+    expect(markerNames.some((name) => name.includes("risicomanagement triglyceriden"))).toBe(false);
+    expect(markerNames.some((name) => name.includes("risicomanagement"))).toBe(false);
+  });
+
+  it("parses IGF-1 and IGF-1 SDS as separate markers in Dutch endocrine block", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Groeihormoon en mediatoren",
+        "IGF-1 (somatomedine C) CLIA 21.0 nmol/l 9.7 - 28.1",
+        "IGF-1 SDS *) +0.7"
+      ].join("\n"),
+      "labrapport-260219-lab-nl.pdf"
+    );
+
+    const igf1 = draft.markers.find((marker) => /^igf-1\s+\(somatomedine c\)$/i.test(marker.marker));
+    const igf1Sds = draft.markers.find((marker) => /^igf-1 sds$/i.test(marker.marker));
+
+    expect(igf1).toBeDefined();
+    expect(igf1?.rawValue).toBeCloseTo(21.0, 1);
+    expect(igf1?.rawUnit).toBe("nmol/L");
+
+    expect(igf1Sds).toBeDefined();
+    expect(igf1Sds?.rawValue).toBeCloseTo(0.7, 2);
+    expect(igf1Sds?.rawUnit ?? "").toBe("");
+  });
+
   it("filters implausible unit-marker combinations during fallback dedupe", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [
