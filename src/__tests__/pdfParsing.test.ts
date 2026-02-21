@@ -633,6 +633,53 @@ describe("pdfParsing fallback layers", () => {
     expect(markerNames.some((name) => name.includes("risicomanagement"))).toBe(false);
   });
 
+  it("parses Dutch huisarts markers without units for homocysteine, ijzer and transferrine", () => {
+    const profile = __pdfParsingInternals.detectParserProfile(
+      [
+        "Uw metingen",
+        "Hemoglobine (Hb) Uw waarde: 10.9Normale waarde: Hoger dan 8.5 - Lager dan 11",
+        "Homocysteine Uw waarde: 9.9Normale waarde: Hoger dan 5 - Lager dan 15",
+        "IJzer Uw waarde: 8Normale waarde: Hoger dan 8 - Lager dan 39",
+        "Transferrine Uw waarde: 2.5Normale waarde: Hoger dan 2.2 - Lager dan 3.6",
+        "Uitslagen uit het verleden"
+      ].join("\n"),
+      "labrapport-251112-huisarts.pdf"
+    );
+    expect(profile.enableKeywordRangeParser).toBe(true);
+
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Uw metingen",
+        "Hemoglobine (Hb) Uw waarde: 10.9Normale waarde: Hoger dan 8.5 - Lager dan 11",
+        "Homocysteine Uw waarde: 9.9Normale waarde: Hoger dan 5 - Lager dan 15",
+        "IJzer Uw waarde: 8Normale waarde: Hoger dan 8 - Lager dan 39",
+        "Transferrine Uw waarde: 2.5Normale waarde: Hoger dan 2.2 - Lager dan 3.6",
+        "Transferrine saturatie Uw waarde: 13Normale waarde: Hoger dan 20 - Lager dan 50",
+        "Uitslagen uit het verleden"
+      ].join("\n"),
+      "labrapport-251112-huisarts.pdf"
+    );
+
+    const homocysteine = draft.markers.find((marker) => marker.marker.toLowerCase() === "homocysteine");
+    const ijzer = draft.markers.find((marker) => marker.marker.toLowerCase() === "ijzer");
+    const transferrine = draft.markers.find((marker) => marker.marker.toLowerCase() === "transferrine");
+
+    expect(homocysteine).toBeDefined();
+    expect(homocysteine?.rawValue).toBeCloseTo(9.9, 1);
+    expect(homocysteine?.rawReferenceMin).toBe(5);
+    expect(homocysteine?.rawReferenceMax).toBe(15);
+
+    expect(ijzer).toBeDefined();
+    expect(ijzer?.rawValue).toBe(8);
+    expect(ijzer?.rawReferenceMin).toBe(8);
+    expect(ijzer?.rawReferenceMax).toBe(39);
+
+    expect(transferrine).toBeDefined();
+    expect(transferrine?.rawValue).toBeCloseTo(2.5, 1);
+    expect(transferrine?.rawReferenceMin).toBeCloseTo(2.2, 1);
+    expect(transferrine?.rawReferenceMax).toBeCloseTo(3.6, 1);
+  });
+
   it("parses IGF-1 and IGF-1 SDS as separate markers in Dutch endocrine block", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [

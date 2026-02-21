@@ -151,7 +151,7 @@ const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const MARKER_ANCHOR_PATTERN =
-  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine)\b/i;
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine|homocysteine|transferrine|transferrin|transferrine saturatie|transferrin saturation|ijzer|iron)\b/i;
 const COMMENTARY_FRAGMENT_PATTERN =
   /\b(?:for intermediate and high risk individuals|low risk individuals|please interpret results with caution|if dexamethasone has been given|for further information please contact|new method effective|shown to interfere|changes in serial psa levels|this high sensitivity crp method is sensitive to|in presence of significant hypoalbuminemia|is suitable for coronary artery disease assessment)\b/i;
 const GUIDANCE_RESULT_PATTERN =
@@ -1362,11 +1362,15 @@ const extractDateByPattern = (text: string, pattern: RegExp): string | null => {
 
 const detectParserProfile = (text: string, fileName: string): ParserProfile => {
   const haystack = `${fileName}\n${text.slice(0, 10000)}`;
+  const normalizedForKeywordDetection = haystack.replace(
+    /([0-9])(?=(?:Uw waarde:|Normale waarde:|Datum:))/gi,
+    "$1 "
+  );
   const keywordStyleHits = Array.from(
-    haystack.matchAll(/\b(?:uw|your)\s+waarde:\s*[<>]?\s*\d+(?:[.,]\d+)?/gi)
+    normalizedForKeywordDetection.matchAll(/\b(?:uw|your)\s+waarde:\s*[<>]?\s*\d+(?:[.,]\d+)?/gi)
   ).length;
   const normalRangeHits = Array.from(
-    haystack.matchAll(/\b(?:normale\s+waarde|normal\s+range|reference\s+range)\s*:/gi)
+    normalizedForKeywordDetection.matchAll(/\b(?:normale\s+waarde|normal\s+range|reference\s+range)\s*:/gi)
   ).length;
   const keywordRangeStyle = keywordStyleHits > 0 && normalRangeHits > 0;
 
