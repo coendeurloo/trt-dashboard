@@ -60,8 +60,8 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
                     "Your data stays local unless you grant consent below. Choose what to include for AI analysis."
                   )
                 : tr(
-                    "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat de parser extern mag gebruiken voor herstel.",
-                    "Your data stays local unless you grant consent below. Choose what parser rescue may send externally."
+                    "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat we extern mogen gebruiken om deze PDF beter uit te lezen.",
+                    "Your data stays local unless you grant consent below. Choose what we may send externally to improve extraction for this PDF."
                   )}
             </p>
           </div>
@@ -76,7 +76,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
           {action === "parser_rescue" ? (
             <>
               <label className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
-                <span>{tr("Parser-rescue met AI toestaan", "Allow parser rescue with AI")}</span>
+                <span>{tr("AI gebruiken om extractie te verbeteren", "Use AI to improve extraction")}</span>
                 <input
                   type="checkbox"
                   checked={parserRescueEnabled}
@@ -94,8 +94,8 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
               </label>
               <p className="text-xs text-slate-400">
                 {tr(
-                  "Standaard sturen we alleen geanonimiseerde tekst. PDF meesturen is optioneel en alleen voor deze parser-run.",
-                  "By default we send only redacted text. Sending the PDF is optional and only for this parser run."
+                  "Standaard sturen we alleen geanonimiseerde tekst. Het volledige PDF-bestand meesturen is optioneel en geldt alleen voor deze ene poging.",
+                  "By default we send only redacted text. Sending the full PDF is optional and applies only to this one attempt."
                 )}
               </p>
             </>
