@@ -1,0 +1,20 @@
+BUN/Creatinine Ratio 10 9 - 20
+Potassium 4.2 mmol/L 3.5 - 5.2 01
+Chloride 106 mmol/L 96 - 106 01
+Carbon Dioxide, Total 22 mmol/L 20 - 29 01
+calcium 9.2 mg/dL 8.7 - 10.2 01
+Protein, Total 6.6 g/dL 6.0 - 8.5 01
+Albumin 4.5 g/dL 3.5 - 5.5 01
+A/G Ratio BE 1.2 - 2.2
+Bilirubin, Total 0.5 mg/dL 0.0 - 1.2 01
+Alkaline Phosphatase 103 U/L 39 - 117 01
+AST (SGOT) 25 IU/L 0 - 40 01
+ALT (SGPT) 17 IU/L 0 - 44 01
+Cholesterol, Total 142 mg/dL 100 - 199 01
+Triglycerides 101 mg/dL 0 - 149 01
+HDL Cholesterol 40 mg/dL >39 01
+LDL Cholesterol Calc 82 mg/dL 0-99
+T. Chol/HDL Ratio 3.6 ratio 0.0 - 5.0
+Testosterone, Free/Tot Equilib
+Testosterone, Serum 705 ng/dL 264 - 916 01
+Testosterone, Free 25.94 High ng/dL 5.00 - 21.00

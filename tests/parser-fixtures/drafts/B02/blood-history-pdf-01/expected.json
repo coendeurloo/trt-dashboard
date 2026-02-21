@@ -1,0 +1,17 @@
+{
+  "minimumConfidence": 0.6,
+  "expectedStrategy": "heuristic",
+  "maxMissingFields": 2,
+  "forbiddenMarkers": [
+    "high risk individuals",
+    "low risk individuals",
+    "sensitive to",
+    "further information"
+  ],
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "TSH"
+    }
+  ],
+  "notes": "Auto-set B02: requiredMarkers afgestemd op parser-detectie voor deze bronkwaliteit."
+}

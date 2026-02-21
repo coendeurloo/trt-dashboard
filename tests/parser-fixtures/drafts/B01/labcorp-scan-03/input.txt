@@ -1,3 +1,21 @@
-# PLAK HIER ALLEEN GEANONIMISEERDE TEKST
-# Verwijder namen, IDs, adressen, telefoon en e-mail.
-# Laat alleen labtabellen/markerregels staan.
+Bilirubin, Total 02 mg/dL 00-12
+Alkaline Phosphatase 105 U/L 44-121
+AST (SGOT)™ 20 JL 0-40
+ALT (SGPT) 20 U/L 0-44
+A Cholesterol, Total® 202 High mg/dL 100-199
+Triglycerides! 51 mg/dL 0-149
+HDL Cholesterol ** 50 mg/dL >39
+VLDL Cholesterol Cal Ld mg/dL 5-40
+A LDL Chol Calc (NIH) 143 High mg/dL 0-99
+T. Chol/HDL Ratio 4.0 ratio 0.0-5.0
+Testosterone,Free and Total
+Testosterone” 465 ng/dL 264-916
+Travison, et.al. JCEM 2017,1082;1161-1173. PMID: 28324103.
+Free Testosterone(Direct) 12.0 pg/mL 7.2-24.0
+DHEA-Sulfate
+A DHEA-Sulfate® 421.0 High g/dL 48.9-344.2
+TSH 1.940 ulu/mt 0.450-4.500
+Luteinizing Hormone(LH)
+LH 5.7 miu/mL 17-86
+Prostate Specific Ag™ 12 ng/mL 0.0-4.0
+According to the American Urological Association, Serum PSA should

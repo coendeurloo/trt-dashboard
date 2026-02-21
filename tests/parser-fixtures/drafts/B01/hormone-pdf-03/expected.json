@@ -1,7 +1,7 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.5,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 2,
+  "maxMissingFields": 8,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -10,20 +10,104 @@
   ],
   "requiredMarkers": [
     {
-      "canonicalMarker": "Testosterone"
+      "canonicalMarker": "Hemoglobin"
     },
     {
-      "canonicalMarker": "Free Testosterone"
-    },
-    {
-      "canonicalMarker": "Estradiol"
-    },
-    {
-      "canonicalMarker": "SHBG"
+      "canonicalMarker": "Red Blood Cells"
     },
     {
       "canonicalMarker": "Hematocrit"
+    },
+    {
+      "canonicalMarker": "MCV"
+    },
+    {
+      "canonicalMarker": "MCH"
+    },
+    {
+      "canonicalMarker": "MCHC"
+    },
+    {
+      "canonicalMarker": "RDW-CV"
+    },
+    {
+      "canonicalMarker": "Platelets"
+    },
+    {
+      "canonicalMarker": "Leukocyten"
+    },
+    {
+      "canonicalMarker": "Neutrophils Abs."
+    },
+    {
+      "canonicalMarker": "Lymphocytes Abs."
+    },
+    {
+      "canonicalMarker": "Monocytes Abs."
+    },
+    {
+      "canonicalMarker": "Eosinophils Abs."
+    },
+    {
+      "canonicalMarker": "Basophils Abs."
+    },
+    {
+      "canonicalMarker": "Albumine"
+    },
+    {
+      "canonicalMarker": "Ferritine"
+    },
+    {
+      "canonicalMarker": "Transferrine Saturatie"
+    },
+    {
+      "canonicalMarker": "Ureum"
+    },
+    {
+      "canonicalMarker": "Creatinine"
+    },
+    {
+      "canonicalMarker": "eGFR"
+    },
+    {
+      "canonicalMarker": "Free T4"
+    },
+    {
+      "canonicalMarker": "TSH"
+    },
+    {
+      "canonicalMarker": "LDL Cholesterol"
+    },
+    {
+      "canonicalMarker": "Triglyceriden"
+    },
+    {
+      "canonicalMarker": "Cholesterol"
+    },
+    {
+      "canonicalMarker": "Non-HDL Cholesterol"
+    },
+    {
+      "canonicalMarker": "Cholesterol/HDL Ratio"
+    },
+    {
+      "canonicalMarker": "HDL Cholesterol"
+    },
+    {
+      "canonicalMarker": "Foliumzuur"
+    },
+    {
+      "canonicalMarker": "Vitamin D (D3+D2) OH"
+    },
+    {
+      "canonicalMarker": "Vitamine B12"
+    },
+    {
+      "canonicalMarker": "Testosterone"
+    },
+    {
+      "canonicalMarker": "CRP"
     }
   ],
-  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
+  "notes": "Must-have set bevestigd door owner. Markerlijst is volgens owner inhoudelijk juist; onderaan staat een herhaalde tabel die als voorkeur-bron gebruikt kan worden. Datum niet verplicht."
 }

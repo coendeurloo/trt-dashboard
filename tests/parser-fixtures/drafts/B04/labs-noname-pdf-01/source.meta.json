@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "4eb2f67dd745",
+  "label": "labs_noname_pdf_01",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

@@ -1,3 +1,22 @@
-# PLAK HIER ALLEEN GEANONIMISEERDE TEKST
-# Verwijder namen, IDs, adressen, telefoon en e-mail.
-# Laat alleen labtabellen/markerregels staan.
+Glucose mg/dL 6599 0 07H TSHuU/mL 0.4504.500 1.940
+BUN mg/dL 624 16
+Creatinine mg/dL 0.76127 094
+Sodium mmol/L 134144 181
+Potassium mmol/L. 355.2 s a7
+Chloride mmol/L 96-106 105
+Carbon Dioxide mmol/L 2029 21
+Calcium mg/dL 8.7-10.2 9.5
+Protein, Total, Serum g/dL. 6.08.5 6.9
+Albumin g/dL 3.84.9 a4
+Globulin, Total g/dL 154.5 25
+Bilirubin, Total mg/dL 001.2 02
+Alkaline Phosphatase, S IU/L 44-121 105
+BUN: Creatinine Ratio 920 17
+Anion Gap mmol/L 10-18 15
+Albumin testing performed on the Roche Modular using the AL PLUS assay.
+Total Cholesterol mg/dL 100-199 eo 202 H
+Triglyceride mg/dL 0-149 51
+HDL-C mg/dL. >39 o 50
+VLDL mg/dL 5-40 9
+LDL(calc) mg/dL 0-99 . 143 H
+non-HDL cholesterol mg/dL 0-129 (1d 152 H

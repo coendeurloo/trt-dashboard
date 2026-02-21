@@ -1,0 +1,10 @@
+{
+  "batch": "B02",
+  "file_id": "a182f2a07f23",
+  "label": "jmh_scan_01",
+  "source_type": "webp_scan",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

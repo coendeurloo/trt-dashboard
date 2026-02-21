@@ -1,7 +1,7 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.5,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 2,
+  "maxMissingFields": 6,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -10,20 +10,32 @@
   ],
   "requiredMarkers": [
     {
-      "canonicalMarker": "Testosterone"
-    },
-    {
-      "canonicalMarker": "Free Testosterone"
+      "canonicalMarker": "Cortisol"
     },
     {
       "canonicalMarker": "Estradiol"
     },
     {
+      "canonicalMarker": "Testosterone"
+    },
+    {
       "canonicalMarker": "SHBG"
     },
     {
-      "canonicalMarker": "Hematocrit"
+      "canonicalMarker": "DHEA Sulfate"
+    },
+    {
+      "canonicalMarker": "PSA"
+    },
+    {
+      "canonicalMarker": "Free T4"
+    },
+    {
+      "canonicalMarker": "Free T3"
+    },
+    {
+      "canonicalMarker": "TSH"
     }
   ],
-  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
+  "notes": "Must-have set bevestigd door owner. Veel tekst/grafieken na TPOab moeten genegeerd worden. Datum niet verplicht."
 }

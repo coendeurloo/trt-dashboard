@@ -1,0 +1,131 @@
+{
+  "batch": "B02",
+  "generatedAt": "2026-02-21T16:12:32.152Z",
+  "aggregate": {
+    "files": 5,
+    "requiredMarkerRecall": {
+      "value": 1,
+      "display": "100.0%",
+      "numerator": 17,
+      "denominator": 17
+    },
+    "unitAccuracy": null,
+    "referenceRangeAccuracy": null,
+    "dateAccuracy": null,
+    "falsePositiveRate": {
+      "value": 0,
+      "display": "0.0%",
+      "numerator": 0,
+      "denominator": 33
+    },
+    "unknownLayoutRate": {
+      "value": 0,
+      "display": "0.0%",
+      "numerator": 0,
+      "denominator": 5
+    }
+  },
+  "files": [
+    {
+      "fileId": "c23c5d460166",
+      "label": "blood_history_pdf_01",
+      "status": "fixture_done",
+      "requiredMarkers": 1,
+      "requiredFound": 1,
+      "parsedMarkers": 1,
+      "foundCanonicalMarkers": [
+        "TSH"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.776,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    },
+    {
+      "fileId": "57c3aef46baa",
+      "label": "bw_excelmale_scan_01",
+      "status": "fixture_done",
+      "requiredMarkers": 5,
+      "requiredFound": 5,
+      "parsedMarkers": 10,
+      "foundCanonicalMarkers": [
+        "Bun",
+        "eGFR",
+        "Eos (absolute)",
+        "Hematocrit",
+        "Lymphs (absolute)",
+        "MCH",
+        "Monocytes Abs.",
+        "Neutrophils Abs.",
+        "Platelets"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.778,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    },
+    {
+      "fileId": "130db5906564",
+      "label": "bw_excelmale_scan_02",
+      "status": "fixture_done",
+      "requiredMarkers": 5,
+      "requiredFound": 5,
+      "parsedMarkers": 16,
+      "foundCanonicalMarkers": [
+        "Albumine",
+        "Alkaline Phosphatase",
+        "Alt (sgpt)",
+        "Ast (sgot)",
+        "Bilirubin, Total",
+        "Calcium",
+        "Carbon Dioxide, Total",
+        "Chloride",
+        "Cholesterol",
+        "Free Testosterone",
+        "HDL Cholesterol",
+        "Potassium",
+        "Protein, Total",
+        "T. Chol/hdl Ratio",
+        "Triglyceriden"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.782,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    },
+    {
+      "fileId": "5151b7d145b8",
+      "label": "bw_excelmale_scan_03",
+      "status": "fixture_done",
+      "requiredMarkers": 5,
+      "requiredFound": 5,
+      "parsedMarkers": 5,
+      "foundCanonicalMarkers": [
+        "Prolactin",
+        "Prostate-specific Ag, Serum Prostate Specific Ag, Serum",
+        "Rer Non Reactive Non Reactive",
+        "Ta, Free (direct)",
+        "TSH"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.757,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    },
+    {
+      "fileId": "a182f2a07f23",
+      "label": "jmh_scan_01",
+      "status": "fixture_done",
+      "requiredMarkers": 1,
+      "requiredFound": 1,
+      "parsedMarkers": 1,
+      "foundCanonicalMarkers": [
+        "Lymphocytes Abs."
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.712,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    }
+  ]
+}

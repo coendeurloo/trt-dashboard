@@ -21,6 +21,9 @@
     "server:status": "node scripts/server-control.mjs status",
     "parser:scan-examplelabs": "node scripts/parser-batch/scan-examplelabs.mjs",
     "parser:create-fixture-drafts": "node scripts/parser-batch/create-fixture-drafts.mjs",
+    "parser:fill-batch-fixtures": "node scripts/parser-batch/fill-batch-fixtures.mjs",
+    "parser:batch-report": "PARSER_BATCH_REPORT_WRITE=1 vitest run src/__tests__/parserBatchReport.test.ts",
+    "parser:batch-strict": "STRICT_DRAFT_FIXTURES=1 vitest run src/__tests__/parserFixtures.test.ts",
     "app:start": "npm run build && npm run server:start:open"
   },
   "dependencies": {

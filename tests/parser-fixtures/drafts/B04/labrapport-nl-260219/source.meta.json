@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "c78c9c12d6b2",
+  "label": "labrapport_nl_260219",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

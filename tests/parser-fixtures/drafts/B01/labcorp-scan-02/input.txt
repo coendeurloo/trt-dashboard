@@ -1,3 +1,27 @@
-# PLAK HIER ALLEEN GEANONIMISEERDE TEKST
-# Verwijder namen, IDs, adressen, telefoon en e-mail.
-# Laat alleen labtabellen/markerregels staan.
+IGF-1
+Test Current Result and Flag Previous Result and Date Units Reference Interval
+Insulin-Like Growth Factor | 140 ng/mL 68-247
+Estradiol, Sensitive
+Test Current Result and Flag Previous Result and Date Units Reference Interval
+Estradiol, Sensitive ™ 214 pg/mL 8.0-35.0
+This test was developed and its performance characteristics
+determined by LabCorp. It has not been cleared by the Food and
+Drug Administration.
+Methodology: Liquid chromatography tandem mass spectrometry (LC/MS/MS)
+Sex Horm Binding Glob, Serum
+Test Current Result and Flag Previous Result and Date Units Reference Interval
+Sex Horm Binding Glob,
+Serum® 34.7 nmol/L 19.3-76.4
+Cardiovascular Report
+Test Current Result and Flag Previous Result and Date Units Reference Interval
+Interpretation Note
+Supplemental report is available
+PDF f
+Disclaimer
+The Previous Result is listed for the most recent test performed by Labcorp in the past 5 years where there is sufficient patient demographic data to
+match the result to the patient. Results from certain tests are excluded from the Previous Result display.
+Icon Legend
+A Out of Reference Range Ml Critical or Alert
+Performing Labs
+03: LITIL - Litholink Corporation 150 Spring Lake Dr Ste A, Itasca, IL, 60143-2091 Dir: [REDACTED_PROVIDER]
+For Inquiries, the physician may contact Branch: [REDACTED_PHONE] Lab: [REDACTED_PHONE]

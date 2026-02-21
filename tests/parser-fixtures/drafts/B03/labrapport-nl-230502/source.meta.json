@@ -1,0 +1,10 @@
+{
+  "batch": "B03",
+  "file_id": "d511d7bd5881",
+  "label": "labrapport_nl_230502",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

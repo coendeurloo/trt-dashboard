@@ -1,3 +1,27 @@
-# PLAK HIER ALLEEN GEANONIMISEERDE TEKST
-# Verwijder namen, IDs, adressen, telefoon en e-mail.
-# Laat alleen labtabellen/markerregels staan.
+WBC? 47 X10E3/uL 34-108
+RBC! 462 X10E6/uL 4145.80
+Hemoglobin*! 135 g/dL 13.0-17.7
+Hematocrit™ 40.1 % 37.5-51.0
+MCV 87 fL 79-97
+MCH® 292 pg 26.6-33.0
+MCHC 337 g/dL 315357
+ROW?! 136 % 116-154
+Platelets™ 430 X10E3/uL. 150-450
+Neutrophils (Absolute) ** 2.8 X10E3/uL 1.47.0
+Lymphs (Absolute) 11 X10E3/ul 0.7-3.1
+Monocytes(Absolute) 0.6 X10E3/uL 0.1-0.9
+Eos (Absolute) * 0.1 X10E3/uL 0.00.4
+Baso (Absolute) 01 X10E3/ul 0.002
+Immature Grans (Abs) 0.0 X10E3/uL. 0.0-0.1
+A Glucose® 107 High mg/dL 65-99
+BUN® 16 mg/dL 6-24
+Creatinine®! 0.94 mg/dL 0.76-1.27
+BUN/Creatinine Ratio 17 9-20
+Sodium ™ 141 mmol/L 134-144
+Potassium 47 | mmol/L 3552
+Chloride 105 mmol/L 96-106
+Carbon Dioxide, Total 21 mmol/L 20-29
+Calcium 9.5 mg/dL 8.7-10.2
+Protein, Total® 6.9 g/dL 6.0-8.5
+Albumin ® 44 g/dL 3.84.9
+Globulin, Total 25 g/dL 1545

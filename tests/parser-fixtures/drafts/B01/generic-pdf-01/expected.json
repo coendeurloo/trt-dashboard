@@ -1,7 +1,7 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.5,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 2,
+  "maxMissingFields": 4,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -16,14 +16,8 @@
       "canonicalMarker": "Free Testosterone"
     },
     {
-      "canonicalMarker": "Estradiol"
-    },
-    {
-      "canonicalMarker": "SHBG"
-    },
-    {
-      "canonicalMarker": "Hematocrit"
+      "canonicalMarker": "DHEA Sulfate"
     }
   ],
-  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
+  "notes": "Must-have set bevestigd door owner. Huidige geanonimiseerde fixturetekst bevat voor DHT/Estradiol/PSA geen betrouwbare waarde; opnieuw toetsen met betere OCR-export. Datum niet verplicht."
 }

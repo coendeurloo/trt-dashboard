@@ -100,3 +100,9 @@ These are local-dev convenience scripts and are not required for the hosted Verc
   - Scans `examplelabs/`
   - Computes 12-char SHA-256 IDs per file
   - Shows which files are already present in the registry
+- Draft fixtures maken: `npm run parser:create-fixture-drafts -- --batch B01 --labels label_1,label_2`
+- Draft fixtures vullen (extractie + anonimisatie): `npm run parser:fill-batch-fixtures -- --batch B01`
+- Batch score-rapport genereren: `npm run parser:batch-report`
+  - Output: `docs/parser-batch-report-b01.json` (of andere batch via `PARSER_BATCH_ID`)
+- Strikte batch-validatie draaien: `npm run parser:batch-strict`
+  - Gebruik dit als go/no-go check; het mag FAIL geven zolang de batch nog niet op `validated` staat.

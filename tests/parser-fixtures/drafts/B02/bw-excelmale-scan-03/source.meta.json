@@ -1,0 +1,10 @@
+{
+  "batch": "B02",
+  "file_id": "5151b7d145b8",
+  "label": "bw_excelmale_scan_03",
+  "source_type": "webp_scan",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

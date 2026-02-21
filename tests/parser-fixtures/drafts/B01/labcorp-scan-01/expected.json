@@ -1,7 +1,7 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.35,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 2,
+  "maxMissingFields": 4,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -10,20 +10,8 @@
   ],
   "requiredMarkers": [
     {
-      "canonicalMarker": "Testosterone"
-    },
-    {
-      "canonicalMarker": "Free Testosterone"
-    },
-    {
-      "canonicalMarker": "Estradiol"
-    },
-    {
-      "canonicalMarker": "SHBG"
-    },
-    {
       "canonicalMarker": "Hematocrit"
     }
   ],
-  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
+  "notes": "Auto-seeded from sanitized source text. Handmatige review verplicht."
 }

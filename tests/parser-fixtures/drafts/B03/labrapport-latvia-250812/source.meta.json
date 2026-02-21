@@ -1,0 +1,10 @@
+{
+  "batch": "B03",
+  "file_id": "b649f902bc18",
+  "label": "labrapport_latvia_250812",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

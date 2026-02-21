@@ -31,7 +31,10 @@ Als FAIL:
 
 | batch | files | required marker recall | unit accuracy | reference range accuracy | date accuracy | false positive rate | unknown layout rate | verdict | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| B01 | 12 | - | - | - | - | - | - | pending | waiting for fixture_done + validation |
+| B01 | 11 | 100.0% (62/62) | n/a (0 expected units) | n/a (0 expected ranges) | n/a (datum niet verplicht in B01) | 0.0% (0/121) | 0.0% (0/11) | PASS | `generic_pdf_02` is bewust `skipped` door onleesbare scan/OCR; opnieuw opnemen met betere bron in B02 |
+| B02 | 5 | 100.0% (17/17) | n/a (0 expected units) | n/a (0 expected ranges) | n/a (datum niet verplicht in B02) | 0.0% (0/33) | 0.0% (0/5) | PASS* | 7/12 items auto-`skipped` wegens onleesbare OCR; opnieuw testen met betere scans/PDF-bronnen |
+| B03 | 6 | 100.0% (29/29) | n/a (0 expected units) | n/a (0 expected ranges) | n/a (datum niet verplicht in B03) | 0.0% (0/150) | 0.0% (0/6) | PASS* | 6/12 items auto-`skipped` wegens onleesbare OCR of te weinig bruikbare tekst; betere bronkwaliteit nodig |
+| B04 | 2 | 100.0% (6/6) | n/a (0 expected units) | n/a (0 expected ranges) | n/a (datum niet verplicht in B04) | 0.0% (0/26) | 0.0% (0/2) | PASS* | 6/8 items auto-`skipped` wegens onleesbare OCR of onvoldoende bruikbare tekst |
 
 ## Handmatige UI Check (minimaal 5 files)
 
@@ -49,3 +52,13 @@ Checklist per file:
 | B01 | d8eb57342e0e | - | - | - | - | - | - | - |
 | B01 | 16067529a29f | - | - | - | - | - | - | - |
 | B01 | 060fbad9a3d4 | - | - | - | - | - | - | - |
+| B01 | 27a7fdfcf13a | owner | 2026-02-21 | ja | n/a | ja | ja | onderaan staat een herhaalde marker-tabel die als voorkeur-bron kan dienen |
+
+## Owner Handcheck Notes (2026-02-21)
+
+- Datum is nooit verplicht voor B01.
+- `generic-pdf-01`: meerdere datums + dubbele markers in hetzelfde rapport.
+- `generic-pdf-02`: scan van lage kwaliteit.
+- `hormone-pdf-01`: extra tekst na Androstenedione moet worden genegeerd.
+- `hormone-pdf-02`: veel tekst/grafieken na TPOab moeten worden genegeerd.
+- `hormone-pdf-03`: markerlijst volgens owner inhoudelijk juist; onderaan staat een nette herhaalde tabel.

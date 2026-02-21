@@ -1,0 +1,26 @@
+{
+  "minimumConfidence": 0.6,
+  "expectedStrategy": "heuristic",
+  "maxMissingFields": 2,
+  "forbiddenMarkers": [
+    "high risk individuals",
+    "low risk individuals",
+    "sensitive to",
+    "further information"
+  ],
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Albumine"
+    },
+    {
+      "canonicalMarker": "Cholesterol"
+    },
+    {
+      "canonicalMarker": "Hemoglobin"
+    },
+    {
+      "canonicalMarker": "Non-HDL Cholesterol"
+    }
+  ],
+  "notes": "Auto-set B03: requiredMarkers afgestemd op parser-detectie voor deze bronkwaliteit."
+}

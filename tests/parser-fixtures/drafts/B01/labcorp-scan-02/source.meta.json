@@ -4,5 +4,7 @@
   "label": "labcorp_scan_02",
   "source_type": "webp_scan",
   "vendor": "labcorp",
-  "status": "templated"
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
 }

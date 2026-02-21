@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "65a54c693caa",
+  "label": "sep_bloodwork_pdf_01",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}

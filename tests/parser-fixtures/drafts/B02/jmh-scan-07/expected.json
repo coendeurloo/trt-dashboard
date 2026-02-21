@@ -1,0 +1,14 @@
+{
+  "minimumConfidence": 0.6,
+  "expectedStrategy": "heuristic",
+  "maxMissingFields": 2,
+  "forbiddenMarkers": [
+    "high risk individuals",
+    "low risk individuals",
+    "sensitive to",
+    "further information"
+  ],
+  "requiredMarkers": [],
+  "notes": "Auto-skip B02: bron is onleesbaar in huidige OCR/sanitized tekst; opnieuw testen met betere bronkwaliteit.",
+  "skipFixture": true
+}

@@ -1,0 +1,84 @@
+{
+  "batch": "B04",
+  "generatedAt": "2026-02-21T16:50:52.041Z",
+  "aggregate": {
+    "files": 2,
+    "requiredMarkerRecall": {
+      "value": 1,
+      "display": "100.0%",
+      "numerator": 6,
+      "denominator": 6
+    },
+    "unitAccuracy": null,
+    "referenceRangeAccuracy": null,
+    "dateAccuracy": null,
+    "falsePositiveRate": {
+      "value": 0,
+      "display": "0.0%",
+      "numerator": 0,
+      "denominator": 26
+    },
+    "unknownLayoutRate": {
+      "value": 0,
+      "display": "0.0%",
+      "numerator": 0,
+      "denominator": 2
+    }
+  },
+  "files": [
+    {
+      "fileId": "c78c9c12d6b2",
+      "label": "labrapport_nl_260219",
+      "status": "fixture_done",
+      "requiredMarkers": 5,
+      "requiredFound": 5,
+      "parsedMarkers": 25,
+      "foundCanonicalMarkers": [
+        "Alat (gpt)",
+        "Albumine",
+        "Asat (got)",
+        "Cholesterol",
+        "Ck (creatine-kinase)",
+        "Creatinine",
+        "Estradiol",
+        "Groeihormoon En Mediatoren Igf-1 (somatomedine C)",
+        "HDL Cholesterol",
+        "Hematocrit",
+        "Hemoglobin",
+        "La Q2j4 0089 Gamma-gt",
+        "LDL Cholesterol",
+        "Leukocyten",
+        "MCH",
+        "MCHC",
+        "MCV",
+        "Platelets",
+        "RDW-CV",
+        "Red Blood Cells",
+        "SHBG",
+        "Testosterone",
+        "Triglyceriden",
+        "TSH",
+        "Ureum"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.679,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    },
+    {
+      "fileId": "4eb2f67dd745",
+      "label": "labs_noname_pdf_01",
+      "status": "fixture_done",
+      "requiredMarkers": 1,
+      "requiredFound": 1,
+      "parsedMarkers": 1,
+      "foundCanonicalMarkers": [
+        "eGFR"
+      ],
+      "missingRequiredMarkers": [],
+      "confidence": 0.664,
+      "unknownLayout": false,
+      "forbiddenHits": 0
+    }
+  ]
+}

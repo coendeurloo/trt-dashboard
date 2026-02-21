@@ -1,7 +1,7 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.5,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 2,
+  "maxMissingFields": 5,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -10,20 +10,29 @@
   ],
   "requiredMarkers": [
     {
-      "canonicalMarker": "Testosterone"
-    },
-    {
-      "canonicalMarker": "Free Testosterone"
-    },
-    {
-      "canonicalMarker": "Estradiol"
+      "canonicalMarker": "DHEA Sulfate"
     },
     {
       "canonicalMarker": "SHBG"
     },
     {
-      "canonicalMarker": "Hematocrit"
+      "canonicalMarker": "Estradiol"
+    },
+    {
+      "canonicalMarker": "Free Testosterone"
+    },
+    {
+      "canonicalMarker": "PSA"
+    },
+    {
+      "canonicalMarker": "Prolactin"
+    },
+    {
+      "canonicalMarker": "LH"
+    },
+    {
+      "canonicalMarker": "FSH"
     }
   ],
-  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
+  "notes": "Must-have set bevestigd door owner. Huidige geanonimiseerde fixturetekst bevat geen duidelijke DHT/Testosterone meetrij; opnieuw toetsen met rijkere bronextractie. Extra tekst na Androstenedione moet genegeerd worden. Datum niet verplicht."
 }

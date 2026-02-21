@@ -1,0 +1,10 @@
+{
+  "batch": "B03",
+  "file_id": "76019ff58188",
+  "label": "bloodwork_clean_pdf_01",
+  "source_type": "pdf_text",
+  "vendor": "unknown",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_auto_seed"
+}
