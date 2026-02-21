@@ -461,6 +461,67 @@ describe("pdfParsing fallback layers", () => {
     expect(parsed?.referenceMax).toBe(76.4);
   });
 
+  it("parses Latvian indexed hematology rows without corrupting first values", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "E. Gulbja Laboratorija Testing Report Nr. 26862432 /2/Request complete",
+        "Test title Result Reference interval Units Prev. Result/ date",
+        "Hematology",
+        "1/58 A Red blood cells 5.8 4.5 - 5.9 10x12/L",
+        "2/58 A Hemoglobin 172 132 - 175 g/L",
+        "3/58 A Hematocrit 52 40 - 51 %"
+      ].join("\n"),
+      "labrapport-250812-lab-latvia.pdf"
+    );
+
+    const rbc = draft.markers.find((marker) => marker.canonicalMarker === "Red Blood Cells");
+    const hgb = draft.markers.find((marker) => marker.canonicalMarker === "Hemoglobin");
+
+    expect(rbc).toBeDefined();
+    expect(rbc?.rawValue).toBeCloseTo(5.8, 2);
+    expect(rbc?.rawUnit).toBe("10^12/L");
+    expect(rbc?.value).toBeCloseTo(5.8, 2);
+    expect(rbc?.unit).toBe("10^12/L");
+    expect(rbc?.referenceMin).toBe(4.5);
+    expect(rbc?.referenceMax).toBe(5.9);
+
+    expect(hgb).toBeDefined();
+    expect(hgb?.rawValue).toBe(172);
+    expect(hgb?.rawUnit).toBe("g/L");
+    expect(hgb?.rawReferenceMin).toBe(132);
+    expect(hgb?.rawReferenceMax).toBe(175);
+  });
+
+  it("parses Latvian rows with B12 and clinical chemistry without index pollution", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "E. Gulbja Laboratorija Testing Report Nr. 26862432 /2/Request complete",
+        "23/58 A ESR 2 1 - 15 mm/h",
+        "24/58 A Ferritin 27.6 22 - 322 ng/mL",
+        "25/58 A Active B12 (Holotranscobalamin) 96.74 27.24-169.62 pmol/L",
+        "Clinical Chemistry",
+        "26/58 A Urea 4.6 3.2 - 8.2 mmol/L",
+        "27/58 A Creatinine 97 53-97 µmol/L"
+      ].join("\n"),
+      "labrapport-250812-lab-latvia.pdf"
+    );
+
+    const activeB12 = draft.markers.find((marker) => marker.marker.toLowerCase().includes("active b12"));
+    const urea = draft.markers.find((marker) => marker.canonicalMarker === "Ureum");
+    const polluted = draft.markers.find((marker) => /interval clinical chemistry|clinical chemistry/i.test(marker.marker));
+
+    expect(activeB12).toBeDefined();
+    expect(activeB12?.rawValue).toBeCloseTo(96.74, 2);
+    expect(activeB12?.rawUnit).toBe("pmol/L");
+    expect(activeB12?.rawReferenceMin).toBeCloseTo(27.24, 2);
+    expect(activeB12?.rawReferenceMax).toBeCloseTo(169.62, 2);
+
+    expect(urea).toBeDefined();
+    expect(urea?.rawValue).toBe(4.6);
+    expect(urea?.rawUnit).toBe("mmol/L");
+    expect(polluted).toBeUndefined();
+  });
+
   it("filters implausible unit-marker combinations during fallback dedupe", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [

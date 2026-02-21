@@ -130,6 +130,7 @@ const SECTION_PREFIX_PATTERN =
   /^(?:nuchter|hematology|clinical chemistry|general chemistry|hormones|vitamins|tumor markers|tumour markers|cardial markers|lipids|muscle enzymes|random urine chemistry|urine \(micro\)albumin|adrenal function|reproductive and gonadal|serum proteins|hemoglobin a1c|haemoglobin a1c|differential|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
 const METHOD_SUFFIX_PATTERN = /\b(?:ECLIA|PHOT|ENZ|NEPH|ISSAM)\b$/i;
 const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|×)?(?:9|12)\/l|[A-Za-z%µμ/][A-Za-z0-9%µμ/.*^\-²]*)$/i;
+const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>≤≥]?\s*-?\d+(?:[.,]\d+)?$/;
 const LEADING_UNIT_FRAGMENT_PATTERN =
   /^(?:mmol|nmol|pmol|pg|ng|g|mg|µmol|umol|u|mu|miu|fl|fmol|l)\s*\/\s*[a-z0-9µμ%]+\s*/i;
 const IMPORTANT_MARKERS = new Set([
@@ -1603,6 +1604,7 @@ const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
 const cleanMarkerName = (rawMarker: string): string => {
   let marker = cleanWhitespace(rawMarker)
     .replace(/^[^A-Za-zÀ-ž]+/, "")
+    .replace(/^(?:A|H|L)\s+(?=[A-Za-zÀ-ž])/i, "")
     .replace(/\s*\([^)]*dr\.[^)]*\)$/i, "")
     .replace(/\b(?:within|above|below)\s+(?:luteal|follicular|optimal|reference)?\s*range\b/gi, "")
     .trim();
@@ -1754,6 +1756,10 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
+  if (/^(?:hematology|clinical chemistry|biochemistry|hormones?|vitamins?|lipids?|differential)$/i.test(marker)) {
+    return true;
+  }
+
   const tokenCount = tokens.length;
   if (tokenCount >= 8 && !MARKER_ANCHOR_PATTERN.test(marker)) {
     return true;
@@ -1818,7 +1824,7 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
 };
 
 const isNumericToken = (token: string): boolean => {
-  return safeNumber(token) !== null;
+  return STRICT_NUMERIC_TOKEN_PATTERN.test(token.trim());
 };
 
 const parseRowByRightAnchoredUnit = (
@@ -3137,6 +3143,46 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   return rows;
 };
 
+const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  if (!/\b(?:e\.\s*gulbja laboratorija|request complete|test title)\b/i.test(text)) {
+    return [];
+  }
+
+  const rows: ParsedFallbackRow[] = [];
+  const normalized = cleanWhitespace(text);
+  const rowPattern =
+    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))\s+([A-Za-z%µμ0-9*^/.\-]+)(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
+
+  for (const match of normalized.matchAll(rowPattern)) {
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));
+    if (looksLikeNoiseMarker(markerName)) {
+      continue;
+    }
+
+    const value = safeNumber(match[2]);
+    if (value === null) {
+      continue;
+    }
+
+    const unit = normalizeUnit(match[4] ?? "");
+    const parsedReference = extractReferenceAndUnit(`${match[3] ?? ""} ${unit}`);
+
+    const row: ParsedFallbackRow = {
+      markerName,
+      value,
+      unit,
+      referenceMin: parsedReference.referenceMin,
+      referenceMax: parsedReference.referenceMax,
+      confidence: 0.86
+    };
+    if (shouldKeepParsedRow(row, profile)) {
+      rows.push(row);
+    }
+  }
+
+  return rows;
+};
+
 const parseLondonDoctorSummaryRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
   if (!/\b(?:results for your doctor|londonmedicallaboratory\.com)\b/i.test(text)) {
     return [];
@@ -3388,12 +3434,14 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
   const genovaRows = parseGenovaHormoneRows(text, profile);
   const zrtRows = parseZrtCompactRows(text, profile);
   const wardeRows = parseWardeTesbRows(text, profile);
+  const latvianRows = parseLatvianIndexedRows(text, profile);
   const londonRows = parseLondonDoctorSummaryRows(text, profile);
   const lifeLabsRows = parseLifeLabsTableRows(text, profile);
   const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
   const columnRows = parseColumnRows(text, profile);
   const lineRows = parseLineRows(text, profile);
-  const indexedRows = parseIndexedRows(text, profile);
+  const indexedRowsRaw = parseIndexedRows(text, profile);
+  const indexedRows = latvianRows.length > 0 ? [] : indexedRowsRaw;
   const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
   const huisartsRows = profile.enableKeywordRangeParser ? parseMijnGezondheidRows(text) : [];
 
@@ -3403,6 +3451,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...genovaRows,
           ...zrtRows,
           ...wardeRows,
+          ...latvianRows,
           ...londonRows,
           ...lifeLabsRows,
           ...columnRows,
@@ -3415,6 +3464,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...genovaRows,
           ...zrtRows,
           ...wardeRows,
+          ...latvianRows,
           ...londonRows,
           ...lifeLabsRows,
           ...columnRows,

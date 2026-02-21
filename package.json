@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@upstash/redis": "^1.36.2",
+    "@vercel/analytics": "^1.6.1",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.11.17",
     "html2canvas": "^1.4.1",
