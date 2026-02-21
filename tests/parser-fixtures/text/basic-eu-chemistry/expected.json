@@ -1,5 +1,14 @@
 {
   "minimumConfidence": 0.6,
+  "expectedStrategy": "heuristic",
+  "expectedDate": "2026-01-20",
+  "maxMissingFields": 0,
+  "forbiddenMarkers": [
+    "high risk individuals",
+    "low risk individuals",
+    "sensitive to",
+    "further information"
+  ],
   "requiredMarkers": [
     {
       "canonicalMarker": "Testosterone",

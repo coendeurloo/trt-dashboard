@@ -19,6 +19,8 @@
     "server:start:open": "node scripts/server-control.mjs start --open",
     "server:stop": "node scripts/server-control.mjs stop",
     "server:status": "node scripts/server-control.mjs status",
+    "parser:scan-examplelabs": "node scripts/parser-batch/scan-examplelabs.mjs",
+    "parser:create-fixture-drafts": "node scripts/parser-batch/create-fixture-drafts.mjs",
     "app:start": "npm run build && npm run server:start:open"
   },
   "dependencies": {

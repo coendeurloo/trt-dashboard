@@ -91,3 +91,12 @@ For local desktop usage, launcher scripts are kept in the repo root:
 - `Stop LabTracker.bat`
 
 These are local-dev convenience scripts and are not required for the hosted Vercel app.
+
+## Parser QA workflow (batch protocol)
+
+- Registry: `docs/parser-batch-registry.md` (tracks file hashes, batch status, and dedupe)
+- Scorecard: `docs/parser-batch-scorecard.md` (go/no-go metrics per batch)
+- Local scan helper: `npm run parser:scan-examplelabs`
+  - Scans `examplelabs/`
+  - Computes 12-char SHA-256 IDs per file
+  - Shows which files are already present in the registry

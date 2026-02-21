@@ -1,0 +1,3 @@
+# PLAK HIER ALLEEN GEANONIMISEERDE TEKST
+# Verwijder namen, IDs, adressen, telefoon en e-mail.
+# Laat alleen labtabellen/markerregels staan.

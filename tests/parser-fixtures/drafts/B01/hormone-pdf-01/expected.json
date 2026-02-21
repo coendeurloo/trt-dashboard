@@ -1,7 +1,7 @@
 {
   "minimumConfidence": 0.6,
   "expectedStrategy": "heuristic",
-  "maxMissingFields": 0,
+  "maxMissingFields": 2,
   "forbiddenMarkers": [
     "high risk individuals",
     "low risk individuals",
@@ -13,15 +13,17 @@
       "canonicalMarker": "Testosterone"
     },
     {
+      "canonicalMarker": "Free Testosterone"
+    },
+    {
       "canonicalMarker": "Estradiol"
     },
     {
-      "canonicalMarker": "SHBG",
-      "unit": "nmol/L"
+      "canonicalMarker": "SHBG"
     },
     {
-      "canonicalMarker": "Hematocrit",
-      "unit": "%"
+      "canonicalMarker": "Hematocrit"
     }
-  ]
+  ],
+  "notes": "Update requiredMarkers en thresholds na eerste handmatige review."
 }
