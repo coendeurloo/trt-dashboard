@@ -522,6 +522,28 @@ describe("pdfParsing fallback layers", () => {
     expect(polluted).toBeUndefined();
   });
 
+  it("keeps Dutch marker labels in review and trims dangling '(volgens' fragment", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "estradiol (17-beta-estradiol) ECLIA 216.9 pmol/l 41.5 - 158.5",
+        "testosteron ECLIA 39.6 nmol/l 8.64 - 29.00",
+        "testosteron, vrij (volgens",
+        "ISSAM) 0.961 nmol/l > 0.125",
+        "SHBG (sex.horm.bind. gl.) ECLIA 33.1 nmol/l 18.3 - 54.1"
+      ].join("\n"),
+      "labrapport-240319-lab-nl.pdf"
+    );
+
+    const testosterone = draft.markers.find((marker) => marker.marker.toLowerCase() === "testosteron");
+    const free = draft.markers.find((marker) => marker.marker.toLowerCase().includes("testosteron, vrij"));
+
+    expect(testosterone).toBeDefined();
+    expect(testosterone?.marker).toBe("testosteron");
+    expect(free).toBeDefined();
+    expect(free?.marker).toBe("testosteron, vrij");
+    expect(free?.rawValue).toBeCloseTo(0.961, 3);
+  });
+
   it("filters implausible unit-marker combinations during fallback dedupe", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [

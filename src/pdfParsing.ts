@@ -1668,7 +1668,7 @@ const applyProfileMarkerFixes = (markerName: string): string => {
   marker = marker.replace(/^.*\bSex Hormone Binding Globulin\b/i, "SHBG");
   marker = marker.replace(/^Sex Horm Binding Glob(?:,?\s*Serum)?$/i, "SHBG");
   marker = marker.replace(/^Sex Hormone Binding Globulin$/i, "SHBG");
-  marker = marker.replace(/^Testosterons?(?:,\s*Serum)?$/i, "Testosterone");
+  marker = marker.replace(/^Testosterons(?:,\s*Serum)?$/i, "Testosterone");
   marker = marker.replace(/^Testosterone,\s*Serum$/i, "Testosterone");
   marker = marker.replace(/^Dibya?rotestosterone$/i, "Dihydrotestosterone");
   marker = marker.replace(/^Dihyarotestosterone$/i, "Dihydrotestosterone");
@@ -1680,6 +1680,8 @@ const applyProfileMarkerFixes = (markerName: string): string => {
   marker = marker.replace(/^Posta?\s*Spec\s*4\s*Sem'?$/i, "PSA");
 
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
+  marker = marker.replace(/\s*\(volgens\s*$/i, "").trim();
+  marker = marker.replace(/\s+\($/, "").trim();
   marker = marker.replace(/\s{2,}/g, " ").trim();
 
   return marker;
@@ -2145,12 +2147,13 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
     /^(?:result(?:\s+(?:normal|high|low))?|normal|abnormal|in\s+range|out\s+of\s+range|value)\s+/i,
     ""
   );
-  const directNext = parseSingleRow(`${markerName} ${normalizedNext}`, 0.64, profile);
+  const dequalifiedNext = normalizedNext.replace(/^\(?[A-Z]{2,}(?:\/[A-Z]{2,})?\)?\s+/, "");
+  const directNext = parseSingleRow(`${markerName} ${dequalifiedNext}`, 0.64, profile);
   if (directNext) {
     return directNext;
   }
 
-  const nextMatch = normalizedNext.match(
+  const nextMatch = dequalifiedNext.match(
     /^([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?))?\s*(.*)$/i
   );
   if (!nextMatch) {
