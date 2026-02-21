@@ -31,17 +31,26 @@ const MarkerTrendChart = ({
   const markerLabel = getMarkerDisplayName(marker, language);
   const mins = points.map((point) => point.referenceMin).filter((value): value is number => value !== null);
   const maxs = points.map((point) => point.referenceMax).filter((value): value is number => value !== null);
+  const hasLowerBound = mins.length > 0;
+  const hasUpperBound = maxs.length > 0;
   const rangeMin = mins.length > 0 ? Math.min(...mins) : undefined;
   const rangeMax = maxs.length > 0 ? Math.max(...maxs) : undefined;
   const trtZone = settings.showTrtTargetZone ? getTargetZone(marker, "trt", settings.unitSystem) : null;
   const longevityZone = settings.showLongevityTargetZone ? getTargetZone(marker, "longevity", settings.unitSystem) : null;
   const yAxisCandidates = [
     ...points.map((point) => point.value),
-    ...(settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? [rangeMin, rangeMax] : []),
+    ...(settings.showReferenceRanges
+      ? [
+          ...(rangeMin !== undefined ? [rangeMin] : []),
+          ...(rangeMax !== undefined ? [rangeMax] : [])
+        ]
+      : []),
     ...(trtZone && trtZone.min < trtZone.max ? [trtZone.min, trtZone.max] : []),
     ...(longevityZone && longevityZone.min < longevityZone.max ? [longevityZone.min, longevityZone.max] : [])
   ];
   const yDomain = buildYAxisDomain(yAxisCandidates, settings.yAxisMode);
+  const chartMin = yDomain?.[0] ?? Math.min(...points.map((point) => point.value));
+  const chartMax = yDomain?.[1] ?? Math.max(...points.map((point) => point.value));
   const availableKeys = new Set(points.map((point) => point.key));
   const compactTooltip = settings.tooltipDetailMode === "compact";
   const phaseBlocksForSeries = phaseBlocks.filter(
@@ -194,6 +203,12 @@ const MarkerTrendChart = ({
 
         {settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? (
           <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
+        ) : null}
+        {settings.showReferenceRanges && hasLowerBound && !hasUpperBound && rangeMin !== undefined && chartMax > rangeMin ? (
+          <ReferenceArea y1={rangeMin} y2={chartMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
+        ) : null}
+        {settings.showReferenceRanges && hasUpperBound && !hasLowerBound && rangeMax !== undefined && chartMin < rangeMax ? (
+          <ReferenceArea y1={chartMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
         ) : null}
 
         {trtZone && trtZone.min < trtZone.max ? (
