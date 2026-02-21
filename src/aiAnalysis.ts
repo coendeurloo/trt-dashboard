@@ -21,6 +21,7 @@ import { getRelevantBenchmarks } from "./data/studyBenchmarks";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
+  stop_reason?: string;
   error?: {
     message?: string;
   };
@@ -88,6 +89,8 @@ const ANALYSIS_MODEL_CANDIDATES = [
 ] as const;
 
 const MAX_FULL_REPORTS = 2;
+const BASE_ANALYSIS_MAX_TOKENS = 2400;
+const BASE_DEEP_ANALYSIS_MAX_TOKENS = 3200;
 const parseMarkerCap = (): number => {
   const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 80);
   if (!Number.isFinite(raw)) {
@@ -702,7 +705,7 @@ export const analyzeLabDataWithClaude = async ({
   const preferredOutputLanguage = "English";
   const recentPayload = payload.slice(-MAX_FULL_REPORTS);
   const olderReportCount = Math.max(0, payload.length - MAX_FULL_REPORTS);
-  const maxTokens = deepMode ? 1800 : 1200;
+  const maxTokens = deepMode ? BASE_DEEP_ANALYSIS_MAX_TOKENS : BASE_ANALYSIS_MAX_TOKENS;
 
   const fullPrompt = [
     `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
@@ -825,7 +828,11 @@ export const analyzeLabDataWithClaude = async ({
       if (!text) {
         throw new Error("AI_EMPTY_RESPONSE");
       }
-      return stripComplexFormatting(text);
+      const maybeTruncated =
+        result.body.stop_reason === "max_tokens"
+          ? `${text}\n\n_Note: output may be incomplete due to output token limit._`
+          : text;
+      return stripComplexFormatting(maybeTruncated);
     }
 
     const errorMessage = result.body.error?.message ?? "";
