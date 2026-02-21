@@ -32,6 +32,8 @@ export interface ExtractionReviewTableProps {
   onAddSupplementPeriod: (period: SupplementPeriod) => void;
   isImprovingWithAi?: boolean;
   onImproveWithAi?: () => void;
+  onRetryWithOcr?: () => void;
+  onStartManualEntry?: () => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -52,11 +54,15 @@ const ExtractionReviewTable = ({
   onAddSupplementPeriod,
   isImprovingWithAi = false,
   onImproveWithAi,
+  onRetryWithOcr,
+  onStartManualEntry,
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const showParserDebugInfo =
+    import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
 
   const [showCreateProtocol, setShowCreateProtocol] = useState(false);
   const [protocolDraft, setProtocolDraft] = useState(blankProtocolDraft());
@@ -112,6 +118,12 @@ const ExtractionReviewTable = ({
           "Parser confidence is low. Check date, marker values, and reference ranges before saving."
         );
       }
+      if (code === "PDF_UNKNOWN_LAYOUT") {
+        return tr(
+          "Onbekend labformat gedetecteerd. Controleer de extractie handmatig of probeer OCR opnieuw.",
+          "Unknown lab format detected. Review extraction manually or retry OCR."
+        );
+      }
       if (code === "PDF_AI_SKIPPED_COST_MODE") {
         return tr(
           "AI-verbetering is overgeslagen door je kosteninstellingen. Je kunt handmatig verbeteren indien nodig.",
@@ -154,15 +166,28 @@ const ExtractionReviewTable = ({
           "AI refinement was skipped due to rate limits. Try again later."
         );
       }
+      if (code === "PDF_AI_LIMITS_UNAVAILABLE") {
+        return tr(
+          "AI-verbetering is tijdelijk niet beschikbaar omdat de limietservice niet reageert.",
+          "AI refinement is temporarily unavailable because the limits service is unreachable."
+        );
+      }
       if (code === "PDF_AI_DISABLED_BY_PARSER_MODE") {
         return tr(
           "AI-verbetering is uitgeschakeld door de gekozen parser-debugmodus.",
           "AI refinement is disabled by the selected parser debug mode."
         );
       }
+      if (code === "PDF_AI_CONSENT_REQUIRED") {
+        return tr(
+          "Externe AI staat uit totdat je expliciet toestemming geeft in Instellingen > Privacy & AI.",
+          "External AI is disabled until you explicitly grant consent in Settings > Privacy & AI."
+        );
+      }
       return null;
     })
     .filter((value): value is string => Boolean(value));
+  const unknownLayoutDetected = warningCodes.includes("PDF_UNKNOWN_LAYOUT");
 
   const selectedProtocol = useMemo(
     () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
@@ -377,9 +402,11 @@ const ExtractionReviewTable = ({
           <p className="text-sm text-slate-300">
             {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
             <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
-            <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
-              {tr("parsermodus", "parser mode")}: {parserModeLabel}
-            </span>
+            {showParserDebugInfo ? (
+              <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
+                {tr("parsermodus", "parser mode")}: {parserModeLabel}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -440,7 +467,7 @@ const ExtractionReviewTable = ({
                 <p>• {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
                 <p>• {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
               </div>
-              {debugInfo ? (
+              {showParserDebugInfo && debugInfo ? (
                 <p className="mt-2 text-[11px] text-amber-100/80">
                   {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
                   {debugInfo.rejectedRows}
@@ -451,6 +478,48 @@ const ExtractionReviewTable = ({
               ) : null}
             </>
           ) : null}
+        </div>
+      ) : null}
+
+      {unknownLayoutDetected ? (
+        <div className="mt-3 rounded-xl border border-rose-500/35 bg-rose-500/10 p-3 text-sm text-rose-100">
+          <p className="font-medium">
+            {tr("Volgende stap bij onbekend format", "Next step for unknown format")}
+          </p>
+          <p className="mt-1 text-xs text-rose-100/90 sm:text-sm">
+            {tr(
+              "Kies één van deze opties om verder te gaan.",
+              "Choose one of these options to continue."
+            )}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {onStartManualEntry ? (
+              <button
+                type="button"
+                className="rounded-md border border-rose-400/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-100 hover:bg-rose-500/20 sm:text-sm"
+                onClick={onStartManualEntry}
+              >
+                {tr("Handmatig invullen", "Enter manually")}
+              </button>
+            ) : null}
+            {onRetryWithOcr ? (
+              <button
+                type="button"
+                className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-500/20 sm:text-sm"
+                onClick={onRetryWithOcr}
+              >
+                {tr("OCR opnieuw proberen", "Retry OCR")}
+              </button>
+            ) : null}
+            <a
+              href={parsingFeedbackMailto}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-500/20 sm:text-sm"
+            >
+              {tr("Geanonimiseerde feedback sturen", "Send anonymized feedback")}
+            </a>
+          </div>
         </div>
       ) : null}
 

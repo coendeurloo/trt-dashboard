@@ -3,6 +3,15 @@ export type UnitSystem = "eu" | "us";
 export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type AICostMode = "balanced" | "ultra_low_cost" | "max_accuracy";
 export type ParserDebugMode = "text_only" | "text_ocr" | "text_ocr_ai";
+export type AIConsentAction = "analysis" | "parser_rescue";
+export type AIConsentScope = "once" | "always";
+export type ParserStage =
+  | "reading_text_layer"
+  | "running_ocr"
+  | "running_ai_text"
+  | "running_ai_pdf_rescue"
+  | "done"
+  | "failed";
 export type TabKey =
   | "dashboard"
   | "protocol"
@@ -140,6 +149,7 @@ export type ExtractionWarningCode =
   | "PDF_OCR_INIT_FAILED"
   | "PDF_OCR_PARTIAL"
   | "PDF_LOW_CONFIDENCE_LOCAL"
+  | "PDF_UNKNOWN_LAYOUT"
   | "PDF_AI_TEXT_ONLY_INSUFFICIENT"
   | "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE"
   | "PDF_AI_PDF_RESCUE_SKIPPED_SIZE"
@@ -147,6 +157,8 @@ export type ExtractionWarningCode =
   | "PDF_AI_SKIPPED_COST_MODE"
   | "PDF_AI_SKIPPED_BUDGET"
   | "PDF_AI_SKIPPED_RATE_LIMIT"
+  | "PDF_AI_LIMITS_UNAVAILABLE"
+  | "PDF_AI_CONSENT_REQUIRED"
   | "PDF_AI_DISABLED_BY_PARSER_MODE";
 
 export type ExtractionAIReason =
@@ -155,7 +167,8 @@ export type ExtractionAIReason =
   | "disabled_by_budget"
   | "cache_hit"
   | "local_high_quality"
-  | "disabled_by_cost_mode";
+  | "disabled_by_cost_mode"
+  | "disabled_by_consent";
 
 export type ExtractionRoute =
   | "local-text"
@@ -164,6 +177,16 @@ export type ExtractionRoute =
   | "gemini-with-ocr"
   | "gemini-vision-only"
   | "empty";
+
+export interface AIConsentDecision {
+  action: AIConsentAction;
+  scope: AIConsentScope;
+  allowExternalAi: boolean;
+  parserRescueEnabled: boolean;
+  includeSymptoms: boolean;
+  includeNotes: boolean;
+  allowPdfAttachment: boolean;
+}
 
 export interface ExtractionDebugInfo {
   textItems: number;
@@ -205,6 +228,7 @@ export interface AppSettings {
   timeRange: TimeRangeKey;
   customRangeStart: string;
   customRangeEnd: string;
+  aiExternalConsent: boolean;
   aiCostMode: AICostMode;
   aiAutoImproveEnabled: boolean;
   parserDebugMode: ParserDebugMode;

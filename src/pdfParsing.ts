@@ -5,6 +5,7 @@ import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
 import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
 import { PRIMARY_MARKERS } from "./constants";
 import {
+  AIConsentDecision,
   AICostMode,
   ExtractionAIReason,
   ExtractionDebugInfo,
@@ -12,6 +13,7 @@ import {
   ExtractionRoute,
   ExtractionWarningCode,
   MarkerValue,
+  ParserStage,
   ParserDebugMode
 } from "./types";
 import {
@@ -20,6 +22,7 @@ import {
 } from "./markerNormalization";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
+import { sanitizeParserTextForAI } from "./privacy/sanitizeForAI";
 
 (pdfjsLib as unknown as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc =
   pdfWorker;
@@ -58,14 +61,18 @@ interface ExtractLabDataOptions {
   costMode?: AICostMode;
   aiAutoImproveEnabled?: boolean;
   forceAi?: boolean;
+  externalAiAllowed?: boolean;
   parserDebugMode?: ParserDebugMode;
   markerAliasOverrides?: Record<string, string>;
+  aiConsent?: AIConsentDecision | null;
+  onStageChange?: (stage: ParserStage) => void;
 }
 
 interface GeminiRequestOptions {
   mode: "text_only" | "pdf_rescue";
   fileHash: string;
   traceId: string;
+  allowPdfAttachment?: boolean;
 }
 
 interface ParsedFallbackRow {
@@ -2997,8 +3004,12 @@ const callGeminiExtraction = async (
   requestOptions: GeminiRequestOptions
 ): Promise<GeminiExtractionAttemptResult> => {
   const compactText = compactTextForAi(pdfText);
+  const sanitizedInput = sanitizeParserTextForAI(compactText, fileName);
   const shouldAttachPdf =
-    requestOptions.mode === "pdf_rescue" && rawPdfBuffer.byteLength > 0 && rawPdfBuffer.byteLength <= MAX_PDF_RESCUE_BYTES;
+    requestOptions.mode === "pdf_rescue" &&
+    Boolean(requestOptions.allowPdfAttachment) &&
+    rawPdfBuffer.byteLength > 0 &&
+    rawPdfBuffer.byteLength <= MAX_PDF_RESCUE_BYTES;
   const pdfBase64 = shouldAttachPdf ? arrayBufferToBase64(rawPdfBuffer) : null;
 
   const cached = getCachedAiExtraction(requestOptions.fileHash, requestOptions.mode);
@@ -3035,8 +3046,8 @@ const callGeminiExtraction = async (
   }
 
   const payload = {
-    fileName,
-    pdfText: compactText,
+    fileName: sanitizedInput.fileName,
+    pdfText: sanitizedInput.text,
     pdfBase64,
     mode: requestOptions.mode,
     fileHash: requestOptions.fileHash,
@@ -3067,6 +3078,9 @@ const callGeminiExtraction = async (
     if (response.status === 429 && body?.error?.code === "AI_BUDGET_EXCEEDED") {
       return { body: null, warningCode: "PDF_AI_SKIPPED_BUDGET" };
     }
+    if (response.status === 503 && body?.error?.code === "AI_LIMITS_UNAVAILABLE") {
+      return { body: null, warningCode: "PDF_AI_LIMITS_UNAVAILABLE" };
+    }
     if (response.status === 429) {
       return { body: null, warningCode: "PDF_AI_SKIPPED_RATE_LIMIT" };
     }
@@ -3088,7 +3102,7 @@ const callGeminiExtraction = async (
       return null;
     }
 
-    const parts: Array<Record<string, unknown>> = [{ text: buildAiExtractionPrompt(fileName, compactText) }];
+    const parts: Array<Record<string, unknown>> = [{ text: buildAiExtractionPrompt(sanitizedInput.fileName, sanitizedInput.text) }];
     if (pdfBase64) {
       parts.push({
         inline_data: {
@@ -3251,6 +3265,12 @@ const buildLocalExtractionWarnings = (
     pushWarning("PDF_OCR_PARTIAL");
   }
 
+  const likelyUnknownLayout =
+    (textResult.textItemCount > 0 || ocrResult.used) && draft.markers.length <= 3 && draft.extraction.confidence < 0.55;
+  if (likelyUnknownLayout) {
+    pushWarning("PDF_UNKNOWN_LAYOUT");
+  }
+
   if (draft.extraction.confidence < 0.65 || draft.markers.length < 6) {
     pushWarning("PDF_LOW_CONFIDENCE_LOCAL");
   }
@@ -3308,13 +3328,27 @@ const buildNormalizationSummary = (
 
 export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
   try {
+    const onStageChange = options.onStageChange ?? (() => {});
+    const emitStage = (stage: ParserStage) => {
+      try {
+        onStageChange(stage);
+      } catch {
+        // Stage callback is best-effort and should never break parsing.
+      }
+    };
+    emitStage("reading_text_layer");
+
     setMarkerAliasOverrides(options.markerAliasOverrides ?? null);
     const costMode: AICostMode = options.costMode ?? "balanced";
     const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
+    const externalAiAllowed = options.externalAiAllowed ?? false;
+    const consent = options.aiConsent ?? null;
     const parserDebugMode: ParserDebugMode = options.parserDebugMode ?? "text_ocr_ai";
     const allowOcr = parserDebugMode !== "text_only";
-    const allowAi = parserDebugMode === "text_ocr_ai";
+    const allowAiByMode = parserDebugMode === "text_ocr_ai";
+    const allowAi = allowAiByMode && externalAiAllowed && Boolean(consent?.allowExternalAi) && Boolean(consent?.parserRescueEnabled);
     const forceAi = Boolean(options.forceAi) && allowAi;
+    const forceAiRequested = Boolean(options.forceAi);
     const originalArrayBuffer = await file.arrayBuffer();
     const sourceBytes = new Uint8Array(originalArrayBuffer);
     const cloneArrayBuffer = (): ArrayBuffer => sourceBytes.slice().buffer as ArrayBuffer;
@@ -3378,6 +3412,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       if (isLocalDraftGoodEnough(textFallback.draft) && !forceAi && costMode !== "max_accuracy") {
         console.info("[extractLabData] Route: local-text (good enough)");
         const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, textFallback.draft);
+        emitStage("done");
         return withExtractionMetadata(
           {
             ...textFallback.draft,
@@ -3409,6 +3444,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const canRunOcr = needsOcr && isBrowserRuntime();
 
     if (canRunOcr) {
+      emitStage("running_ocr");
       console.info("[extractLabData] Attempting OCR fallback...");
       ocrResult = {
         text: "",
@@ -3456,6 +3492,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         if (isLocalDraftGoodEnough(bestLocal) && !forceAi && costMode !== "max_accuracy") {
           console.info(`[extractLabData] Route: ${bestRoute} (good enough)`);
           const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, bestLocal);
+          emitStage("done");
           return withExtractionMetadata(
             {
               ...bestLocal,
@@ -3506,9 +3543,14 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const localMetrics = getLocalQualityMetrics(bestLocalDraft);
     const localQualityGood = isLocalQualityHighEnough(localMetrics);
     const compactAiText = compactTextForAi(combinedText);
+    const consentBlocksAi = allowAiByMode && (!externalAiAllowed || !Boolean(consent?.allowExternalAi) || !Boolean(consent?.parserRescueEnabled));
 
     const aiWarnings: ExtractionWarningCode[] = [];
-    let aiReason: ExtractionAIReason = localQualityGood ? "local_high_quality" : "disabled_by_cost_mode";
+    let aiReason: ExtractionAIReason = localQualityGood
+      ? "local_high_quality"
+      : consentBlocksAi
+        ? "disabled_by_consent"
+        : "disabled_by_cost_mode";
     let aiInputTokens = 0;
     let aiOutputTokens = 0;
     let aiCacheHit = false;
@@ -3533,13 +3575,19 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       ocrResult.initFailed;
     const shouldUseAi = allowAi && (forceAi || shouldAutoUseAi || mustUseAiRescue);
 
-    if (!allowAi && !localQualityGood) {
-      aiWarnings.push("PDF_AI_DISABLED_BY_PARSER_MODE");
+    if (!allowAi && (forceAiRequested || !localQualityGood)) {
+      if (consentBlocksAi) {
+        aiWarnings.push("PDF_AI_CONSENT_REQUIRED");
+        aiReason = "disabled_by_consent";
+      } else {
+        aiWarnings.push("PDF_AI_DISABLED_BY_PARSER_MODE");
+      }
     } else if (!shouldUseAi && !localQualityGood) {
       aiWarnings.push("PDF_AI_SKIPPED_COST_MODE");
     }
 
     if (shouldUseAi) {
+      emitStage("running_ai_text");
       const registerAttempt = (result: GeminiExtractionAttemptResult) => {
         aiInputTokens += result.usage?.inputTokens ?? 0;
         aiOutputTokens += result.usage?.outputTokens ?? 0;
@@ -3550,7 +3598,8 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       const textOnlyResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
         mode: "text_only",
         fileHash,
-        traceId
+        traceId,
+        allowPdfAttachment: false
       });
       let aiResult = textOnlyResult;
       registerAttempt(textOnlyResult);
@@ -3578,14 +3627,18 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         if (rescueDecision.shouldRescue) {
           aiRescueTriggered = true;
           aiRescueReason = rescueDecision.reason;
-          if (aiRawPdfBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
+          if (!Boolean(consent?.allowPdfAttachment)) {
+            aiRescueReason = "pdf_rescue_not_consented";
+          } else if (aiRawPdfBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
             aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_SIZE");
           } else {
+            emitStage("running_ai_pdf_rescue");
             aiAttemptedModes.push("pdf_rescue");
             const rescueResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
               mode: "pdf_rescue",
               fileHash,
-              traceId
+              traceId,
+              allowPdfAttachment: Boolean(consent?.allowPdfAttachment)
             });
             registerAttempt(rescueResult);
             if (rescueResult.draft) {
@@ -3662,6 +3715,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       extractionRoute
     };
 
+    emitStage("done");
     return withExtractionMetadata(
       {
         ...parsingDraft,
@@ -3678,6 +3732,11 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     );
   } catch (error) {
     console.warn("Unexpected PDF parsing failure", error);
+    try {
+      options.onStageChange?.("failed");
+    } catch {
+      // no-op
+    }
     return {
       sourceFileName: file.name,
       testDate: new Date().toISOString().slice(0, 10),

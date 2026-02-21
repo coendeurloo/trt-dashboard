@@ -14,12 +14,19 @@ Roadmap direction: broader performance and general health lab tracking.
 
 Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.app)
 
+## Privacy behavior (important)
+
+- Default: parsing stays local in the browser (text extraction + OCR when needed).
+- External AI is **off by default** and only used after explicit opt-in in `Settings > Privacy & AI`.
+- If opt-in is off, parser fallback AI and AI analysis are both blocked.
+- AI limits/budget are stored in Upstash Redis. If Redis is unavailable, external AI calls fail closed (`503 AI_LIMITS_UNAVAILABLE`).
+
 ## Features implemented
 
 - Drag-and-drop PDF upload (`react-dropzone`)
 - Adaptive PDF parser for mixed lab layouts (tables, line-based rows, multi-line rows)
 - Smart OCR fallback for scanned PDFs (`tesseract.js`, client-side, only when needed)
-- Claude structured extraction + AI lab analysis (full and latest-vs-previous)
+- Gemini parser fallback (server proxy) + Claude AI lab analysis (full and latest-vs-previous)
 - Editable extraction review table with hover edit icon
 - Report context fields:
   - Protocol
@@ -44,6 +51,24 @@ Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.
   - Export PDF report screenshot (`html2canvas` + `jspdf`)
 - Responsive UI + dark/light mode persistence
 - Medical disclaimer
+
+## Environment variables
+
+Use `.env.example` as template.
+
+Server-only (Vercel + local server):
+- `CLAUDE_API_KEY` (required)
+- `GEMINI_API_KEY` (required)
+- `UPSTASH_REDIS_REST_URL` (required for AI limits/budget store)
+- `UPSTASH_REDIS_REST_TOKEN` (required for AI limits/budget store)
+- `AI_DAILY_BUDGET_EUR` (optional, `0` = disabled)
+- `AI_MONTHLY_BUDGET_EUR` (optional, `0` = disabled)
+- `AI_PARSER_MAX_CALLS_PER_USER_PER_DAY` (optional)
+
+Client/build flags:
+- `VITE_ENABLE_PARSER_DEBUG` (optional, keep `false` for normal production)
+- `VITE_GEMINI_API_KEY` (dev-only fallback, do not use in production)
+- `VITE_AI_ANALYSIS_MARKER_CAP` (optional)
 
 ## Tech stack
 

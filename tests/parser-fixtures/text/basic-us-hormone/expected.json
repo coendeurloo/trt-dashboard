@@ -1,0 +1,19 @@
+{
+  "minimumConfidence": 0.6,
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Testosterone"
+    },
+    {
+      "canonicalMarker": "Estradiol"
+    },
+    {
+      "canonicalMarker": "SHBG",
+      "unit": "nmol/L"
+    },
+    {
+      "canonicalMarker": "Hematocrit",
+      "unit": "%"
+    }
+  ]
+}

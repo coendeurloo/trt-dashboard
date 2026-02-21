@@ -1,0 +1,8 @@
+Patient: Synthetic Test User
+Collected: 02/14/2026 07:45
+Report Date: 02/15/2026
+
+Testosterone, Total, LC/MS/MS 632 250 - 1100 ng/dL
+Estradiol 31 10 - 40 pg/mL
+SHBG 29 10 - 50 nmol/L
+Hematocrit 49.1 40.0 - 52.0 %

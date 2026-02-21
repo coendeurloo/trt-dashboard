@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
-import { AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
+import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
@@ -59,9 +59,19 @@ export const useAnalysis = ({
     setBetaRemaining(getRemainingAnalyses());
   };
 
-  const runAiAnalysis = async (analysisType: "full" | "latestComparison") => {
+  const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
     if (analysisType === "latestComparison" && visibleReports.length < 2) {
       setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
+      return;
+    }
+    const externalAiAllowed = settings.aiExternalConsent || Boolean(consentOverride?.allowExternalAi);
+    if (!externalAiAllowed) {
+      setAnalysisError(
+        tr(
+          "AI staat uit. Geef eerst expliciete toestemming in Instellingen > Privacy & AI.",
+          "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
+        )
+      );
       return;
     }
 
@@ -87,6 +97,11 @@ export const useAnalysis = ({
         unitSystem: settings.unitSystem,
         language,
         analysisType,
+        externalAiAllowed,
+        aiConsent: {
+          includeSymptoms: consentOverride?.includeSymptoms ?? false,
+          includeNotes: consentOverride?.includeNotes ?? false
+        },
         context: {
           samplingFilter: samplingControlsEnabled ? settings.samplingFilter : "all",
           protocolImpact: protocolImpactSummary,

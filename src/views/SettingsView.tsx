@@ -23,6 +23,8 @@ interface SettingsViewProps {
   markerUsage: MarkerUsageRow[];
   shareOptions: ShareOptions;
   shareLink: string;
+  shareLinkLength: number;
+  shareLinkTooLong: boolean;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onRemapMarker: (sourceCanonical: string, targetLabel: string) => void;
   onOpenRenameDialog: (sourceCanonical: string) => void;
@@ -79,6 +81,8 @@ const SettingsView = ({
   markerUsage,
   shareOptions,
   shareLink,
+  shareLinkLength,
+  shareLinkTooLong,
   onUpdateSettings,
   onRemapMarker,
   onOpenRenameDialog,
@@ -103,7 +107,8 @@ const SettingsView = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
-  const showParserDebugControls = true;
+  const showParserDebugControls =
+    import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
 
   useEffect(() => {
     if (editableMarkers.length === 0) {
@@ -297,6 +302,42 @@ const SettingsView = ({
               <option value="full">{tr("Uitgebreid (alle context)", "Extended (full context)")}</option>
             </select>
           </label>
+
+          <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm md:col-span-2">
+            <span className="block text-xs uppercase tracking-wide text-emerald-300">{tr("Privacy & AI", "Privacy & AI")}</span>
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 p-3">
+              <div>
+                <p className="text-sm text-slate-200">{tr("Externe AI toestaan", "Allow external AI")}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {tr(
+                    "Zonder permanente toestemming tonen we per run eerst een consent-check.",
+                    "Without persistent consent, we show a consent check before each run."
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                  settings.aiExternalConsent ? "border-emerald-500/60 bg-emerald-500/25" : "border-slate-600 bg-slate-700"
+                }`}
+                onClick={() => onUpdateSettings({ aiExternalConsent: !settings.aiExternalConsent })}
+                aria-label={tr("Externe AI toestaan", "Allow external AI")}
+                aria-pressed={settings.aiExternalConsent}
+              >
+                <span
+                  className={`h-4 w-4 rounded-full transition ${
+                    settings.aiExternalConsent ? "translate-x-5 bg-emerald-300" : "translate-x-1 bg-slate-300"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              {tr(
+                "Standaard verwerken we lokaal op je apparaat. Pas na opt-in sturen we alleen noodzakelijke velden naar externe AI.",
+                "By default processing stays local on your device. Only after opt-in do we send required fields to external AI."
+              )}
+            </p>
+          </div>
 
           {showParserDebugControls ? (
             <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3 text-sm md:col-span-2">
@@ -506,8 +547,8 @@ const SettingsView = ({
           <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Delen", "Share")}</h3>
           <p className="mt-1 text-sm text-slate-400">
             {tr(
-              "Genereer een read-only snapshotlink zonder API keys. De gedeelde weergave staat geen bewerken toe.",
-              "Generate a read-only snapshot link without API keys. Shared view does not allow editing."
+              "Genereer een korte read-only snapshotlink zonder API keys. De gedeelde weergave staat geen bewerken toe.",
+              "Generate a short read-only snapshot link without API keys. Shared view does not allow editing."
             )}
           </p>
           <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
@@ -548,7 +589,7 @@ const SettingsView = ({
             {shareLink ? (
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(shareLink);
@@ -556,11 +597,25 @@ const SettingsView = ({
                     // no-op
                   }
                 }}
+                disabled={shareLinkTooLong}
               >
                 <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
               </button>
             ) : null}
           </div>
+          {shareLink ? (
+            <p className={`mt-2 text-xs ${shareLinkTooLong ? "text-amber-300" : "text-emerald-300"}`}>
+              {shareLinkTooLong
+                ? tr(
+                    `Deellink is te lang (${shareLinkLength} tekens). Gebruik JSON export/import als alternatief.`,
+                    `Share link is too long (${shareLinkLength} chars). Use JSON export/import instead.`
+                  )
+                : tr(
+                    `Korte deellink gegenereerd (${shareLinkLength} tekens). Deze link is read-only.`,
+                    `Short share link generated (${shareLinkLength} chars). This link is read-only.`
+                  )}
+            </p>
+          ) : null}
           {shareLink ? (
             <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
           ) : null}

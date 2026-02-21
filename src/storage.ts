@@ -355,13 +355,16 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         report.extraction?.warningCode === "PDF_OCR_INIT_FAILED" ||
         report.extraction?.warningCode === "PDF_OCR_PARTIAL" ||
         report.extraction?.warningCode === "PDF_LOW_CONFIDENCE_LOCAL" ||
+        report.extraction?.warningCode === "PDF_UNKNOWN_LAYOUT" ||
         report.extraction?.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT" ||
         report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE" ||
         report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_SKIPPED_SIZE" ||
         report.extraction?.warningCode === "PDF_AI_PDF_RESCUE_FAILED" ||
         report.extraction?.warningCode === "PDF_AI_SKIPPED_COST_MODE" ||
         report.extraction?.warningCode === "PDF_AI_SKIPPED_BUDGET" ||
-        report.extraction?.warningCode === "PDF_AI_SKIPPED_RATE_LIMIT"
+        report.extraction?.warningCode === "PDF_AI_SKIPPED_RATE_LIMIT" ||
+        report.extraction?.warningCode === "PDF_AI_CONSENT_REQUIRED" ||
+        report.extraction?.warningCode === "PDF_AI_DISABLED_BY_PARSER_MODE"
           ? report.extraction.warningCode
           : undefined,
       warnings: Array.isArray(report.extraction?.warnings)
@@ -473,7 +476,8 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         report.extraction?.aiReason === "disabled_by_budget" ||
         report.extraction?.aiReason === "cache_hit" ||
         report.extraction?.aiReason === "local_high_quality" ||
-        report.extraction?.aiReason === "disabled_by_cost_mode"
+        report.extraction?.aiReason === "disabled_by_cost_mode" ||
+        report.extraction?.aiReason === "disabled_by_consent"
           ? report.extraction.aiReason
           : undefined
     }
@@ -497,6 +501,7 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
   return {
     ...DEFAULT_SETTINGS,
     ...rest,
+    aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
     parserDebugMode

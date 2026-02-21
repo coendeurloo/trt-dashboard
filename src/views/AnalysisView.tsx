@@ -59,6 +59,7 @@ const AnalysisView = ({
   const dayLimitReached = betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
   const monthLimitReached = betaUsage.monthlyCount >= betaLimits.maxAnalysesPerMonth;
   const blockedByLimits = dayLimitReached || monthLimitReached;
+  const blockedByConsent = !settings.aiExternalConsent;
   const isAnalyzingFull = isAnalyzingLabs && analyzingKind === "full";
   const isAnalyzingLatest = isAnalyzingLabs && analyzingKind === "latestComparison";
   const canRunFull = !isAnalyzingLabs && reportsInScope > 0 && !blockedByLimits;
@@ -135,6 +136,20 @@ const AnalysisView = ({
             {betaUsage.monthlyCount}/{betaLimits.maxAnalysesPerMonth} {tr("gebruikt deze maand", "used this month")}
             {dayLimitReached ? ` · ${tr("reset om middernacht", "resets at midnight")}` : ""}
           </div>
+          {blockedByConsent ? (
+            <div
+              className={
+                isDarkTheme
+                  ? "mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                  : "mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+              }
+            >
+              {tr(
+                "AI staat standaard uit. Voor elke run zie je eerst een toestemmingscheck.",
+                "AI is off by default. You will see a consent check before each run."
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -33,8 +33,8 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
       icon: Sparkles,
       title: tr("Optimaliseer je protocol", "Optimize your protocol"),
       description: tr(
-        "Koppel protocollen aan je labs en laat AI patronen analyseren.",
-        "Connect protocols to your labs and let AI surface patterns."
+        "Koppel protocollen aan je labs en gebruik AI alleen als je daar expliciet voor kiest.",
+        "Connect protocols to your labs and use AI only if you explicitly opt in."
       )
     }
   ];
@@ -42,7 +42,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
   const trust = [
     {
       icon: Lock,
-      label: tr("Alles lokaal opgeslagen", "All data stays local")
+      label: tr("Standaard lokaal verwerkt", "Local processing by default")
     },
     {
       icon: FileText,
@@ -64,8 +64,8 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-slate-400 sm:text-base">
           {tr(
-            "Volg je bloedwerk. Upload PDF's, spot trends en optimaliseer je protocol — alle data blijft in je browser.",
-            "Track your bloodwork. Upload PDFs, spot trends, optimize your protocol — all data stays in your browser."
+            "Volg je bloedwerk. Upload PDF's, spot trends en optimaliseer je protocol — lokaal als standaard, externe AI alleen met toestemming.",
+            "Track your bloodwork. Upload PDFs, spot trends, optimize your protocol — local by default, external AI only with consent."
           )}
         </p>
       </div>

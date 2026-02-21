@@ -1,0 +1,23 @@
+{
+  "minimumConfidence": 0.6,
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Testosterone",
+      "unit": "nmol/L",
+      "referenceMin": 8,
+      "referenceMax": 29
+    },
+    {
+      "canonicalMarker": "Free Testosterone",
+      "unit": "nmol/L"
+    },
+    {
+      "canonicalMarker": "Estradiol",
+      "unit": "pmol/L"
+    },
+    {
+      "canonicalMarker": "SHBG",
+      "unit": "nmol/L"
+    }
+  ]
+}

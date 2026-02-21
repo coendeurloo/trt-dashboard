@@ -1,12 +1,19 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
-import { buildShareToken, parseShareToken } from "../share";
+import { buildShareToken, parseShareToken, ShareOptions } from "../share";
 import { StoredAppData } from "../types";
 
 const makeSampleData = (): StoredAppData => ({
   schemaVersion: 4,
-  settings: DEFAULT_SETTINGS,
-  markerAliasOverrides: {},
+  settings: {
+    ...DEFAULT_SETTINGS,
+    language: "en",
+    unitSystem: "us",
+    theme: "light"
+  },
+  markerAliasOverrides: {
+    testo: "Testosterone"
+  },
   protocols: [
     {
       id: "p1",
@@ -17,8 +24,28 @@ const makeSampleData = (): StoredAppData => ({
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
   ],
-  supplementTimeline: [],
-  checkIns: [],
+  supplementTimeline: [
+    {
+      id: "s1",
+      name: "Fish Oil",
+      dose: "2 g",
+      frequency: "daily",
+      startDate: "2026-01-01",
+      endDate: null
+    }
+  ],
+  checkIns: [
+    {
+      id: "c1",
+      date: "2026-01-14",
+      energy: 4,
+      libido: 3,
+      mood: 4,
+      sleep: 3,
+      motivation: 4,
+      notes: "stable"
+    }
+  ],
   reports: [
     {
       id: "r1",
@@ -57,48 +84,65 @@ const makeSampleData = (): StoredAppData => ({
   ]
 });
 
-const originalWindow = globalThis.window;
-
-const setWindowBase64 = () => {
-  (globalThis as { window?: Window }).window = {
-    ...((originalWindow ?? {}) as Window),
-    btoa: (value: string) => Buffer.from(value, "utf8").toString("base64"),
-    atob: (value: string) => Buffer.from(value, "base64").toString("utf8")
-  } as Window;
+const LEGACY_OPTIONS: ShareOptions = {
+  hideNotes: false,
+  hideProtocol: false,
+  hideSymptoms: false
 };
 
-afterEach(() => {
-  (globalThis as { window?: Window }).window = originalWindow;
-});
+const buildLegacyV1Token = (data: StoredAppData, options: ShareOptions): string => {
+  const payload = {
+    schemaVersion: 5,
+    generatedAt: "2026-01-20T10:00:00.000Z",
+    options,
+    data
+  };
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+};
 
-describe("share token protocol visibility", () => {
-  it("keeps protocol data when hideProtocol is false", () => {
-    setWindowBase64();
+describe("share token format", () => {
+  it("builds a v2 token and roundtrips core report data", () => {
+    const token = buildShareToken(makeSampleData(), LEGACY_OPTIONS);
+    expect(token.startsWith("s2.")).toBe(true);
+
+    const parsed = parseShareToken(token);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.data.reports).toHaveLength(1);
+    expect(parsed?.data.reports[0]?.markers[0]?.canonicalMarker).toBe("Testosterone");
+    expect(parsed?.data.reports[0]?.annotations.protocol).toBe("Protocol A");
+    expect(parsed?.data.protocols).toHaveLength(0);
+    expect(parsed?.data.supplementTimeline).toHaveLength(0);
+    expect(parsed?.data.checkIns).toHaveLength(0);
+  });
+
+  it("preserves hideProtocol/hideSymptoms/hideNotes in v2", () => {
     const token = buildShareToken(makeSampleData(), {
-      hideNotes: false,
-      hideProtocol: false,
-      hideSymptoms: false
+      hideNotes: true,
+      hideProtocol: true,
+      hideSymptoms: true
     });
 
     const parsed = parseShareToken(token);
     expect(parsed).not.toBeNull();
+    expect(parsed?.data.reports[0]?.annotations.protocol).toBe("");
+    expect(parsed?.data.reports[0]?.annotations.notes).toBe("");
+    expect(parsed?.data.reports[0]?.annotations.symptoms).toBe("");
+  });
+
+  it("keeps backward compatibility for legacy v1 links", () => {
+    const legacyToken = buildLegacyV1Token(makeSampleData(), LEGACY_OPTIONS);
+    const parsed = parseShareToken(legacyToken);
+
+    expect(parsed).not.toBeNull();
     expect(parsed?.data.protocols).toHaveLength(1);
-    expect(parsed?.data.reports[0]?.annotations.protocolId).toBe("p1");
     expect(parsed?.data.reports[0]?.annotations.protocol).toBe("Protocol A");
   });
 
-  it("removes protocol data when hideProtocol is true", () => {
-    setWindowBase64();
-    const token = buildShareToken(makeSampleData(), {
-      hideNotes: false,
-      hideProtocol: true,
-      hideSymptoms: false
-    });
+  it("produces a much shorter token than legacy base64 JSON", () => {
+    const sample = makeSampleData();
+    const v2 = buildShareToken(sample, LEGACY_OPTIONS);
+    const legacy = buildLegacyV1Token(sample, LEGACY_OPTIONS);
 
-    const parsed = parseShareToken(token);
-    expect(parsed).not.toBeNull();
-    expect(parsed?.data.protocols).toHaveLength(0);
-    expect(parsed?.data.reports[0]?.annotations.protocolId).toBeNull();
-    expect(parsed?.data.reports[0]?.annotations.protocol).toBe("");
+    expect(v2.length).toBeLessThan(legacy.length * 0.75);
   });
 });

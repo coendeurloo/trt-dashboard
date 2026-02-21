@@ -1,3 +1,5 @@
+import { incrementCounterWindow } from "../_lib/redisStore.js";
+
 export interface RateLimitConfig {
   windowMs: number;
   maxRequests: number;
@@ -11,13 +13,6 @@ export interface RateLimitResult {
 
 export type RequestType = "extraction" | "analysis";
 
-interface CounterEntry {
-  count: number;
-  windowStart: number;
-}
-
-const counters = new Map<string, CounterEntry>();
-
 const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   extraction: {
     windowMs: 60 * 60 * 1000,
@@ -29,35 +24,15 @@ const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   }
 };
 
-export const checkRateLimit = (ip: string, requestType: RequestType): RateLimitResult => {
+export const checkRateLimit = async (ip: string, requestType: RequestType): Promise<RateLimitResult> => {
   const config = RATE_LIMITS[requestType];
-  const now = Date.now();
-  const key = `${ip}:${requestType}`;
-  const entry = counters.get(key);
-
-  if (!entry || now - entry.windowStart >= config.windowMs) {
-    counters.set(key, { count: 1, windowStart: now });
-    return {
-      allowed: true,
-      remaining: Math.max(0, config.maxRequests - 1),
-      resetAt: now + config.windowMs
-    };
-  }
-
-  if (entry.count >= config.maxRequests) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: entry.windowStart + config.windowMs
-    };
-  }
-
-  entry.count += 1;
-  counters.set(key, entry);
+  const windowSeconds = Math.max(1, Math.ceil(config.windowMs / 1000));
+  const key = `ai:rate:${requestType}:${ip}`;
+  const result = await incrementCounterWindow(key, windowSeconds, 1);
 
   return {
-    allowed: true,
-    remaining: Math.max(0, config.maxRequests - entry.count),
-    resetAt: entry.windowStart + config.windowMs
+    allowed: result.count <= config.maxRequests,
+    remaining: Math.max(0, config.maxRequests - result.count),
+    resetAt: Date.now() + result.ttlSeconds * 1000
   };
 };

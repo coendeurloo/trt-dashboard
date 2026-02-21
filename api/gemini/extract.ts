@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { checkRateLimit } from "../claude/rateLimit.js";
+import { RedisStoreUnavailableError, getCounter, incrementCounterWindow, incrementFloatWindow } from "../_lib/redisStore.js";
 
 interface GeminiExtractRequestBody {
   fileName?: string;
@@ -44,11 +45,10 @@ const PRIMARY_MODEL = "gemini-2.5-flash-lite";
 const TECHNICAL_FALLBACK_MODEL = "gemini-2.0-flash";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
+const DAY_TTL_SECONDS = 48 * 60 * 60;
+const MONTH_TTL_SECONDS = 40 * 24 * 60 * 60;
 
 const responseCache = new Map<string, CachedEntry>();
-const dailySpendEur = new Map<string, number>();
-const monthlySpendEur = new Map<string, number>();
-const dailyUserCalls = new Map<string, number>();
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -147,19 +147,24 @@ const estimateCostEur = (usage: GeminiUsage): number => {
   return input + output;
 };
 
-const getCurrentSpend = () => {
+const makeDailySpendKey = (day: string) => `ai:spend:daily:${day}`;
+const makeMonthlySpendKey = (month: string) => `ai:spend:monthly:${month}`;
+const makeDailyUserCallsKey = (day: string, ip: string) => `ai:parser:calls:${day}:${ip}`;
+
+const getCurrentSpend = async () => {
   const day = getDayKey();
   const month = getMonthKey();
+  const [daily, monthly] = await Promise.all([getCounter(makeDailySpendKey(day)), getCounter(makeMonthlySpendKey(month))]);
   return {
     day,
     month,
-    daily: dailySpendEur.get(day) ?? 0,
-    monthly: monthlySpendEur.get(month) ?? 0
+    daily,
+    monthly
   };
 };
 
-const canSpend = (): { allowed: boolean; reason?: "daily" | "monthly" } => {
-  const spend = getCurrentSpend();
+const canSpend = async (): Promise<{ allowed: boolean; reason?: "daily" | "monthly" }> => {
+  const spend = await getCurrentSpend();
   if (DAILY_BUDGET_EUR > 0 && spend.daily >= DAILY_BUDGET_EUR) {
     return { allowed: false, reason: "daily" };
   }
@@ -169,11 +174,22 @@ const canSpend = (): { allowed: boolean; reason?: "daily" | "monthly" } => {
   return { allowed: true };
 };
 
-const recordSpend = (usage: GeminiUsage) => {
-  const spend = getCurrentSpend();
+const recordSpend = async (usage: GeminiUsage) => {
+  const spend = await getCurrentSpend();
   const cost = estimateCostEur(usage);
-  dailySpendEur.set(spend.day, (dailySpendEur.get(spend.day) ?? 0) + cost);
-  monthlySpendEur.set(spend.month, (monthlySpendEur.get(spend.month) ?? 0) + cost);
+  if (cost <= 0) {
+    return spend;
+  }
+  const [dailyResult, monthlyResult] = await Promise.all([
+    incrementFloatWindow(makeDailySpendKey(spend.day), DAY_TTL_SECONDS, cost),
+    incrementFloatWindow(makeMonthlySpendKey(spend.month), MONTH_TTL_SECONDS, cost)
+  ]);
+  return {
+    day: spend.day,
+    month: spend.month,
+    daily: dailyResult.value,
+    monthly: monthlyResult.value
+  };
 };
 
 const pruneCache = () => {
@@ -360,19 +376,53 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
+    const sendLimitsUnavailable = () => {
+      sendJson(res, 503, {
+        error: {
+          code: "AI_LIMITS_UNAVAILABLE",
+          message: "AI limits store unavailable. Try again later."
+        }
+      });
+    };
+
     const ip = getClientIp(req);
-    const limit = checkRateLimit(ip, "extraction");
+    let limit: Awaited<ReturnType<typeof checkRateLimit>>;
+    try {
+      limit = await checkRateLimit(ip, "extraction");
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError || (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")) {
+        sendLimitsUnavailable();
+        return;
+      }
+      throw error;
+    }
     const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
     res.setHeader("x-ratelimit-remaining", String(limit.remaining));
     res.setHeader("x-ratelimit-reset", String(limit.resetAt));
     if (!limit.allowed) {
-      sendJson(res, 429, { error: "Rate limit exceeded", retryAfter, remaining: limit.remaining });
+      sendJson(res, 429, {
+        error: {
+          code: "AI_RATE_LIMIT",
+          message: "Rate limit exceeded"
+        },
+        retryAfter,
+        remaining: limit.remaining
+      });
       return;
     }
 
     const today = getDayKey();
-    const userKey = `${ip}:${today}`;
-    const usedCallsToday = dailyUserCalls.get(userKey) ?? 0;
+    const userKey = makeDailyUserCallsKey(today, ip);
+    let usedCallsToday = 0;
+    try {
+      usedCallsToday = await getCounter(userKey);
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError || (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")) {
+        sendLimitsUnavailable();
+        return;
+      }
+      throw error;
+    }
     if (usedCallsToday >= MAX_CALLS_PER_USER_PER_DAY) {
       console.info(
         `[gemini-extract] trace=${traceId} mode=${mode} reason=user_daily_limit ip=${ip} used=${usedCallsToday} limit=${MAX_CALLS_PER_USER_PER_DAY}`
@@ -400,7 +450,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const spendCheck = canSpend();
+    let spendCheck: Awaited<ReturnType<typeof canSpend>>;
+    try {
+      spendCheck = await canSpend();
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError || (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")) {
+        sendLimitsUnavailable();
+        return;
+      }
+      throw error;
+    }
     if (!spendCheck.allowed) {
       console.info(
         `[gemini-extract] trace=${traceId} mode=${mode} reason=budget_blocked scope=${spendCheck.reason ?? "unknown"} promptChars=${pdfText.length}`
@@ -465,8 +524,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       usage = fallbackResult.usage;
     }
 
-    dailyUserCalls.set(userKey, usedCallsToday + 1);
-    recordSpend(usage);
+    let spend: Awaited<ReturnType<typeof recordSpend>>;
+    try {
+      await incrementCounterWindow(userKey, DAY_TTL_SECONDS, 1);
+      spend = await recordSpend(usage);
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError || (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")) {
+        sendLimitsUnavailable();
+        return;
+      }
+      throw error;
+    }
 
     const markers = Array.isArray(extraction?.markers) ? extraction.markers : [];
     const payload = {
@@ -482,7 +550,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
     pruneCache();
 
-    const spend = getCurrentSpend();
     console.info(
       `[gemini-extract] trace=${traceId} mode=${mode} model=${selectedModel} promptChars=${pdfText.length} markers=${markers.length} inputTokens=${usage.inputTokens} outputTokens=${usage.outputTokens} dailySpendEur=${spend.daily.toFixed(4)} monthlySpendEur=${spend.monthly.toFixed(4)} cacheHit=false`
     );

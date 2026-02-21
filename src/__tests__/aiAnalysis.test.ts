@@ -65,12 +65,65 @@ describe("analyzeLabDataWithClaude", () => {
       protocols: [],
       supplementTimeline: [],
       unitSystem: "eu",
-      language: "en"
+      language: "en",
+      externalAiAllowed: true
     });
 
     expect(result).toContain("Partial analysis");
     expect(result).toContain("output may be incomplete");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(requests[0]?.payload?.max_tokens).toBe(2400);
+  });
+
+  it("keeps symptoms/notes out unless explicitly opted in", async () => {
+    const reportWithContext: LabReport = {
+      ...sampleReport,
+      annotations: {
+        ...sampleReport.annotations,
+        symptoms: "Headache on peak day",
+        notes: "Reach me via test@example.com"
+      }
+    };
+
+    const prompts: string[] = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      const prompt = body?.payload?.messages?.[0]?.content ?? "";
+      prompts.push(String(prompt));
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports: [reportWithContext],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+    await analyzeLabDataWithClaude({
+      reports: [reportWithContext],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      aiConsent: {
+        includeSymptoms: true,
+        includeNotes: true
+      }
+    });
+
+    expect(prompts[0]).not.toContain("Headache on peak day");
+    expect(prompts[0]).not.toContain("test@example.com");
+    expect(prompts[1]).toContain("Headache on peak day");
+    expect(prompts[1]).toContain("[REDACTED_EMAIL]");
   });
 });

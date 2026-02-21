@@ -25,6 +25,7 @@ import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
+import AIConsentModal from "./components/AIConsentModal";
 import { getDemoProtocols, getDemoReports } from "./demoData";
 import { getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
@@ -45,10 +46,13 @@ import { resolveUploadTriggerAction } from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import DashboardView from "./views/DashboardView";
 import {
+  AIConsentAction,
+  AIConsentDecision,
   AppSettings,
   ExtractionDraft,
   LabReport,
   MarkerValue,
+  ParserStage,
   ReportAnnotations,
   TabKey,
   TimeRangeKey
@@ -63,6 +67,7 @@ const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
+const SHARE_URL_WARNING_LIMIT = 7000;
 
 const App = () => {
   const [sharedSnapshot] = useState(() => {
@@ -83,6 +88,8 @@ const App = () => {
     hideSymptoms: false
   });
   const [shareLink, setShareLink] = useState("");
+  const [shareLinkTooLong, setShareLinkTooLong] = useState(false);
+  const [shareLinkLength, setShareLinkLength] = useState(0);
   const {
     appData,
     setAppData,
@@ -124,6 +131,18 @@ const App = () => {
 
     const code = error.message ?? "";
     if (scope === "ai") {
+      if (code === "AI_CONSENT_REQUIRED") {
+        return tr(
+          "AI staat uit. Geef eerst expliciete toestemming in Instellingen > Privacy & AI.",
+          "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
+        );
+      }
+      if (code === "AI_LIMITS_UNAVAILABLE") {
+        return tr(
+          "AI is tijdelijk niet beschikbaar omdat de limietservice niet reageert. Probeer later opnieuw.",
+          "AI is temporarily unavailable because the limits service is unreachable. Please try again later."
+        );
+      }
       if (code.startsWith("AI_RATE_LIMITED:")) {
         const seconds = Number(code.split(":")[1] ?? "0");
         const minutes = Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 0) / 60));
@@ -147,6 +166,12 @@ const App = () => {
     if (code === "PDF_PROXY_UNREACHABLE") {
       return t(appData.settings.language, "pdfProxyUnreachable");
     }
+    if (code === "AI_LIMITS_UNAVAILABLE") {
+      return tr(
+        "AI parserfallback is tijdelijk niet beschikbaar omdat de limietservice niet reageert.",
+        "AI parser fallback is temporarily unavailable because the limits service is unreachable."
+      );
+    }
     if (code === "PDF_EMPTY_RESPONSE") {
       return t(appData.settings.language, "pdfEmptyResponse");
     }
@@ -164,6 +189,7 @@ const App = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false);
+  const [uploadStage, setUploadStage] = useState<ParserStage | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [uploadSummary, setUploadSummary] = useState<{
     fileName: string;
@@ -191,12 +217,27 @@ const App = () => {
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   const hiddenUploadInputRef = useRef<HTMLInputElement | null>(null);
   const parserModuleRef = useRef<Promise<typeof import("./pdfParsing")> | null>(null);
+  const consentResolveRef = useRef<((decision: AIConsentDecision | null) => void) | null>(null);
+  const [consentAction, setConsentAction] = useState<AIConsentAction | null>(null);
 
   const ensurePdfParsingModule = () => {
     if (!parserModuleRef.current) {
       parserModuleRef.current = import("./pdfParsing");
     }
     return parserModuleRef.current;
+  };
+
+  const requestAiConsent = (action: AIConsentAction): Promise<AIConsentDecision | null> =>
+    new Promise((resolve) => {
+      consentResolveRef.current = resolve;
+      setConsentAction(action);
+    });
+
+  const resolveConsentRequest = (decision: AIConsentDecision | null) => {
+    setConsentAction(null);
+    const resolver = consentResolveRef.current;
+    consentResolveRef.current = null;
+    resolver?.(decision);
   };
 
   const {
@@ -272,6 +313,7 @@ const App = () => {
     analyzingKind,
     betaUsage,
     betaLimits,
+    setAnalysisError,
     runAiAnalysis,
     copyAnalysis
   } = useAnalysis({
@@ -536,6 +578,7 @@ const App = () => {
 
   const handleUpload = async (file: File) => {
     setIsProcessing(true);
+    setUploadStage("reading_text_layer");
     setUploadError("");
     setUploadSummary(null);
     setIsImprovingExtraction(false);
@@ -545,8 +588,19 @@ const App = () => {
       const extracted = await extractLabData(file, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled,
+        externalAiAllowed: appData.settings.aiExternalConsent,
+        aiConsent: {
+          action: "parser_rescue",
+          scope: "always",
+          allowExternalAi: appData.settings.aiExternalConsent,
+          parserRescueEnabled: true,
+          includeSymptoms: false,
+          includeNotes: false,
+          allowPdfAttachment: false
+        },
         parserDebugMode: appData.settings.parserDebugMode,
-        markerAliasOverrides: appData.markerAliasOverrides
+        markerAliasOverrides: appData.markerAliasOverrides,
+        onStageChange: setUploadStage
       });
       const warningCount = new Set([
         ...(extracted.extraction.warnings ?? []),
@@ -566,8 +620,10 @@ const App = () => {
       });
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadStage("failed");
     } finally {
       setIsProcessing(false);
+      setUploadStage(null);
     }
   };
 
@@ -576,7 +632,21 @@ const App = () => {
       setUploadError(tr("Upload dit PDF-bestand opnieuw om AI-verbetering uit te voeren.", "Re-upload this PDF to run AI refinement."));
       return;
     }
+    const consent = await requestAiConsent("parser_rescue");
+    if (!consent || !consent.allowExternalAi || !consent.parserRescueEnabled) {
+      setUploadError(
+        tr(
+          "Externe AI is niet gestart. Je kunt handmatig doorgaan met lokale extractie.",
+          "External AI was not started. You can continue with local extraction manually."
+        )
+      );
+      return;
+    }
+    if (consent.scope === "always") {
+      updateSettings({ aiExternalConsent: true });
+    }
     setIsImprovingExtraction(true);
+    setUploadStage("running_ai_text");
     setUploadError("");
     try {
       const { extractLabData } = await ensurePdfParsingModule();
@@ -584,8 +654,11 @@ const App = () => {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: true,
         forceAi: true,
+        externalAiAllowed: true,
+        aiConsent: consent,
         parserDebugMode: appData.settings.parserDebugMode,
-        markerAliasOverrides: appData.markerAliasOverrides
+        markerAliasOverrides: appData.markerAliasOverrides,
+        onStageChange: setUploadStage
       });
       const warningCount = new Set([
         ...(improved.extraction.warnings ?? []),
@@ -602,8 +675,71 @@ const App = () => {
       });
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadStage("failed");
     } finally {
       setIsImprovingExtraction(false);
+      setUploadStage(null);
+    }
+  };
+
+  const retryDraftWithOcr = async () => {
+    if (!lastUploadedFile) {
+      setUploadError(
+        tr(
+          "Upload dit PDF-bestand opnieuw om OCR opnieuw te proberen.",
+          "Re-upload this PDF to retry OCR."
+        )
+      );
+      return;
+    }
+
+    setIsProcessing(true);
+    setUploadStage("running_ocr");
+    setUploadError("");
+    setUploadSummary(null);
+    setIsImprovingExtraction(false);
+
+    try {
+      const { extractLabData } = await ensurePdfParsingModule();
+      const extracted = await extractLabData(lastUploadedFile, {
+        costMode: appData.settings.aiCostMode,
+        aiAutoImproveEnabled: false,
+        externalAiAllowed: false,
+        aiConsent: {
+          action: "parser_rescue",
+          scope: "once",
+          allowExternalAi: false,
+          parserRescueEnabled: false,
+          includeSymptoms: false,
+          includeNotes: false,
+          allowPdfAttachment: false
+        },
+        parserDebugMode: "text_ocr",
+        markerAliasOverrides: appData.markerAliasOverrides,
+        onStageChange: setUploadStage
+      });
+      const warningCount = new Set([
+        ...(extracted.extraction.warnings ?? []),
+        ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
+      ]).size;
+
+      setDraft(extracted);
+      captureOriginalDraftMarkerLabels(extracted);
+      setDraftAnnotations(blankAnnotations());
+      setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
+      setActiveTab("dashboard");
+      setUploadSummary({
+        fileName: extracted.sourceFileName,
+        markerCount: extracted.markers.length,
+        confidence: extracted.extraction.confidence,
+        warnings: warningCount
+      });
+    } catch (error) {
+      setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadStage("failed");
+    } finally {
+      setIsProcessing(false);
+      setUploadStage(null);
     }
   };
 
@@ -826,6 +962,45 @@ const App = () => {
     return Array.from(markerSet);
   }, [visibleReports]);
 
+  const uploadStageText = useMemo(() => {
+    if (!uploadStage) {
+      return tr("PDF wordt verwerkt...", "Processing PDF...");
+    }
+    if (uploadStage === "reading_text_layer") {
+      return tr("Tekstlaag lezen...", "Reading text layer...");
+    }
+    if (uploadStage === "running_ocr") {
+      return tr("OCR uitvoeren op scan...", "Running OCR on scanned pages...");
+    }
+    if (uploadStage === "running_ai_text") {
+      return tr("AI parser op geanonimiseerde tekst...", "Running AI parser on redacted text...");
+    }
+    if (uploadStage === "running_ai_pdf_rescue") {
+      return tr("AI PDF-rescue uitvoeren...", "Running AI PDF rescue...");
+    }
+    if (uploadStage === "done") {
+      return tr("Extractie afgerond.", "Extraction completed.");
+    }
+    return tr("Extractie mislukt.", "Extraction failed.");
+  }, [uploadStage, tr]);
+
+  const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
+    const decision = await requestAiConsent("analysis");
+    if (!decision || !decision.allowExternalAi) {
+      setAnalysisError(
+        tr(
+          "Externe AI is niet gestart. Je kunt doorgaan zonder AI of later opnieuw proberen.",
+          "External AI was not started. You can continue without AI or try again later."
+        )
+      );
+      return;
+    }
+    if (decision.scope === "always") {
+      updateSettings({ aiExternalConsent: true });
+    }
+    await runAiAnalysis(analysisType, decision);
+  };
+
   const generateShareLink = async () => {
     if (typeof window === "undefined") {
       return;
@@ -835,7 +1010,13 @@ const App = () => {
       return;
     }
     const shareUrl = `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(token)}`;
+    const tooLong = shareUrl.length > SHARE_URL_WARNING_LIMIT;
     setShareLink(shareUrl);
+    setShareLinkLength(shareUrl.length);
+    setShareLinkTooLong(tooLong);
+    if (tooLong) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(shareUrl);
     } catch {
@@ -1062,6 +1243,7 @@ const App = () => {
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
               <UploadPanel
                 isProcessing={isProcessing}
+                processingStage={uploadStage}
                 onFileSelected={handleUpload}
                 onUploadIntent={() => {
                   void ensurePdfParsingModule();
@@ -1164,7 +1346,13 @@ const App = () => {
                 onProtocolCreate={addProtocol}
                 onAddSupplementPeriod={addSupplementPeriod}
                 isImprovingWithAi={isImprovingExtraction}
-                onImproveWithAi={lastUploadedFile && appData.settings.parserDebugMode === "text_ocr_ai" ? improveDraftWithAi : undefined}
+                onImproveWithAi={
+                  lastUploadedFile && appData.settings.parserDebugMode === "text_ocr_ai"
+                    ? improveDraftWithAi
+                    : undefined
+                }
+                onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
+                onStartManualEntry={startManualEntry}
                 onSave={saveDraftAsReport}
                 onCancel={() => {
                   setUploadSummary(null);
@@ -1371,7 +1559,7 @@ const App = () => {
                   betaLimits={betaLimits}
                   settings={appData.settings}
                   language={appData.settings.language}
-                  onRunAnalysis={runAiAnalysis}
+                  onRunAnalysis={runAiAnalysisWithConsent}
                   onCopyAnalysis={copyAnalysis}
                 />
               ) : null}
@@ -1387,6 +1575,8 @@ const App = () => {
                   markerUsage={markerUsage}
                   shareOptions={shareOptions}
                   shareLink={shareLink}
+                  shareLinkLength={shareLinkLength}
+                  shareLinkTooLong={shareLinkTooLong}
                   onUpdateSettings={updateSettings}
                   onRemapMarker={remapMarkerAcrossReports}
                   onOpenRenameDialog={openRenameDialog}
@@ -1404,6 +1594,14 @@ const App = () => {
           ) : null}
         </main>
       </div>
+
+      <AIConsentModal
+        open={consentAction !== null}
+        action={consentAction ?? "analysis"}
+        language={appData.settings.language}
+        onClose={() => resolveConsentRequest(null)}
+        onDecide={(decision) => resolveConsentRequest(decision)}
+      />
 
       <AnimatePresence>
         {isProcessing ? (
@@ -1428,9 +1626,12 @@ const App = () => {
                     {tr("Je PDF wordt verwerkt", "Your PDF is being processed")}
                   </p>
                   <p className="mt-1 text-sm text-slate-300">
+                    {uploadStageText}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
                     {tr(
-                      "Markerwaarden, eenheden en referentiebereiken worden nu uitgelezen. Dit kan tot ongeveer 30 seconden duren.",
-                      "Markers, units, and reference ranges are being extracted. This can take up to about 30 seconds."
+                      "Markerwaarden, eenheden en referentiebereiken worden nu uitgelezen.",
+                      "Markers, units, and reference ranges are being extracted."
                     )}
                   </p>
                 </div>

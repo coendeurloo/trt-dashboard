@@ -45,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timeRange: "12m",
   customRangeStart: "",
   customRangeEnd: "",
+  aiExternalConsent: false,
   aiCostMode: "balanced",
   aiAutoImproveEnabled: false,
   parserDebugMode: "text_ocr_ai"

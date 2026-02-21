@@ -1,5 +1,5 @@
 import { sortReportsChronological } from "./utils";
-import { AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
+import { AIConsentDecision, AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
   getProtocolCompoundsText,
@@ -18,11 +18,13 @@ import {
   TrtStabilityResult
 } from "./analytics";
 import { getRelevantBenchmarks } from "./data/studyBenchmarks";
+import { sanitizeAnalysisPayloadForAI } from "./privacy/sanitizeForAI";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
   stop_reason?: string;
   error?: {
+    code?: string;
     message?: string;
   };
 }
@@ -35,6 +37,8 @@ interface AnalyzeLabDataOptions {
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
   deepMode?: boolean;
+  externalAiAllowed?: boolean;
+  aiConsent?: Pick<AIConsentDecision, "includeSymptoms" | "includeNotes">;
   context?: {
     samplingFilter: "all" | "trough" | "peak";
     protocolImpact: ProtocolImpactSummary;
@@ -686,17 +690,26 @@ export const analyzeLabDataWithClaude = async ({
   language = "nl",
   analysisType = "full",
   deepMode = false,
+  externalAiAllowed = false,
+  aiConsent,
   context
 }: AnalyzeLabDataOptions): Promise<string> => {
   if (reports.length === 0) {
     throw new Error("Er zijn nog geen rapporten om te analyseren.");
+  }
+  if (!externalAiAllowed) {
+    throw new Error("AI_CONSENT_REQUIRED");
   }
   if (analysisType === "latestComparison" && reports.length < 2) {
     throw new Error("Voor 'laatste vs vorige' zijn minimaal 2 rapporten nodig.");
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const payload = buildPayload(reports, protocols, supplementTimeline, unitSystem);
+  const rawPayload = buildPayload(reports, protocols, supplementTimeline, unitSystem);
+  const payload = sanitizeAnalysisPayloadForAI(rawPayload, {
+    includeSymptoms: aiConsent?.includeSymptoms ?? false,
+    includeNotes: aiConsent?.includeNotes ?? false
+  });
   const derivedSignals = buildDerivedSignals(payload);
   const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);
@@ -836,10 +849,14 @@ export const analyzeLabDataWithClaude = async ({
     }
 
     const errorMessage = result.body.error?.message ?? "";
+    const errorCode = (result.body as { error?: { code?: string } })?.error?.code ?? "";
     if (result.status === 429) {
       const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
       const retryAfter = typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
       throw new Error(`AI_RATE_LIMITED:${retryAfter}`);
+    }
+    if (result.status === 503 && errorCode === "AI_LIMITS_UNAVAILABLE") {
+      throw new Error("AI_LIMITS_UNAVAILABLE");
     }
     lastErrorMessage = errorMessage;
     const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
