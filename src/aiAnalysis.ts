@@ -17,6 +17,7 @@ import {
   ProtocolImpactSummary,
   TrtStabilityResult
 } from "./analytics";
+import { getRelevantBenchmarks } from "./data/studyBenchmarks";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -144,6 +145,28 @@ const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or me
 
 const KEY_LEGEND =
   "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming.";
+
+const buildBenchmarkContext = (markerNames: string[]): string => {
+  const relevant = getRelevantBenchmarks(markerNames);
+  if (relevant.length === 0) {
+    return "";
+  }
+
+  return [
+    "",
+    "## Reference data from published studies",
+    "",
+    "Use the following findings from peer-reviewed research to provide context where relevant.",
+    "Reference the source naturally in your analysis (e.g. 'According to a 2021 study in the Journal of Urology...').",
+    "Do NOT reproduce these as a list or bibliography; weave them into your narrative only where they add value.",
+    "",
+    ...relevant.map(
+      (benchmark) =>
+        `- ${benchmark.marker}: ${benchmark.finding} (${benchmark.source.authors}, ${benchmark.source.journal} ${benchmark.source.year})`
+    ),
+    ""
+  ].join("\n");
+};
 
 const toRounded = (value: number): number => {
   if (Math.abs(value) >= 100) {
@@ -674,6 +697,8 @@ export const analyzeLabDataWithClaude = async ({
   const derivedSignals = buildDerivedSignals(payload);
   const signals = buildSignals(derivedSignals, context);
   const latestComparison = buildLatestVsPrevious(payload);
+  const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
+  const benchmarkSection = buildBenchmarkContext(trackedMarkerNames);
   const preferredOutputLanguage = "English";
   const recentPayload = payload.slice(-MAX_FULL_REPORTS);
   const olderReportCount = Math.max(0, payload.length - MAX_FULL_REPORTS);
@@ -689,6 +714,7 @@ export const analyzeLabDataWithClaude = async ({
     ...SUPPLEMENT_SECTION_TEMPLATE,
     SAFETY_NOTE,
     KEY_LEGEND,
+    benchmarkSection,
     "DATA START",
     JSON.stringify({
       type: analysisType,
@@ -704,6 +730,7 @@ export const analyzeLabDataWithClaude = async ({
     const relevantPayload = payload.slice(-2);
     const relevantComparison = buildLatestVsPrevious(relevantPayload);
     const relevantMarkers = new Set(relevantPayload.flatMap((report) => report.markers.map((marker) => marker.m)));
+    const relevantBenchmarkSection = buildBenchmarkContext(Array.from(relevantMarkers));
     const startDate = relevantPayload[0]?.date ?? null;
     const endDate = relevantPayload[1]?.date ?? null;
 
@@ -725,6 +752,7 @@ export const analyzeLabDataWithClaude = async ({
       ...SUPPLEMENT_SECTION_TEMPLATE,
       SAFETY_NOTE,
       KEY_LEGEND,
+      relevantBenchmarkSection,
       "DATA START",
       JSON.stringify({
         type: "latestComparison",

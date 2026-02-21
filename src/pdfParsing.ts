@@ -14,6 +14,10 @@ import {
   MarkerValue,
   ParserDebugMode
 } from "./types";
+import {
+  resolveCanonicalMarker,
+  setMarkerAliasOverrides
+} from "./markerNormalization";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag, safeNumber } from "./utils";
 
@@ -55,6 +59,7 @@ interface ExtractLabDataOptions {
   aiAutoImproveEnabled?: boolean;
   forceAi?: boolean;
   parserDebugMode?: ParserDebugMode;
+  markerAliasOverrides?: Record<string, string>;
 }
 
 interface GeminiRequestOptions {
@@ -1104,7 +1109,13 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
     return null;
   }
 
-  const canonicalMarker = canonicalizeMarker(cleanedMarker);
+  const resolved = resolveCanonicalMarker({
+    rawName: cleanedMarker,
+    unit,
+    contextText: raw.marker,
+    mode: "balanced"
+  });
+  const canonicalMarker = resolved.canonicalMarker;
   const normalized = normalizeMarkerMeasurement({
     canonicalMarker,
     value,
@@ -1122,7 +1133,10 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
     referenceMin: normalized.referenceMin,
     referenceMax: normalized.referenceMax,
     abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
-    confidence: typeof raw.confidence === "number" ? Math.min(1, Math.max(0, raw.confidence)) : 0.7
+    confidence:
+      typeof raw.confidence === "number"
+        ? Math.min(1, Math.max(0, raw.confidence))
+        : Math.max(0.45, Math.min(0.92, resolved.confidence))
   };
 };
 
@@ -1988,7 +2002,7 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DE
   if (row.unit || row.referenceMin !== null || row.referenceMax !== null) {
     return true;
   }
-  const canonical = canonicalizeMarker(row.markerName);
+  const canonical = canonicalizeMarker(row.markerName, { unit: row.unit, mode: "balanced" });
   return IMPORTANT_MARKERS.has(canonical);
 };
 
@@ -2435,7 +2449,7 @@ const parseSpatialRows = (rows: PdfSpatialRow[], profile: ParserProfile): Parsed
       return;
     }
     if (shouldKeepParsedRow(candidate, profile)) {
-      const canonicalMarker = canonicalizeMarker(candidate.markerName);
+      const canonicalMarker = canonicalizeMarker(candidate.markerName, { unit: candidate.unit, mode: "balanced" });
       if (!IMPORTANT_MARKERS.has(canonicalMarker) && !SPATIAL_PRIORITY_MARKER_PATTERN.test(candidate.markerName)) {
         return;
       }
@@ -2808,7 +2822,7 @@ const dedupeRowsDetailed = (rows: ParsedFallbackRow[]): { markers: MarkerValue[]
   const rejectionReasons = new Map<string, number>();
 
   for (const row of rows) {
-    const canonicalMarker = canonicalizeMarker(row.markerName);
+    const canonicalMarker = canonicalizeMarker(row.markerName, { unit: row.unit, mode: "balanced" });
     const normalized = normalizeMarkerMeasurement({
       canonicalMarker,
       value: row.value,
@@ -3263,8 +3277,38 @@ const withExtractionMetadata = (
   }
 });
 
+const buildNormalizationSummary = (
+  markers: MarkerValue[]
+): NonNullable<ExtractionDebugInfo["normalizationSummary"]> => {
+  return markers.reduce(
+    (summary, marker) => {
+      const resolved = resolveCanonicalMarker({
+        rawName: marker.marker,
+        unit: marker.unit,
+        mode: "balanced"
+      });
+      if (resolved.method === "override") {
+        summary.overridesHit += 1;
+      }
+      if (resolved.canonicalMarker === "Unknown Marker") {
+        summary.unknownCount += 1;
+      }
+      if (resolved.confidence < 0.6) {
+        summary.lowConfidenceCount += 1;
+      }
+      return summary;
+    },
+    {
+      overridesHit: 0,
+      unknownCount: 0,
+      lowConfidenceCount: 0
+    }
+  );
+};
+
 export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
   try {
+    setMarkerAliasOverrides(options.markerAliasOverrides ?? null);
     const costMode: AICostMode = options.costMode ?? "balanced";
     const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
     const parserDebugMode: ParserDebugMode = options.parserDebugMode ?? "text_ocr_ai";
@@ -3597,6 +3641,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     }
 
     const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, parsingDraft, aiWarnings);
+    const normalizationSummary = buildNormalizationSummary(parsingDraft.markers);
     const debugMeta: ExtractionDebugInfo = {
       textItems: textResult.textItemCount,
       ocrUsed: ocrResult.used,
@@ -3607,6 +3652,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           : bestLocalDiagnostics.keptRows,
       rejectedRows: bestLocalDiagnostics.rejectedRows,
       topRejectReasons: bestLocalDiagnostics.topRejectReasons,
+      normalizationSummary,
       aiInputTokens,
       aiOutputTokens,
       aiCacheHit,
@@ -3653,6 +3699,11 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           keptRows: 0,
           rejectedRows: 0,
           topRejectReasons: {},
+          normalizationSummary: {
+            overridesHit: 0,
+            unknownCount: 0,
+            lowConfidenceCount: 0
+          },
           extractionRoute: "empty"
         }
       }

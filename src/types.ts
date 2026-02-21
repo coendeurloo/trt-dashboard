@@ -172,6 +172,11 @@ export interface ExtractionDebugInfo {
   keptRows: number;
   rejectedRows: number;
   topRejectReasons: Record<string, number>;
+  normalizationSummary?: {
+    overridesHit: number;
+    unknownCount: number;
+    lowConfidenceCount: number;
+  };
   aiInputTokens?: number;
   aiOutputTokens?: number;
   aiCacheHit?: boolean;
@@ -211,6 +216,7 @@ export interface StoredAppData {
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
   checkIns: SymptomCheckIn[];
+  markerAliasOverrides: Record<string, string>;
   settings: AppSettings;
 }
 

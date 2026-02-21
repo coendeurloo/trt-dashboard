@@ -11,6 +11,7 @@ import {
   SupplementPeriod,
   SymptomCheckIn
 } from "./types";
+import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "./markerNormalization";
 import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { createId, deriveAbnormalFlag } from "./utils";
@@ -26,6 +27,7 @@ type PartialAppData = Partial<StoredAppData> & {
   protocols?: Array<Partial<Protocol>>;
   supplementTimeline?: Array<Partial<SupplementPeriod>>;
   checkIns?: Array<Partial<SymptomCheckIn>>;
+  markerAliasOverrides?: Record<string, string>;
   settings?: Partial<AppSettings>;
 };
 
@@ -42,6 +44,7 @@ const createDefaultData = (): StoredAppData => ({
   protocols: [],
   supplementTimeline: [],
   checkIns: [],
+  markerAliasOverrides: {},
   settings: DEFAULT_SETTINGS
 });
 
@@ -403,6 +406,25 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
                           .slice(0, 6)
                       )
                   : {},
+              normalizationSummary:
+                report.extraction.debug.normalizationSummary &&
+                typeof report.extraction.debug.normalizationSummary === "object" &&
+                !Array.isArray(report.extraction.debug.normalizationSummary)
+                  ? {
+                      overridesHit:
+                        Number.isFinite(Number(report.extraction.debug.normalizationSummary.overridesHit))
+                          ? Math.max(0, Math.round(Number(report.extraction.debug.normalizationSummary.overridesHit)))
+                          : 0,
+                      unknownCount:
+                        Number.isFinite(Number(report.extraction.debug.normalizationSummary.unknownCount))
+                          ? Math.max(0, Math.round(Number(report.extraction.debug.normalizationSummary.unknownCount)))
+                          : 0,
+                      lowConfidenceCount:
+                        Number.isFinite(Number(report.extraction.debug.normalizationSummary.lowConfidenceCount))
+                          ? Math.max(0, Math.round(Number(report.extraction.debug.normalizationSummary.lowConfidenceCount)))
+                          : 0
+                    }
+                  : undefined,
               aiInputTokens:
                 typeof report.extraction.debug.aiInputTokens === "number" && Number.isFinite(report.extraction.debug.aiInputTokens)
                   ? Math.max(0, Math.round(report.extraction.debug.aiInputTokens))
@@ -483,8 +505,12 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
 
 export const coerceStoredAppData = (raw: PartialAppData | null | undefined): StoredAppData => {
   if (!raw || typeof raw !== "object") {
+    setMarkerAliasOverrides({});
     return createDefaultData();
   }
+
+  const markerAliasOverrides = normalizeMarkerAliasOverrides(raw.markerAliasOverrides);
+  setMarkerAliasOverrides(markerAliasOverrides);
 
   const reports = Array.isArray(raw.reports) ? raw.reports.map((report) => normalizeReport(report)).filter((item): item is LabReport => item !== null) : [];
   const protocols = Array.isArray(raw.protocols)
@@ -534,6 +560,7 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
     protocols,
     supplementTimeline,
     checkIns,
+    markerAliasOverrides,
     settings: normalizeSettings(raw.settings)
   };
 };
@@ -541,11 +568,13 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
 export const loadAppData = (): StoredAppData => {
   const storage = getStorage();
   if (!storage) {
+    setMarkerAliasOverrides({});
     return createDefaultData();
   }
 
   const raw = storage.getItem(APP_STORAGE_KEY);
   if (!raw) {
+    setMarkerAliasOverrides({});
     return createDefaultData();
   }
 
@@ -553,6 +582,7 @@ export const loadAppData = (): StoredAppData => {
     const parsed = JSON.parse(raw) as PartialAppData;
     return coerceStoredAppData(parsed);
   } catch {
+    setMarkerAliasOverrides({});
     return createDefaultData();
   }
 };

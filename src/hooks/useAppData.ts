@@ -12,6 +12,10 @@ import {
   SymptomCheckIn
 } from "../types";
 import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
+import {
+  normalizeMarkerAliasOverrides,
+  setMarkerAliasOverrides
+} from "../markerNormalization";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
 
@@ -115,6 +119,10 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     }
     saveAppData(appData);
   }, [appData, isShareMode]);
+
+  useEffect(() => {
+    setMarkerAliasOverrides(appData.markerAliasOverrides);
+  }, [appData.markerAliasOverrides]);
 
   const updateSettings = (patch: Partial<AppSettings>) => {
     setAppData((prev) => ({
@@ -309,6 +317,31 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     [isShareMode]
   );
 
+  const upsertMarkerAliasOverrides = useCallback(
+    (overrides: Record<string, string>) => {
+      if (isShareMode) {
+        return;
+      }
+      const normalized = normalizeMarkerAliasOverrides(overrides);
+      if (Object.keys(normalized).length === 0) {
+        return;
+      }
+
+      setAppData((prev) => {
+        const merged = {
+          ...prev.markerAliasOverrides,
+          ...normalized
+        };
+
+        return {
+          ...prev,
+          markerAliasOverrides: merged
+        };
+      });
+    },
+    [isShareMode]
+  );
+
   const importData = useCallback(
     (incomingRaw: unknown, mode: "merge" | "replace"): ImportResult => {
       if (isShareMode) {
@@ -351,7 +384,8 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
           settings: {
             ...incoming.settings
           },
-          reports: normalizeBaselineFlags(importedReports)
+          reports: normalizeBaselineFlags(importedReports),
+          markerAliasOverrides: incoming.markerAliasOverrides ?? {}
         });
 
         return {
@@ -382,7 +416,11 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
           supplementTimeline: [...prev.supplementTimeline, ...incoming.supplementTimeline].sort(
             (left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name)
           ),
-          checkIns: [...prev.checkIns, ...incoming.checkIns].sort((left, right) => left.date.localeCompare(right.date))
+          checkIns: [...prev.checkIns, ...incoming.checkIns].sort((left, right) => left.date.localeCompare(right.date)),
+          markerAliasOverrides: {
+            ...prev.markerAliasOverrides,
+            ...incoming.markerAliasOverrides
+          }
         };
       });
 
@@ -549,6 +587,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     getProtocolUsageCount,
     setBaseline,
     remapMarker,
+    upsertMarkerAliasOverrides,
     addSupplementPeriod,
     updateSupplementPeriod,
     stopSupplement,

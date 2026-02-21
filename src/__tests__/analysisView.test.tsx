@@ -21,6 +21,7 @@ describe("AnalysisView", () => {
     analyzingKind: null,
     reportsInScope: 1,
     markersTracked: 35,
+    analysisMarkerNames: ["Testosterone", "Estradiol", "Hematocrit"],
     activeProtocolLabel: "No protocol",
     betaUsage: {
       dailyCount: 0,

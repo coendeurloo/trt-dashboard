@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -21,7 +21,6 @@ import {
   calculatePercentChange,
   calculatePercentVsBaseline
 } from "./analytics";
-import { buildCsv } from "./csvExport";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
@@ -32,24 +31,19 @@ import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelper
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
-import { exportElementToPdf } from "./pdfExport";
-import { extractLabData } from "./pdfParsing";
 import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
 import { buildShareToken, parseShareToken, ShareOptions } from "./share";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
-import useDerivedData from "./hooks/useDerivedData";
+import {
+  useCoreDerivedData,
+  useDashboardDerivedData,
+  useProtocolDerivedData
+} from "./hooks/useDerivedData";
 import { resolveUploadTriggerAction } from "./uploadFlow";
-import AlertsView from "./views/AlertsView";
-import AnalysisView from "./views/AnalysisView";
+import { normalizeMarkerLookupKey } from "./markerNormalization";
 import DashboardView from "./views/DashboardView";
-import DoseResponseView from "./views/DoseResponseView";
-import ProtocolImpactView from "./views/ProtocolImpactView";
-import ProtocolView from "./views/ProtocolView";
-import ReportsView from "./views/ReportsView";
-import SettingsView from "./views/SettingsView";
-import SupplementsView from "./views/SupplementsView";
 import {
   AppSettings,
   ExtractionDraft,
@@ -60,6 +54,15 @@ import {
   TimeRangeKey
 } from "./types";
 import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
+
+const ProtocolView = lazy(() => import("./views/ProtocolView"));
+const SupplementsView = lazy(() => import("./views/SupplementsView"));
+const AlertsView = lazy(() => import("./views/AlertsView"));
+const ProtocolImpactView = lazy(() => import("./views/ProtocolImpactView"));
+const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
+const ReportsView = lazy(() => import("./views/ReportsView"));
+const AnalysisView = lazy(() => import("./views/AnalysisView"));
+const SettingsView = lazy(() => import("./views/SettingsView"));
 
 const App = () => {
   const [sharedSnapshot] = useState(() => {
@@ -96,6 +99,7 @@ const App = () => {
     getProtocolUsageCount,
     setBaseline,
     remapMarker,
+    upsertMarkerAliasOverrides,
     addSupplementPeriod,
     updateSupplementPeriod,
     stopSupplement,
@@ -168,6 +172,7 @@ const App = () => {
     warnings: number;
   } | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
+  const [draftOriginalMarkerLabels, setDraftOriginalMarkerLabels] = useState<Record<string, string>>({});
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
@@ -185,6 +190,14 @@ const App = () => {
   const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   const hiddenUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const parserModuleRef = useRef<Promise<typeof import("./pdfParsing")> | null>(null);
+
+  const ensurePdfParsingModule = () => {
+    if (!parserModuleRef.current) {
+      parserModuleRef.current = import("./pdfParsing");
+    }
+    return parserModuleRef.current;
+  };
 
   const {
     reports,
@@ -194,25 +207,44 @@ const App = () => {
     markerUsage,
     primaryMarkers,
     baselineReport,
-    dosePhaseBlocks,
+    dosePhaseBlocks
+  } = useCoreDerivedData({
+    appData,
+    protocols: appData.protocols,
+    samplingControlsEnabled
+  });
+  const needsDashboardDerived = activeTab === "dashboard" || activeTab === "alerts" || activeTab === "analysis";
+  const needsProtocolDerived = activeTab === "protocolImpact" || activeTab === "doseResponse" || activeTab === "analysis";
+  const {
     trendByMarker,
     alerts,
     actionableAlerts,
     positiveAlerts,
     alertsByMarker,
     alertSeriesByMarker,
-    trtStability,
+    trtStability
+  } = useDashboardDerivedData({
+    enabled: needsDashboardDerived,
+    visibleReports,
+    allMarkers,
+    settings: appData.settings,
+    protocols: appData.protocols,
+    supplementTimeline: appData.supplementTimeline
+  });
+  const {
     protocolImpactSummary,
     protocolDoseEvents,
     protocolDoseOverview,
     dosePredictions,
     customDoseValue,
     hasCustomDose
-  } = useDerivedData({
-    appData,
+  } = useProtocolDerivedData({
+    enabled: needsProtocolDerived,
+    visibleReports,
+    allMarkers,
+    settings: appData.settings,
     protocols: appData.protocols,
     supplementTimeline: appData.supplementTimeline,
-    samplingControlsEnabled,
     protocolWindowSize,
     doseResponseInput
   });
@@ -263,6 +295,36 @@ const App = () => {
       setActiveTab("dashboard");
     }
   }, [activeTab, isShareMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const browserWindow = window as Window & typeof globalThis;
+    const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+    if (nav.connection?.saveData) {
+      return;
+    }
+
+    const prefetchLikelyTabs = () => {
+      void import("./views/ReportsView");
+      void import("./views/ProtocolView");
+    };
+
+    if (typeof browserWindow.requestIdleCallback === "function") {
+      const idleWindow = browserWindow as Window & {
+        requestIdleCallback: (callback: IdleRequestCallback) => number;
+        cancelIdleCallback: (handle: number) => void;
+      };
+      const handle = idleWindow.requestIdleCallback(() => {
+        prefetchLikelyTabs();
+      });
+      return () => idleWindow.cancelIdleCallback(handle);
+    }
+
+    const timeout = globalThis.setTimeout(prefetchLikelyTabs, 1200);
+    return () => globalThis.clearTimeout(timeout);
+  }, []);
 
   useEffect(() => {
     if (!draft) {
@@ -361,13 +423,24 @@ const App = () => {
     });
   };
 
+  const captureOriginalDraftMarkerLabels = (nextDraft: ExtractionDraft | null) => {
+    if (!nextDraft) {
+      setDraftOriginalMarkerLabels({});
+      return;
+    }
+    const byId = Object.fromEntries(
+      nextDraft.markers.map((marker) => [marker.id, marker.marker])
+    );
+    setDraftOriginalMarkerLabels(byId);
+  };
+
   const startManualEntry = () => {
     setUploadError("");
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
     setLastUploadedFile(null);
     setIsImprovingExtraction(false);
-    setDraft({
+    const manualDraft: ExtractionDraft = {
       sourceFileName: "Manual entry",
       testDate: new Date().toISOString().slice(0, 10),
       markers: [
@@ -389,7 +462,9 @@ const App = () => {
         confidence: 1,
         needsReview: false
       }
-    });
+    };
+    setDraft(manualDraft);
+    captureOriginalDraftMarkerLabels(manualDraft);
     setActiveTab("dashboard");
   };
 
@@ -426,6 +501,7 @@ const App = () => {
   };
 
   const scrollToUploadPanel = () => {
+    void ensurePdfParsingModule();
     if (activeTab !== "dashboard") {
       setActiveTab("dashboard");
     }
@@ -465,16 +541,19 @@ const App = () => {
     setIsImprovingExtraction(false);
 
     try {
+      const { extractLabData } = await ensurePdfParsingModule();
       const extracted = await extractLabData(file, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled,
-        parserDebugMode: appData.settings.parserDebugMode
+        parserDebugMode: appData.settings.parserDebugMode,
+        markerAliasOverrides: appData.markerAliasOverrides
       });
       const warningCount = new Set([
         ...(extracted.extraction.warnings ?? []),
         ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
       ]).size;
       setDraft(extracted);
+      captureOriginalDraftMarkerLabels(extracted);
       setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
@@ -500,22 +579,21 @@ const App = () => {
     setIsImprovingExtraction(true);
     setUploadError("");
     try {
+      const { extractLabData } = await ensurePdfParsingModule();
       const improved = await extractLabData(lastUploadedFile, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: true,
         forceAi: true,
-        parserDebugMode: appData.settings.parserDebugMode
+        parserDebugMode: appData.settings.parserDebugMode,
+        markerAliasOverrides: appData.markerAliasOverrides
       });
       const warningCount = new Set([
         ...(improved.extraction.warnings ?? []),
         ...(improved.extraction.warningCode ? [improved.extraction.warningCode] : [])
       ]).size;
-      setDraft((currentDraft) => {
-        if (!currentDraft) {
-          return improved;
-        }
-        return improved.markers.length >= currentDraft.markers.length ? improved : currentDraft;
-      });
+      const chosenDraft = !draft || improved.markers.length >= draft.markers.length ? improved : draft;
+      setDraft(chosenDraft);
+      captureOriginalDraftMarkerLabels(chosenDraft);
       setUploadSummary({
         fileName: improved.sourceFileName,
         markerCount: improved.markers.length,
@@ -534,6 +612,7 @@ const App = () => {
       return;
     }
 
+    const learnedAliasOverrides: Record<string, string> = {};
     const sanitizedMarkers = draft.markers
       .map((marker) => {
         const canonicalMarker = canonicalizeMarker(marker.marker || marker.canonicalMarker);
@@ -563,6 +642,24 @@ const App = () => {
       })
       .filter((marker): marker is MarkerValue => marker !== null);
 
+    draft.markers.forEach((row) => {
+      const originalRaw = draftOriginalMarkerLabels[row.id];
+      const currentRaw = row.marker?.trim() ?? "";
+      if (!originalRaw || !currentRaw) {
+        return;
+      }
+      const originalKey = normalizeMarkerLookupKey(originalRaw);
+      const currentKey = normalizeMarkerLookupKey(currentRaw);
+      if (!originalKey || originalKey === currentKey) {
+        return;
+      }
+      const canonical = canonicalizeMarker(currentRaw);
+      if (!canonical || canonical === "Unknown Marker") {
+        return;
+      }
+      learnedAliasOverrides[originalKey] = canonical;
+    });
+
     if (sanitizedMarkers.length === 0) {
       setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal één marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
       return;
@@ -590,10 +687,12 @@ const App = () => {
     const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
     addReport(report);
+    upsertMarkerAliasOverrides(learnedAliasOverrides);
     appendMarkerSuggestions(suggestions);
 
     setUploadSummary(null);
     setDraft(null);
+    setDraftOriginalMarkerLabels({});
     setLastUploadedFile(null);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
@@ -601,7 +700,8 @@ const App = () => {
     setIsImprovingExtraction(false);
   };
 
-  const exportCsv = (selectedMarkers: string[]) => {
+  const exportCsv = async (selectedMarkers: string[]) => {
+    const { buildCsv } = await import("./csvExport");
     const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -613,6 +713,7 @@ const App = () => {
   };
 
   const exportPdf = async () => {
+    const { exportElementToPdf } = await import("./pdfExport");
     const root = document.getElementById("dashboard-export-root");
     if (!root) {
       return;
@@ -715,6 +816,15 @@ const App = () => {
     const annotationLabel = latestReport.annotations.protocol.trim();
     return annotationLabel || tr("Geen protocol", "No protocol");
   }, [appData.protocols, visibleReports, tr]);
+  const analysisMarkerNames = useMemo(() => {
+    const markerSet = new Set<string>();
+    visibleReports.forEach((report) => {
+      report.markers.forEach((marker) => {
+        markerSet.add(marker.canonicalMarker);
+      });
+    });
+    return Array.from(markerSet);
+  }, [visibleReports]);
 
   const generateShareLink = async () => {
     if (typeof window === "undefined") {
@@ -742,6 +852,15 @@ const App = () => {
       : isShareMode
         ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
         : tr("Professionele bloedwaardetracking met bewerkbare extractie en trendvisualisatie.", "Professional blood work tracking with editable extraction and visual trends.");
+  const tabLoadFallback = (
+    <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="flex items-center gap-2 text-sm text-slate-300">
+        <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+        {tr("Sectie wordt geladen...", "Loading section...")}
+      </div>
+      <p className="mt-1 text-xs text-slate-500">{activeTabTitle}</p>
+    </section>
+  );
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
   const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
   const visibleTabKeys = useMemo(() => new Set(visibleTabs.map((tab) => tab.key as TabKey)), [visibleTabs]);
@@ -810,6 +929,7 @@ const App = () => {
     const nextTab = pendingTabChange;
     setPendingTabChange(null);
     setDraft(null);
+    setDraftOriginalMarkerLabels({});
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
     setUploadError("");
@@ -940,7 +1060,14 @@ const App = () => {
           ) : reports.length > 0 ? (
             <div ref={uploadPanelRef} className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
-              <UploadPanel isProcessing={isProcessing} onFileSelected={handleUpload} language={appData.settings.language} />
+              <UploadPanel
+                isProcessing={isProcessing}
+                onFileSelected={handleUpload}
+                onUploadIntent={() => {
+                  void ensurePdfParsingModule();
+                }}
+                language={appData.settings.language}
+              />
               <button
                 type="button"
                 className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
@@ -1042,6 +1169,7 @@ const App = () => {
                 onCancel={() => {
                   setUploadSummary(null);
                   setDraft(null);
+                  setDraftOriginalMarkerLabels({});
                   setLastUploadedFile(null);
                   setSelectedProtocolId(null);
                   setIsImprovingExtraction(false);
@@ -1140,134 +1268,139 @@ const App = () => {
             />
           ) : null}
 
-          {activeTab === "protocol" ? (
-            <ProtocolView
-              protocols={appData.protocols}
-              reports={reports}
-              language={appData.settings.language}
-              isShareMode={isShareMode}
-              onAddProtocol={addProtocol}
-              onUpdateProtocol={updateProtocol}
-              onDeleteProtocol={deleteProtocol}
-              getProtocolUsageCount={getProtocolUsageCount}
-            />
-          ) : null}
+          {activeTab !== "dashboard" ? (
+            <Suspense fallback={tabLoadFallback}>
+              {activeTab === "protocol" ? (
+                <ProtocolView
+                  protocols={appData.protocols}
+                  reports={reports}
+                  language={appData.settings.language}
+                  isShareMode={isShareMode}
+                  onAddProtocol={addProtocol}
+                  onUpdateProtocol={updateProtocol}
+                  onDeleteProtocol={deleteProtocol}
+                  getProtocolUsageCount={getProtocolUsageCount}
+                />
+              ) : null}
 
-          {activeTab === "supplements" ? (
-            <SupplementsView
-              language={appData.settings.language}
-              timeline={appData.supplementTimeline}
-              isShareMode={isShareMode}
-              onAddSupplementPeriod={addSupplementPeriod}
-              onUpdateSupplementPeriod={updateSupplementPeriod}
-              onStopSupplement={stopSupplement}
-              onDeleteSupplementPeriod={deleteSupplementPeriod}
-            />
-          ) : null}
+              {activeTab === "supplements" ? (
+                <SupplementsView
+                  language={appData.settings.language}
+                  timeline={appData.supplementTimeline}
+                  isShareMode={isShareMode}
+                  onAddSupplementPeriod={addSupplementPeriod}
+                  onUpdateSupplementPeriod={updateSupplementPeriod}
+                  onStopSupplement={stopSupplement}
+                  onDeleteSupplementPeriod={deleteSupplementPeriod}
+                />
+              ) : null}
 
-          {activeTab === "alerts" ? (
-            <AlertsView
-              alerts={alerts}
-              actionableAlerts={actionableAlerts}
-              positiveAlerts={positiveAlerts}
-              alertSeriesByMarker={alertSeriesByMarker}
-              settings={appData.settings}
-              language={appData.settings.language}
-              samplingControlsEnabled={samplingControlsEnabled}
-            />
-          ) : null}
+              {activeTab === "alerts" ? (
+                <AlertsView
+                  alerts={alerts}
+                  actionableAlerts={actionableAlerts}
+                  positiveAlerts={positiveAlerts}
+                  alertSeriesByMarker={alertSeriesByMarker}
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  samplingControlsEnabled={samplingControlsEnabled}
+                />
+              ) : null}
 
-          {activeTab === "protocolImpact" ? (
-            <ProtocolImpactView
-              protocolDoseOverview={protocolDoseOverview}
-              protocolDoseEvents={protocolDoseEvents}
-              protocolWindowSize={protocolWindowSize}
-              protocolMarkerSearch={protocolMarkerSearch}
-              protocolCategoryFilter={protocolCategoryFilter}
-              settings={appData.settings}
-              language={appData.settings.language}
-              onProtocolWindowSizeChange={setProtocolWindowSize}
-              onProtocolMarkerSearchChange={setProtocolMarkerSearch}
-              onProtocolCategoryFilterChange={setProtocolCategoryFilter}
-            />
-          ) : null}
+              {activeTab === "protocolImpact" ? (
+                <ProtocolImpactView
+                  protocolDoseOverview={protocolDoseOverview}
+                  protocolDoseEvents={protocolDoseEvents}
+                  protocolWindowSize={protocolWindowSize}
+                  protocolMarkerSearch={protocolMarkerSearch}
+                  protocolCategoryFilter={protocolCategoryFilter}
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  onProtocolWindowSizeChange={setProtocolWindowSize}
+                  onProtocolMarkerSearchChange={setProtocolMarkerSearch}
+                  onProtocolCategoryFilterChange={setProtocolCategoryFilter}
+                />
+              ) : null}
 
-          {activeTab === "doseResponse" ? (
-            <DoseResponseView
-              dosePredictions={dosePredictions}
-              customDoseValue={customDoseValue}
-              hasCustomDose={hasCustomDose}
-              doseResponseInput={doseResponseInput}
-              visibleReports={visibleReports}
-              settings={appData.settings}
-              language={appData.settings.language}
-              onDoseResponseInputChange={setDoseResponseInput}
-            />
-          ) : null}
+              {activeTab === "doseResponse" ? (
+                <DoseResponseView
+                  dosePredictions={dosePredictions}
+                  customDoseValue={customDoseValue}
+                  hasCustomDose={hasCustomDose}
+                  doseResponseInput={doseResponseInput}
+                  visibleReports={visibleReports}
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  onDoseResponseInputChange={setDoseResponseInput}
+                />
+              ) : null}
 
-          {activeTab === "reports" ? (
-            <ReportsView
-              reports={reports}
-              protocols={appData.protocols}
-              supplementTimeline={appData.supplementTimeline}
-              settings={appData.settings}
-              language={appData.settings.language}
-              samplingControlsEnabled={samplingControlsEnabled}
-              isShareMode={isShareMode}
-              onDeleteReport={deleteReportFromData}
-              onDeleteReports={deleteReportsFromData}
-              onUpdateReportAnnotations={updateReportAnnotations}
-              onSetBaseline={setBaseline}
-              onRenameMarker={openRenameDialog}
-              onOpenProtocolTab={() => requestTabChange("protocol")}
-            />
-          ) : null}
+              {activeTab === "reports" ? (
+                <ReportsView
+                  reports={reports}
+                  protocols={appData.protocols}
+                  supplementTimeline={appData.supplementTimeline}
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  samplingControlsEnabled={samplingControlsEnabled}
+                  isShareMode={isShareMode}
+                  onDeleteReport={deleteReportFromData}
+                  onDeleteReports={deleteReportsFromData}
+                  onUpdateReportAnnotations={updateReportAnnotations}
+                  onSetBaseline={setBaseline}
+                  onRenameMarker={openRenameDialog}
+                  onOpenProtocolTab={() => requestTabChange("protocol")}
+                />
+              ) : null}
 
-          {activeTab === "analysis" ? (
-            <AnalysisView
-              isAnalyzingLabs={isAnalyzingLabs}
-              analysisError={analysisError}
-              analysisResult={analysisResult}
-              analysisResultDisplay={analysisResultDisplay}
-              analysisGeneratedAt={analysisGeneratedAt}
-              analysisCopied={analysisCopied}
-              analysisKind={analysisKind}
-              analyzingKind={analyzingKind}
-              reportsInScope={visibleReports.length}
-              markersTracked={allMarkers.length}
-              activeProtocolLabel={activeAnalysisProtocolLabel}
-              betaUsage={betaUsage}
-              betaLimits={betaLimits}
-              settings={appData.settings}
-              language={appData.settings.language}
-              onRunAnalysis={runAiAnalysis}
-              onCopyAnalysis={copyAnalysis}
-            />
-          ) : null}
+              {activeTab === "analysis" ? (
+                <AnalysisView
+                  isAnalyzingLabs={isAnalyzingLabs}
+                  analysisError={analysisError}
+                  analysisResult={analysisResult}
+                  analysisResultDisplay={analysisResultDisplay}
+                  analysisGeneratedAt={analysisGeneratedAt}
+                  analysisCopied={analysisCopied}
+                  analysisKind={analysisKind}
+                  analyzingKind={analyzingKind}
+                  reportsInScope={visibleReports.length}
+                  markersTracked={allMarkers.length}
+                  analysisMarkerNames={analysisMarkerNames}
+                  activeProtocolLabel={activeAnalysisProtocolLabel}
+                  betaUsage={betaUsage}
+                  betaLimits={betaLimits}
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  onRunAnalysis={runAiAnalysis}
+                  onCopyAnalysis={copyAnalysis}
+                />
+              ) : null}
 
-          {activeTab === "settings" ? (
-            <SettingsView
-              settings={appData.settings}
-              language={appData.settings.language}
-              reports={reports}
-              samplingControlsEnabled={samplingControlsEnabled}
-              allMarkers={allMarkers}
-              editableMarkers={editableMarkers}
-              markerUsage={markerUsage}
-              shareOptions={shareOptions}
-              shareLink={shareLink}
-              onUpdateSettings={updateSettings}
-              onRemapMarker={remapMarkerAcrossReports}
-              onOpenRenameDialog={openRenameDialog}
-              onExportJson={exportJson}
-              onExportCsv={exportCsv}
-              onExportPdf={exportPdf}
-              onImportData={importData}
-              onClearAllData={clearAllData}
-              onAddMarkerSuggestions={appendMarkerSuggestions}
-              onShareOptionsChange={setShareOptions}
-              onGenerateShareLink={generateShareLink}
-            />
+              {activeTab === "settings" ? (
+                <SettingsView
+                  settings={appData.settings}
+                  language={appData.settings.language}
+                  reports={reports}
+                  samplingControlsEnabled={samplingControlsEnabled}
+                  allMarkers={allMarkers}
+                  editableMarkers={editableMarkers}
+                  markerUsage={markerUsage}
+                  shareOptions={shareOptions}
+                  shareLink={shareLink}
+                  onUpdateSettings={updateSettings}
+                  onRemapMarker={remapMarkerAcrossReports}
+                  onOpenRenameDialog={openRenameDialog}
+                  onExportJson={exportJson}
+                  onExportCsv={exportCsv}
+                  onExportPdf={exportPdf}
+                  onImportData={importData}
+                  onClearAllData={clearAllData}
+                  onAddMarkerSuggestions={appendMarkerSuggestions}
+                  onShareOptionsChange={setShareOptions}
+                  onGenerateShareLink={generateShareLink}
+                />
+              ) : null}
+            </Suspense>
           ) : null}
         </main>
       </div>

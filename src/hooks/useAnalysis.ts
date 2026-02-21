@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { analyzeLabDataWithClaude } from "../aiAnalysis";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
@@ -80,6 +79,7 @@ export const useAnalysis = ({
     setAnalysisCopied(false);
 
     try {
+      const { analyzeLabDataWithClaude } = await import("../aiAnalysis");
       const result = await analyzeLabDataWithClaude({
         reports: visibleReports,
         protocols,

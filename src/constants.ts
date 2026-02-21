@@ -1,7 +1,7 @@
 import { AppSettings } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
-export const APP_SCHEMA_VERSION = 4;
+export const APP_SCHEMA_VERSION = 5;
 export const FEEDBACK_EMAIL = "trtlabtracker@gmail.com";
 
 export const PRIMARY_MARKERS = [
@@ -64,6 +64,9 @@ const RAW_ALIASES: Record<string, string[]> = {
     "vrij testosteron",
     "vrije testosteron",
     "testosterone free",
+    "testosterone direct",
+    "testosterone (direct)",
+    "direct testosterone",
     "testosteron vrij",
     "testosteron, vrij",
     "testosterone, free",

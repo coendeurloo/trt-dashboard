@@ -1,5 +1,8 @@
-import { MARKER_ALIAS_LOOKUP } from "./constants";
 import { UnitSystem } from "./types";
+import {
+  MarkerNormalizationMode,
+  resolveCanonicalMarker
+} from "./markerNormalization";
 
 interface ConversionRule {
   canonicalMarker: string;
@@ -41,92 +44,21 @@ const conversionRules: ConversionRule[] = [
   }
 ];
 
-const normalizeMarkerText = (input: string): string => {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-};
+interface CanonicalizeMarkerOptions {
+  unit?: string;
+  contextText?: string;
+  mode?: MarkerNormalizationMode;
+  overrideLookup?: Record<string, string>;
+}
 
-const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const normalizedAliasEntries = Object.entries(MARKER_ALIAS_LOOKUP)
-  .map(([alias, canonical]) => ({
-    alias: normalizeMarkerText(alias),
-    canonical
-  }))
-  .filter((entry) => entry.alias.length > 0)
-  .sort((a, b) => b.alias.length - a.alias.length);
-
-const hasWholeAlias = (normalizedText: string, alias: string): boolean => {
-  const pattern = new RegExp(`\\b${escapeRegex(alias)}\\b`);
-  return pattern.test(normalizedText);
-};
-
-export const canonicalizeMarker = (input: string): string => {
-  const normalized = normalizeMarkerText(input);
-  if (!normalized) {
-    return "Unknown Marker";
-  }
-
-  if (/\bbioavailable\b/.test(normalized) && /\b(?:testosterone|testosteron)\b/.test(normalized)) {
-    return "Bioavailable Testosterone";
-  }
-
-  if (
-    /\b(testosterone|testosteron)\b/.test(normalized) &&
-    /\b(free|vrij|vrije)\b/.test(normalized) &&
-    /\b(calculated|berekend|derived)\b/.test(normalized)
-  ) {
-    return "Free Testosterone";
-  }
-
-  if (
-    /\b(testosterone|testosteron)\b/.test(normalized) &&
-    /\bdirect\b/.test(normalized) &&
-    !/\b(total|totaal|totale)\b/.test(normalized)
-  ) {
-    return "Free Testosterone";
-  }
-
-  // Combined headings like "Testosterone, Free+Total" should not force Free Testosterone.
-  if (
-    /\b(testosterone|testosteron)\b/.test(normalized) &&
-    /\b(free|vrij|vrije)\b/.test(normalized) &&
-    /\b(total|totaal|totale)\b/.test(normalized)
-  ) {
-    return "Testosterone";
-  }
-
-  // Prefer the explicit "free + testosterone" pattern before generic testosterone aliases.
-  if (
-    /\b(testosterone|testosteron)\b/.test(normalized) &&
-    /\b(free|vrij|vrije)\b/.test(normalized)
-  ) {
-    return "Free Testosterone";
-  }
-
-  const exact = normalizedAliasEntries.find((entry) => entry.alias === normalized);
-  if (exact) {
-    return exact.canonical;
-  }
-
-  const includes = normalizedAliasEntries.find((entry) => hasWholeAlias(normalized, entry.alias));
-  if (includes) {
-    return includes.canonical;
-  }
-
-  if (!input.trim()) {
-    return "Unknown Marker";
-  }
-
-  return input
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word[0].toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+export const canonicalizeMarker = (input: string, options: CanonicalizeMarkerOptions = {}): string => {
+  return resolveCanonicalMarker({
+    rawName: input,
+    unit: options.unit,
+    contextText: options.contextText,
+    mode: options.mode,
+    overrideLookup: options.overrideLookup
+  }).canonicalMarker;
 };
 
 const getRule = (canonicalMarker: string): ConversionRule | undefined => {

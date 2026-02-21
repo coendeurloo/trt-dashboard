@@ -64,8 +64,8 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-slate-400 sm:text-base">
           {tr(
-            "Track markers, volg trends over tijd, en optimaliseer je protocol — alle data blijft in je browser.",
-            "Track markers, follow trends over time, and optimize your protocol — all data stays in your browser."
+            "Volg je bloedwerk. Upload PDF's, spot trends en optimaliseer je protocol — alle data blijft in je browser.",
+            "Track your bloodwork. Upload PDFs, spot trends, optimize your protocol — all data stays in your browser."
           )}
         </p>
       </div>

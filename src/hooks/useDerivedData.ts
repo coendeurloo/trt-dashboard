@@ -1,7 +1,13 @@
 import { useMemo } from "react";
 import {
+  MarkerAlert,
+  DosePrediction,
   MarkerSeriesPoint,
   MarkerTrendSummary,
+  DoseCorrelationInsight,
+  ProtocolImpactDoseEvent,
+  ProtocolImpactSummary,
+  TrtStabilityResult,
   buildAlerts,
   buildAlertsByMarker,
   buildDoseCorrelationInsights,
@@ -20,23 +26,77 @@ import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS } from "../constants";
 import { AppSettings, Protocol, StoredAppData, SupplementPeriod } from "../types";
 import { safeNumber, sortReportsChronological, withinRange } from "../utils";
 
-interface UseDerivedDataOptions {
+interface UseCoreDerivedDataOptions {
   appData: StoredAppData;
   protocols: Protocol[];
-  supplementTimeline: SupplementPeriod[];
   samplingControlsEnabled: boolean;
+}
+
+interface UseDashboardDerivedDataOptions {
+  enabled: boolean;
+  visibleReports: ReturnType<typeof sortReportsChronological>;
+  allMarkers: string[];
+  settings: AppSettings;
+  protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
+}
+
+interface UseProtocolDerivedDataOptions {
+  enabled: boolean;
+  visibleReports: ReturnType<typeof sortReportsChronological>;
+  allMarkers: string[];
+  settings: AppSettings;
+  protocols: Protocol[];
+  supplementTimeline: SupplementPeriod[];
   protocolWindowSize: number;
   doseResponseInput: string;
 }
 
-export const useDerivedData = ({
+const EMPTY_ALERTS: MarkerAlert[] = [];
+const EMPTY_ALERTS_BY_MARKER = {} as Record<string, MarkerAlert[]>;
+const EMPTY_ALERT_SERIES = {} as Record<string, MarkerSeriesPoint[]>;
+const EMPTY_TREND_BY_MARKER = {} as Record<string, MarkerTrendSummary>;
+const EMPTY_PROTOCOL_SUMMARY: ProtocolImpactSummary = { events: [], insights: [] };
+const EMPTY_PROTOCOL_EVENTS: ProtocolImpactDoseEvent[] = [];
+const EMPTY_PROTOCOL_OVERVIEW: DoseCorrelationInsight[] = [];
+const EMPTY_DOSE_PREDICTIONS: DosePrediction[] = [];
+const EMPTY_STABILITY: TrtStabilityResult = {
+  score: null,
+  components: {}
+};
+const EMPTY_STABILITY_SERIES: MarkerSeriesPoint[] = [];
+
+const useMarkerSeriesFactory = (
+  visibleReports: ReturnType<typeof sortReportsChronological>,
+  unitSystem: AppSettings["unitSystem"],
+  protocols: Protocol[],
+  supplementTimeline: SupplementPeriod[]
+) => {
+  return useMemo(() => {
+    const cache = new Map<string, MarkerSeriesPoint[]>();
+    return (marker: string): MarkerSeriesPoint[] => {
+      const cached = cache.get(marker);
+      if (cached) {
+        return cached;
+      }
+      const nextSeries = buildMarkerSeries(
+        visibleReports,
+        marker,
+        unitSystem,
+        protocols,
+        supplementTimeline
+      );
+      cache.set(marker, nextSeries);
+      return nextSeries;
+    };
+  }, [visibleReports, unitSystem, protocols, supplementTimeline]);
+};
+
+export const useCoreDerivedData = ({
   appData,
   protocols,
-  supplementTimeline,
-  samplingControlsEnabled,
-  protocolWindowSize,
-  doseResponseInput
-}: UseDerivedDataOptions) => {
+  samplingControlsEnabled
+}: UseCoreDerivedDataOptions) => {
   const reports = useMemo(
     () =>
       sortReportsChronological(
@@ -129,70 +189,6 @@ export const useDerivedData = ({
   const baselineReport = useMemo(() => reports.find((report) => report.isBaseline) ?? null, [reports]);
   const dosePhaseBlocks = useMemo(() => buildDosePhaseBlocks(visibleReports, protocols), [visibleReports, protocols]);
 
-  const trendByMarker = useMemo(() => {
-    return allMarkers.reduce(
-      (acc, marker) => {
-        const series = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem, protocols, supplementTimeline);
-        acc[marker] = classifyMarkerTrend(series, marker);
-        return acc;
-      },
-      {} as Record<string, MarkerTrendSummary>
-    );
-  }, [allMarkers, visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]);
-
-  const alerts = useMemo(
-    () => buildAlerts(visibleReports, allMarkers, appData.settings.unitSystem, appData.settings.language),
-    [visibleReports, allMarkers, appData.settings.unitSystem, appData.settings.language]
-  );
-
-  const actionableAlerts = useMemo(() => alerts.filter((alert) => alert.actionNeeded), [alerts]);
-  const positiveAlerts = useMemo(() => alerts.filter((alert) => !alert.actionNeeded), [alerts]);
-  const alertsByMarker = useMemo(() => buildAlertsByMarker(actionableAlerts), [actionableAlerts]);
-
-  const alertSeriesByMarker = useMemo(() => {
-    const markerSet = new Set<string>(alerts.map((alert) => alert.marker));
-    return Array.from(markerSet).reduce(
-      (acc, marker) => {
-        acc[marker] = buildMarkerSeries(visibleReports, marker, appData.settings.unitSystem, protocols, supplementTimeline);
-        return acc;
-      },
-      {} as Record<string, MarkerSeriesPoint[]>
-    );
-  }, [alerts, visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]);
-
-  const trtStability = useMemo(
-    () => computeTrtStabilityIndex(visibleReports, appData.settings.unitSystem),
-    [visibleReports, appData.settings.unitSystem]
-  );
-
-  const trtStabilitySeries = useMemo(
-    () => buildTrtStabilitySeries(visibleReports, appData.settings.unitSystem),
-    [visibleReports, appData.settings.unitSystem]
-  );
-
-  const protocolImpactSummary = useMemo(
-    () => buildProtocolImpactSummary(visibleReports, appData.settings.unitSystem, protocols, supplementTimeline),
-    [visibleReports, appData.settings.unitSystem, protocols, supplementTimeline]
-  );
-
-  const protocolDoseEvents = useMemo(
-    () => buildProtocolImpactDoseEvents(visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols, supplementTimeline),
-    [visibleReports, appData.settings.unitSystem, protocolWindowSize, protocols, supplementTimeline]
-  );
-
-  const protocolDoseOverview = useMemo(
-    () => buildDoseCorrelationInsights(visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline),
-    [visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline]
-  );
-
-  const dosePredictions = useMemo(
-    () => estimateDoseResponse(visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline),
-    [visibleReports, allMarkers, appData.settings.unitSystem, protocols, supplementTimeline]
-  );
-
-  const customDoseValue = useMemo(() => safeNumber(doseResponseInput), [doseResponseInput]);
-  const hasCustomDose = customDoseValue !== null && customDoseValue >= 0;
-
   return {
     reports,
     rangeFilteredReports,
@@ -202,7 +198,94 @@ export const useDerivedData = ({
     markerUsage,
     primaryMarkers,
     baselineReport,
-    dosePhaseBlocks,
+    dosePhaseBlocks
+  };
+};
+
+export const useDashboardDerivedData = ({
+  enabled,
+  visibleReports,
+  allMarkers,
+  settings,
+  protocols,
+  supplementTimeline
+}: UseDashboardDerivedDataOptions) => {
+  const getMarkerSeries = useMarkerSeriesFactory(
+    visibleReports,
+    settings.unitSystem,
+    protocols,
+    supplementTimeline
+  );
+
+  const trendByMarker = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_TREND_BY_MARKER;
+    }
+    return allMarkers.reduce(
+      (acc, marker) => {
+        acc[marker] = classifyMarkerTrend(getMarkerSeries(marker), marker);
+        return acc;
+      },
+      {} as Record<string, MarkerTrendSummary>
+    );
+  }, [enabled, allMarkers, getMarkerSeries]);
+
+  const alerts = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_ALERTS;
+    }
+    return buildAlerts(visibleReports, allMarkers, settings.unitSystem, settings.language);
+  }, [enabled, visibleReports, allMarkers, settings.unitSystem, settings.language]);
+
+  const actionableAlerts = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_ALERTS;
+    }
+    return alerts.filter((alert) => alert.actionNeeded);
+  }, [enabled, alerts]);
+
+  const positiveAlerts = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_ALERTS;
+    }
+    return alerts.filter((alert) => !alert.actionNeeded);
+  }, [enabled, alerts]);
+
+  const alertsByMarker = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_ALERTS_BY_MARKER;
+    }
+    return buildAlertsByMarker(actionableAlerts);
+  }, [enabled, actionableAlerts]);
+
+  const alertSeriesByMarker = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_ALERT_SERIES;
+    }
+    return allMarkers.reduce(
+      (acc, marker) => {
+        acc[marker] = getMarkerSeries(marker);
+        return acc;
+      },
+      {} as Record<string, MarkerSeriesPoint[]>
+    );
+  }, [enabled, allMarkers, getMarkerSeries]);
+
+  const trtStability = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_STABILITY;
+    }
+    return computeTrtStabilityIndex(visibleReports, settings.unitSystem);
+  }, [enabled, visibleReports, settings.unitSystem]);
+
+  const trtStabilitySeries = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_STABILITY_SERIES;
+    }
+    return buildTrtStabilitySeries(visibleReports, settings.unitSystem);
+  }, [enabled, visibleReports, settings.unitSystem]);
+
+  return {
     trendByMarker,
     alerts,
     actionableAlerts,
@@ -210,13 +293,111 @@ export const useDerivedData = ({
     alertsByMarker,
     alertSeriesByMarker,
     trtStability,
-    trtStabilitySeries,
+    trtStabilitySeries
+  };
+};
+
+export const useProtocolDerivedData = ({
+  enabled,
+  visibleReports,
+  allMarkers,
+  settings,
+  protocols,
+  supplementTimeline,
+  protocolWindowSize,
+  doseResponseInput
+}: UseProtocolDerivedDataOptions) => {
+  const protocolImpactSummary = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_PROTOCOL_SUMMARY;
+    }
+    return buildProtocolImpactSummary(visibleReports, settings.unitSystem, protocols, supplementTimeline);
+  }, [enabled, visibleReports, settings.unitSystem, protocols, supplementTimeline]);
+
+  const protocolDoseEvents = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_PROTOCOL_EVENTS;
+    }
+    return buildProtocolImpactDoseEvents(
+      visibleReports,
+      settings.unitSystem,
+      protocolWindowSize,
+      protocols,
+      supplementTimeline
+    );
+  }, [enabled, visibleReports, settings.unitSystem, protocolWindowSize, protocols, supplementTimeline]);
+
+  const protocolDoseOverview = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_PROTOCOL_OVERVIEW;
+    }
+    return buildDoseCorrelationInsights(visibleReports, allMarkers, settings.unitSystem, protocols, supplementTimeline);
+  }, [enabled, visibleReports, allMarkers, settings.unitSystem, protocols, supplementTimeline]);
+
+  const dosePredictions = useMemo(() => {
+    if (!enabled) {
+      return EMPTY_DOSE_PREDICTIONS;
+    }
+    return estimateDoseResponse(visibleReports, allMarkers, settings.unitSystem, protocols, supplementTimeline);
+  }, [enabled, visibleReports, allMarkers, settings.unitSystem, protocols, supplementTimeline]);
+
+  const customDoseValue = useMemo(() => safeNumber(doseResponseInput), [doseResponseInput]);
+  const hasCustomDose = customDoseValue !== null && customDoseValue >= 0;
+
+  return {
     protocolImpactSummary,
     protocolDoseEvents,
     protocolDoseOverview,
     dosePredictions,
     customDoseValue,
     hasCustomDose
+  };
+};
+
+interface UseDerivedDataOptions extends UseCoreDerivedDataOptions {
+  supplementTimeline: SupplementPeriod[];
+  protocolWindowSize: number;
+  doseResponseInput: string;
+}
+
+export const useDerivedData = ({
+  appData,
+  protocols,
+  supplementTimeline,
+  samplingControlsEnabled,
+  protocolWindowSize,
+  doseResponseInput
+}: UseDerivedDataOptions) => {
+  const core = useCoreDerivedData({
+    appData,
+    protocols,
+    samplingControlsEnabled
+  });
+
+  const dashboard = useDashboardDerivedData({
+    enabled: true,
+    visibleReports: core.visibleReports,
+    allMarkers: core.allMarkers,
+    settings: appData.settings,
+    protocols,
+    supplementTimeline
+  });
+
+  const protocol = useProtocolDerivedData({
+    enabled: true,
+    visibleReports: core.visibleReports,
+    allMarkers: core.allMarkers,
+    settings: appData.settings,
+    protocols,
+    supplementTimeline,
+    protocolWindowSize,
+    doseResponseInput
+  });
+
+  return {
+    ...core,
+    ...dashboard,
+    ...protocol
   };
 };
 

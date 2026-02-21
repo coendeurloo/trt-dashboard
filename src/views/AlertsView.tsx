@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { MarkerAlert, MarkerSeriesPoint } from "../analytics";
 import AlertTrendMiniChart from "../components/AlertTrendMiniChart";
 import { getMarkerDisplayName, trLocale } from "../i18n";
+import { buildPredictiveAlerts } from "../predictiveTrends";
 import { AppLanguage, AppSettings } from "../types";
 import { formatDate } from "../utils";
 
@@ -24,6 +26,10 @@ const AlertsView = ({
   samplingControlsEnabled
 }: AlertsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const predictiveAlerts = useMemo(
+    () => buildPredictiveAlerts(alertSeriesByMarker, settings.unitSystem),
+    [alertSeriesByMarker, settings.unitSystem]
+  );
 
   const alertSeverityLabel = (severity: "high" | "medium" | "low"): string => {
     if (severity === "high") {
@@ -186,6 +192,62 @@ const AlertsView = ({
           </div>
         )}
       </div>
+
+      {predictiveAlerts.length > 0 ? (
+        <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+          <div className="mb-4 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-100">{tr("Voorspellend", "Predictive")}</h4>
+            <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20">
+              {tr("Op basis van trend", "Trend-based")}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {predictiveAlerts.map((alert) => (
+              <article
+                key={`${alert.marker}-${alert.threshold}`}
+                className="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-100">
+                      {getMarkerDisplayName(alert.marker, language)}
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                      {language === "nl" ? alert.narrativeNl : alert.narrativeEn}
+                    </p>
+                    {alert.confidence === "low" ? (
+                      <p className="mt-1.5 text-[11px] text-slate-500">
+                        {tr(
+                          "Gebaseerd op slechts 2 metingen. Meer metingen maken deze projectie betrouwbaarder.",
+                          "Based on only 2 data points. More measurements make this projection more reliable."
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={
+                      alert.daysUntil <= 60
+                        ? "shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/25"
+                        : "shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300 ring-1 ring-slate-700"
+                    }
+                  >
+                    ~{Math.max(1, Math.round(alert.daysUntil / 30))}
+                    {tr("mnd", "mo")}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <p className="mt-4 text-[11px] text-slate-500">
+            {tr(
+              "Projecties zijn gebaseerd op lineaire extrapolatie van je meetgeschiedenis en houden geen rekening met protocolwijzigingen of leefstijlfactoren. Geen medisch advies.",
+              "Projections are based on linear extrapolation of your measurement history and do not account for protocol changes or lifestyle factors. Not medical advice."
+            )}
+          </p>
+        </section>
+      ) : null}
     </section>
   );
 };

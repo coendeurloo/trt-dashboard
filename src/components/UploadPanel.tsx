@@ -7,10 +7,11 @@ import { AppLanguage } from "../types";
 export interface UploadPanelProps {
   isProcessing: boolean;
   onFileSelected: (file: File) => void;
+  onUploadIntent?: () => void;
   language: AppLanguage;
 }
 
-const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProps) => {
+const UploadPanel = ({ isProcessing, onFileSelected, onUploadIntent, language }: UploadPanelProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -39,6 +40,9 @@ const UploadPanel = ({ isProcessing, onFileSelected, language }: UploadPanelProp
       <div
         {...getRootProps()}
         className="upload-panel-dropzone flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl px-4 py-9 text-center"
+        onMouseEnter={onUploadIntent}
+        onFocusCapture={onUploadIntent}
+        onTouchStart={onUploadIntent}
       >
         <input {...getInputProps()} />
         {isProcessing ? (
