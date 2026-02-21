@@ -73,21 +73,13 @@ const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onU
           </>
         ) : (
           <>
-            <UploadCloud className="h-9 w-9 text-cyan-300" />
-            <div>
-              <p className="text-base font-semibold text-slate-100">
-                {tr(
-                  "Upload een lab-PDF (tekst-PDF werkt het best).",
-                  "Upload a lab PDF (text PDFs work best)."
-                )}
+            <UploadCloud className="h-10 w-10 text-cyan-300" />
+            <div className="max-w-xs">
+              <p className="text-lg font-semibold text-slate-100">{tr("Upload lab-PDF", "Upload lab PDF")}</p>
+              <p className="mt-1 text-sm text-slate-300">{tr("Tekst-PDF werkt het best. Scan? Dan gebruiken we OCR.", "Text PDFs work best. Scanned file? We'll use OCR.")}</p>
+              <p className="mt-3 inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200">
+                {tr("Klik of sleep PDF hier", "Click or drop PDF here")}
               </p>
-              <p className="mt-1 text-sm text-slate-300">
-                {tr(
-                  "Is het een gescand document? Dan proberen we OCR.",
-                  "Is it a scanned document? We'll try OCR."
-                )}
-              </p>
-              <p className="mt-1 text-sm text-slate-300">{tr("Sleep hierheen of klik om te bladeren", "Drag here or click to browse files")}</p>
             </div>
           </>
         )}

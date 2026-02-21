@@ -517,6 +517,27 @@ const DashboardView = ({
                     ? tr("Pas tijdsbereik of meetmoment-filter aan om data te tonen.", "Change time range or sampling filter to show data.")
                     : tr("Pas het tijdsbereik aan om data te tonen.", "Change time range to show data.")}
                 </p>
+                {!isShareMode ? (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={onUploadClick}
+                      disabled={isProcessing}
+                      className={`rounded-md border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 sm:text-sm ${
+                        isProcessing ? "cursor-not-allowed opacity-70" : "hover:border-cyan-300 hover:text-cyan-50"
+                      }`}
+                    >
+                      {isProcessing ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {tr("Bezig met upload...", "Uploading...")}
+                        </span>
+                      ) : (
+                        tr("Of upload nog een PDF", "Or, upload another PDF")
+                      )}
+                    </button>
+                  </div>
+                ) : null}
               </>
             )}
           </div>

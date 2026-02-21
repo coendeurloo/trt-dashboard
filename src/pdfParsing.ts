@@ -1630,6 +1630,8 @@ const cleanMarkerName = (rawMarker: string): string => {
 
   marker = marker.replace(METHOD_SUFFIX_PATTERN, "").trim();
   marker = marker.replace(/\s*[=<>]+\s*$/g, "").trim();
+  // Drop flattened carry-over content from indexed lab rows (e.g. "... 54/58 A TSH ...").
+  marker = marker.replace(/\s+\d{1,3}\/\d{2,3}\s+A?\b.*$/i, "").trim();
 
   if (
     /\b(langere tijd tussen (?:bloed)?afname en analyse|longer time between blood collection and analysis)\b/i.test(marker)
@@ -1710,8 +1712,14 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   if (/^\d/.test(marker)) {
     return true;
   }
+  if (/\b\d{1,3}\/\d{2,3}\s+A?\b/i.test(marker)) {
+    return true;
+  }
 
   if (/[=<>]/.test(marker)) {
+    return true;
+  }
+  if (/\b\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\b/.test(marker)) {
     return true;
   }
 
@@ -1758,7 +1766,15 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
-  if (/^(?:hematology|clinical chemistry|biochemistry|hormones?|vitamins?|lipids?|differential)$/i.test(marker)) {
+  if (
+    /^(?:hematology|clinical chemistry|biochemistry|hormones?|vitamins?|lipids?|differential|tumou?r markers?|cardial markers?|leukocyte differential count)$/i.test(
+      marker
+    )
+  ) {
+    return true;
+  }
+
+  if (/^(?:morning|afternoon|evening|night)\s+hours?$/i.test(marker)) {
     return true;
   }
 
@@ -3154,7 +3170,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
   const rows: ParsedFallbackRow[] = [];
   const normalized = cleanWhitespace(text);
   const rowPattern =
-    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))\s+([A-Za-z%µμ0-9*^/.\-]+)(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
+    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%µμ][A-Za-z%µμ0-9*^/.\-]*))?(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
 
   for (const match of normalized.matchAll(rowPattern)) {
     const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));
@@ -3180,6 +3196,38 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
     };
     if (shouldKeepParsedRow(row, profile)) {
       rows.push(row);
+    }
+  }
+
+  // Some Latvia rows (notably Free Androgen Index) may omit the unit column.
+  const freeAndrogenPattern =
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+Free Androgen Index\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/i;
+  const freeAndrogenMatch = normalized.match(freeAndrogenPattern);
+  if (freeAndrogenMatch) {
+    const value = safeNumber(freeAndrogenMatch[1]);
+    const referenceMin = safeNumber(freeAndrogenMatch[2]);
+    const referenceMax = safeNumber(freeAndrogenMatch[3]);
+    if (value !== null) {
+      const row: ParsedFallbackRow = {
+        markerName: "Free Androgen Index",
+        value,
+        unit: "",
+        referenceMin,
+        referenceMax,
+        confidence: 0.86
+      };
+      if (
+        shouldKeepParsedRow(row, profile) &&
+        !rows.some(
+          (item) =>
+            item.markerName.toLowerCase() === "free androgen index" &&
+            Math.abs(item.value - value) < 0.0001 &&
+            (item.referenceMin ?? null) === (referenceMin ?? null) &&
+            (item.referenceMax ?? null) === (referenceMax ?? null)
+        )
+      ) {
+        rows.push(row);
+      }
     }
   }
 

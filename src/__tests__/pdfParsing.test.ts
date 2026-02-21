@@ -522,6 +522,37 @@ describe("pdfParsing fallback layers", () => {
     expect(polluted).toBeUndefined();
   });
 
+  it("drops Latvian section/index bleed-through rows while keeping real markers", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "E. Gulbja Laboratorija Testing Report Nr. 26862432 /2/Request complete",
+        "9/58 A MPV-Mean Platelet Volume 9.5 9.1-12.6 fL",
+        "10/58 A PCT-plateletcrit 0.260 0.12-0.39 %",
+        "11/58 A PDW-Platelet Distribution Width 11.3 9.30-16.70 fL",
+        "12/58 A White blood cells 7.05 4.0 - 9.8 10x9/L",
+        "Vitamins",
+        "45/58 A 25-OH- Vitamin D (D3+D2) 60.10 30 - 100 ng/mL",
+        "Tumor Markers",
+        "46/58 A PSA 0.424 <4.0 ng/mL",
+        "53/58 A Free Androgen Index 101.83 14.8 - 95.0",
+        "54/58 A TSH 2.2 0.55 - 4.78 mU/L",
+        "56/58 A Cortisol 538.0 - nmol/L",
+        "Morning hours 6.00-10.00 166-507 nmol/L.",
+        "Afternoon hours 16.00 līdz 20.00 73.8-291 nmol/L"
+      ].join("\n"),
+      "labrapport-250812-lab-latvia.pdf"
+    );
+
+    const tsh = draft.markers.find((marker) => marker.canonicalMarker === "TSH");
+    const hasNoiseMarker = draft.markers.some((marker) =>
+      /\b(?:tumou?r markers?|cardial markers?|afternoon hours|morning hours|interval vitamins|12\/58|54\/58)\b/i.test(marker.marker)
+    );
+
+    expect(tsh).toBeDefined();
+    expect(tsh?.rawValue).toBeCloseTo(2.2, 2);
+    expect(hasNoiseMarker).toBe(false);
+  });
+
   it("keeps Dutch marker labels in review and trims dangling '(volgens' fragment", () => {
     const draft = __pdfParsingInternals.fallbackExtract(
       [
