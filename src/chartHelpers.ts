@@ -1,10 +1,113 @@
 import { createElement } from "react";
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
-import { ReportAnnotations, AppLanguage, MarkerValue, AppSettings, ExtractionDraft, LabReport } from "./types";
+import {
+  ReportAnnotations,
+  AppLanguage,
+  MarkerValue,
+  AppSettings,
+  ExtractionDraft,
+  LabReport,
+  DashboardChartPreset
+} from "./types";
 import { trLocale } from "./i18n";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "./utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { MarkerTrendSummary } from "./analytics";
+
+type DashboardPresetName = Exclude<DashboardChartPreset, "custom">;
+type DashboardPresetVisualSettings = Pick<
+  AppSettings,
+  | "showReferenceRanges"
+  | "showAbnormalHighlights"
+  | "showAnnotations"
+  | "showTrtTargetZone"
+  | "showLongevityTargetZone"
+  | "yAxisMode"
+>;
+
+const DASHBOARD_PRESET_SETTINGS: Record<DashboardPresetName, DashboardPresetVisualSettings> = {
+  clinical: {
+    showReferenceRanges: true,
+    showAbnormalHighlights: true,
+    showAnnotations: false,
+    showTrtTargetZone: false,
+    showLongevityTargetZone: false,
+    yAxisMode: "zero"
+  },
+  protocol: {
+    showReferenceRanges: false,
+    showAbnormalHighlights: true,
+    showAnnotations: true,
+    showTrtTargetZone: false,
+    showLongevityTargetZone: false,
+    yAxisMode: "data"
+  },
+  minimal: {
+    showReferenceRanges: false,
+    showAbnormalHighlights: false,
+    showAnnotations: false,
+    showTrtTargetZone: false,
+    showLongevityTargetZone: false,
+    yAxisMode: "zero"
+  }
+};
+
+const LEGACY_CONFLICT_SETTINGS: DashboardPresetVisualSettings = {
+  showReferenceRanges: true,
+  showAbnormalHighlights: true,
+  showAnnotations: true,
+  showTrtTargetZone: true,
+  showLongevityTargetZone: false,
+  yAxisMode: "zero"
+};
+
+const dashboardSettingsMatch = (
+  left: DashboardPresetVisualSettings,
+  right: DashboardPresetVisualSettings
+): boolean =>
+  left.showReferenceRanges === right.showReferenceRanges &&
+  left.showAbnormalHighlights === right.showAbnormalHighlights &&
+  left.showAnnotations === right.showAnnotations &&
+  left.showTrtTargetZone === right.showTrtTargetZone &&
+  left.showLongevityTargetZone === right.showLongevityTargetZone &&
+  left.yAxisMode === right.yAxisMode;
+
+export const getDashboardPresetVisualSettings = (preset: DashboardPresetName): DashboardPresetVisualSettings => ({
+  ...DASHBOARD_PRESET_SETTINGS[preset]
+});
+
+export const isLegacyConflictingOverlayCombination = (
+  settings: DashboardPresetVisualSettings
+): boolean => dashboardSettingsMatch(settings, LEGACY_CONFLICT_SETTINGS);
+
+export const inferDashboardChartPresetFromSettings = (
+  settings: DashboardPresetVisualSettings
+): DashboardChartPreset => {
+  if (isLegacyConflictingOverlayCombination(settings)) {
+    return "clinical";
+  }
+
+  const matchedPreset = (Object.keys(DASHBOARD_PRESET_SETTINGS) as DashboardPresetName[]).find((preset) =>
+    dashboardSettingsMatch(settings, DASHBOARD_PRESET_SETTINGS[preset])
+  );
+  return matchedPreset ?? "custom";
+};
+
+export const buildDashboardPresetPatch = (
+  preset: DashboardPresetName
+): Pick<
+  AppSettings,
+  | "showReferenceRanges"
+  | "showAbnormalHighlights"
+  | "showAnnotations"
+  | "showTrtTargetZone"
+  | "showLongevityTargetZone"
+  | "yAxisMode"
+  | "dashboardChartPreset"
+> => ({
+  ...getDashboardPresetVisualSettings(preset),
+  dashboardChartPreset: preset
+});
 
 export const markerColor = (index: number): string => {
   const palette = ["#22d3ee", "#f472b6", "#a78bfa", "#34d399", "#f59e0b", "#60a5fa", "#fb7185", "#2dd4bf"];

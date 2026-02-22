@@ -8,11 +8,19 @@ describe("pre-launch copy hardening", () => {
     expect(t("nl", "trtStabilityShort")).toBe("Hormonale stabiliteit");
   });
 
-  it("has translatable optimal-zone wording for extra locales", () => {
-    const english = trLocale("en", "Doelzone", "Optimal zone");
-    expect(english).toBe("Optimal zone");
-    expect(translateFromEnglish("es", english)).toBe("Zona óptima");
-    expect(translateFromEnglish("pt", english)).toBe("Zona ideal");
-    expect(translateFromEnglish("de", english)).toBe("Optimale Zone");
+  it("has translatable TRT-target-zone wording for extra locales", () => {
+    const english = trLocale("en", "TRT-streefzone", "TRT target zone");
+    expect(english).toBe("TRT target zone");
+    expect(translateFromEnglish("es", english)).toBe("Zona objetivo TRT");
+    expect(translateFromEnglish("pt", english)).toBe("Zona-alvo TRT");
+    expect(translateFromEnglish("de", english)).toBe("TRT-Zielbereich");
+  });
+
+  it("has translatable compare-2-markers wording for extra locales", () => {
+    const english = trLocale("en", "Vergelijk 2 markers", "Compare 2 markers");
+    expect(english).toBe("Compare 2 markers");
+    expect(translateFromEnglish("es", english)).toBe("Comparar 2 marcadores");
+    expect(translateFromEnglish("pt", english)).toBe("Comparar 2 marcadores");
+    expect(translateFromEnglish("de", english)).toBe("2 Marker vergleichen");
   });
 });

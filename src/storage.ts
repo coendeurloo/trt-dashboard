@@ -14,6 +14,7 @@ import {
 import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "./markerNormalization";
 import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
+import { inferDashboardChartPresetFromSettings } from "./chartHelpers";
 import { createId, deriveAbnormalFlag } from "./utils";
 
 declare global {
@@ -490,6 +491,14 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
   const { claudeApiKey: _legacyClaudeApiKey, ...rest } = (settings ?? {}) as Partial<AppSettings> & {
     claudeApiKey?: string;
   };
+  const rawDashboardPreset = rest.dashboardChartPreset;
+  const dashboardPresetFromStorage =
+    rawDashboardPreset === "clinical" ||
+    rawDashboardPreset === "protocol" ||
+    rawDashboardPreset === "minimal" ||
+    rawDashboardPreset === "custom"
+      ? rawDashboardPreset
+      : null;
   const aiCostMode =
     rest.aiCostMode === "balanced" || rest.aiCostMode === "ultra_low_cost" || rest.aiCostMode === "max_accuracy"
       ? rest.aiCostMode
@@ -498,13 +507,40 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.parserDebugMode === "text_only" || rest.parserDebugMode === "text_ocr" || rest.parserDebugMode === "text_ocr_ai"
       ? rest.parserDebugMode
       : DEFAULT_SETTINGS.parserDebugMode;
-  return {
+  const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
     aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
     parserDebugMode
+  };
+
+  const inferredPreset = inferDashboardChartPresetFromSettings({
+    showReferenceRanges: normalizedSettings.showReferenceRanges,
+    showAbnormalHighlights: normalizedSettings.showAbnormalHighlights,
+    showAnnotations: normalizedSettings.showAnnotations,
+    showTrtTargetZone: normalizedSettings.showTrtTargetZone,
+    showLongevityTargetZone: normalizedSettings.showLongevityTargetZone,
+    yAxisMode: normalizedSettings.yAxisMode
+  });
+
+  const resolvedDashboardPreset = (() => {
+    if (!dashboardPresetFromStorage) {
+      return inferredPreset;
+    }
+    if (dashboardPresetFromStorage === "custom") {
+      return "custom";
+    }
+    if (dashboardPresetFromStorage === inferredPreset) {
+      return dashboardPresetFromStorage;
+    }
+    return inferredPreset;
+  })();
+
+  return {
+    ...normalizedSettings,
+    dashboardChartPreset: resolvedDashboardPreset
   };
 };
 

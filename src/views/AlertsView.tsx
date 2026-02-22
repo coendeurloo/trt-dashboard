@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MarkerAlert, MarkerSeriesPoint } from "../analytics";
 import AlertTrendMiniChart from "../components/AlertTrendMiniChart";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -14,6 +14,8 @@ interface AlertsViewProps {
   settings: AppSettings;
   language: AppLanguage;
   samplingControlsEnabled: boolean;
+  focusedMarker: string | null;
+  onFocusedMarkerHandled: () => void;
 }
 
 const AlertsView = ({
@@ -23,9 +25,12 @@ const AlertsView = ({
   alertSeriesByMarker,
   settings,
   language,
-  samplingControlsEnabled
+  samplingControlsEnabled,
+  focusedMarker,
+  onFocusedMarkerHandled
 }: AlertsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const rootRef = useRef<HTMLElement | null>(null);
   const predictiveAlerts = useMemo(
     () => buildPredictiveAlerts(alertSeriesByMarker, settings.unitSystem),
     [alertSeriesByMarker, settings.unitSystem]
@@ -48,8 +53,21 @@ const AlertsView = ({
     return tr("Trend", "Trend");
   };
 
+  useEffect(() => {
+    if (!focusedMarker || !rootRef.current) {
+      return;
+    }
+    const markerKey = focusedMarker.toLowerCase();
+    const cards = Array.from(rootRef.current.querySelectorAll<HTMLElement>("[data-alert-marker]"));
+    const target = cards.find((card) => (card.dataset.alertMarker ?? "").toLowerCase() === markerKey) ?? null;
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    onFocusedMarkerHandled();
+  }, [focusedMarker, onFocusedMarkerHandled]);
+
   return (
-    <section className="space-y-4 fade-in">
+    <section ref={rootRef} className="space-y-4 fade-in">
       <div className="alerts-hero rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -100,7 +118,13 @@ const AlertsView = ({
             {positiveAlerts.map((alert) => {
               const series = alertSeriesByMarker[alert.marker] ?? [];
               return (
-                <article key={alert.id} className="positive-alert-card mb-3 break-inside-avoid rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-emerald-100">
+                <article
+                  key={alert.id}
+                  data-alert-marker={alert.marker}
+                  className={`positive-alert-card mb-3 break-inside-avoid rounded-xl border bg-emerald-500/10 p-3 text-emerald-100 ${
+                    focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : "border-emerald-500/35"
+                  }`}
+                >
                   <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_190px]">
                     <div>
                       <div className="flex items-center justify-between gap-2">
@@ -153,7 +177,13 @@ const AlertsView = ({
                     : "border-slate-600 bg-slate-800/70 text-slate-100";
               const series = alertSeriesByMarker[alert.marker] ?? [];
               return (
-                <article key={alert.id} className={`mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass}`}>
+                <article
+                  key={alert.id}
+                  data-alert-marker={alert.marker}
+                  className={`mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass} ${
+                    focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : ""
+                  }`}
+                >
                   <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_200px]">
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2">

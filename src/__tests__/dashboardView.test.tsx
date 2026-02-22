@@ -87,18 +87,18 @@ const buildProps = () => {
       isShareMode: false,
       samplingControlsEnabled: true,
       dashboardView: "primary" as const,
-      comparisonMode: false,
+      dashboardMode: "cards" as const,
       leftCompareMarker: "Testosterone",
       rightCompareMarker: "Estradiol",
       timeRangeOptions,
       samplingOptions,
       onUpdateSettings,
       onDashboardViewChange: vi.fn(),
-      onComparisonModeChange: vi.fn(),
+      onDashboardModeChange: vi.fn(),
       onLeftCompareMarkerChange: vi.fn(),
       onRightCompareMarkerChange: vi.fn(),
       onExpandMarker: vi.fn(),
-      onRenameMarker: vi.fn(),
+      onOpenMarkerAlerts: vi.fn(),
       chartPointsForMarker: vi.fn(() => []),
       markerPercentChange: vi.fn(() => null),
       markerBaselineDelta: vi.fn(() => null),
@@ -144,5 +144,92 @@ describe("DashboardView first-report UX", () => {
         /Great start: your first report is saved\. Add one more report to unlock trend charts and over-time comparisons\./i
       )
     ).toBeTruthy();
+  });
+});
+
+describe("DashboardView chart controls", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows Compare 2 markers and Chart settings controls", () => {
+    const { props } = buildProps();
+    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
+
+    expect(screen.getByRole("button", { name: "Compare 2 markers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Chart settings" })).toBeTruthy();
+  });
+
+  it("hides card-only layer controls in compare mode", () => {
+    const { props } = buildProps();
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          dashboardMode: "compare2",
+          visibleReports: [report],
+          allMarkers: ["Testosterone", "Estradiol"]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
+
+    expect(screen.getByText("Data & scale")).toBeTruthy();
+    expect(screen.getByText("Comparison scale")).toBeTruthy();
+    expect(screen.queryByText("Reference range")).toBeNull();
+    expect(screen.queryByText("TRT target zone")).toBeNull();
+    expect(screen.queryByText("Protocol phase overlay")).toBeNull();
+    expect(screen.queryByText("Highlight out-of-range values")).toBeNull();
+  });
+
+  it("applies protocol preset values", () => {
+    const { props, onUpdateSettings } = buildProps();
+    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Protocol" }));
+
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      showReferenceRanges: false,
+      showAbnormalHighlights: true,
+      showAnnotations: true,
+      showTrtTargetZone: false,
+      showLongevityTargetZone: false,
+      yAxisMode: "data",
+      dashboardChartPreset: "protocol"
+    });
+  });
+
+  it("marks preset as custom after manual visual change", () => {
+    const { props, onUpdateSettings } = buildProps();
+    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reference range" }));
+
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      showReferenceRanges: false,
+      dashboardChartPreset: "custom"
+    });
+  });
+
+  it("opens marker alerts when alert badge is clicked", () => {
+    const { props } = buildProps();
+    const onOpenMarkerAlerts = vi.fn();
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          visibleReports: [report],
+          allMarkers: ["Apolipoprotein B"],
+          primaryMarkers: ["Apolipoprotein B"],
+          alertsByMarker: { "Apolipoprotein B": [{ id: "a-1" } as never] },
+          onOpenMarkerAlerts
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /open alerts for apolipoprotein b/i }));
+    expect(onOpenMarkerAlerts).toHaveBeenCalledWith("Apolipoprotein B");
   });
 });

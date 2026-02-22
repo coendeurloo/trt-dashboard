@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
 import { trLocale } from "../i18n";
+import { inferDashboardChartPresetFromSettings } from "../chartHelpers";
 import {
   AppSettings,
   LabReport,
@@ -129,13 +130,35 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   }, [appData.markerAliasOverrides]);
 
   const updateSettings = (patch: Partial<AppSettings>) => {
-    setAppData((prev) => ({
-      ...prev,
-      settings: {
+    setAppData((prev) => {
+      const nextSettings: AppSettings = {
         ...prev.settings,
         ...patch
+      };
+      const visualSettingsTouched =
+        patch.showReferenceRanges !== undefined ||
+        patch.showAbnormalHighlights !== undefined ||
+        patch.showAnnotations !== undefined ||
+        patch.showTrtTargetZone !== undefined ||
+        patch.showLongevityTargetZone !== undefined ||
+        patch.yAxisMode !== undefined;
+
+      if (visualSettingsTouched && patch.dashboardChartPreset === undefined) {
+        nextSettings.dashboardChartPreset = inferDashboardChartPresetFromSettings({
+          showReferenceRanges: nextSettings.showReferenceRanges,
+          showAbnormalHighlights: nextSettings.showAbnormalHighlights,
+          showAnnotations: nextSettings.showAnnotations,
+          showTrtTargetZone: nextSettings.showTrtTargetZone,
+          showLongevityTargetZone: nextSettings.showLongevityTargetZone,
+          yAxisMode: nextSettings.yAxisMode
+        });
       }
-    }));
+
+      return {
+        ...prev,
+        settings: nextSettings
+      };
+    });
   };
 
   const addReport = useCallback(

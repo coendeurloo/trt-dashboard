@@ -25,6 +25,8 @@ export type TabKey =
   | "analysis";
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
+export type DashboardChartPreset = "clinical" | "protocol" | "minimal" | "custom";
+export type DashboardViewMode = "cards" | "compare2";
 
 export type DosePredictionSource = "personal" | "hybrid" | "study_prior";
 
@@ -229,6 +231,7 @@ export interface AppSettings {
   samplingFilter: "all" | "trough" | "peak";
   compareToBaseline: boolean;
   comparisonScale: "absolute" | "normalized";
+  dashboardChartPreset: DashboardChartPreset;
   timeRange: TimeRangeKey;
   customRangeStart: string;
   customRangeEnd: string;

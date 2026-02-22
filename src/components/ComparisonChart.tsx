@@ -119,7 +119,7 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
   if (data.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/50 p-4">
-        <h3 className="text-sm font-semibold text-slate-100">{tr("Vergelijkingsmodus", "Comparison mode")}</h3>
+        <h3 className="text-sm font-semibold text-slate-100">{tr("Vergelijk 2 markers", "Compare 2 markers")}</h3>
         <p className="mt-2 text-sm text-slate-400">
           {tr("Geen overlappende data in gekozen bereik.", "No overlapping data in selected range.")}
         </p>
@@ -135,7 +135,7 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
       animate={{ opacity: 1, y: 0 }}
     >
       <h3 className="mb-2 text-sm font-semibold text-slate-100">
-        {tr("Vergelijkingsmodus", "Comparison mode")}{" "}
+        {tr("Vergelijk 2 markers", "Compare 2 markers")}{" "}
         {settings.comparisonScale === "normalized" ? tr("(genormaliseerd 0-100%)", "(normalized 0-100%)") : ""}
       </h3>
       <ResponsiveContainer width="100%" height={280}>

@@ -51,12 +51,13 @@ import {
   AppSettings,
   ExtractionDraft,
   LabReport,
-  MarkerValue,
-  ParserStage,
-  ReportAnnotations,
-  TabKey,
-  TimeRangeKey
-} from "./types";
+    MarkerValue,
+    ParserStage,
+    ReportAnnotations,
+    TabKey,
+    DashboardViewMode,
+    TimeRangeKey
+  } from "./types";
 import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -205,9 +206,10 @@ const App = () => {
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
 
-  const [comparisonMode, setComparisonMode] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<DashboardViewMode>("cards");
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
   const [rightCompareMarker, setRightCompareMarker] = useState<string>(PRIMARY_MARKERS[2]);
+  const [focusedAlertMarker, setFocusedAlertMarker] = useState<string | null>(null);
 
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
   const [protocolWindowSize, setProtocolWindowSize] = useState(45);
@@ -1164,6 +1166,10 @@ const App = () => {
     }
     setActiveTab(nextTab);
   };
+  const openAlertsForMarker = (marker: string) => {
+    setFocusedAlertMarker(marker);
+    requestTabChange("alerts");
+  };
 
   useEffect(() => {
     scrollPageToTop();
@@ -1510,18 +1516,18 @@ const App = () => {
               isShareMode={isShareMode}
               samplingControlsEnabled={samplingControlsEnabled}
               dashboardView={dashboardView}
-              comparisonMode={comparisonMode}
+              dashboardMode={dashboardMode}
               leftCompareMarker={leftCompareMarker}
               rightCompareMarker={rightCompareMarker}
               timeRangeOptions={timeRangeOptions}
               samplingOptions={samplingOptions}
               onUpdateSettings={updateSettings}
               onDashboardViewChange={setDashboardView}
-              onComparisonModeChange={setComparisonMode}
+              onDashboardModeChange={setDashboardMode}
               onLeftCompareMarkerChange={setLeftCompareMarker}
               onRightCompareMarkerChange={setRightCompareMarker}
               onExpandMarker={setExpandedMarker}
-              onRenameMarker={openRenameDialog}
+              onOpenMarkerAlerts={openAlertsForMarker}
               chartPointsForMarker={chartPointsForMarker}
               markerPercentChange={markerPercentChange}
               markerBaselineDelta={markerBaselineDelta}
@@ -1567,6 +1573,8 @@ const App = () => {
                   settings={appData.settings}
                   language={appData.settings.language}
                   samplingControlsEnabled={samplingControlsEnabled}
+                  focusedMarker={focusedAlertMarker}
+                  onFocusedMarkerHandled={() => setFocusedAlertMarker(null)}
                 />
               ) : null}
 
