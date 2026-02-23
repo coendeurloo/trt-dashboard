@@ -1,5 +1,5 @@
 import { format, subMonths } from "date-fns";
-import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "./types";
+import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod, SymptomCheckIn } from "./types";
 import { createId, deriveAbnormalFlag } from "./utils";
 
 export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
@@ -257,6 +257,112 @@ export const getDemoSupplementTimeline = (): SupplementPeriod[] => {
     }
   ];
 };
+
+const dateAt = (monthsAgo: number, daysAdjust = 0): string =>
+  makeIsoDate(new Date(subMonths(new Date(), monthsAgo).getTime() + daysAdjust * 86_400_000));
+
+export const getDemoCheckIns = (): SymptomCheckIn[] => [
+  {
+    id: "demo-checkin-1",
+    date: dateAt(12, -2),
+    energy: 3,
+    mood: 4,
+    sleep: 6,
+    libido: 3,
+    motivation: 4,
+    notes: "Constantly tired, low drive and motivation"
+  },
+  {
+    id: "demo-checkin-2",
+    date: dateAt(11, 5),
+    energy: 5,
+    mood: 5,
+    sleep: 6,
+    libido: 5,
+    motivation: 5,
+    notes: "Starting to notice some changes after beginning protocol"
+  },
+  {
+    id: "demo-checkin-3",
+    date: dateAt(9, -3),
+    energy: 8,
+    mood: 6,
+    sleep: 5,
+    libido: 8,
+    motivation: 7,
+    notes: "Lots of energy but sleep is off — feeling a bit moody"
+  },
+  {
+    id: "demo-checkin-4",
+    date: dateAt(8, 3),
+    energy: 8,
+    mood: 6,
+    sleep: 5,
+    libido: 8,
+    motivation: 8,
+    notes: "Some water retention, mood still variable"
+  },
+  {
+    id: "demo-checkin-5",
+    date: dateAt(7, 7),
+    energy: 7,
+    mood: 8,
+    sleep: 7,
+    libido: 7,
+    motivation: 8,
+    notes: "Dose adjustment really helped — mood feels balanced again"
+  },
+  {
+    id: "demo-checkin-6",
+    date: dateAt(6, -4),
+    energy: 7,
+    mood: 7,
+    sleep: 7,
+    libido: 6,
+    motivation: 7,
+    notes: "Hematocrit flag in last test is a bit worrying"
+  },
+  {
+    id: "demo-checkin-7",
+    date: dateAt(4, 5),
+    energy: 8,
+    mood: 8,
+    sleep: 8,
+    libido: 7,
+    motivation: 8,
+    notes: "Split dosing feels noticeably smoother, fewer mood swings"
+  },
+  {
+    id: "demo-checkin-8",
+    date: dateAt(3, -2),
+    energy: 8,
+    mood: 8,
+    sleep: 9,
+    libido: 7,
+    motivation: 8,
+    notes: "Best sleep I've had in months"
+  },
+  {
+    id: "demo-checkin-9",
+    date: dateAt(2, 4),
+    energy: 8,
+    mood: 8,
+    sleep: 8,
+    libido: 8,
+    motivation: 9,
+    notes: "Cypionate switch going well, feeling solid"
+  },
+  {
+    id: "demo-checkin-10",
+    date: dateAt(1, -6),
+    energy: 9,
+    mood: 9,
+    sleep: 8,
+    libido: 8,
+    motivation: 9,
+    notes: "Feeling great — most stable and consistent I've been"
+  }
+];
 
 export const getDemoReports = (): LabReport[] => [
   makeReport({

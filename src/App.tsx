@@ -31,8 +31,7 @@ import AIConsentModal from "./components/AIConsentModal";
 import ParserUncertaintyModal from "./components/ParserUncertaintyModal";
 import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import MobileNavDrawer from "./components/MobileNavDrawer";
-import { getDemoProtocols, getDemoReports } from "./demoData";
-import { getDemoSupplementTimeline } from "./demoData";
+import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
@@ -757,6 +756,7 @@ const App = () => {
     const demoProtocols = getDemoProtocols();
     const demoReports = getDemoReports();
     const demoSupplementTimeline = getDemoSupplementTimeline();
+    const demoCheckIns = getDemoCheckIns();
     setAppData((prev) => ({
       ...prev,
       reports: demoReports,
@@ -764,7 +764,11 @@ const App = () => {
       supplementTimeline: [
         ...prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-")),
         ...demoSupplementTimeline
-      ]
+      ],
+      checkIns: [
+        ...prev.checkIns.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-")),
+        ...demoCheckIns
+      ].sort((a, b) => a.date.localeCompare(b.date))
     }));
     setActiveTab("dashboard");
   };
@@ -777,7 +781,8 @@ const App = () => {
       ...prev,
       reports: prev.reports.filter((report) => report.extraction.model !== "demo-data"),
       protocols: prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")),
-      supplementTimeline: prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-"))
+      supplementTimeline: prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-")),
+      checkIns: prev.checkIns.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-"))
     }));
     setActiveTab("dashboard");
   };
