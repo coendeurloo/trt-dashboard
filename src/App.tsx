@@ -9,6 +9,7 @@ import {
   Gauge,
   Info,
   Loader2,
+  Menu,
   Pill,
   Plus,
   Sparkles,
@@ -26,6 +27,7 @@ import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
 import AIConsentModal from "./components/AIConsentModal";
+import MobileNavDrawer from "./components/MobileNavDrawer";
 import { getDemoProtocols, getDemoReports } from "./demoData";
 import { getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
@@ -33,7 +35,8 @@ import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } 
 import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
-import { buildShareToken, parseShareToken, ShareOptions } from "./share";
+import { buildShareSubsetData, buildShareToken, parseShareToken, ShareOptions, SHARE_REPORT_CAP_SEQUENCE } from "./share";
+import { createShortShareLink, resolveShortShareCode, ShareClientError } from "./shareClient";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
@@ -51,13 +54,14 @@ import {
   AppSettings,
   ExtractionDraft,
   LabReport,
-    MarkerValue,
-    ParserStage,
-    ReportAnnotations,
-    TabKey,
-    DashboardViewMode,
-    TimeRangeKey
-  } from "./types";
+  MarkerValue,
+  ParserStage,
+  ReportAnnotations,
+  StoredAppData,
+  TabKey,
+  DashboardViewMode,
+  TimeRangeKey
+} from "./types";
 import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -68,20 +72,119 @@ const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
-const SHARE_URL_WARNING_LIMIT = 7000;
+
+type ShareGenerationStatus = "idle" | "loading" | "success" | "error";
+type ShareBootstrapStatus = "ready" | "resolving" | "error";
+const SHORT_SHARE_CODE_PATTERN = /^[A-Za-z0-9]{8,24}$/;
+
+interface ParsedSharedSnapshot {
+  data: StoredAppData;
+  generatedAt: string | null;
+  options: ShareOptions;
+}
+
+interface ShareBootstrapState {
+  status: ShareBootstrapStatus;
+  snapshot: ParsedSharedSnapshot | null;
+  requestedShare: boolean;
+  pendingCode: string | null;
+  errorMessage: string;
+}
+
+const prefersDutch = (): boolean => {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /^nl/i.test(navigator.language ?? "");
+};
+
+const shareBootstrapText = (nl: string, en: string): string => (prefersDutch() ? nl : en);
+
+const parseShortShareCodeFromPath = (pathname: string): string | null => {
+  const match = pathname.match(/^\/s\/([A-Za-z0-9]{8,24})\/?$/);
+  if (!match?.[1]) {
+    return null;
+  }
+  return match[1];
+};
+
+const createInitialShareBootstrapState = (): ShareBootstrapState => {
+  if (typeof window === "undefined") {
+    return {
+      status: "ready",
+      snapshot: null,
+      requestedShare: false,
+      pendingCode: null,
+      errorMessage: ""
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const legacyToken = (params.get("share") ?? "").trim();
+  if (legacyToken) {
+    const parsed = parseShareToken(legacyToken);
+    if (parsed) {
+      return {
+        status: "ready",
+        snapshot: parsed,
+        requestedShare: true,
+        pendingCode: null,
+        errorMessage: ""
+      };
+    }
+    return {
+      status: "error",
+      snapshot: null,
+      requestedShare: true,
+      pendingCode: null,
+      errorMessage: shareBootstrapText(
+        "Deze deellink is ongeldig of beschadigd. Vraag een nieuwe link.",
+        "This share link is invalid or corrupted. Request a new link."
+      )
+    };
+  }
+
+  const queryCode = (params.get("s") ?? "").trim();
+  const pathCode = parseShortShareCodeFromPath(window.location.pathname) ?? "";
+  const code = queryCode || pathCode;
+  if (!code) {
+    return {
+      status: "ready",
+      snapshot: null,
+      requestedShare: false,
+      pendingCode: null,
+      errorMessage: ""
+    };
+  }
+
+  if (!SHORT_SHARE_CODE_PATTERN.test(code)) {
+    return {
+      status: "error",
+      snapshot: null,
+      requestedShare: true,
+      pendingCode: null,
+      errorMessage: shareBootstrapText(
+        "Deze korte deellink is ongeldig. Vraag een nieuwe link.",
+        "This short share link is invalid. Request a new link."
+      )
+    };
+  }
+
+  return {
+    status: "resolving",
+    snapshot: null,
+    requestedShare: true,
+    pendingCode: code,
+    errorMessage: ""
+  };
+};
 
 const App = () => {
-  const [sharedSnapshot] = useState(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const token = new URLSearchParams(window.location.search).get("share");
-    if (!token) {
-      return null;
-    }
-    return parseShareToken(token);
-  });
-  const isShareMode = sharedSnapshot !== null;
+  const [shareBootstrap, setShareBootstrap] = useState<ShareBootstrapState>(() => createInitialShareBootstrapState());
+  const sharedSnapshot = shareBootstrap.snapshot;
+  const isShareMode = shareBootstrap.requestedShare;
+  const isShareResolving = isShareMode && shareBootstrap.status === "resolving";
+  const isShareBootstrapError = isShareMode && shareBootstrap.status === "error" && !sharedSnapshot;
 
   const [shareOptions, setShareOptions] = useState<ShareOptions>({
     hideNotes: false,
@@ -89,8 +192,88 @@ const App = () => {
     hideSymptoms: false
   });
   const [shareLink, setShareLink] = useState("");
-  const [shareLinkTooLong, setShareLinkTooLong] = useState(false);
-  const [shareLinkLength, setShareLinkLength] = useState(0);
+  const [shareStatus, setShareStatus] = useState<ShareGenerationStatus>("idle");
+  const [shareMessage, setShareMessage] = useState("");
+  const [shareIncludedReports, setShareIncludedReports] = useState<number | null>(null);
+  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (shareBootstrap.status !== "resolving" || !shareBootstrap.pendingCode) {
+      return;
+    }
+
+    let canceled = false;
+
+    const resolveShareCode = async () => {
+      try {
+        const resolved = await resolveShortShareCode(shareBootstrap.pendingCode ?? "");
+        if (canceled) {
+          return;
+        }
+
+        const parsed = parseShareToken(resolved.token);
+        if (!parsed) {
+          setShareBootstrap({
+            status: "error",
+            snapshot: null,
+            requestedShare: true,
+            pendingCode: null,
+            errorMessage: shareBootstrapText(
+              "Deze deellink kon niet worden gelezen. Vraag een nieuwe link.",
+              "This share link could not be read. Request a new link."
+            )
+          });
+          return;
+        }
+
+        setShareBootstrap({
+          status: "ready",
+          snapshot: parsed,
+          requestedShare: true,
+          pendingCode: null,
+          errorMessage: ""
+        });
+      } catch (error) {
+        if (canceled) {
+          return;
+        }
+
+        let errorMessage = shareBootstrapText(
+          "De deellink kon niet worden geopend. Probeer later opnieuw.",
+          "The share link could not be opened. Please try again later."
+        );
+
+        if (error instanceof ShareClientError) {
+          if (error.code === "SHARE_LINK_NOT_FOUND") {
+            errorMessage = shareBootstrapText(
+              "Deze deellink is verlopen of niet gevonden. Vraag een nieuwe link.",
+              "This share link has expired or was not found. Request a new link."
+            );
+          } else if (error.code === "SHARE_PROXY_UNREACHABLE" || error.code === "SHARE_STORE_UNAVAILABLE") {
+            errorMessage = shareBootstrapText(
+              "De deellinkservice is tijdelijk niet bereikbaar. Probeer later opnieuw.",
+              "The share-link service is temporarily unreachable. Please try again later."
+            );
+          }
+        }
+
+        setShareBootstrap({
+          status: "error",
+          snapshot: null,
+          requestedShare: true,
+          pendingCode: null,
+          errorMessage
+        });
+      }
+    };
+
+    void resolveShareCode();
+
+    return () => {
+      canceled = true;
+    };
+  }, [shareBootstrap.pendingCode, shareBootstrap.status]);
+
   const {
     appData,
     setAppData,
@@ -185,6 +368,7 @@ const App = () => {
     return t(appData.settings.language, "pdfProcessFailed");
   };
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
 
@@ -395,6 +579,30 @@ const App = () => {
       document.body.classList.add("light");
     }
   }, [appData.settings.theme]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const closeMenuOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (mediaQuery.matches) {
+      setIsMobileMenuOpen(false);
+    }
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", closeMenuOnDesktop);
+      return () => mediaQuery.removeEventListener("change", closeMenuOnDesktop);
+    }
+
+    mediaQuery.addListener(closeMenuOnDesktop);
+    return () => mediaQuery.removeListener(closeMenuOnDesktop);
+  }, []);
 
   useEffect(() => {
     if (!expandedMarker) {
@@ -1067,27 +1275,108 @@ const App = () => {
     await runAiAnalysis(analysisType, decision);
   };
 
+  const mapShareServiceErrorToMessage = (error: unknown): string => {
+    if (!(error instanceof ShareClientError)) {
+      return tr(
+        "De deellink kon niet worden aangemaakt. Probeer later opnieuw.",
+        "Could not create the share link. Please try again later."
+      );
+    }
+
+    if (error.code === "SHARE_PROXY_UNREACHABLE" || error.code === "SHARE_STORE_UNAVAILABLE") {
+      return tr(
+        "De deellinkservice is tijdelijk niet bereikbaar. Probeer later opnieuw.",
+        "The share-link service is temporarily unreachable. Please try again later."
+      );
+    }
+
+    if (error.code === "SHARE_CRYPTO_MISCONFIGURED") {
+      return tr(
+        "De deellinkservice is tijdelijk verkeerd geconfigureerd. Probeer later opnieuw.",
+        "The share-link service is temporarily misconfigured. Please try again later."
+      );
+    }
+
+    if (error.code === "SHARE_TOKEN_REQUIRED" || error.code === "SHARE_CODE_INVALID") {
+      return tr(
+        "De deellink kon niet worden opgebouwd door ongeldige data.",
+        "The share link could not be created due to invalid data."
+      );
+    }
+
+    return tr(
+      "De deellink kon niet worden aangemaakt. Probeer later opnieuw.",
+      "Could not create the share link. Please try again later."
+    );
+  };
+
   const generateShareLink = async () => {
     if (typeof window === "undefined") {
       return;
     }
-    const token = buildShareToken(appData, shareOptions);
-    if (!token) {
+
+    setShareStatus("loading");
+    setShareMessage(tr("Korte deellink wordt aangemaakt...", "Creating short share link..."));
+    setShareLink("");
+    setShareIncludedReports(null);
+    setShareExpiresAt(null);
+
+    let sawSnapshotTooLarge = false;
+    for (const cap of SHARE_REPORT_CAP_SEQUENCE) {
+      const subset = buildShareSubsetData(appData, cap);
+      const token = buildShareToken(subset, shareOptions);
+      if (!token) {
+        continue;
+      }
+
+      try {
+        const response = await createShortShareLink(token);
+        const includedReports = subset.reports.length;
+        const expiresAt = response.expiresAt || null;
+        const expiryLabel = expiresAt ? formatDate(expiresAt) : tr("ongeveer 30 dagen", "about 30 days");
+
+        setShareStatus("success");
+        setShareLink(response.shareUrl);
+        setShareIncludedReports(includedReports);
+        setShareExpiresAt(expiresAt);
+        setShareMessage(
+          tr(
+            `Korte deellink klaar. Gedeeld: laatste ${includedReports} rapporten. Vervalt: ${expiryLabel}.`,
+            `Short share link ready. Shared: latest ${includedReports} reports. Expires: ${expiryLabel}.`
+          )
+        );
+
+        try {
+          await navigator.clipboard.writeText(response.shareUrl);
+        } catch {
+          // Clipboard is optional; link is shown in UI.
+        }
+        return;
+      } catch (error) {
+        if (error instanceof ShareClientError && error.code === "SHARE_SNAPSHOT_TOO_LARGE") {
+          sawSnapshotTooLarge = true;
+          continue;
+        }
+
+        setShareStatus("error");
+        setShareMessage(mapShareServiceErrorToMessage(error));
+        return;
+      }
+    }
+
+    if (sawSnapshotTooLarge) {
+      setShareStatus("error");
+      setShareMessage(
+        tr(
+          "Zelfs met 1 rapport is deze snapshot te groot voor delen. Verberg extra velden of probeer een kleinere dataset.",
+          "Even with 1 report this snapshot is too large to share. Hide additional fields or use a smaller dataset."
+        )
+      );
       return;
     }
-    const shareUrl = `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(token)}`;
-    const tooLong = shareUrl.length > SHARE_URL_WARNING_LIMIT;
-    setShareLink(shareUrl);
-    setShareLinkLength(shareUrl.length);
-    setShareLinkTooLong(tooLong);
-    if (tooLong) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // Clipboard is optional here; the generated URL is still shown in the UI.
-    }
+
+    setShareStatus("error");
+    setShareMessage(tr("Korte deellink kon niet worden aangemaakt.", "Could not create a short share link."));
   };
 
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
@@ -1111,7 +1400,20 @@ const App = () => {
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
   const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
   const visibleTabKeys = useMemo(() => new Set(visibleTabs.map((tab) => tab.key as TabKey)), [visibleTabs]);
-  const renderTabButton = (key: TabKey) => {
+  const requestTabChange = (nextTab: TabKey) => {
+    if (nextTab === activeTab) {
+      return;
+    }
+    if (draft && !isShareMode) {
+      setPendingTabChange(nextTab);
+      return;
+    }
+    setActiveTab(nextTab);
+  };
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+  const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
     if (!visibleTabKeys.has(key)) {
       return null;
     }
@@ -1141,7 +1443,10 @@ const App = () => {
       <button
         key={key}
         type="button"
-        onClick={() => requestTabChange(key)}
+        onClick={() => {
+          requestTabChange(key);
+          onAfterNavigate?.();
+        }}
         className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
           activeTab === key ? "bg-cyan-500/15 text-cyan-200" : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
         }`}
@@ -1156,15 +1461,139 @@ const App = () => {
       </button>
     );
   };
-  const requestTabChange = (nextTab: TabKey) => {
-    if (nextTab === activeTab) {
-      return;
+  const renderNavigationSections = (onAfterNavigate?: () => void) => (
+    <nav className="space-y-0.5">
+      {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") ? (
+        <>
+          <p className="mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Core</p>
+          {renderTabButton("dashboard", onAfterNavigate)}
+          {renderTabButton("reports", onAfterNavigate)}
+          {renderTabButton("alerts", onAfterNavigate)}
+        </>
+      ) : null}
+
+      {visibleTabKeys.has("protocol") ||
+      visibleTabKeys.has("supplements") ||
+      visibleTabKeys.has("protocolImpact") ||
+      visibleTabKeys.has("doseResponse") ? (
+        <>
+          <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Protocol</p>
+          {renderTabButton("protocol", onAfterNavigate)}
+          {renderTabButton("supplements", onAfterNavigate)}
+          {renderTabButton("protocolImpact", onAfterNavigate)}
+          {renderTabButton("doseResponse", onAfterNavigate)}
+        </>
+      ) : null}
+
+      {visibleTabKeys.has("analysis") ? (
+        <>
+          <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Pro</p>
+          {renderTabButton("analysis", onAfterNavigate)}
+        </>
+      ) : null}
+
+      {visibleTabKeys.has("settings") ? (
+        <div className="mt-3 border-t border-slate-800 pt-3">{renderTabButton("settings", onAfterNavigate)}</div>
+      ) : null}
+    </nav>
+  );
+  const renderShareSnapshotCard = () => (
+    <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-100">
+      <p className="font-semibold">{tr("Read-only deellink-snapshot", "Read-only share snapshot")}</p>
+      <p className="mt-1">
+        {isNl
+          ? "Bewerken, uploads, API-keys en lokale opslagwijzigingen zijn uitgeschakeld in deze weergave."
+          : "Editing, uploads, API keys and local data writes are disabled in this view."}
+      </p>
+      {sharedSnapshot?.generatedAt ? (
+        <p className="mt-1 text-cyan-200/80">
+          {tr("Gegenereerd", "Generated")}: {formatDate(sharedSnapshot.generatedAt)}
+        </p>
+      ) : null}
+    </div>
+  );
+  const renderUploadPanelCard = (containerClassName: string) => {
+    if (isShareMode || reports.length === 0) {
+      return null;
     }
-    if (draft && !isShareMode) {
-      setPendingTabChange(nextTab);
-      return;
-    }
-    setActiveTab(nextTab);
+
+    return (
+      <div ref={uploadPanelRef} className={containerClassName}>
+        <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
+        <UploadPanel
+          isProcessing={isProcessing}
+          processingStage={uploadStage}
+          onFileSelected={handleUpload}
+          onUploadIntent={() => {
+            void ensurePdfParsingModule();
+          }}
+          language={appData.settings.language}
+        />
+        <button
+          type="button"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+          onClick={startManualEntry}
+        >
+          <Plus className="h-4 w-4" /> {t(appData.settings.language, "addManualValue")}
+        </button>
+        {uploadError ? (
+          <div className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+            {uploadError}
+          </div>
+        ) : null}
+        {uploadNotice ? (
+          <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            {uploadNotice}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+  const renderSidebarContent = ({
+    includeUploadPanel,
+    onAfterNavigate
+  }: {
+    includeUploadPanel: boolean;
+    onAfterNavigate?: () => void;
+  }) => {
+    return (
+      <>
+        <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
+          <img
+            src={appData.settings.theme === "dark" ? labtrackerLogoDark : labtrackerLogoLight}
+            alt="LabTracker"
+            className="brand-logo mx-auto w-full max-w-[230px]"
+          />
+          {hasReports && activeProtocolCompound ? (
+            <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2.5">
+              <p className="truncate text-[11px] font-medium text-slate-400">
+                <span className="text-slate-600">{tr("Protocol", "Protocol")} · </span>
+                {activeProtocolCompound.name} {activeProtocolCompound.doseMg}
+              </p>
+              {outOfRangeCount > 0 ? (
+                <p className="mt-0.5 text-[11px] text-amber-400">
+                  {tr(
+                    `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} buiten bereik`,
+                    `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} out of range`
+                  )}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-emerald-400">
+                  {tr("Alle markers binnen bereik", "All markers in range")}
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        {renderNavigationSections(onAfterNavigate)}
+
+        {isShareMode ? renderShareSnapshotCard() : null}
+        {!isShareMode && includeUploadPanel
+          ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3")
+          : null}
+      </>
+    );
   };
   const openAlertsForMarker = (marker: string) => {
     setFocusedAlertMarker(marker);
@@ -1172,6 +1601,7 @@ const App = () => {
   };
 
   useEffect(() => {
+    closeMobileMenu();
     scrollPageToTop();
   }, [activeTab]);
 
@@ -1219,6 +1649,43 @@ const App = () => {
         ["trough", "Trough only"],
         ["peak", "Peak only"]
       ];
+  const quickUploadDisabled = isShareMode || isProcessing;
+
+  if (isShareResolving) {
+    return (
+      <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
+        <section className="mx-auto w-full max-w-xl rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5 text-sm text-slate-200">
+          <div className="flex items-center gap-2 text-cyan-200">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {shareBootstrapText("Korte deellink wordt geladen...", "Loading short share link...")}
+          </div>
+          <p className="mt-2 text-slate-400">
+            {shareBootstrapText(
+              "Even geduld. We openen je read-only snapshot.",
+              "Please wait. We are opening your read-only snapshot."
+            )}
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  if (isShareBootstrapError) {
+    return (
+      <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
+        <section className="mx-auto w-full max-w-xl rounded-2xl border border-rose-500/30 bg-slate-900/80 p-5 text-sm text-rose-100">
+          <p className="font-semibold">{shareBootstrapText("Deellink niet beschikbaar", "Share link unavailable")}</p>
+          <p className="mt-2 text-rose-100/90">
+            {shareBootstrap.errorMessage ||
+              shareBootstrapText(
+                "Deze deellink kon niet worden geopend. Vraag de verzender om een nieuwe link.",
+                "This share link could not be opened. Ask the sender for a new link."
+              )}
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
@@ -1236,121 +1703,53 @@ const App = () => {
           void handleUpload(file);
         }}
       />
+      <MobileNavDrawer
+        open={isMobileMenuOpen}
+        title={tr("Navigatie", "Navigation")}
+        onClose={closeMobileMenu}
+      >
+        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3">
+          {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: closeMobileMenu })}
+        </div>
+      </MobileNavDrawer>
+
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
-        <aside className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:w-72 lg:self-start">
-          <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
-            <img
-              src={appData.settings.theme === "dark" ? labtrackerLogoDark : labtrackerLogoLight}
-              alt="LabTracker"
-              className="brand-logo mx-auto w-full max-w-[230px]"
-            />
-            {hasReports && activeProtocolCompound ? (
-              <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2.5">
-                <p className="truncate text-[11px] font-medium text-slate-400">
-                  <span className="text-slate-600">{tr("Protocol", "Protocol")} · </span>
-                  {activeProtocolCompound.name} {activeProtocolCompound.doseMg}
-                </p>
-                {outOfRangeCount > 0 ? (
-                  <p className="mt-0.5 text-[11px] text-amber-400">
-                    {tr(
-                      `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} buiten bereik`,
-                      `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} out of range`
-                    )}
-                  </p>
-                ) : (
-                  <p className="mt-0.5 text-[11px] text-emerald-400">
-                    {tr("Alle markers binnen bereik", "All markers in range")}
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          <nav className="space-y-0.5">
-            {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") ? (
-              <>
-                <p className="mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Core</p>
-                {renderTabButton("dashboard")}
-                {renderTabButton("reports")}
-                {renderTabButton("alerts")}
-              </>
-            ) : null}
-
-            {visibleTabKeys.has("protocol") ||
-            visibleTabKeys.has("supplements") ||
-            visibleTabKeys.has("protocolImpact") ||
-            visibleTabKeys.has("doseResponse") ? (
-              <>
-                <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Protocol</p>
-                {renderTabButton("protocol")}
-                {renderTabButton("supplements")}
-                {renderTabButton("protocolImpact")}
-                {renderTabButton("doseResponse")}
-              </>
-            ) : null}
-
-            {visibleTabKeys.has("analysis") ? (
-              <>
-                <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Pro</p>
-                {renderTabButton("analysis")}
-              </>
-            ) : null}
-
-            {visibleTabKeys.has("settings") ? (
-              <div className="mt-3 border-t border-slate-800 pt-3">{renderTabButton("settings")}</div>
-            ) : null}
-          </nav>
-
-          {isShareMode ? (
-            <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-100">
-              <p className="font-semibold">{tr("Read-only deellink-snapshot", "Read-only share snapshot")}</p>
-              <p className="mt-1">
-                {isNl
-                  ? "Bewerken, uploads, API-keys en lokale opslagwijzigingen zijn uitgeschakeld in deze weergave."
-                  : "Editing, uploads, API keys and local data writes are disabled in this view."}
-              </p>
-              {sharedSnapshot?.generatedAt ? (
-                <p className="mt-1 text-cyan-200/80">{tr("Gegenereerd", "Generated")}: {formatDate(sharedSnapshot.generatedAt)}</p>
-              ) : null}
-            </div>
-          ) : reports.length > 0 ? (
-            <div ref={uploadPanelRef} className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(appData.settings.language, "uploadPdf")}</p>
-              <UploadPanel
-                isProcessing={isProcessing}
-                processingStage={uploadStage}
-                onFileSelected={handleUpload}
-                onUploadIntent={() => {
-                  void ensurePdfParsingModule();
-                }}
-                language={appData.settings.language}
-              />
-              <button
-                type="button"
-                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-                onClick={startManualEntry}
-              >
-                <Plus className="h-4 w-4" /> {t(appData.settings.language, "addManualValue")}
-              </button>
-              {uploadError ? (
-                <div className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                  {uploadError}
-                </div>
-              ) : null}
-              {uploadNotice ? (
-                <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                  {uploadNotice}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
+        <aside className="hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start">
+          {renderSidebarContent({ includeUploadPanel: true })}
         </aside>
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
-          <header className="px-1 py-0.5">
+          <header className="space-y-3 px-1 py-0.5">
+            <div className="flex items-center gap-2 lg:hidden">
+              <button
+                type="button"
+                aria-expanded={isMobileMenuOpen}
+                aria-controls="mobile-nav-drawer"
+                aria-label={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
+                title={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
+                onClick={() => setIsMobileMenuOpen((current) => !current)}
+              >
+                {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                  quickUploadDisabled
+                    ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+                    : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+                }`}
+                onClick={startSecondUpload}
+                disabled={quickUploadDisabled}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {tr("Snelle upload", "Quick Upload")}
+              </button>
+            </div>
+            {activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+              <div className="hidden lg:block">
                 <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
                 {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
               </div>
@@ -1407,6 +1806,10 @@ const App = () => {
               </div>
             </div>
           </header>
+
+          {activeTab === "dashboard"
+            ? renderUploadPanelCard("lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3")
+            : null}
 
           <AnimatePresence mode="wait">
             {draft && !isShareMode ? (
@@ -1658,8 +2061,10 @@ const App = () => {
                   markerUsage={markerUsage}
                   shareOptions={shareOptions}
                   shareLink={shareLink}
-                  shareLinkLength={shareLinkLength}
-                  shareLinkTooLong={shareLinkTooLong}
+                  shareStatus={shareStatus}
+                  shareMessage={shareMessage}
+                  shareIncludedReports={shareIncludedReports}
+                  shareExpiresAt={shareExpiresAt}
                   onUpdateSettings={updateSettings}
                   onRemapMarker={remapMarkerAcrossReports}
                   onOpenRenameDialog={openRenameDialog}

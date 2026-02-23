@@ -272,6 +272,11 @@ body.light .brand-logo {
   filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.16));
 }
 
+.mobile-menu-shell {
+  padding-top: calc(0.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}
+
 body.light .upload-panel-shell {
   border-color: rgba(14, 116, 144, 0.3) !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.92) 100%) !important;
