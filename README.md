@@ -12,7 +12,7 @@ LabTracker is a privacy-first web app that turns messy lab PDFs into clear trend
 Current beta focus: hormone and bloodwork tracking (including TRT-style workflows).  
 Roadmap direction: broader performance and general health lab tracking.
 
-Live app: [labtracker-dashboard.vercel.app](https://labtracker-dashboard.vercel.app)
+Live app: [labtracker.app](https://labtracker.app)
 
 ## Privacy behavior (important)
 
@@ -61,6 +61,8 @@ Server-only (Vercel + local server):
 - `GEMINI_API_KEY` (required)
 - `UPSTASH_REDIS_REST_URL` (required for AI limits/budget store)
 - `UPSTASH_REDIS_REST_TOKEN` (required for AI limits/budget store)
+- `SHARE_LINK_SECRET_BASE64` (required for encrypted short share links)
+- `SHARE_PUBLIC_ORIGIN` (optional, defaults to `https://labtracker.app`)
 - `AI_DAILY_BUDGET_EUR` (optional, `0` = disabled)
 - `AI_MONTHLY_BUDGET_EUR` (optional, `0` = disabled)
 - `AI_PARSER_MAX_CALLS_PER_USER_PER_DAY` (optional)
@@ -69,6 +71,7 @@ Client/build flags:
 - `VITE_ENABLE_PARSER_DEBUG` (optional, keep `false` for normal production)
 - `VITE_GEMINI_API_KEY` (dev-only fallback, do not use in production)
 - `VITE_AI_ANALYSIS_MARKER_CAP` (optional)
+- `VITE_SHARE_PUBLIC_ORIGIN` (optional, defaults to `https://labtracker.app`)
 
 ## Tech stack
 

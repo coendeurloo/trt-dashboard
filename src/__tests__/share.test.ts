@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
-import { buildShareToken, parseShareToken, ShareOptions } from "../share";
+import { buildShareSubsetData, buildShareToken, parseShareToken, ShareOptions, SHARE_REPORT_CAP_SEQUENCE } from "../share";
 import { StoredAppData } from "../types";
 
 const makeSampleData = (): StoredAppData => ({
@@ -144,5 +144,23 @@ describe("share token format", () => {
     const legacy = buildLegacyV1Token(sample, LEGACY_OPTIONS);
 
     expect(v2.length).toBeLessThan(legacy.length * 0.75);
+  });
+
+  it("uses the expected fallback cap sequence for short-link generation", () => {
+    expect(Array.from(SHARE_REPORT_CAP_SEQUENCE)).toEqual([8, 6, 4, 2, 1]);
+  });
+
+  it("buildShareSubsetData keeps only most recent reports by date while preserving original order", () => {
+    const sample = makeSampleData();
+    sample.reports = [
+      { ...sample.reports[0], id: "r-1", testDate: "2025-01-01", createdAt: "2025-01-01T08:00:00.000Z" },
+      { ...sample.reports[0], id: "r-2", testDate: "2025-03-01", createdAt: "2025-03-01T08:00:00.000Z" },
+      { ...sample.reports[0], id: "r-3", testDate: "2025-04-01", createdAt: "2025-04-01T08:00:00.000Z" },
+      { ...sample.reports[0], id: "r-4", testDate: "2025-06-01", createdAt: "2025-06-01T08:00:00.000Z" }
+    ];
+
+    const subset = buildShareSubsetData(sample, 2);
+    expect(subset.reports).toHaveLength(2);
+    expect(subset.reports.map((report) => report.id)).toEqual(["r-3", "r-4"]);
   });
 });

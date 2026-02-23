@@ -1,1 +1,8 @@
-{}
+{
+  "rewrites": [
+    {
+      "source": "/s/:code",
+      "destination": "/?s=:code"
+    }
+  ]
+}

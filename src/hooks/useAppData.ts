@@ -113,10 +113,25 @@ export const detectMarkerMergeSuggestions = (
 };
 
 export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
-  const [appData, setAppData] = useState<StoredAppData>(() => (sharedData ? sharedData : loadAppData()));
+  const [appData, setAppData] = useState<StoredAppData>(() => {
+    if (sharedData) {
+      return sharedData;
+    }
+    if (isShareMode) {
+      return coerceStoredAppData({});
+    }
+    return loadAppData();
+  });
   const isNl = appData.settings.language === "nl";
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const samplingControlsEnabled = appData.settings.enableSamplingControls;
+
+  useEffect(() => {
+    if (!isShareMode || !sharedData) {
+      return;
+    }
+    setAppData(sharedData);
+  }, [isShareMode, sharedData]);
 
   useEffect(() => {
     if (isShareMode) {

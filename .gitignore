@@ -13,3 +13,4 @@ vitest.config.d.ts
 examplelabs
 examplelabs.zip
 eng.traineddata
+.vercel
