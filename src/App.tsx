@@ -27,6 +27,8 @@ import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import UploadPanel from "./components/UploadPanel";
 import AIConsentModal from "./components/AIConsentModal";
+import ParserUncertaintyModal from "./components/ParserUncertaintyModal";
+import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import MobileNavDrawer from "./components/MobileNavDrawer";
 import { getDemoProtocols, getDemoReports } from "./demoData";
 import { getDemoSupplementTimeline } from "./demoData";
@@ -34,12 +36,14 @@ import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelper
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
 import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
+import appIcon from "../favicon.svg";
 import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
 import { buildShareSubsetData, buildShareToken, parseShareToken, ShareOptions, SHARE_REPORT_CAP_SEQUENCE } from "./share";
 import { createShortShareLink, resolveShortShareCode, ShareClientError } from "./shareClient";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
+import { buildExtractionDiffSummary } from "./extractionDiff";
 import {
   useCoreDerivedData,
   useDashboardDerivedData,
@@ -53,8 +57,11 @@ import {
   AIConsentDecision,
   AppSettings,
   ExtractionDraft,
+  ExtractionDiffSummary,
+  ExtractionRoute,
   LabReport,
   MarkerValue,
+  ParserUncertaintyAssessment,
   ParserStage,
   ReportAnnotations,
   StoredAppData,
@@ -382,8 +389,17 @@ const App = () => {
     markerCount: number;
     confidence: number;
     warnings: number;
+    routeLabel: string;
+    usedAi: boolean;
+    usedOcr: boolean;
   } | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
+  const [localBaselineDraft, setLocalBaselineDraft] = useState<ExtractionDraft | null>(null);
+  const [aiCandidateDraft, setAiCandidateDraft] = useState<ExtractionDraft | null>(null);
+  const [uncertaintyAssessment, setUncertaintyAssessment] = useState<ParserUncertaintyAssessment | null>(null);
+  const [showUncertaintyModal, setShowUncertaintyModal] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<ExtractionDiffSummary | null>(null);
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [draftOriginalMarkerLabels, setDraftOriginalMarkerLabels] = useState<Record<string, string>>({});
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
@@ -689,10 +705,17 @@ const App = () => {
 
   const startManualEntry = () => {
     setUploadError("");
+    setUploadNotice("");
+    setUploadSummary(null);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
     setLastUploadedFile(null);
     setIsImprovingExtraction(false);
+    setShowUncertaintyModal(false);
+    setShowComparisonModal(false);
+    setPendingDiff(null);
+    setAiCandidateDraft(null);
+    setUncertaintyAssessment(null);
     const manualDraft: ExtractionDraft = {
       sourceFileName: "Manual entry",
       testDate: new Date().toISOString().slice(0, 10),
@@ -717,6 +740,7 @@ const App = () => {
       }
     };
     setDraft(manualDraft);
+    setLocalBaselineDraft(manualDraft);
     captureOriginalDraftMarkerLabels(manualDraft);
     setActiveTab("dashboard");
   };
@@ -811,19 +835,34 @@ const App = () => {
     });
   };
 
-  const buildDraftComparisonSignature = (candidate: ExtractionDraft): string => {
-    const markerSignature = candidate.markers
-      .map((marker) => {
-        const markerName = marker.marker.trim().toLowerCase();
-        const value = typeof marker.rawValue === "number" ? marker.rawValue : marker.value;
-        const unit = (marker.rawUnit ?? marker.unit ?? "").trim().toLowerCase();
-        const refMin = marker.rawReferenceMin ?? marker.referenceMin;
-        const refMax = marker.rawReferenceMax ?? marker.referenceMax;
-        return `${markerName}|${value}|${unit}|${refMin ?? ""}|${refMax ?? ""}`;
-      })
-      .sort()
-      .join("||");
-    return `${candidate.testDate}|${markerSignature}`;
+  const countWarnings = (candidate: ExtractionDraft): number =>
+    new Set([
+      ...(candidate.extraction.warnings ?? []),
+      ...(candidate.extraction.warningCode ? [candidate.extraction.warningCode] : [])
+    ]).size;
+
+  const getExtractionRouteSummary = (
+    candidate: ExtractionDraft
+  ): { label: string; usedAi: boolean; usedOcr: boolean } => {
+    const route: ExtractionRoute =
+      candidate.extraction.debug?.extractionRoute ??
+      (candidate.extraction.aiUsed ? "gemini-with-text" : candidate.extraction.debug?.ocrUsed ? "local-ocr" : "local-text");
+    if (route === "local-text") {
+      return { label: tr("Alleen tekstlaag", "Text layer only"), usedAi: false, usedOcr: false };
+    }
+    if (route === "local-ocr") {
+      return { label: tr("OCR fallback", "OCR fallback"), usedAi: false, usedOcr: true };
+    }
+    if (route === "gemini-with-text") {
+      return { label: tr("Tekst + AI", "Text + AI"), usedAi: true, usedOcr: false };
+    }
+    if (route === "gemini-with-ocr") {
+      return { label: tr("OCR + AI", "OCR + AI"), usedAi: true, usedOcr: true };
+    }
+    if (route === "gemini-vision-only") {
+      return { label: tr("AI PDF-rescue", "AI PDF rescue"), usedAi: true, usedOcr: false };
+    }
+    return { label: tr("Geen parserdata", "No parser data"), usedAi: false, usedOcr: false };
   };
 
   const handleUpload = async (file: File) => {
@@ -833,43 +872,62 @@ const App = () => {
     setUploadNotice("");
     setUploadSummary(null);
     setIsImprovingExtraction(false);
+    setLocalBaselineDraft(null);
+    setUncertaintyAssessment(null);
+    setShowUncertaintyModal(false);
+    setShowComparisonModal(false);
+    setPendingDiff(null);
+    setAiCandidateDraft(null);
 
     try {
-      const { extractLabData } = await ensurePdfParsingModule();
+      const { extractLabData, assessParserUncertainty } = await ensurePdfParsingModule();
+      const initialParserMode =
+        appData.settings.parserDebugMode === "text_ocr_ai" ? "text_ocr" : appData.settings.parserDebugMode;
       const extracted = await extractLabData(file, {
         costMode: appData.settings.aiCostMode,
-        aiAutoImproveEnabled: appData.settings.aiAutoImproveEnabled,
-        externalAiAllowed: appData.settings.aiExternalConsent,
+        aiAutoImproveEnabled: false,
+        externalAiAllowed: false,
         aiConsent: {
           action: "parser_rescue",
-          scope: "always",
-          allowExternalAi: appData.settings.aiExternalConsent,
-          parserRescueEnabled: true,
+          scope: "once",
+          allowExternalAi: false,
+          parserRescueEnabled: false,
           includeSymptoms: false,
           includeNotes: false,
           allowPdfAttachment: false
         },
-        parserDebugMode: appData.settings.parserDebugMode,
+        parserDebugMode: initialParserMode,
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const warningCount = new Set([
-        ...(extracted.extraction.warnings ?? []),
-        ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
-      ]).size;
+      const warningCount = countWarnings(extracted);
+      const assessment = assessParserUncertainty(extracted);
+      const shouldPromptAi = appData.settings.parserDebugMode === "text_ocr_ai" && assessment.isUncertain;
       setDraft(extracted);
+      setLocalBaselineDraft(extracted);
+      setAiCandidateDraft(null);
+      setPendingDiff(null);
+      setShowComparisonModal(false);
+      setUncertaintyAssessment(assessment);
+      setShowUncertaintyModal(shouldPromptAi);
       captureOriginalDraftMarkerLabels(extracted);
       setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
       scrollPageToTop();
-      setUploadSummary({
-        fileName: extracted.sourceFileName,
-        markerCount: extracted.markers.length,
-        confidence: extracted.extraction.confidence,
-        warnings: warningCount
-      });
+      if (!shouldPromptAi) {
+        const routeSummary = getExtractionRouteSummary(extracted);
+        setUploadSummary({
+          fileName: extracted.sourceFileName,
+          markerCount: extracted.markers.length,
+          confidence: extracted.extraction.confidence,
+          warnings: warningCount,
+          routeLabel: routeSummary.label,
+          usedAi: routeSummary.usedAi,
+          usedOcr: routeSummary.usedOcr
+        });
+      }
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
       setUploadStage("failed");
@@ -884,6 +942,16 @@ const App = () => {
       setUploadError(tr("Upload dit PDF-bestand opnieuw om AI-verbetering uit te voeren.", "Re-upload this PDF to run AI refinement."));
       return;
     }
+    const baselineDraft = localBaselineDraft ?? draft;
+    if (!baselineDraft) {
+      setUploadError(
+        tr(
+          "Er is geen lokaal basisresultaat beschikbaar voor vergelijking.",
+          "No local baseline result is available for comparison."
+        )
+      );
+      return;
+    }
     const consent = await requestAiConsent("parser_rescue");
     if (!consent || !consent.allowExternalAi || !consent.parserRescueEnabled) {
       setUploadError(
@@ -893,9 +961,6 @@ const App = () => {
         )
       );
       return;
-    }
-    if (consent.scope === "always") {
-      updateSettings({ aiExternalConsent: true });
     }
     setIsImprovingExtraction(true);
     setUploadStage("running_ai_text");
@@ -907,44 +972,28 @@ const App = () => {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: true,
         forceAi: true,
+        preferAiResultWhenForced: true,
         externalAiAllowed: true,
         aiConsent: consent,
         parserDebugMode: appData.settings.parserDebugMode,
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const warningCount = new Set([
-        ...(improved.extraction.warnings ?? []),
-        ...(improved.extraction.warningCode ? [improved.extraction.warningCode] : [])
-      ]).size;
-      const previousDraft = draft;
-      const sameAsCurrent =
-        previousDraft !== null &&
-        buildDraftComparisonSignature(improved) === buildDraftComparisonSignature(previousDraft);
-      const improvedLooksWorse =
-        previousDraft !== null &&
-        improved.markers.length < previousDraft.markers.length &&
-        improved.extraction.confidence <= previousDraft.extraction.confidence + 0.01;
-      const chosenDraft = !draft || improved.markers.length >= draft.markers.length ? improved : draft;
-      setDraft(chosenDraft);
-      captureOriginalDraftMarkerLabels(chosenDraft);
+      const diff = buildExtractionDiffSummary(baselineDraft, improved);
+      setAiCandidateDraft(improved);
+      setPendingDiff(diff);
+      setShowComparisonModal(true);
+      setShowUncertaintyModal(false);
+      setUploadSummary(null);
       scrollPageToTop();
-      if (sameAsCurrent || improvedLooksWorse) {
+      if (!diff.hasChanges) {
         setUploadNotice(
           tr(
-            "AI gaf geen betere extractie voor dit rapport. De huidige versie is behouden.",
-            "AI did not improve extraction for this report. Your current version was kept."
+            "AI gaf geen inhoudelijke wijzigingen. Je kunt in de vergelijking alsnog kiezen welke versie je houdt.",
+            "AI produced no meaningful changes. You can still choose which version to keep in the comparison."
           )
         );
-      } else {
-        setUploadNotice("");
       }
-      setUploadSummary({
-        fileName: improved.sourceFileName,
-        markerCount: improved.markers.length,
-        confidence: improved.extraction.confidence,
-        warnings: warningCount
-      });
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
       setUploadStage("failed");
@@ -952,6 +1001,53 @@ const App = () => {
       setIsImprovingExtraction(false);
       setUploadStage(null);
     }
+  };
+
+  const promptAiFromUncertainty = () => {
+    setShowUncertaintyModal(false);
+    void improveDraftWithAi();
+  };
+
+  const keepLocalDraftVersion = () => {
+    setShowComparisonModal(false);
+    setPendingDiff(null);
+    setAiCandidateDraft(null);
+    setUploadNotice(
+      tr(
+        "Lokale extractie is behouden. Je kunt markers handmatig aanpassen en opslaan.",
+        "Local extraction was kept. You can edit markers manually and save."
+      )
+    );
+  };
+
+  const applyAiCandidateDraft = () => {
+    if (!aiCandidateDraft) {
+      return;
+    }
+    const warningCount = countWarnings(aiCandidateDraft);
+    setDraft(aiCandidateDraft);
+    setLocalBaselineDraft(aiCandidateDraft);
+    setUncertaintyAssessment(null);
+    captureOriginalDraftMarkerLabels(aiCandidateDraft);
+    const routeSummary = getExtractionRouteSummary(aiCandidateDraft);
+    setUploadSummary({
+      fileName: aiCandidateDraft.sourceFileName,
+      markerCount: aiCandidateDraft.markers.length,
+      confidence: aiCandidateDraft.extraction.confidence,
+      warnings: warningCount,
+      routeLabel: routeSummary.label,
+      usedAi: routeSummary.usedAi,
+      usedOcr: routeSummary.usedOcr
+    });
+    setShowComparisonModal(false);
+    setPendingDiff(null);
+    setAiCandidateDraft(null);
+    setUploadNotice(
+      tr(
+        "AI-resultaat is toegepast. Controleer de tabel en sla daarna op.",
+        "AI result was applied. Review the table, then save."
+      )
+    );
   };
 
   const retryDraftWithOcr = async () => {
@@ -971,9 +1067,15 @@ const App = () => {
     setUploadNotice("");
     setUploadSummary(null);
     setIsImprovingExtraction(false);
+    setLocalBaselineDraft(null);
+    setUncertaintyAssessment(null);
+    setShowUncertaintyModal(false);
+    setShowComparisonModal(false);
+    setPendingDiff(null);
+    setAiCandidateDraft(null);
 
     try {
-      const { extractLabData } = await ensurePdfParsingModule();
+      const { extractLabData, assessParserUncertainty } = await ensurePdfParsingModule();
       const extracted = await extractLabData(lastUploadedFile, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: false,
@@ -991,22 +1093,30 @@ const App = () => {
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const warningCount = new Set([
-        ...(extracted.extraction.warnings ?? []),
-        ...(extracted.extraction.warningCode ? [extracted.extraction.warningCode] : [])
-      ]).size;
+      const warningCount = countWarnings(extracted);
+      const assessment = assessParserUncertainty(extracted);
 
       setDraft(extracted);
+      setLocalBaselineDraft(extracted);
+      setAiCandidateDraft(null);
+      setPendingDiff(null);
+      setShowComparisonModal(false);
+      setUncertaintyAssessment(assessment);
+      setShowUncertaintyModal(false);
       captureOriginalDraftMarkerLabels(extracted);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
       scrollPageToTop();
+      const routeSummary = getExtractionRouteSummary(extracted);
       setUploadSummary({
         fileName: extracted.sourceFileName,
         markerCount: extracted.markers.length,
         confidence: extracted.extraction.confidence,
-        warnings: warningCount
+        warnings: warningCount,
+        routeLabel: routeSummary.label,
+        usedAi: routeSummary.usedAi,
+        usedOcr: routeSummary.usedOcr
       });
     } catch (error) {
       setUploadError(mapServiceErrorToMessage(error, "pdf"));
@@ -1102,6 +1212,12 @@ const App = () => {
 
     setUploadSummary(null);
     setDraft(null);
+    setLocalBaselineDraft(null);
+    setAiCandidateDraft(null);
+    setPendingDiff(null);
+    setShowUncertaintyModal(false);
+    setShowComparisonModal(false);
+    setUncertaintyAssessment(null);
     setDraftOriginalMarkerLabels({});
     setLastUploadedFile(null);
     setDraftAnnotations(blankAnnotations());
@@ -1615,6 +1731,12 @@ const App = () => {
     const nextTab = pendingTabChange;
     setPendingTabChange(null);
     setDraft(null);
+    setLocalBaselineDraft(null);
+    setAiCandidateDraft(null);
+    setPendingDiff(null);
+    setShowUncertaintyModal(false);
+    setShowComparisonModal(false);
+    setUncertaintyAssessment(null);
     setDraftOriginalMarkerLabels({});
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
@@ -1734,7 +1856,7 @@ const App = () => {
               </button>
               <div className="min-w-0 flex flex-1 items-center gap-2">
                 <img
-                  src="/favicon.svg"
+                  src={appIcon}
                   alt="LabTracker"
                   className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
                 />
@@ -1837,7 +1959,10 @@ const App = () => {
                 onAddSupplementPeriod={addSupplementPeriod}
                 isImprovingWithAi={isImprovingExtraction}
                 onImproveWithAi={
-                  lastUploadedFile && appData.settings.parserDebugMode === "text_ocr_ai"
+                  lastUploadedFile &&
+                  appData.settings.parserDebugMode === "text_ocr_ai" &&
+                  Boolean(uncertaintyAssessment?.isUncertain) &&
+                  !draft.extraction.aiUsed
                     ? improveDraftWithAi
                     : undefined
                 }
@@ -1847,6 +1972,12 @@ const App = () => {
                 onCancel={() => {
                   setUploadSummary(null);
                   setDraft(null);
+                  setLocalBaselineDraft(null);
+                  setAiCandidateDraft(null);
+                  setPendingDiff(null);
+                  setShowUncertaintyModal(false);
+                  setShowComparisonModal(false);
+                  setUncertaintyAssessment(null);
                   setDraftOriginalMarkerLabels({});
                   setLastUploadedFile(null);
                   setSelectedProtocolId(null);
@@ -2090,6 +2221,22 @@ const App = () => {
         </main>
       </div>
 
+      <ParserUncertaintyModal
+        open={showUncertaintyModal}
+        language={appData.settings.language}
+        assessment={uncertaintyAssessment}
+        onSkip={() => setShowUncertaintyModal(false)}
+        onUseAi={promptAiFromUncertainty}
+      />
+
+      <ExtractionComparisonModal
+        open={showComparisonModal}
+        language={appData.settings.language}
+        summary={pendingDiff}
+        onKeepLocal={keepLocalDraftVersion}
+        onApplyAi={applyAiCandidateDraft}
+      />
+
       <AIConsentModal
         open={consentAction !== null}
         action={consentAction ?? "analysis"}
@@ -2173,7 +2320,7 @@ const App = () => {
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
                   <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Markers gevonden", "Markers found")}</p>
                   <p className="mt-0.5 text-lg font-semibold text-cyan-300">{uploadSummary.markerCount}</p>
@@ -2186,13 +2333,22 @@ const App = () => {
                   <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Waarschuwingen", "Warnings")}</p>
                   <p className="mt-0.5 text-sm font-semibold text-slate-100">{uploadSummary.warnings}</p>
                 </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Gebruikte route", "Used route")}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-cyan-100">{uploadSummary.routeLabel}</p>
+                </div>
               </div>
 
               <div className="mt-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                {tr(
-                  "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. OCR/AI kan kleine fouten maken.",
-                  "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
-                )}
+                {uploadSummary.usedAi || uploadSummary.usedOcr
+                  ? tr(
+                      "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. OCR/AI kan kleine fouten maken.",
+                      "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
+                    )
+                  : tr(
+                      "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. Ook tekst-only parsing kan fouten maken.",
+                      "Always verify marker name, value, and reference range before saving. Text-only parsing can still make mistakes."
+                    )}
                 {uploadSummary.warnings > 0 ? ` ${tr("Er zijn parserwaarschuwingen gevonden.", "Parser warnings were detected.")}` : ""}
               </div>
               <div className="mt-4 flex justify-end">
