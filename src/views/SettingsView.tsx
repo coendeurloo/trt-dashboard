@@ -1,5 +1,5 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Copy, Download, FileText, Link2, Lock, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
@@ -24,8 +24,10 @@ interface SettingsViewProps {
   markerUsage: MarkerUsageRow[];
   shareOptions: ShareOptions;
   shareLink: string;
-  shareLinkLength: number;
-  shareLinkTooLong: boolean;
+  shareStatus: "idle" | "loading" | "success" | "error";
+  shareMessage: string;
+  shareIncludedReports: number | null;
+  shareExpiresAt: string | null;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onRemapMarker: (sourceCanonical: string, targetLabel: string) => void;
   onOpenRenameDialog: (sourceCanonical: string) => void;
@@ -82,8 +84,10 @@ const SettingsView = ({
   markerUsage,
   shareOptions,
   shareLink,
-  shareLinkLength,
-  shareLinkTooLong,
+  shareStatus,
+  shareMessage,
+  shareIncludedReports,
+  shareExpiresAt,
   onUpdateSettings,
   onRemapMarker,
   onOpenRenameDialog,
@@ -567,8 +571,8 @@ const SettingsView = ({
           <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Delen", "Share")}</h3>
           <p className="mt-1 text-sm text-slate-400">
             {tr(
-              "Genereer een korte read-only snapshotlink zonder API keys. De gedeelde weergave staat geen bewerken toe.",
-              "Generate a short read-only snapshot link without API keys. Shared view does not allow editing."
+              "Genereer een korte read-only snapshotlink zonder API keys. We delen slim alleen recente rapporten als dat nodig is.",
+              "Generate a short read-only snapshot link without API keys. We smartly share only recent reports when needed."
             )}
           </p>
           <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
@@ -601,15 +605,16 @@ const SettingsView = ({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={onGenerateShareLink}
+              disabled={shareStatus === "loading"}
             >
-              <Link2 className="h-4 w-4" /> {tr("Genereer deellink", "Generate share link")}
+              <Link2 className="h-4 w-4" /> {shareStatus === "loading" ? tr("Link maken...", "Creating link...") : tr("Genereer deellink", "Generate share link")}
             </button>
             {shareLink ? (
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(shareLink);
@@ -617,28 +622,47 @@ const SettingsView = ({
                     // no-op
                   }
                 }}
-                disabled={shareLinkTooLong}
               >
                 <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
               </button>
             ) : null}
+            <a
+              className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200 hover:border-amber-400/60 hover:bg-amber-500/15"
+              href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(tr("Interesse: Artsen-PDF Premium", "Interest: Doctor PDF Premium"))}`}
+            >
+              <Lock className="h-4 w-4" /> {tr("Artsen-PDF (Premium)", "Doctor PDF (Premium)")}
+            </a>
           </div>
-          {shareLink ? (
-            <p className={`mt-2 text-xs ${shareLinkTooLong ? "text-amber-300" : "text-emerald-300"}`}>
-              {shareLinkTooLong
+          {shareStatus !== "idle" || shareMessage ? (
+            <p className={`mt-2 text-xs ${shareStatus === "error" ? "text-rose-300" : shareStatus === "success" ? "text-emerald-300" : "text-slate-300"}`}>
+              {shareMessage ||
+                (shareStatus === "loading"
+                  ? tr("Korte deellink wordt voorbereid...", "Preparing short share link...")
+                  : "")}
+            </p>
+          ) : null}
+          {shareStatus === "success" && shareIncludedReports !== null ? (
+            <p className="mt-2 text-xs text-slate-400">
+              {shareExpiresAt
                 ? tr(
-                    `Deellink is te lang (${shareLinkLength} tekens). Gebruik JSON export/import als alternatief.`,
-                    `Share link is too long (${shareLinkLength} chars). Use JSON export/import instead.`
+                    `Deze link deelt de laatste ${shareIncludedReports} rapporten en vervalt automatisch.`,
+                    `This link shares the latest ${shareIncludedReports} reports and expires automatically.`
                   )
                 : tr(
-                    `Korte deellink gegenereerd (${shareLinkLength} tekens). Deze link is read-only.`,
-                    `Short share link generated (${shareLinkLength} chars). This link is read-only.`
+                    `Deze link deelt de laatste ${shareIncludedReports} rapporten.`,
+                    `This link shares the latest ${shareIncludedReports} reports.`
                   )}
             </p>
           ) : null}
           {shareLink ? (
             <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
           ) : null}
+          <p className="mt-2 text-xs text-amber-200/80">
+            {tr(
+              "Premium Artsen-PDF: binnenkort beschikbaar in een betaald pakket (met nette samenvatting voor je arts).",
+              "Premium Doctor PDF: coming soon in a paid package (with a polished summary for your doctor)."
+            )}
+          </p>
         </div>
       </div>
 

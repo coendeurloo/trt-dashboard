@@ -48,6 +48,7 @@ interface SharedSnapshotPayloadV2 {
 }
 
 const SHARE_TOKEN_V2_PREFIX = "s2.";
+export const SHARE_REPORT_CAP_SEQUENCE = [8, 6, 4, 2, 1] as const;
 
 const encodeBase64 = (value: string): string => {
   if (typeof window !== "undefined" && typeof window.btoa === "function") {
@@ -90,6 +91,32 @@ const sanitizeReportForShare = (report: LabReport, options: ShareOptions): LabRe
     notes: options.hideNotes ? "" : report.annotations.notes
   }
 });
+
+const compareReportsByRecency = (left: LabReport, right: LabReport): number => {
+  const byTestDate = right.testDate.localeCompare(left.testDate);
+  if (byTestDate !== 0) {
+    return byTestDate;
+  }
+  return right.createdAt.localeCompare(left.createdAt);
+};
+
+export const buildShareSubsetData = (data: StoredAppData, reportCap: number): StoredAppData => {
+  if (!Number.isFinite(reportCap) || reportCap <= 0 || data.reports.length <= reportCap) {
+    return data;
+  }
+
+  const recentIds = new Set(
+    [...data.reports]
+      .sort(compareReportsByRecency)
+      .slice(0, Math.max(1, Math.round(reportCap)))
+      .map((report) => report.id)
+  );
+
+  return {
+    ...data,
+    reports: data.reports.filter((report) => recentIds.has(report.id))
+  };
+};
 
 const buildLegacyShareToken = (data: StoredAppData, options: ShareOptions): string => {
   const sanitizedData: StoredAppData = {
