@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { differenceInDays, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp, Loader2, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
@@ -13,7 +14,7 @@ import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
 import { getMarkerDisplayName, t, trLocale } from "../i18n";
-import { AppLanguage, AppSettings, DashboardViewMode, LabReport, TimeRangeKey } from "../types";
+import { AppLanguage, AppSettings, DashboardViewMode, LabReport, SymptomCheckIn, TimeRangeKey } from "../types";
 
 interface DashboardViewProps {
   reports: LabReport[];
@@ -48,6 +49,8 @@ interface DashboardViewProps {
   onLoadDemo: () => void;
   onUploadClick: () => void;
   isProcessing: boolean;
+  checkIns: SymptomCheckIn[];
+  onNavigateToCheckIns: () => void;
 }
 
 interface ToggleSwitchProps {
@@ -125,10 +128,21 @@ const DashboardView = ({
   markerBaselineDelta,
   onLoadDemo,
   onUploadClick,
-  isProcessing
+  isProcessing,
+  checkIns,
+  onNavigateToCheckIns
 }: DashboardViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const hasReports = reports.length > 0;
+
+  // Wellbeing nudge: show when no check-ins or last one was ≥7 days ago
+  const lastCheckIn = checkIns.length > 0
+    ? checkIns.reduce((a, b) => a.date > b.date ? a : b)
+    : null;
+  const daysSinceCheckIn = lastCheckIn
+    ? differenceInDays(new Date(), parseISO(lastCheckIn.date))
+    : null;
+  const showWellbeingNudge = !isShareMode && (daysSinceCheckIn === null || daysSinceCheckIn >= 7);
   const hasSingleReport = reports.length === 1;
   const firstReportVisible = hasSingleReport && visibleReports.length > 0;
   const firstReportFilteredOut = hasSingleReport && visibleReports.length === 0;
@@ -212,6 +226,27 @@ const DashboardView = ({
           <span className="text-slate-400">
             {t(language, "trtStabilityShort")}: <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong>
           </span>
+        </div>
+      ) : null}
+
+      {/* ── Wellbeing nudge ── */}
+      {showWellbeingNudge && hasReports ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🧘</span>
+            <span className="text-sm text-amber-200">
+              {daysSinceCheckIn === null
+                ? tr("Start je welzijnsmonitoring — doe een eerste check-in", "Start tracking your wellbeing — do your first check-in")
+                : tr(`${daysSinceCheckIn} dagen geen check-in — hoe voel je je?`, `${daysSinceCheckIn} days since your last check-in — how are you feeling?`)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onNavigateToCheckIns}
+            className="shrink-0 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/30"
+          >
+            {tr("Check-in", "Check in")}
+          </button>
         </div>
       ) : null}
 
@@ -421,6 +456,16 @@ const DashboardView = ({
                       label={tr("Protocolfase-overlay", "Protocol phase overlay")}
                       tooltip={dosePhaseOverlaysTooltip}
                       disabled={!hasPhaseBlocks}
+                    />
+                    <ToggleSwitch
+                      checked={settings.showCheckInOverlay}
+                      onChange={(checked) => onUpdateSettings({ showCheckInOverlay: checked })}
+                      label={tr("Welzijns check-ins", "Wellbeing check-ins")}
+                      tooltip={tr(
+                        "Toont verticale lijnen op check-in datums in de grafieken, zodat je welzijn naast je labwaarden kunt zien.",
+                        "Shows vertical markers on check-in dates in the charts, so you can see how you felt alongside your lab values."
+                      )}
+                      disabled={checkIns.length === 0}
                     />
                   </div>
                   {!hasPhaseBlocks ? (
@@ -677,6 +722,7 @@ const DashboardView = ({
                   isCalculatedMarker={points.length > 0 && points.every((point) => point.isCalculated)}
                   onOpenLarge={() => onExpandMarker(marker)}
                   onOpenAlerts={() => onOpenMarkerAlerts(marker)}
+                  checkIns={checkIns}
                 />
               );
             })}

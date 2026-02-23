@@ -22,7 +22,8 @@ export type TabKey =
   | "alerts"
   | "reports"
   | "settings"
-  | "analysis";
+  | "analysis"
+  | "checkIns";
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 export type DashboardChartPreset = "clinical" | "protocol" | "minimal" | "custom";
@@ -282,6 +283,7 @@ export interface AppSettings {
   showReferenceRanges: boolean;
   showAbnormalHighlights: boolean;
   showAnnotations: boolean;
+  showCheckInOverlay: boolean;
   showTrtTargetZone: boolean;
   showLongevityTargetZone: boolean;
   yAxisMode: "zero" | "data";

@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showReferenceRanges: true,
   showAbnormalHighlights: true,
   showAnnotations: false,
+  showCheckInOverlay: false,
   showTrtTargetZone: false,
   showLongevityTargetZone: false,
   yAxisMode: "zero",
@@ -249,6 +250,7 @@ export const MARKER_ALIAS_LOOKUP = Object.entries(RAW_ALIASES).reduce(
 
 export const TAB_ITEMS = [
   { key: "dashboard", label: "Dashboard" },
+  { key: "checkIns", label: "Wellbeing" },
   { key: "protocol", label: "Protocols" },
   { key: "supplements", label: "Supplements" },
   { key: "doseResponse", label: "Dose Simulator" },

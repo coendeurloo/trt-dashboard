@@ -104,7 +104,9 @@ const buildProps = () => {
       markerBaselineDelta: vi.fn(() => null),
       onLoadDemo: vi.fn(),
       onUploadClick,
-      isProcessing: false
+      isProcessing: false,
+      checkIns: [],
+      onNavigateToCheckIns: vi.fn()
     },
     onUpdateSettings,
     onUploadClick

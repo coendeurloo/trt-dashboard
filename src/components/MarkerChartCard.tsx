@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, MarkerTrendSummary } from "../analytics";
-import { AppLanguage, AppSettings } from "../types";
+import { AppLanguage, AppSettings, SymptomCheckIn } from "../types";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { trendVisual } from "../chartHelpers";
 import MarkerInfoBadge from "./MarkerInfoBadge";
@@ -20,6 +20,7 @@ export interface MarkerChartCardProps {
   isCalculatedMarker: boolean;
   onOpenLarge: () => void;
   onOpenAlerts: () => void;
+  checkIns?: SymptomCheckIn[];
 }
 
 const MarkerChartCard = ({
@@ -35,7 +36,8 @@ const MarkerChartCard = ({
   baselineDelta,
   isCalculatedMarker,
   onOpenLarge,
-  onOpenAlerts
+  onOpenAlerts,
+  checkIns = []
 }: MarkerChartCardProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const trend = trendVisual(trendSummary?.direction ?? null);
@@ -133,6 +135,7 @@ const MarkerChartCard = ({
           language={language}
           phaseBlocks={phaseBlocks}
           height={230}
+          checkIns={checkIns}
         />
       </button>
     </motion.div>

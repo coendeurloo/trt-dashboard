@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Cog,
   Gauge,
+  Heart,
   Info,
   Loader2,
   Menu,
@@ -73,6 +74,7 @@ import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
 const SupplementsView = lazy(() => import("./views/SupplementsView"));
+const CheckInsView = lazy(() => import("./views/CheckInsView"));
 const AlertsView = lazy(() => import("./views/AlertsView"));
 const ProtocolImpactView = lazy(() => import("./views/ProtocolImpactView"));
 const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
@@ -302,6 +304,9 @@ const App = () => {
     updateSupplementPeriod,
     stopSupplement,
     deleteSupplementPeriod,
+    addCheckIn,
+    updateCheckIn,
+    deleteCheckIn,
     importData,
     clearAllData,
     exportJson
@@ -1548,6 +1553,8 @@ const App = () => {
         <Gauge className="h-4 w-4" />
       ) : key === "doseResponse" ? (
         <SlidersHorizontal className="h-4 w-4" />
+      ) : key === "checkIns" ? (
+        <Heart className="h-4 w-4" />
       ) : key === "alerts" ? (
         <AlertTriangle className="h-4 w-4" />
       ) : key === "reports" ? (
@@ -1582,10 +1589,11 @@ const App = () => {
   };
   const renderNavigationSections = (onAfterNavigate?: () => void) => (
     <nav className="space-y-0.5">
-      {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") ? (
+      {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") || visibleTabKeys.has("checkIns") ? (
         <>
           <p className="mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Core</p>
           {renderTabButton("dashboard", onAfterNavigate)}
+          {renderTabButton("checkIns", onAfterNavigate)}
           {renderTabButton("reports", onAfterNavigate)}
           {renderTabButton("alerts", onAfterNavigate)}
         </>
@@ -2078,6 +2086,8 @@ const App = () => {
               onLoadDemo={loadDemoData}
               onUploadClick={startSecondUpload}
               isProcessing={isProcessing}
+              checkIns={appData.checkIns}
+              onNavigateToCheckIns={() => setActiveTab("checkIns")}
             />
           ) : null}
 
@@ -2105,6 +2115,17 @@ const App = () => {
                   onUpdateSupplementPeriod={updateSupplementPeriod}
                   onStopSupplement={stopSupplement}
                   onDeleteSupplementPeriod={deleteSupplementPeriod}
+                />
+              ) : null}
+
+              {activeTab === "checkIns" ? (
+                <CheckInsView
+                  checkIns={appData.checkIns}
+                  language={appData.settings.language}
+                  isShareMode={isShareMode}
+                  onAdd={(data) => addCheckIn({ ...data, id: crypto.randomUUID() })}
+                  onUpdate={updateCheckIn}
+                  onDelete={deleteCheckIn}
                 />
               ) : null}
 

@@ -1,7 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, getTargetZone } from "../analytics";
-import { AppLanguage, AppSettings } from "../types";
+import { AppLanguage, AppSettings, SymptomCheckIn } from "../types";
 import { formatDate } from "../utils";
 import { buildYAxisDomain, compactTooltipText, formatAxisTick, markerColor, phaseColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -15,6 +15,7 @@ export interface MarkerTrendChartProps {
   phaseBlocks: ReturnType<typeof buildDosePhaseBlocks>;
   height: number;
   showYearHints?: boolean;
+  checkIns?: SymptomCheckIn[];
 }
 
 const MarkerTrendChart = ({
@@ -25,7 +26,8 @@ const MarkerTrendChart = ({
   language,
   phaseBlocks,
   height,
-  showYearHints = false
+  showYearHints = false,
+  checkIns = []
 }: MarkerTrendChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(marker, language);
@@ -246,6 +248,38 @@ const MarkerTrendChart = ({
           }}
           activeDot={{ r: 6 }}
         />
+
+        {/* Check-in overlay: vertical lines at nearest point to each check-in date */}
+        {settings.showCheckInOverlay && checkIns.length > 0
+          ? checkIns
+              .map((c) => {
+                // Find closest data point within 30 days
+                const targetTs = parseISO(c.date).getTime();
+                let best: MarkerSeriesPoint | null = null;
+                let bestDiff = Infinity;
+                for (const point of points) {
+                  const diff = Math.abs(parseISO(point.date).getTime() - targetTs);
+                  if (diff < bestDiff) { bestDiff = diff; best = point; }
+                }
+                if (!best || bestDiff > 30 * 24 * 60 * 60 * 1000) return null;
+                const avgScore = [c.energy, c.mood, c.sleep, c.libido, c.motivation]
+                  .filter((v): v is number => v !== null)
+                  .reduce((sum, v, _, arr) => sum + v / arr.length, 0);
+                const emoji = avgScore >= 7.5 ? "😄" : avgScore >= 5 ? "🙂" : "😟";
+                return (
+                  <ReferenceLine
+                    key={`checkin-${c.id}`}
+                    x={best.key}
+                    stroke="#f59e0b"
+                    strokeOpacity={0.5}
+                    strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    label={{ value: emoji, position: "top", fontSize: 12, offset: 4 }}
+                  />
+                );
+              })
+              .filter(Boolean)
+          : null}
         </LineChart>
       </ResponsiveContainer>
     </div>
