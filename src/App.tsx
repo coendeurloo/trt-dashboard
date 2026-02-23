@@ -1732,7 +1732,14 @@ const App = () => {
               >
                 {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </button>
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
+              <div className="min-w-0 flex flex-1 items-center gap-2">
+                <img
+                  src="/favicon.svg"
+                  alt="LabTracker"
+                  className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
+                />
+                <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
+              </div>
               <button
                 type="button"
                 className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
