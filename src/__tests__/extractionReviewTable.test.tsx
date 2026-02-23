@@ -150,4 +150,62 @@ describe("ExtractionReviewTable", () => {
     fireEvent.click(checklistButton);
     expect(screen.getByText(/AI text-only extraction found too few marker rows/i)).toBeTruthy();
   });
+
+  it("shows local vs AI-applied origin labels", () => {
+    const { rerender } = render(
+      <ExtractionReviewTable
+        draft={{
+          ...draft,
+          extraction: {
+            ...draft.extraction,
+            aiUsed: false
+          }
+        }}
+        annotations={annotations}
+        protocols={[]}
+        supplementTimeline={[]}
+        selectedProtocolId={null}
+        language="en"
+        showSamplingTiming={false}
+        onDraftChange={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onSelectedProtocolIdChange={vi.fn()}
+        onProtocolCreate={vi.fn()}
+        onAddSupplementPeriod={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/You are viewing: local result/i)).toBeTruthy();
+    expect(screen.getByText(/used: text layer only/i)).toBeTruthy();
+
+    rerender(
+      <ExtractionReviewTable
+        draft={{
+          ...draft,
+          extraction: {
+            ...draft.extraction,
+            aiUsed: true
+          }
+        }}
+        annotations={annotations}
+        protocols={[]}
+        supplementTimeline={[]}
+        selectedProtocolId={null}
+        language="en"
+        showSamplingTiming={false}
+        onDraftChange={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onSelectedProtocolIdChange={vi.fn()}
+        onProtocolCreate={vi.fn()}
+        onAddSupplementPeriod={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/You are viewing: AI result/i)).toBeTruthy();
+    expect(screen.getByText(/used: text \+ AI/i)).toBeTruthy();
+  });
 });

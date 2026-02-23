@@ -167,6 +167,62 @@ export type ExtractionWarningCode =
   | "PDF_AI_CONSENT_REQUIRED"
   | "PDF_AI_DISABLED_BY_PARSER_MODE";
 
+export type ParserUncertaintyReason =
+  | "warning_unknown_layout"
+  | "warning_text_extraction_failed"
+  | "warning_ocr_init_failed"
+  | "warning_text_layer_empty"
+  | "marker_count_low"
+  | "confidence_very_low"
+  | "confidence_and_unit_coverage_low";
+
+export interface ParserUncertaintyAssessment {
+  isUncertain: boolean;
+  reasons: ParserUncertaintyReason[];
+  markerCount: number;
+  confidence: number;
+  unitCoverage: number;
+  warnings: ExtractionWarningCode[];
+}
+
+export interface ExtractionDiffRowSnapshot {
+  marker: string;
+  canonicalMarker: string;
+  value: number;
+  unit: string;
+  referenceMin: number | null;
+  referenceMax: number | null;
+  confidence: number;
+}
+
+export interface ExtractionDiffRowChange {
+  canonicalMarker: string;
+  marker: string;
+  local?: ExtractionDiffRowSnapshot;
+  ai?: ExtractionDiffRowSnapshot;
+  changedFields?: Array<"marker" | "value" | "unit" | "referenceMin" | "referenceMax" | "confidence">;
+}
+
+export interface ExtractionDiffSummary {
+  local: {
+    markerCount: number;
+    confidence: number;
+    warnings: ExtractionWarningCode[];
+  };
+  ai: {
+    markerCount: number;
+    confidence: number;
+    warnings: ExtractionWarningCode[];
+  };
+  localTestDate: string;
+  aiTestDate: string;
+  testDateChanged: boolean;
+  added: ExtractionDiffRowChange[];
+  removed: ExtractionDiffRowChange[];
+  changed: ExtractionDiffRowChange[];
+  hasChanges: boolean;
+}
+
 export type ExtractionAIReason =
   | "auto_low_quality"
   | "manual_improve"
@@ -179,6 +235,7 @@ export type ExtractionAIReason =
 export type ExtractionRoute =
   | "local-text"
   | "local-ocr"
+  | "local-text-ocr-merged"
   | "gemini-with-text"
   | "gemini-with-ocr"
   | "gemini-vision-only"

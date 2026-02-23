@@ -12,6 +12,7 @@ import {
   ExtractionDraft,
   ExtractionRoute,
   ExtractionWarningCode,
+  ParserUncertaintyAssessment,
   MarkerValue,
   ParserStage,
   ParserDebugMode
@@ -61,6 +62,7 @@ interface ExtractLabDataOptions {
   costMode?: AICostMode;
   aiAutoImproveEnabled?: boolean;
   forceAi?: boolean;
+  preferAiResultWhenForced?: boolean;
   externalAiAllowed?: boolean;
   parserDebugMode?: ParserDebugMode;
   markerAliasOverrides?: Record<string, string>;
@@ -161,7 +163,7 @@ const COMMENTARY_GUARD_PATTERN =
 const HISTORY_CALCULATOR_NOISE_PATTERN =
   /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|free\s+testosterone\s*-\s*calculated|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay|calculated\s+value)\b|https?:\/\/|www\./i;
 const SPATIAL_PRIORITY_MARKER_PATTERN =
-  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|dht|dihydrotestosterone|prolactin|psa)\b/i;
+  /\b(?:testosterone|testosteron|free\s+testosterone|bioavailable\s+testosterone|estradiol|oestradiol|shbg|hematocrit|hematocriet|haemoglobin|hemoglobin|rbc|wbc|platelets?|neutrophils?|lymphocytes?|monocytes?|eosinophils?|basophils?|lh|fsh|dht|dihydrotestosterone|prolactin|progesterone|psa|tsh|t3|t4|glucose|creatinine|egfr|bilirubin|alkaline\s+phosphatase|alt|ast|ggt|albumin|globulin|protein|cholesterol|hdl|ldl|triglycerides?|ferritin|transferrin|iron|vitamin\s*d|dhea|igf-?1)\b/i;
 const SINGLE_TOKEN_MARKER_STOPWORDS = new Set([
   "is",
   "to",
@@ -193,6 +195,53 @@ const SHORT_MARKER_ALLOWLIST = new Set([
   "DHT",
   "CRP"
 ]);
+const EDGE_NOISE_TOKEN_BLOCKLIST = new Set([
+  "ref",
+  "range",
+  "result",
+  "results",
+  "value",
+  "values",
+  "lab",
+  "labs",
+  "nz",
+  "us",
+  "usa",
+  "boa",
+  "dv",
+  "tet",
+  "tfl",
+  "oe",
+  "wee",
+  "il",
+  "l",
+  "r"
+]);
+const EDGE_NOISE_TOKEN_ALLOWLIST = new Set([
+  ...Array.from(SHORT_MARKER_ALLOWLIST),
+  "SHBG",
+  "GGT",
+  "A/G",
+  "T3",
+  "T4",
+  "E2",
+  "IGF-1",
+  "BUN",
+  "EGFR",
+  "HBA1C",
+  "MPV"
+]);
+const ALLOWED_RATIO_MARKER_PATTERN =
+  /\b(?:chol(?:esterol)?\s*\/\s*h(?:dl|dh)|ldl\s*\/\s*hdl|a\/g|albumin\s*\/\s*globulin|free androgen index)\b/i;
+const HISTORY_CANONICAL_COLLAPSE_UNITS: Record<string, string[]> = {
+  Testosterone: ["nmol/L", "ng/dL", "ng/mL"],
+  "Free Testosterone": ["pmol/L", "pg/mL", "ng/dL", "nmol/L"],
+  "Bioavailable Testosterone": ["nmol/L", "ng/dL", "pg/mL", "%"],
+  SHBG: ["nmol/L"],
+  "Dihydrotestosteron (DHT)": ["ng/dL", "nmol/L", "pg/mL", "pmol/L", "µg/dL"],
+  FSH: ["mIU/mL", "IU/L", "U/L", "mU/L"],
+  LH: ["mIU/mL", "IU/L", "U/L", "mU/L"]
+};
 
 const MARKER_CONTINUATION_SUFFIX_PATTERN = /\b(?:volume|distribution(?:\s+width)?|width|count|ratio|index|percentage)\b/i;
 
@@ -370,6 +419,20 @@ const shouldUseOcrFallback = (textResult: PdfTextExtractionResult, fallbackDraft
       .map((marker) => marker.canonicalMarker)
       .filter((canonical) => IMPORTANT_MARKERS.has(canonical))
   ).size;
+  const historyLayoutSignal = looksLikeHistorySheetLayout(textResult.text);
+  const complexMultiPageSignal =
+    textResult.pageCount >= 3 && textResult.textItemCount >= textResult.pageCount * 120;
+  const lowYieldForComplex = fallbackDraft.markers.length < Math.max(10, textResult.pageCount * 3);
+  const veryLowYieldForComplex = fallbackDraft.markers.length < Math.max(8, textResult.pageCount * 2);
+  const lowImportantCoverageForComplex = importantCoverage < Math.max(2, Math.min(4, textResult.pageCount));
+
+  if (
+    (historyLayoutSignal && fallbackDraft.markers.length < 12) ||
+    (complexMultiPageSignal && (veryLowYieldForComplex || (lowYieldForComplex && lowImportantCoverageForComplex)))
+  ) {
+    return true;
+  }
+
   const broadButLowCoverage = fallbackDraft.markers.length >= 5 && importantCoverage < 2;
   if (fallbackDraft.markers.length >= 6 && fallbackDraft.extraction.confidence >= 0.72 && !broadButLowCoverage) {
     return false;
@@ -1626,7 +1689,46 @@ const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
 };
 
 const cleanMarkerName = (rawMarker: string): string => {
+  const normalizeEdgeToken = (token: string): string => token.replace(/^[^A-Za-z0-9/%+.-]+|[^A-Za-z0-9/%+.-]+$/g, "");
+  const shouldTrimEdgeToken = (token: string): boolean => {
+    const normalized = normalizeEdgeToken(token);
+    if (!normalized) {
+      return true;
+    }
+    const upper = normalized.toUpperCase();
+    const lower = normalized.toLowerCase();
+    if (EDGE_NOISE_TOKEN_ALLOWLIST.has(upper)) {
+      return false;
+    }
+    if (EDGE_NOISE_TOKEN_BLOCKLIST.has(lower)) {
+      return true;
+    }
+    if (/^[|`~]+$/.test(token)) {
+      return true;
+    }
+    if (/^[A-Za-z]{1,4}\)$/.test(token)) {
+      return true;
+    }
+    if (normalized.length <= 2 && !SHORT_MARKER_ALLOWLIST.has(upper) && !EDGE_NOISE_TOKEN_ALLOWLIST.has(upper)) {
+      return true;
+    }
+    return false;
+  };
+  const trimEdgeNoiseTokens = (value: string): string => {
+    const tokens = value.split(/\s+/).filter(Boolean);
+    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[0])) {
+      tokens.shift();
+    }
+    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[tokens.length - 1])) {
+      tokens.pop();
+    }
+    return tokens.join(" ");
+  };
+
   let marker = cleanWhitespace(rawMarker)
+    .replace(/[|`~]+/g, " ")
+    .replace(/[•·]+/g, " ")
+    .replace(/\s+/g, " ")
     .replace(/^[^A-Za-zÀ-ž]+/, "")
     .replace(/^(?:A|H|L)\s+(?=[A-Za-zÀ-ž0-9])/i, "")
     .replace(/\s*\([^)]*dr\.[^)]*\)$/i, "")
@@ -1657,6 +1759,12 @@ const cleanMarkerName = (rawMarker: string): string => {
   marker = marker.replace(/\s*[=<>]+\s*$/g, "").trim();
   // Drop flattened carry-over content from indexed lab rows (e.g. "... 54/58 A TSH ...").
   marker = marker.replace(/\s+\d{1,3}\/\d{2,3}\s+A?\b.*$/i, "").trim();
+  marker = marker.replace(/\b(?:nz|us|usa)\s+ref(?:erence)?(?:\s*range|\s+[a-z]{1,4})*\b.*$/i, "").trim();
+  marker = marker.replace(/\bref(?:erence)?\s*(?:r(?:ange)?)?\b.*$/i, "").trim();
+  marker = marker.replace(/\b(?:discounted|dicounted)\s+lab'?s?\b.*$/i, "").trim();
+  marker = marker.replace(/\b[A-Za-z]{1,4}\)(?=\s|$)/g, "").replace(/\s+/g, " ").trim();
+  marker = trimEdgeNoiseTokens(marker);
+  marker = marker.replace(/\s+\b[a-z]{1,3}\b\s*$/g, "").trim();
 
   if (
     /\b(langere tijd tussen (?:bloed)?afname en analyse|longer time between blood collection and analysis)\b/i.test(marker)
@@ -1667,8 +1775,11 @@ const cleanMarkerName = (rawMarker: string): string => {
   const anchor = marker.match(MARKER_ANCHOR_PATTERN);
   if (anchor && anchor.index !== undefined && anchor.index > 0) {
     const prefix = marker.slice(0, anchor.index);
+    const prefixTokens = prefix.split(/\s+/).filter(Boolean);
+    const shortPrefixNoise = prefixTokens.length >= 2 && prefixTokens.every((token) => token.length <= 3);
     if (
       prefix.length > 20 ||
+      shortPrefixNoise ||
       /\b(?:risk|risico|report|resultaat|patient|uitslag|diagnostiek|caution|interpret|method|given|individuals|effective|assessment|presence)\b/i.test(
         prefix
       )
@@ -1681,7 +1792,7 @@ const cleanMarkerName = (rawMarker: string): string => {
     marker = marker.split(" ").slice(-6).join(" ");
   }
 
-  return marker.replace(/[.,;:]+$/, "").trim();
+  return trimEdgeNoiseTokens(marker.replace(/[.,;:]+$/, "").trim());
 };
 
 const applyProfileMarkerFixes = (markerName: string): string => {
@@ -1746,6 +1857,14 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
   if (/\b\d{1,3}\/\d{2,3}\s+A?\b/i.test(marker)) {
+    return true;
+  }
+
+  if (/\b(?:fsh|lh)\s*&\s*(?:fsh|lh)\b/i.test(marker)) {
+    return true;
+  }
+
+  if (/\b\d+(?:[.,]\d+)?\s*-\s*$/i.test(marker)) {
     return true;
   }
 
@@ -2080,6 +2199,14 @@ const shouldKeepParsedRow = (row: ParsedFallbackRow, profile: ParserProfile = DE
   }
 
   if (/\bvalue\b$/i.test(row.markerName)) {
+    return false;
+  }
+
+  if (/\bratio\b/i.test(row.markerName) && !ALLOWED_RATIO_MARKER_PATTERN.test(row.markerName)) {
+    return false;
+  }
+
+  if (row.markerName.split(/\s+-\s+/).filter(Boolean).length >= 3) {
     return false;
   }
 
@@ -2534,6 +2661,25 @@ const isPlausibleNonSpatialMeasurement = (canonicalMarker: string, unit: string,
     return ["ng/dL", "nmol/L", "pg/mL", "%"].includes(normalizedUnit) && value <= 2000;
   }
 
+  if (canonical.includes("dihydrotestoster") || canonical === "dht") {
+    if (["ng/dL", "pg/mL", "nmol/L", "pmol/L", "µg/dL"].includes(normalizedUnit)) {
+      if (normalizedUnit === "ng/dL") {
+        return value <= 800;
+      }
+      if (normalizedUnit === "pg/mL") {
+        return value <= 8000;
+      }
+      if (normalizedUnit === "nmol/L") {
+        return value <= 30;
+      }
+      if (normalizedUnit === "pmol/L") {
+        return value <= 30000;
+      }
+      return value <= 20;
+    }
+    return false;
+  }
+
   return true;
 };
 
@@ -2679,11 +2825,12 @@ const parseSpatialRows = (rows: PdfSpatialRow[], profile: ParserProfile): Parsed
 };
 
 const looksLikeHistorySheetLayout = (text: string): boolean => {
-  return (
-    /\bbaseline\b/i.test(text) &&
-    /\bper\s+week\b/i.test(text) &&
-    /\bfree\s+testosterone\s*-\s*calculated\b/i.test(text)
-  );
+  const normalized = cleanWhitespace(text).toLowerCase();
+  const hasBaseline = /\bbaseline\b/.test(normalized);
+  const hasPerWeekOrProtocols = /\bper\s+week\b/.test(normalized) || /\bprotocols?\b/.test(normalized);
+  const hasFreeTestosteroneCalculated = /\bfree\s+testosterone\b/.test(normalized) && /\bcalculated\b/.test(normalized);
+  const hasKnownLabcorpIssue = /\bknown\s+labcorp\s+unit\s+issue\b/.test(normalized);
+  return hasBaseline && hasPerWeekOrProtocols && (hasFreeTestosteroneCalculated || hasKnownLabcorpIssue);
 };
 
 const HISTORY_MARKER_CONFIGS: HistoryMarkerConfig[] = [
@@ -3588,6 +3735,53 @@ const mergeMarkerSets = (primary: MarkerValue[], secondary: MarkerValue[]): Mark
   return Array.from(byKey.values());
 };
 
+const mergeDedupeReasons = (...reasonMaps: Array<Record<string, number>>): Record<string, number> => {
+  const merged = new Map<string, number>();
+  reasonMaps.forEach((reasonMap) => {
+    Object.entries(reasonMap).forEach(([reason, count]) => {
+      merged.set(reason, (merged.get(reason) ?? 0) + count);
+    });
+  });
+  return Object.fromEntries(
+    Array.from(merged.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 6)
+  );
+};
+
+const buildMergedLocalDraft = (
+  textDraft: ExtractionDraft,
+  ocrDraft: ExtractionDraft,
+  sourceText: string,
+  sourceFileName: string
+): ExtractionDraft => {
+  const mergedMarkers = orderMarkersBySourceText(mergeMarkerSets(textDraft.markers, ocrDraft.markers), sourceText);
+  const averageConfidence =
+    mergedMarkers.length > 0 ? mergedMarkers.reduce((sum, marker) => sum + marker.confidence, 0) / mergedMarkers.length : 0;
+  const unitCoverage = mergedMarkers.length > 0 ? mergedMarkers.filter((marker) => marker.unit).length / mergedMarkers.length : 0;
+  const referenceCoverage =
+    mergedMarkers.length > 0
+      ? mergedMarkers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / mergedMarkers.length
+      : 0;
+  const confidenceBase = averageConfidence * 0.62 + unitCoverage * 0.23 + referenceCoverage * 0.15;
+  const confidence =
+    mergedMarkers.length > 0
+      ? Math.min(0.92, Math.max(textDraft.extraction.confidence, ocrDraft.extraction.confidence, confidenceBase))
+      : Math.max(textDraft.extraction.confidence, ocrDraft.extraction.confidence);
+
+  return {
+    sourceFileName,
+    testDate: textDraft.testDate || ocrDraft.testDate || extractDateCandidate(sourceText),
+    markers: mergedMarkers,
+    extraction: {
+      provider: "fallback",
+      model: "fallback-merged:text+ocr",
+      confidence,
+      needsReview: confidence < 0.7 || mergedMarkers.length < 6 || unitCoverage < 0.6
+    }
+  };
+};
+
 const normalizeMarkerOrderLookupText = (value: string): string =>
   cleanWhitespace(value)
     .toLowerCase()
@@ -3685,6 +3879,56 @@ const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): M
     .map((entry) => entry.marker);
 };
 
+const scoreHistoryMarkerCandidate = (marker: MarkerValue, index: number): number => {
+  const preferredUnits = HISTORY_CANONICAL_COLLAPSE_UNITS[marker.canonicalMarker] ?? [];
+  const normalizedUnit = normalizeUnit(marker.unit);
+  const unitRank = preferredUnits.findIndex((unit) => normalizeUnit(unit) === normalizedUnit);
+  const unitScore = unitRank >= 0 ? (preferredUnits.length - unitRank) * 0.12 : 0;
+  const hasReference = marker.referenceMin !== null || marker.referenceMax !== null;
+  const referenceScore = hasReference ? 0.2 : 0;
+  return marker.confidence + unitScore + referenceScore + index * 0.0001;
+};
+
+const collapseHistorySheetMarkers = (markers: MarkerValue[]): MarkerValue[] => {
+  if (markers.length === 0) {
+    return markers;
+  }
+
+  const grouped = new Map<string, Array<{ marker: MarkerValue; index: number }>>();
+  markers.forEach((marker, index) => {
+    const list = grouped.get(marker.canonicalMarker) ?? [];
+    list.push({ marker, index });
+    grouped.set(marker.canonicalMarker, list);
+  });
+
+  const collapsed: MarkerValue[] = [];
+  markers.forEach((marker, index) => {
+    const targetUnits = HISTORY_CANONICAL_COLLAPSE_UNITS[marker.canonicalMarker];
+    if (!targetUnits) {
+      collapsed.push(marker);
+      return;
+    }
+    const group = grouped.get(marker.canonicalMarker) ?? [];
+    if (group.length <= 1) {
+      collapsed.push(marker);
+      return;
+    }
+    const best = group.reduce((currentBest, candidate) => {
+      if (!currentBest) {
+        return candidate;
+      }
+      const bestScore = scoreHistoryMarkerCandidate(currentBest.marker, currentBest.index);
+      const candidateScore = scoreHistoryMarkerCandidate(candidate.marker, candidate.index);
+      return candidateScore > bestScore ? candidate : currentBest;
+    }, null as { marker: MarkerValue; index: number } | null);
+    if (best?.index === index) {
+      collapsed.push(marker);
+    }
+  });
+
+  return collapsed;
+};
+
 const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): FallbackExtractOutcome => {
   const profile = detectParserProfile(text, fileName);
   const genovaRows = parseGenovaHormoneRows(text, profile);
@@ -3738,14 +3982,31 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
   const spatialParsedRows = shouldApplySpatialBoost ? parseSpatialRows(spatialRows, profile) : [];
   const combinedRows = [...historyRows, ...nonSpatialRows, ...spatialParsedRows];
   const combinedDedupe = dedupeRowsDetailed(combinedRows);
-  const markers = orderMarkersBySourceText(combinedDedupe.markers, text);
+  const orderedMarkers = orderMarkersBySourceText(combinedDedupe.markers, text);
+  const markers = looksLikeHistorySheetLayout(text) ? collapseHistorySheetMarkers(orderedMarkers) : orderedMarkers;
 
   const averageConfidence =
     markers.length > 0 ? markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length : 0;
   const unitCoverage = markers.length > 0 ? markers.filter((marker) => marker.unit).length / markers.length : 0;
+  const referenceCoverage =
+    markers.length > 0
+      ? markers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / markers.length
+      : 0;
+  const uniqueCanonicalCount = new Set(markers.map((marker) => marker.canonicalMarker)).size;
+  const canonicalDiversity = markers.length > 0 ? uniqueCanonicalCount / markers.length : 0;
   const importantCoverage = countImportantCoverage(markers);
   const hormoneSignal = HORMONE_SIGNAL_PATTERN.test(text);
-  const confidence = markers.length > 0 ? Math.min(0.9, averageConfidence * 0.8 + unitCoverage * 0.2) : 0.1;
+  const duplicatePenalty =
+    markers.length >= 12 && canonicalDiversity < 0.72 ? (0.72 - canonicalDiversity) * 0.45 : 0;
+  const sparseReferencePenalty =
+    markers.length >= 8 && referenceCoverage < 0.25 ? (0.25 - referenceCoverage) * 0.35 : 0;
+  const historyLayoutPenalty = looksLikeHistorySheetLayout(text) && markers.length >= 8 ? 0.06 : 0;
+  const unitSignal = profile.requireUnit ? unitCoverage : Math.max(unitCoverage, 0.35);
+  const confidenceBase = averageConfidence * 0.64 + unitSignal * 0.2 + referenceCoverage * 0.16;
+  const confidence =
+    markers.length > 0
+      ? Math.max(0.1, Math.min(0.9, confidenceBase - duplicatePenalty - sparseReferencePenalty - historyLayoutPenalty))
+      : 0.1;
 
   return {
     draft: {
@@ -3756,7 +4017,12 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
         provider: "fallback",
         model: `fallback-layered:${profile.id}`,
         confidence,
-        needsReview: confidence < 0.7 || markers.length === 0 || unitCoverage < 0.7 || (hormoneSignal && importantCoverage < 2)
+        needsReview:
+          confidence < 0.7 ||
+          markers.length === 0 ||
+          (profile.requireUnit && unitCoverage < 0.7) ||
+          (markers.length >= 8 && referenceCoverage < 0.2) ||
+          (hormoneSignal && importantCoverage < 2)
       }
     },
     diagnostics: {
@@ -4053,8 +4319,26 @@ const buildLocalExtractionWarnings = (
     pushWarning("PDF_OCR_PARTIAL");
   }
 
+  const markerCount = draft.markers.length;
+  const referenceCoverage =
+    markerCount > 0
+      ? draft.markers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / markerCount
+      : 0;
+  const canonicalDiversity =
+    markerCount > 0 ? new Set(draft.markers.map((marker) => marker.canonicalMarker)).size / markerCount : 0;
+  const duplicateHeavy = markerCount >= 12 && canonicalDiversity < 0.72;
+  const sparseReferences = markerCount >= 8 && referenceCoverage < 0.28;
+  const historyLikeLayout = looksLikeHistorySheetLayout(textResult.text);
+  const historySparseSignal =
+    historyLikeLayout && markerCount >= 8 && referenceCoverage < 0.3 && draft.extraction.confidence < 0.7;
+
   const likelyUnknownLayout =
-    (textResult.textItemCount > 0 || ocrResult.used) && draft.markers.length <= 3 && draft.extraction.confidence < 0.55;
+    (textResult.textItemCount > 0 || ocrResult.used) &&
+    (
+      (markerCount <= 3 && draft.extraction.confidence < 0.55) ||
+      ((duplicateHeavy && sparseReferences) && (draft.extraction.confidence < 0.8 || historyLikeLayout)) ||
+      historySparseSignal
+    );
   if (likelyUnknownLayout) {
     pushWarning("PDF_UNKNOWN_LAYOUT");
   }
@@ -4068,6 +4352,69 @@ const buildLocalExtractionWarnings = (
   return {
     warningCode,
     warnings: Array.from(new Set(warnings))
+  };
+};
+
+const EXTRACTION_WARNING_CODE_SET: ReadonlySet<ExtractionWarningCode> = new Set<ExtractionWarningCode>([
+  "PDF_TEXT_LAYER_EMPTY",
+  "PDF_TEXT_EXTRACTION_FAILED",
+  "PDF_OCR_INIT_FAILED",
+  "PDF_OCR_PARTIAL",
+  "PDF_LOW_CONFIDENCE_LOCAL",
+  "PDF_UNKNOWN_LAYOUT",
+  "PDF_AI_TEXT_ONLY_INSUFFICIENT",
+  "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE",
+  "PDF_AI_PDF_RESCUE_SKIPPED_SIZE",
+  "PDF_AI_PDF_RESCUE_FAILED",
+  "PDF_AI_SKIPPED_COST_MODE",
+  "PDF_AI_SKIPPED_BUDGET",
+  "PDF_AI_SKIPPED_RATE_LIMIT",
+  "PDF_AI_LIMITS_UNAVAILABLE",
+  "PDF_AI_CONSENT_REQUIRED",
+  "PDF_AI_DISABLED_BY_PARSER_MODE"
+]);
+
+const collectDraftWarningCodes = (draft: ExtractionDraft): ExtractionWarningCode[] =>
+  Array.from(
+    new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])])
+  ).filter((code): code is ExtractionWarningCode => EXTRACTION_WARNING_CODE_SET.has(code as ExtractionWarningCode));
+
+export const assessParserUncertainty = (draft: ExtractionDraft): ParserUncertaintyAssessment => {
+  const warnings = collectDraftWarningCodes(draft);
+  const reasons = new Set<ParserUncertaintyAssessment["reasons"][number]>();
+  const markerCount = draft.markers.length;
+  const confidence = draft.extraction.confidence;
+  const unitCoverage = markerCount > 0 ? draft.markers.filter((marker) => marker.unit.trim().length > 0).length / markerCount : 0;
+
+  if (warnings.includes("PDF_UNKNOWN_LAYOUT")) {
+    reasons.add("warning_unknown_layout");
+  }
+  if (warnings.includes("PDF_TEXT_EXTRACTION_FAILED")) {
+    reasons.add("warning_text_extraction_failed");
+  }
+  if (warnings.includes("PDF_OCR_INIT_FAILED")) {
+    reasons.add("warning_ocr_init_failed");
+  }
+  if (warnings.includes("PDF_TEXT_LAYER_EMPTY")) {
+    reasons.add("warning_text_layer_empty");
+  }
+  if (markerCount < 4) {
+    reasons.add("marker_count_low");
+  }
+  if (confidence < 0.55) {
+    reasons.add("confidence_very_low");
+  }
+  if (confidence < 0.62 && unitCoverage < 0.55) {
+    reasons.add("confidence_and_unit_coverage_low");
+  }
+
+  return {
+    isUncertain: reasons.size > 0,
+    reasons: Array.from(reasons),
+    markerCount,
+    confidence,
+    unitCoverage,
+    warnings
   };
 };
 
@@ -4131,6 +4478,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const aiAutoImproveEnabled = options.aiAutoImproveEnabled ?? false;
     const externalAiAllowed = options.externalAiAllowed ?? false;
     const consent = options.aiConsent ?? null;
+    const preferAiResultWhenForced = options.preferAiResultWhenForced ?? false;
     const parserDebugMode: ParserDebugMode = options.parserDebugMode ?? "text_ocr_ai";
     const allowOcr = parserDebugMode !== "text_only";
     const allowAiByMode = parserDebugMode === "text_ocr_ai";
@@ -4227,6 +4575,65 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     }
 
     const emptyDraft = makeEmptyDraft("fallback-empty");
+    const pickBestLocalCandidate = (): { draft: ExtractionDraft; route: ExtractionRoute; diagnostics: DedupeDiagnostics } => {
+      if (textFallback && ocrFallback) {
+        const mergedDraft = buildMergedLocalDraft(
+          textFallback.draft,
+          ocrFallback.draft,
+          [textResult.text, ocrResult.text].filter(Boolean).join("\n"),
+          file.name
+        );
+        const mergedDiagnostics: DedupeDiagnostics = {
+          parsedRowCount: textFallback.diagnostics.parsedRowCount + ocrFallback.diagnostics.parsedRowCount,
+          keptRows: mergedDraft.markers.length,
+          rejectedRows: Math.max(
+            0,
+            textFallback.diagnostics.parsedRowCount + ocrFallback.diagnostics.parsedRowCount - mergedDraft.markers.length
+          ),
+          topRejectReasons: mergeDedupeReasons(textFallback.diagnostics.topRejectReasons, ocrFallback.diagnostics.topRejectReasons)
+        };
+        const candidates: Array<{ draft: ExtractionDraft; route: ExtractionRoute; diagnostics: DedupeDiagnostics }> = [
+          {
+            draft: textFallback.draft,
+            route: "local-text",
+            diagnostics: textFallback.diagnostics
+          },
+          {
+            draft: ocrFallback.draft,
+            route: "local-ocr",
+            diagnostics: ocrFallback.diagnostics
+          },
+          {
+            draft: mergedDraft,
+            route: "local-text-ocr-merged",
+            diagnostics: mergedDiagnostics
+          }
+        ];
+        return candidates.reduce((best, candidate) =>
+          scoreFallbackDraft(candidate.draft) > scoreFallbackDraft(best.draft) ? candidate : best
+        );
+      }
+      if (ocrFallback) {
+        return {
+          draft: ocrFallback.draft,
+          route: "local-ocr",
+          diagnostics: ocrFallback.diagnostics
+        };
+      }
+      if (textFallback) {
+        return {
+          draft: textFallback.draft,
+          route: "local-text",
+          diagnostics: textFallback.diagnostics
+        };
+      }
+      return {
+        draft: emptyDraft,
+        route: "empty",
+        diagnostics: emptyDiagnostics()
+      };
+    };
+
     const baseDraft = textFallback?.draft ?? emptyDraft;
     const needsOcr = allowOcr && (textExtractionFailed || shouldUseOcrFallback(textResult, baseDraft));
     const canRunOcr = needsOcr && isBrowserRuntime();
@@ -4270,12 +4677,10 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           `[extractLabData] Local OCR parse: ${ocrFallback.draft.markers.length} markers, confidence ${ocrFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(ocrFallback.draft.markers)}`
         );
 
-        const bestLocal = textFallback
-          ? chooseBetterFallbackDraft(textFallback.draft, ocrFallback.draft)
-          : ocrFallback.draft;
-        const bestRoute: ExtractionRoute = ocrFallback && bestLocal === ocrFallback.draft ? "local-ocr" : "local-text";
-        const bestDiagnostics =
-          bestRoute === "local-ocr" ? ocrFallback.diagnostics : textFallback?.diagnostics ?? ocrFallback.diagnostics;
+        const bestLocalCandidate = pickBestLocalCandidate();
+        const bestLocal = bestLocalCandidate.draft;
+        const bestRoute = bestLocalCandidate.route;
+        const bestDiagnostics = bestLocalCandidate.diagnostics;
 
         if (isLocalDraftGoodEnough(bestLocal) && !forceAi && costMode !== "max_accuracy") {
           console.info(`[extractLabData] Route: ${bestRoute} (good enough)`);
@@ -4310,21 +4715,10 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const aiRawPdfBuffer = cloneArrayBuffer();
 
     const combinedText = [textResult.text, ocrResult.text].filter(Boolean).join("\n").trim();
-    const bestLocalDraft = ocrFallback && textFallback
-      ? chooseBetterFallbackDraft(textFallback.draft, ocrFallback.draft)
-      : (ocrFallback?.draft ?? textFallback?.draft ?? emptyDraft);
-    const bestLocalRoute: ExtractionRoute =
-      ocrFallback && bestLocalDraft === ocrFallback.draft
-        ? "local-ocr"
-        : textFallback
-          ? "local-text"
-          : "empty";
-    const bestLocalDiagnostics =
-      bestLocalRoute === "local-ocr"
-        ? ocrFallback?.diagnostics ?? emptyDiagnostics()
-        : bestLocalRoute === "local-text"
-          ? textFallback?.diagnostics ?? emptyDiagnostics()
-          : emptyDiagnostics();
+    const bestLocalCandidate = pickBestLocalCandidate();
+    const bestLocalDraft = bestLocalCandidate.draft;
+    const bestLocalRoute = bestLocalCandidate.route;
+    const bestLocalDiagnostics = bestLocalCandidate.diagnostics;
 
     let parsingDraft: ExtractionDraft = bestLocalDraft;
     let extractionRoute: ExtractionRoute = bestLocalRoute;
@@ -4452,7 +4846,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       }
 
       if (aiResult.draft) {
-        parsingDraft = chooseBetterFallbackDraft(bestLocalDraft, aiResult.draft);
+        parsingDraft = forceAi && preferAiResultWhenForced ? aiResult.draft : chooseBetterFallbackDraft(bestLocalDraft, aiResult.draft);
         extractionRoute =
           parsingDraft.extraction.provider === "gemini"
             ? ocrResult.used
@@ -4562,6 +4956,7 @@ export const __pdfParsingInternals = {
   detectParserProfile,
   extractDateCandidate,
   shouldUseOcrFallback,
+  cleanMarkerName,
   scoreMarkerCandidate,
   isAcceptableMarkerCandidate,
   parseSingleRow,
@@ -4576,6 +4971,7 @@ export const __pdfParsingInternals = {
   normalizeMarker,
   filterMarkerValuesForQuality,
   buildLocalExtractionWarnings,
+  assessParserUncertainty,
   isLocalDraftGoodEnough,
   shouldAutoPdfRescue
 };

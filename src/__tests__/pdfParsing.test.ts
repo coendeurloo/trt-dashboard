@@ -201,6 +201,88 @@ describe("pdfParsing fallback layers", () => {
     expect(shouldUseOcr).toBe(false);
   });
 
+  it("forces OCR for complex history-like multi-page text when marker yield is too low", () => {
+    const shouldUseOcr = __pdfParsingInternals.shouldUseOcrFallback(
+      {
+        text: "Baseline 02-Jan-20 Per Week 12-Jan-22 Free Testosterone - Calculated",
+        pageCount: 4,
+        textItemCount: 640,
+        lineCount: 260,
+        nonWhitespaceChars: 5200,
+        spatialRows: []
+      },
+      {
+        sourceFileName: "history-complex.pdf",
+        testDate: "2022-01-12",
+        markers: [
+          {
+            id: "m-1",
+            marker: "Testosterone (Total)",
+            canonicalMarker: "Testosterone",
+            value: 38.1,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.8
+          },
+          {
+            id: "m-2",
+            marker: "Free Testosterone",
+            canonicalMarker: "Free Testosterone",
+            value: 31.93,
+            unit: "ng/dL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.78
+          },
+          {
+            id: "m-3",
+            marker: "SHBG",
+            canonicalMarker: "SHBG",
+            value: 26,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.8
+          },
+          {
+            id: "m-4",
+            marker: "Bioavailable Testosterone",
+            canonicalMarker: "Bioavailable Testosterone",
+            value: 24.8,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.74
+          },
+          {
+            id: "m-5",
+            marker: "FSH",
+            canonicalMarker: "FSH",
+            value: 7.3,
+            unit: "mIU/mL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.72
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.79,
+          needsReview: false
+        }
+      }
+    );
+
+    expect(shouldUseOcr).toBe(true);
+  });
+
   it("parses split marker/value cells from spatial x/y rows", () => {
     const rows = __pdfParsingInternals.parseSpatialRows(
       [
@@ -707,6 +789,7 @@ describe("pdfParsing fallback layers", () => {
       [
         "Collected: 03/11/2025",
         "FSH 65 g/L 1.5 - 12.4",
+        "DHT 65 g/L 10 - 90",
         "Testosterone 22.5 nmol/L 8 - 29",
         "SHBG 36 nmol/L 18 - 54",
         "Estradiol 95 pmol/L 40 - 160",
@@ -717,6 +800,7 @@ describe("pdfParsing fallback layers", () => {
 
     const canonicalMarkers = new Set(draft.markers.map((marker) => marker.canonicalMarker));
     expect(canonicalMarkers.has("FSH")).toBe(false);
+    expect(canonicalMarkers.has("Dihydrotestosteron (DHT)")).toBe(false);
     expect(canonicalMarkers.has("Testosterone")).toBe(true);
     expect(canonicalMarkers.has("SHBG")).toBe(true);
   });
@@ -868,6 +952,142 @@ describe("pdfParsing fallback layers", () => {
     );
 
     expect(warningMeta.warnings).toContain("PDF_OCR_PARTIAL");
+  });
+
+  it("flags unknown layout for history-style text with sparse references", () => {
+    const historyText = [
+      "Baseline",
+      "3 Months 15 Days on 150mg Testosterone Cypionate Per Week",
+      "FREE TESTOSTERONE - CALCULATED",
+      "Free Testosterone 31.93 ng/dL",
+      "Bioavailable Testosterone 24.8 nmol/L",
+      "Bioavailable Testosterone 35.8 nmol/dL",
+      "DHT 65 g/L",
+      "SHBG 26 nmol/L"
+    ].join("\n");
+
+    const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
+      {
+        text: historyText,
+        pageCount: 1,
+        textItemCount: 180,
+        lineCount: 16,
+        nonWhitespaceChars: historyText.replace(/\s+/g, "").length,
+        spatialRows: []
+      },
+      false,
+      {
+        text: "",
+        used: false,
+        pagesAttempted: 0,
+        pagesSucceeded: 0,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      },
+      {
+        sourceFileName: "history.pdf",
+        testDate: "2025-01-01",
+        markers: [
+          {
+            id: "m1",
+            marker: "Free Testosterone",
+            canonicalMarker: "Free Testosterone",
+            value: 31.93,
+            unit: "ng/dL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.62
+          },
+          {
+            id: "m2",
+            marker: "Bioavailable Testosterone",
+            canonicalMarker: "Bioavailable Testosterone",
+            value: 24.8,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.6
+          },
+          {
+            id: "m3",
+            marker: "Bioavailable Testosterone",
+            canonicalMarker: "Bioavailable Testosterone",
+            value: 35.8,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.6
+          },
+          {
+            id: "m4",
+            marker: "DHT",
+            canonicalMarker: "Dihydrotestosteron (DHT)",
+            value: 27,
+            unit: "ng/dL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.62
+          },
+          {
+            id: "m5",
+            marker: "SHBG",
+            canonicalMarker: "SHBG",
+            value: 26,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.66
+          },
+          {
+            id: "m6",
+            marker: "FSH",
+            canonicalMarker: "FSH",
+            value: 7.3,
+            unit: "mIU/mL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.62
+          },
+          {
+            id: "m7",
+            marker: "LH",
+            canonicalMarker: "LH",
+            value: 3.3,
+            unit: "mIU/mL",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.62
+          },
+          {
+            id: "m8",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 38.1,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.64
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.63,
+          needsReview: true
+        }
+      }
+    );
+
+    expect(warningMeta.warnings).toContain("PDF_UNKNOWN_LAYOUT");
   });
 
   it("enables smart auto-rescue when local quality is low and text context is weak", () => {
@@ -1024,5 +1244,93 @@ describe("isLocalDraftGoodEnough", () => {
 
   it("rejects empty draft", () => {
     expect(isLocalDraftGoodEnough(makeDraft(0, 0))).toBe(false);
+  });
+});
+
+describe("assessParserUncertainty", () => {
+  const { assessParserUncertainty } = __pdfParsingInternals;
+
+  const makeDraft = (params: {
+    markerCount: number;
+    confidence: number;
+    unitCoverage?: number;
+    warningCode?: ExtractionDraft["extraction"]["warningCode"];
+  }): ExtractionDraft => {
+    const unitCoverage = params.unitCoverage ?? 1;
+    const markers = Array.from({ length: params.markerCount }, (_, index) => ({
+      id: `m-${index}`,
+      marker: `Marker ${index}`,
+      canonicalMarker: `Marker ${index}`,
+      value: 10 + index,
+      unit: index < Math.round(params.markerCount * unitCoverage) ? "nmol/L" : "",
+      referenceMin: 3,
+      referenceMax: 20,
+      abnormal: "normal" as const,
+      confidence: params.confidence
+    }));
+
+    return {
+      sourceFileName: "uncertainty.pdf",
+      testDate: "2025-01-01",
+      markers,
+      extraction: {
+        provider: "fallback",
+        model: "fallback-layered:adaptive",
+        confidence: params.confidence,
+        needsReview: false,
+        warningCode: params.warningCode
+      }
+    };
+  };
+
+  it("returns not uncertain for strong local extraction", () => {
+    const result = assessParserUncertainty(
+      makeDraft({
+        markerCount: 10,
+        confidence: 0.8,
+        unitCoverage: 1
+      })
+    );
+
+    expect(result.isUncertain).toBe(false);
+    expect(result.reasons).toHaveLength(0);
+  });
+
+  it("flags uncertainty for unknown layout warning", () => {
+    const result = assessParserUncertainty(
+      makeDraft({
+        markerCount: 8,
+        confidence: 0.78,
+        warningCode: "PDF_UNKNOWN_LAYOUT"
+      })
+    );
+
+    expect(result.isUncertain).toBe(true);
+    expect(result.reasons).toContain("warning_unknown_layout");
+  });
+
+  it("flags uncertainty for very low confidence", () => {
+    const result = assessParserUncertainty(
+      makeDraft({
+        markerCount: 8,
+        confidence: 0.5
+      })
+    );
+
+    expect(result.isUncertain).toBe(true);
+    expect(result.reasons).toContain("confidence_very_low");
+  });
+
+  it("flags uncertainty for low confidence + low unit coverage combo", () => {
+    const result = assessParserUncertainty(
+      makeDraft({
+        markerCount: 8,
+        confidence: 0.61,
+        unitCoverage: 0.2
+      })
+    );
+
+    expect(result.isUncertain).toBe(true);
+    expect(result.reasons).toContain("confidence_and_unit_coverage_low");
   });
 });

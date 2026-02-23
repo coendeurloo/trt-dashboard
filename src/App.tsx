@@ -853,6 +853,9 @@ const App = () => {
     if (route === "local-ocr") {
       return { label: tr("OCR fallback", "OCR fallback"), usedAi: false, usedOcr: true };
     }
+    if (route === "local-text-ocr-merged") {
+      return { label: tr("Tekst + OCR (samengevoegd)", "Text + OCR (merged)"), usedAi: false, usedOcr: true };
+    }
     if (route === "gemini-with-text") {
       return { label: tr("Tekst + AI", "Text + AI"), usedAi: true, usedOcr: false };
     }

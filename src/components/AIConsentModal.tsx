@@ -162,14 +162,15 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
           >
             {tr("Alleen deze keer", "Only this time")}
           </button>
-          <button
-            type="button"
-            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
-            onClick={() => onDecide(commonDecision("always"))}
-            disabled={action === "parser_rescue" && !parserRescueEnabled}
-          >
-            {tr("Altijd toestaan", "Always allow")}
-          </button>
+          {action !== "parser_rescue" ? (
+            <button
+              type="button"
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
+              onClick={() => onDecide(commonDecision("always"))}
+            >
+              {tr("Altijd toestaan", "Always allow")}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
