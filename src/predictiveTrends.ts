@@ -189,12 +189,12 @@ export const buildPredictiveAlerts = (
 
     const narrativeEn =
       def.direction === "rising"
-        ? `Based on your last ${sorted.length} measurements, ${def.marker} is trending upward at ~${ratePerMonth} ${currentUnit}/month. At this rate it could reach the ${def.labelEn} of ${threshold} ${thresholdUnit} ${timeEn}.`
-        : `Based on your last ${sorted.length} measurements, ${def.marker} is trending downward. At this rate it could fall below the ${def.labelEn} of ${threshold} ${thresholdUnit} ${timeEn}.`;
+        ? `Based on your last ${sorted.length} measurements, ${def.marker} is trending upward at ~${ratePerMonth} ${currentUnit}/month. If you stay on your current protocol, it could reach the ${def.labelEn} of ${threshold} ${thresholdUnit} ${timeEn}.`
+        : `Based on your last ${sorted.length} measurements, ${def.marker} is trending downward at ~${ratePerMonth} ${currentUnit}/month. If you stay on your current protocol, it could fall below the ${def.labelEn} of ${threshold} ${thresholdUnit} ${timeEn}.`;
     const narrativeNl =
       def.direction === "rising"
-        ? `Op basis van je laatste ${sorted.length} metingen stijgt ${def.marker} met ~${ratePerMonth} ${currentUnit}/maand. In dit tempo bereikt het de ${def.labelNl} van ${threshold} ${thresholdUnit} ${timeNl}.`
-        : `Op basis van je laatste ${sorted.length} metingen daalt ${def.marker}. In dit tempo zakt het onder de ${def.labelNl} van ${threshold} ${thresholdUnit} ${timeNl}.`;
+        ? `Op basis van je laatste ${sorted.length} metingen stijgt ${def.marker} met ~${ratePerMonth} ${currentUnit}/maand. Als je op dit protocol blijft, bereikt het de ${def.labelNl} van ${threshold} ${thresholdUnit} ${timeNl}.`
+        : `Op basis van je laatste ${sorted.length} metingen daalt ${def.marker} met ~${ratePerMonth} ${currentUnit}/maand. Als je op dit protocol blijft, zakt het onder de ${def.labelNl} van ${threshold} ${thresholdUnit} ${timeNl}.`;
 
     alerts.push({
       marker: def.marker,

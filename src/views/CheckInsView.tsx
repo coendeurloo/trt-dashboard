@@ -254,13 +254,13 @@ const CheckInCard = ({
       </div>
 
       {/* Score grid */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 gap-1">
         {METRICS.map((m) => {
           const val = checkIn[m.key];
           return (
-            <div key={m.key} className="flex flex-col items-center gap-0.5">
-              <span className="text-xl leading-none">{scoreToEmoji(val)}</span>
-              <span className="text-[10px] text-slate-500">{trLocale(language, m.labelNl, m.labelEn)}</span>
+            <div key={m.key} className="flex flex-col items-center gap-0.5 min-w-0">
+              <span className="text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</span>
+              <span className="text-[9px] text-slate-500 truncate w-full text-center">{m.icon}</span>
               <span className="text-xs font-semibold text-slate-300">{val ?? "—"}</span>
             </div>
           );
@@ -296,15 +296,16 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   }));
 
   return (
-    <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
+    <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4 overflow-visible">
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
         {tr("Trend", "Trend over time")}
       </p>
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+      <div className="overflow-visible">
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
-          <YAxis domain={[1, 10]} ticks={[1, 3, 5, 7, 10]} tick={{ fontSize: 11, fill: "#64748b" }} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} interval="preserveStartEnd" />
+          <YAxis domain={[1, 10]} ticks={[1, 3, 5, 7, 10]} tick={{ fontSize: 10, fill: "#64748b" }} width={22} />
           <Tooltip
             contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
             labelStyle={{ color: "#94a3b8" }}
@@ -325,6 +326,7 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
           ))}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 };
