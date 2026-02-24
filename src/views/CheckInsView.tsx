@@ -286,14 +286,28 @@ interface TrendChartProps {
 
 const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
-  const data = checkIns.map((c) => ({
-    date: format(parseISO(c.date), "d MMM"),
-    energy: c.energy,
-    mood: c.mood,
-    sleep: c.sleep,
-    libido: c.libido,
-    motivation: c.motivation
-  }));
+  // Exclude check-ins where every metric is null — they have no data to plot and
+  // would only extend the x-axis, leaving the right portion of the chart empty.
+  const data = checkIns
+    .filter(
+      (c) =>
+        c.energy !== null ||
+        c.mood !== null ||
+        c.sleep !== null ||
+        c.libido !== null ||
+        c.motivation !== null
+    )
+    .map((c) => ({
+      date: format(parseISO(c.date), "d MMM"),
+      energy: c.energy,
+      mood: c.mood,
+      sleep: c.sleep,
+      libido: c.libido,
+      motivation: c.motivation
+    }));
+
+  // Need at least 2 data points with real values to draw meaningful lines
+  if (data.length < 2) return null;
 
   return (
     <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4 overflow-visible">

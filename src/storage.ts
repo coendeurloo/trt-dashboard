@@ -134,7 +134,7 @@ const normalizeScore = (value: unknown): number | null => {
     return null;
   }
   const rounded = Math.round(parsed);
-  if (rounded < 1 || rounded > 5) {
+  if (rounded < 1 || rounded > 10) {
     return null;
   }
   return rounded;
