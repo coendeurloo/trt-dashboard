@@ -186,45 +186,35 @@ const DoseResponseView = ({
           </p>
         </div>
 
-        <div className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span>
-              {tr("Assisted study calls over", "Assisted study calls left")}: {remainingAssisted.dailyRemaining}/
-              {assistedLimits.maxRunsPerDay} {tr("vandaag", "today")}
-            </span>
-            <span>
-              {remainingAssisted.monthlyRemaining}/{assistedLimits.maxRunsPerMonth} {tr("deze maand", "this month")}
-            </span>
-            {loading ? (
+        {/* Status indicators — only show when there is something actionable to tell the user */}
+        {(loading || limitReason || offlinePriorFallback) && (
+          <div className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
+            {loading && (
               <span className="inline-flex items-center gap-1 text-cyan-200">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {tr("Assisted model wordt ververst...", "Refreshing assisted model...")}
+                {tr("Model wordt ververst...", "Refreshing model...")}
               </span>
-            ) : apiAssistedCount > 0 ? (
-              <span className="text-emerald-200">
-                {tr("API-assisted markers", "API-assisted markers")}: {apiAssistedCount}
-              </span>
-            ) : null}
+            )}
+            {limitReason && (
+              <p className="inline-flex items-center gap-1 text-amber-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {tr(
+                  "Tijdelijk teruggevallen op lokaal model.",
+                  "Temporarily using local fallback model."
+                )}
+              </p>
+            )}
+            {offlinePriorFallback && !limitReason && (
+              <p className="inline-flex items-center gap-1 text-amber-200">
+                <BadgeInfo className="h-3.5 w-3.5" />
+                {tr(
+                  "Offline modus: lokaal model actief.",
+                  "Offline mode: local model active."
+                )}
+              </p>
+            )}
           </div>
-          {limitReason ? (
-            <p className="mt-1 inline-flex items-center gap-1 text-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {tr(
-                "Assisted quota bereikt; er wordt lokaal fallback model gebruikt.",
-                "Assisted quota reached; using local fallback model."
-              )}
-            </p>
-          ) : null}
-          {offlinePriorFallback && !limitReason ? (
-            <p className="mt-1 inline-flex items-center gap-1 text-amber-200">
-              <BadgeInfo className="h-3.5 w-3.5" />
-              {tr(
-                "Offline prior fallback actief door API-onbereikbaarheid.",
-                "Offline prior fallback active because API was unreachable."
-              )}
-            </p>
-          ) : null}
-        </div>
+        )}
       </div>
 
       {premiumPredictions.length === 0 ? (

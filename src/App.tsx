@@ -1312,16 +1312,12 @@ const App = () => {
     return primaryIndex >= 0 ? primaryIndex : 0;
   }, [expandedMarker, allMarkers, primaryMarkers]);
 
+  // Only count out-of-range markers from the most recent report so the sidebar
+  // reflects the *current* state, not a sum across all historical reports.
   const outOfRangeCount = useMemo(() => {
-    let count = 0;
-    visibleReports.forEach((report) => {
-      report.markers.forEach((marker) => {
-        if (marker.abnormal === "high" || marker.abnormal === "low") {
-          count += 1;
-        }
-      });
-    });
-    return count;
+    if (visibleReports.length === 0) return 0;
+    const latestReport = [...visibleReports].sort((a, b) => b.testDate.localeCompare(a.testDate))[0];
+    return latestReport.markers.filter((m) => m.abnormal === "high" || m.abnormal === "low").length;
   }, [visibleReports]);
   const hasReports = reports.length > 0;
   const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
@@ -1509,14 +1505,23 @@ const App = () => {
   };
 
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
-  const activeTabSubtitle =
-    activeTab === "dashboard"
-      ? reports.length > 0
-        ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.")
-        : null
-      : isShareMode
+  const activeTabSubtitle = (() => {
+    if (isShareMode) {
+      return activeTab === "dashboard"
         ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
-        : tr("Professionele bloedwaardetracking met bewerkbare extractie en trendvisualisatie.", "Professional blood work tracking with editable extraction and visual trends.");
+        : null;
+    }
+    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.") : null;
+    if (activeTab === "reports") return tr("Alle geüploade labresultaten in één overzicht.", "All uploaded lab reports in one overview.");
+    if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je markers.", "Trend and threshold alerts for your markers.");
+    if (activeTab === "protocol") return tr("Je testosteronprotocol in detail.", "Your TRT protocol details and history.");
+    if (activeTab === "supplements") return tr("Bijhoud supplementen naast je labresultaten.", "Track your supplements alongside lab results.");
+    if (activeTab === "protocolImpact") return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
+    if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
+    if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
+    if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
+    return null;
+  })();
   const tabLoadFallback = (
     <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
       <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -2026,14 +2031,8 @@ const App = () => {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={clearDemoButtonClassName}
-                      onClick={clearDemoData}
-                    >
-                      {tr("Begin opnieuw", "Start fresh")}
-                    </button>
                     {isDemoMode ? (
+                      // In demo mode: single primary CTA — uploading IS starting fresh
                       <button
                         type="button"
                         className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
@@ -2049,7 +2048,16 @@ const App = () => {
                           tr("Upload je eigen PDF", "Upload your own PDF")
                         )}
                       </button>
-                    ) : null}
+                    ) : (
+                      // Mixed state (demo + own data): offer to clear demo
+                      <button
+                        type="button"
+                        className={clearDemoButtonClassName}
+                        onClick={clearDemoData}
+                      >
+                        {tr("Demodata wissen", "Clear demo data")}
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.section>

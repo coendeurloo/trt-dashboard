@@ -626,12 +626,21 @@ const SettingsView = ({
                 <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
               </button>
             ) : null}
-            <a
-              className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200 hover:border-amber-400/60 hover:bg-amber-500/15"
-              href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(tr("Interesse: Artsen-PDF Premium", "Interest: Doctor PDF Premium"))}`}
+            <span
+              className="group relative inline-flex"
+              title={tr("Binnenkort beschikbaar", "Coming soon")}
             >
-              <Lock className="h-4 w-4" /> {tr("Artsen-PDF (Premium)", "Doctor PDF (Premium)")}
-            </a>
+              <button
+                type="button"
+                disabled
+                className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-slate-600/50 bg-slate-800/50 px-3 py-1.5 text-sm text-slate-500 opacity-60"
+              >
+                <Lock className="h-4 w-4" /> {tr("Artsen-PDF (Premium)", "Doctor PDF (Premium)")}
+              </button>
+              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-700 px-2 py-1 text-xs text-slate-200 opacity-0 transition-opacity group-hover:opacity-100">
+                {tr("Binnenkort beschikbaar", "Coming soon")}
+              </span>
+            </span>
           </div>
           {shareStatus !== "idle" || shareMessage ? (
             <p className={`mt-2 text-xs ${shareStatus === "error" ? "text-rose-300" : shareStatus === "success" ? "text-emerald-300" : "text-slate-300"}`}>
@@ -657,12 +666,6 @@ const SettingsView = ({
           {shareLink ? (
             <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
           ) : null}
-          <p className="mt-2 text-xs text-amber-200/80">
-            {tr(
-              "Premium Artsen-PDF: binnenkort beschikbaar in een betaald pakket (met nette samenvatting voor je arts).",
-              "Premium Doctor PDF: coming soon in a paid package (with a polished summary for your doctor)."
-            )}
-          </p>
         </div>
       </div>
 

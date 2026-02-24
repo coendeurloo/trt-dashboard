@@ -253,19 +253,23 @@ const CheckInCard = ({
         </div>
       </div>
 
-      {/* Score grid */}
-      <div className="grid grid-cols-5 gap-1">
-        {METRICS.map((m) => {
-          const val = checkIn[m.key];
-          return (
-            <div key={m.key} className="flex flex-col items-center gap-0.5 min-w-0">
-              <span className="text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</span>
-              <span className="text-[9px] text-slate-500 truncate w-full text-center">{m.icon}</span>
-              <span className="text-xs font-semibold text-slate-300">{val ?? "—"}</span>
-            </div>
-          );
-        })}
-      </div>
+      {/* Score grid — only shown when at least one metric has a value */}
+      {METRICS.some((m) => checkIn[m.key] !== null) ? (
+        <div className="grid grid-cols-5 gap-1">
+          {METRICS.map((m) => {
+            const val = checkIn[m.key];
+            return (
+              <div key={m.key} className="flex flex-col items-center gap-0.5 min-w-0">
+                <span className="text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</span>
+                <span className="text-[9px] text-slate-500 truncate w-full text-center">{m.icon}</span>
+                <span className="text-xs font-semibold text-slate-300">{val ?? "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500 italic">{tr("Geen scores ingevuld", "No scores recorded")}</p>
+      )}
 
       {/* Notes */}
       {checkIn.notes ? (

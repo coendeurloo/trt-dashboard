@@ -74,9 +74,6 @@ const ProtocolImpactEventCard = ({
     if (event.confounders.supplementsChanged) {
       parts.push(tr("supplementen veranderden", "supplements changed"));
     }
-    if (event.confounders.symptomsChanged) {
-      parts.push(tr("symptomencontext veranderde", "symptom context changed"));
-    }
     if (parts.length === 0) {
       return null;
     }
@@ -84,7 +81,6 @@ const ProtocolImpactEventCard = ({
   }, [
     event.confounders.samplingChanged,
     event.confounders.supplementsChanged,
-    event.confounders.symptomsChanged,
     tr
   ]);
 
