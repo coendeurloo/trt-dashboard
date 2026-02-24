@@ -5,6 +5,10 @@ import claudeProxyPlugin from "./scripts/vite-claude-proxy.mjs";
 
 export default defineConfig({
   plugins: [react(), claudeProxyPlugin()],
+  server: {
+    host: "0.0.0.0",
+    allowedHosts: "all"
+  },
   build: {
     rollupOptions: {
       output: {
