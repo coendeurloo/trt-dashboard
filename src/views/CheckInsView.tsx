@@ -221,43 +221,46 @@ const CheckInCard = ({
   }
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-4 shadow-soft">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <span className="text-xl font-semibold text-slate-100">
+    <div className="h-full rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-3.5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-slate-100">
             {format(parseISO(checkIn.date), "d MMM yyyy")}
-          </span>
-          <p className="mt-1 text-xs text-slate-400">
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">
             {avg === null
               ? tr("Geen complete score", "No complete score")
-              : tr("Gemiddelde score", "Average score")} {avg === null ? "—" : avg.toFixed(1)}
+              : tr("Gemiddelde", "Average")} {avg === null ? "—" : avg.toFixed(1)}
           </p>
         </div>
-        <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs font-medium text-slate-300">
+        <span className="shrink-0 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs font-medium text-slate-300">
           {avg === null ? "—" : `${scoreToEmoji(Math.round(avg))} ${Math.round(avg)}/10`}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
         {METRICS.map((m) => {
           const val = checkIn[m.key];
           return (
-            <div key={m.key} className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2 text-center">
-              <p className="text-[11px] text-slate-400">{trLocale(language, m.labelNl, m.labelEn)}</p>
-              <p className="mt-0.5 text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</p>
-              <p className="mt-0.5 text-sm font-semibold text-slate-200">{val ?? "—"}</p>
-            </div>
+            <span
+              key={m.key}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/50 px-2.5 py-1 text-xs text-slate-300"
+            >
+              <span className="text-[13px] leading-none">{m.icon}</span>
+              <span className="text-slate-400">{trLocale(language, m.labelNl, m.labelEn)}</span>
+              <span className="font-semibold text-slate-100">{val ?? "—"}</span>
+            </span>
           );
         })}
       </div>
 
       {checkIn.notes ? (
-        <p className="mt-3 border-t border-slate-700/60 pt-3 text-sm text-slate-300 italic">
+        <p className="mt-2.5 border-t border-slate-700/60 pt-2.5 text-sm text-slate-300 italic">
           {checkIn.notes}
         </p>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-end gap-1">
+      <div className="mt-2.5 flex items-center justify-end gap-1">
         <button
           type="button"
           onClick={onEdit}
@@ -483,18 +486,19 @@ const CheckInsView = ({
             ) : null}
           </div>
 
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {displayedHistory.map((c) => (
-              <CheckInCard
-                key={c.id}
-                checkIn={c}
-                language={language}
-                isEditing={editingId === c.id}
-                onEdit={() => setEditingId(c.id)}
-                onCancelEdit={() => setEditingId(null)}
-                onSaveEdit={(data) => handleUpdate(c.id, data)}
-                onDelete={() => onDelete(c.id)}
-              />
+              <div key={c.id} className={editingId === c.id ? "lg:col-span-2" : ""}>
+                <CheckInCard
+                  checkIn={c}
+                  language={language}
+                  isEditing={editingId === c.id}
+                  onEdit={() => setEditingId(c.id)}
+                  onCancelEdit={() => setEditingId(null)}
+                  onSaveEdit={(data) => handleUpdate(c.id, data)}
+                  onDelete={() => onDelete(c.id)}
+                />
+              </div>
             ))}
           </div>
         </section>
