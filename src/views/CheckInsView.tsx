@@ -25,6 +25,16 @@ function scoreToEmoji(score: number | null): string {
   return SCORE_EMOJIS[Math.round(score)] ?? "😐";
 }
 
+const averageScore = (checkIn: SymptomCheckIn): number | null => {
+  const values = [checkIn.energy, checkIn.mood, checkIn.sleep, checkIn.libido, checkIn.motivation].filter(
+    (value): value is number => value !== null
+  );
+  if (values.length === 0) {
+    return null;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
 // ─── Metric config ────────────────────────────────────────────────────────────
 
 interface MetricConfig {
@@ -204,79 +214,84 @@ const CheckInCard = ({
 }: CheckInCardProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const avg = averageScore(checkIn);
 
   if (isEditing) {
     return <CheckInForm initial={checkIn} onSave={onSaveEdit} onCancel={onCancelEdit} language={language} />;
   }
 
   return (
-    <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-200">
-          {format(parseISO(checkIn.date), "d MMM yyyy")}
-        </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-          >
-            {tr("Bewerk", "Edit")}
-          </button>
-          {confirmDelete ? (
-            <>
-              <button
-                type="button"
-                onClick={onDelete}
-                className="rounded-md bg-red-500/20 px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/30"
-              >
-                {tr("Verwijder", "Delete")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800"
-              >
-                {tr("Annuleer", "Cancel")}
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="rounded-md px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-800 hover:text-red-400"
-            >
-              ✕
-            </button>
-          )}
+    <div className="rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-4 shadow-soft">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <span className="text-xl font-semibold text-slate-100">
+            {format(parseISO(checkIn.date), "d MMM yyyy")}
+          </span>
+          <p className="mt-1 text-xs text-slate-400">
+            {avg === null
+              ? tr("Geen complete score", "No complete score")
+              : tr("Gemiddelde score", "Average score")} {avg === null ? "—" : avg.toFixed(1)}
+          </p>
         </div>
+        <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs font-medium text-slate-300">
+          {avg === null ? "—" : `${scoreToEmoji(Math.round(avg))} ${Math.round(avg)}/10`}
+        </span>
       </div>
 
-      {/* Score grid — only shown when at least one metric has a value */}
-      {METRICS.some((m) => checkIn[m.key] !== null) ? (
-        <div className="grid grid-cols-5 gap-1">
-          {METRICS.map((m) => {
-            const val = checkIn[m.key];
-            return (
-              <div key={m.key} className="flex flex-col items-center gap-0.5 min-w-0">
-                <span className="text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</span>
-                <span className="text-[9px] text-slate-500 truncate w-full text-center">{m.icon}</span>
-                <span className="text-xs font-semibold text-slate-300">{val ?? "—"}</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-xs text-slate-500 italic">{tr("Geen scores ingevuld", "No scores recorded")}</p>
-      )}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {METRICS.map((m) => {
+          const val = checkIn[m.key];
+          return (
+            <div key={m.key} className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2 text-center">
+              <p className="text-[11px] text-slate-400">{trLocale(language, m.labelNl, m.labelEn)}</p>
+              <p className="mt-0.5 text-lg leading-none">{val !== null ? scoreToEmoji(val) : m.icon}</p>
+              <p className="mt-0.5 text-sm font-semibold text-slate-200">{val ?? "—"}</p>
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Notes */}
       {checkIn.notes ? (
-        <p className="mt-3 border-t border-slate-700/50 pt-2 text-xs text-slate-400 italic">
+        <p className="mt-3 border-t border-slate-700/60 pt-3 text-sm text-slate-300 italic">
           {checkIn.notes}
         </p>
       ) : null}
+
+      <div className="mt-3 flex items-center justify-end gap-1">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-md px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+        >
+          {tr("Bewerk", "Edit")}
+        </button>
+        {confirmDelete ? (
+          <>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-md bg-red-500/20 px-2.5 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30"
+            >
+              {tr("Verwijder", "Delete")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800"
+            >
+              {tr("Annuleer", "Cancel")}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="rounded-md px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-800 hover:text-red-400"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -290,8 +305,6 @@ interface TrendChartProps {
 
 const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
-  // Exclude check-ins where every metric is null — they have no data to plot and
-  // would only extend the x-axis, leaving the right portion of the chart empty.
   const data = checkIns
     .filter(
       (c) =>
@@ -310,25 +323,31 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
       motivation: c.motivation
     }));
 
-  // Need at least 2 data points with real values to draw meaningful lines
   if (data.length < 2) return null;
 
   return (
-    <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4 overflow-visible">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-        {tr("Trend", "Trend over time")}
-      </p>
-      <div className="overflow-visible">
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+    <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
+      <div className="mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          {tr("Trend over tijd", "Trend over time")}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {tr(
+            "Snel overzicht van hoe je welzijn zich ontwikkelt per check-in.",
+            "Quick view of how your wellbeing changes across check-ins."
+          )}
+        </p>
+      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} interval="preserveStartEnd" />
-          <YAxis domain={[1, 10]} ticks={[1, 3, 5, 7, 10]} tick={{ fontSize: 10, fill: "#64748b" }} width={22} />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" />
+          <YAxis domain={[1, 10]} ticks={[1, 3, 5, 7, 10]} tick={{ fontSize: 11, fill: "#64748b" }} width={26} />
           <Tooltip
-            contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
+            contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 10, fontSize: 12 }}
             labelStyle={{ color: "#94a3b8" }}
           />
-          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 8 }} />
+          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 8 }} />
           {METRICS.map((m) => (
             <Line
               key={m.key}
@@ -336,7 +355,7 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
               dataKey={m.key}
               name={trLocale(language, m.labelNl, m.labelEn)}
               stroke={m.color}
-              strokeWidth={2}
+              strokeWidth={2.5}
               dot={{ r: 3, fill: m.color, strokeWidth: 0 }}
               activeDot={{ r: 5 }}
               connectNulls
@@ -344,7 +363,6 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
           ))}
         </LineChart>
       </ResponsiveContainer>
-      </div>
     </div>
   );
 };
@@ -371,12 +389,14 @@ const CheckInsView = ({
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const sorted = useMemo(
     () => [...checkIns].sort((a, b) => b.date.localeCompare(a.date)),
     [checkIns]
   );
 
+  const displayedHistory = showAllHistory ? sorted : sorted.slice(0, 6);
   const lastCheckIn = sorted[0] ?? null;
   const daysSinceLast = lastCheckIn
     ? differenceInDays(new Date(), parseISO(lastCheckIn.date))
@@ -392,48 +412,48 @@ const CheckInsView = ({
     setEditingId(null);
   };
 
-  // Status label for last check-in
   const statusLabel = (() => {
     if (daysSinceLast === null) return tr("Nog geen check-ins", "No check-ins yet");
-    if (daysSinceLast === 0)    return tr("Vandaag ingecheckt ✓", "Checked in today ✓");
-    if (daysSinceLast === 1)    return tr("Gisteren", "Yesterday");
-    return tr(`${daysSinceLast} dagen geleden`, `${daysSinceLast} days ago`);
+    if (daysSinceLast === 0) return tr("Vandaag ingecheckt", "Checked in today");
+    if (daysSinceLast === 1) return tr("Laatste check-in: gisteren", "Last check-in: yesterday");
+    return tr(`Laatste check-in: ${daysSinceLast} dagen geleden`, `Last check-in: ${daysSinceLast} days ago`);
   })();
 
   const isDue = daysSinceLast === null || daysSinceLast >= 7;
+  const recentAverage = lastCheckIn ? averageScore(lastCheckIn) : null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
-
-      {/* ── Check-in prompt card ── */}
-      <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-base font-semibold text-slate-100">
-              {tr("Welzijns check-in", "Wellbeing check-in")}
+    <div className="space-y-4 px-1 py-2">
+      <section className="rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/65 to-slate-900/35 p-5 shadow-soft">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-1">
+            <p className="text-xl font-semibold text-slate-100">{tr("Welzijns check-in", "Wellbeing check-in")}</p>
+            <p className={`text-sm ${isDue ? "text-amber-300" : "text-slate-300"}`}>
+              {isDue
+                ? tr("Tijd voor een nieuwe check-in", "Time for a new check-in")
+                : tr("Op schema", "On track")}
             </p>
-            <p className={`mt-0.5 text-sm ${isDue && daysSinceLast !== 0 ? "text-amber-400" : "text-slate-400"}`}>
-              {isDue && daysSinceLast !== 0
-                ? tr("Je bent toe aan een nieuwe check-in", "You're due for a check-in")
-                : statusLabel}
-            </p>
-            {!isDue && (
-              <p className="text-xs text-slate-500">{statusLabel}</p>
-            )}
+            <p className="text-xs text-slate-500">{statusLabel}</p>
           </div>
-          {!isShareMode && !showForm && (
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="shrink-0 rounded-lg bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/30"
-            >
-              {tr("Inchecken", "Check in")}
-            </button>
-          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+              {tr("Laatste gemiddelde", "Latest average")}:{" "}
+              <span className="font-semibold text-slate-100">{recentAverage === null ? "—" : recentAverage.toFixed(1)}</span>
+            </div>
+            {!isShareMode && !showForm ? (
+              <button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-sm font-semibold text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+              >
+                {tr("Inchecken", "Check in")}
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Inline form */}
-        {showForm && (
+        {showForm ? (
           <div className="mt-4 border-t border-slate-700/60 pt-4">
             <CheckInForm
               onSave={handleAdd}
@@ -441,50 +461,59 @@ const CheckInsView = ({
               language={language}
             />
           </div>
-        )}
-      </div>
+        ) : null}
+      </section>
 
-      {/* ── Trend chart ── */}
-      {sorted.length >= 2 && (
-        <TrendChart checkIns={[...sorted].reverse()} language={language} />
-      )}
+      {sorted.length >= 2 ? <TrendChart checkIns={[...sorted].reverse()} language={language} /> : null}
 
-      {/* ── History ── */}
-      {sorted.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            {tr("Geschiedenis", "History")}
-          </p>
-          {sorted.map((c) => (
-            <CheckInCard
-              key={c.id}
-              checkIn={c}
-              language={language}
-              isEditing={editingId === c.id}
-              onEdit={() => setEditingId(c.id)}
-              onCancelEdit={() => setEditingId(null)}
-              onSaveEdit={(data) => handleUpdate(c.id, data)}
-              onDelete={() => onDelete(c.id)}
-            />
-          ))}
-        </div>
-      )}
+      {sorted.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {tr("Geschiedenis", "History")}
+            </p>
+            {sorted.length > 6 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory((current) => !current)}
+                className="rounded-md border border-slate-700 bg-slate-900/55 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-600 hover:text-slate-100"
+              >
+                {showAllHistory ? tr("Toon minder", "Show less") : tr("Toon alles", "Show all")}
+              </button>
+            ) : null}
+          </div>
 
-      {/* ── Empty state ── */}
-      {sorted.length === 0 && !showForm && (
-        <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 px-6 py-10 text-center">
+          <div className="space-y-3">
+            {displayedHistory.map((c) => (
+              <CheckInCard
+                key={c.id}
+                checkIn={c}
+                language={language}
+                isEditing={editingId === c.id}
+                onEdit={() => setEditingId(c.id)}
+                onCancelEdit={() => setEditingId(null)}
+                onSaveEdit={(data) => handleUpdate(c.id, data)}
+                onDelete={() => onDelete(c.id)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {sorted.length === 0 && !showForm ? (
+        <section className="rounded-xl border border-slate-700/50 bg-slate-900/30 px-6 py-10 text-center">
           <p className="text-3xl">🧘</p>
           <p className="mt-2 text-sm font-medium text-slate-300">
             {tr("Nog geen check-ins", "No check-ins yet")}
           </p>
           <p className="mt-1 text-xs text-slate-500">
             {tr(
-              "Doe elke week of twee weken een check-in om je welzijn bij te houden.",
-              "Check in every week or two to track how you're feeling over time."
+              "Start met één korte check-in per week om trends naast je labwaarden te zien.",
+              "Start with one short weekly check-in to view trends next to your lab results."
             )}
           </p>
-        </div>
-      )}
+        </section>
+      ) : null}
     </div>
   );
 };
