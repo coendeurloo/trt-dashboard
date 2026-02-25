@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customRangeStart: "",
   customRangeEnd: "",
   aiExternalConsent: false,
+  aiAnalysisProvider: "auto",
   aiCostMode: "balanced",
   aiAutoImproveEnabled: false,
   parserDebugMode: "text_ocr_ai"

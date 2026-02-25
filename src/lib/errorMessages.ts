@@ -50,6 +50,12 @@ export const mapServiceErrorToMessage = ({
     if (code === "AI_EMPTY_RESPONSE") {
       return t(language, "aiEmptyResponse");
     }
+    if (code === "AI_OVERLOADED") {
+      return tr(
+        "AI-service is tijdelijk druk (overloaded). We hebben retries en fallback geprobeerd; probeer het zo opnieuw.",
+        "AI service is temporarily busy (overloaded). Retries and fallback were attempted; please try again now."
+      );
+    }
     if (code.startsWith("AI_REQUEST_FAILED:")) {
       const [, status, ...rest] = code.split(":");
       const details = rest.join(":").trim();

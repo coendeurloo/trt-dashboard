@@ -538,10 +538,15 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.parserDebugMode === "text_only" || rest.parserDebugMode === "text_ocr" || rest.parserDebugMode === "text_ocr_ai"
       ? rest.parserDebugMode
       : DEFAULT_SETTINGS.parserDebugMode;
+  const aiAnalysisProvider =
+    rest.aiAnalysisProvider === "auto" || rest.aiAnalysisProvider === "claude" || rest.aiAnalysisProvider === "gemini"
+      ? rest.aiAnalysisProvider
+      : DEFAULT_SETTINGS.aiAnalysisProvider;
   const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
     aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
+    aiAnalysisProvider,
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
     parserDebugMode

@@ -99,8 +99,8 @@ export const UI_TEXT = {
     en: "Could not reach the local AI proxy. Restart the app server and try again."
   },
   aiEmptyResponse: {
-    nl: "Claude gaf geen analyse-tekst terug.",
-    en: "Claude returned no analysis text."
+    nl: "AI-provider gaf geen analyse-tekst terug.",
+    en: "AI provider returned no analysis text."
   },
   aiRequestFailed: {
     nl: "AI-analyse mislukt.",

@@ -278,6 +278,7 @@ const App = () => {
     analysisResult,
     analysisGeneratedAt,
     analysisCopied,
+    analysisModelInfo,
     analysisKind,
     analyzingKind,
     analysisScopeNotice,
@@ -1647,6 +1648,7 @@ const App = () => {
                 analysisResultDisplay={analysisResultDisplay}
                 analysisGeneratedAt={analysisGeneratedAt}
                 analysisCopied={analysisCopied}
+                analysisModelInfo={analysisModelInfo}
                 analysisKind={analysisKind}
                 analyzingKind={analyzingKind}
                 analysisScopeNotice={analysisScopeNotice}
