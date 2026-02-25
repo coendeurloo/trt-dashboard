@@ -12,6 +12,7 @@ import { AppLanguage, CompoundEntry } from "../types";
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_MAX_OPTIONS = 8;
+const COMPOUND_DATALIST_ID = "protocol-compound-options";
 
 const buildSuggestions = (value: string, options: string[]): string[] => {
   const query = value.trim().toLocaleLowerCase();
@@ -124,6 +125,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                 setCompoundNameInput(event.target.value);
                 setShowCompoundSuggestions(true);
               }}
+              list={COMPOUND_DATALIST_ID}
               onFocus={() => setShowCompoundSuggestions(true)}
               onBlur={() => window.setTimeout(() => setShowCompoundSuggestions(false), 120)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
@@ -199,7 +201,9 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               <div key={`${compound.name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
-                  onChange={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
+                  list={COMPOUND_DATALIST_ID}
+                  onChange={(event) => updateCompound(index, { name: event.target.value })}
+                  onBlur={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
                 <input
@@ -241,6 +245,11 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             ))
           )}
         </div>
+        <datalist id={COMPOUND_DATALIST_ID}>
+          {COMPOUND_OPTIONS.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
       </div>
 
       <label className="block text-xs uppercase tracking-wide text-slate-400">
