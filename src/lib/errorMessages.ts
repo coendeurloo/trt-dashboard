@@ -53,6 +53,12 @@ export const mapServiceErrorToMessage = ({
     if (code.startsWith("AI_REQUEST_FAILED:")) {
       const [, status, ...rest] = code.split(":");
       const details = rest.join(":").trim();
+      if (status === "529") {
+        return tr(
+          "AI-provider is tijdelijk overbelast (529 Overloaded). Wacht 30-90 seconden en probeer opnieuw.",
+          "AI provider is temporarily overloaded (529 Overloaded). Wait 30-90 seconds and retry."
+        );
+      }
       const suffix = details ? ` (${status || "unknown"}: ${details})` : ` (${status || "unknown"})`;
       return `${t(language, "aiRequestFailed")}${suffix}`;
     }

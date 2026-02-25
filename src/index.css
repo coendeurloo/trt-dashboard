@@ -402,6 +402,40 @@ body.light .settings-restore-btn:hover {
   min-height: 2.35rem;
 }
 
+.ai-consent-checkbox {
+  accent-color: #06b6d4;
+}
+
+body.light .ai-consent-modal {
+  background: #f8fbff !important;
+  border-color: rgba(148, 163, 184, 0.5) !important;
+}
+
+body.light .ai-consent-panel {
+  background: #edf4fb !important;
+  border-color: rgba(148, 163, 184, 0.5) !important;
+  color: #1e293b !important;
+}
+
+body.light .ai-consent-option {
+  background: #ffffff !important;
+  border-color: rgba(148, 163, 184, 0.55) !important;
+  color: #1e293b !important;
+}
+
+body.light .ai-consent-warning {
+  background: rgba(245, 158, 11, 0.1) !important;
+  border-color: rgba(217, 119, 6, 0.45) !important;
+  color: #92400e !important;
+}
+
+body.light .ai-consent-modal .text-slate-400,
+body.light .ai-consent-modal .text-slate-300,
+body.light .ai-consent-modal .text-slate-200,
+body.light .ai-consent-modal .text-slate-100 {
+  color: #1e293b !important;
+}
+
 body.light .settings-card {
   border-color: rgba(148, 163, 184, 0.5) !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 248, 254, 0.93) 100%) !important;
