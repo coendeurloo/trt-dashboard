@@ -198,7 +198,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
           ) : (
             value.compounds.map((compound, index) => (
-              <div key={`${compound.name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
+              <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
                   list={COMPOUND_DATALIST_ID}
