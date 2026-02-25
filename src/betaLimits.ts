@@ -5,7 +5,7 @@ export const BETA_LIMITS = {
   maxAnalysesPerMonth: 25
 } as const;
 
-const betaLimitsDisabled = (): boolean => {
+export const betaLimitsDisabled = (): boolean => {
   const raw = String(import.meta.env.VITE_DISABLE_BETA_LIMITS ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 };

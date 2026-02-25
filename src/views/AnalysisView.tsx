@@ -2,6 +2,7 @@ import { format, parseISO } from "date-fns";
 import { Suspense, lazy, useMemo } from "react";
 import { FileText, Loader2, Sparkles } from "lucide-react";
 import { AnalysisScopeNotice } from "../analysisScope";
+import { betaLimitsDisabled } from "../betaLimits";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
@@ -72,8 +73,9 @@ const AnalysisView = ({
 }: AnalysisViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isDarkTheme = settings.theme === "dark";
-  const dayLimitReached = betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
-  const monthLimitReached = betaUsage.monthlyCount >= betaLimits.maxAnalysesPerMonth;
+  const limitsDisabled = betaLimitsDisabled();
+  const dayLimitReached = !limitsDisabled && betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
+  const monthLimitReached = !limitsDisabled && betaUsage.monthlyCount >= betaLimits.maxAnalysesPerMonth;
   const blockedByLimits = dayLimitReached || monthLimitReached;
   const blockedByConsent = !settings.aiExternalConsent;
   const isAnalyzingFull = isAnalyzingLabs && analyzingKind === "full";
