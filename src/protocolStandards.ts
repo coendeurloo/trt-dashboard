@@ -115,6 +115,15 @@ const COMPOUND_CATALOG: CompoundCatalogEntry[] = [
   { name: "CJC-1295" },
   { name: "Ipamorelin" },
   { name: "Tesamorelin" },
+  { name: "Semaglutide", aliases: ["Ozempic", "Wegovy", "Rybelsus"] },
+  { name: "Tirzepatide", aliases: ["Mounjaro", "Zepbound"] },
+  { name: "Retatrutide", aliases: ["LY3437943"] },
+  { name: "Liraglutide", aliases: ["Saxenda", "Victoza"] },
+  { name: "Dulaglutide", aliases: ["Trulicity"] },
+  { name: "Exenatide", aliases: ["Byetta", "Bydureon"] },
+  { name: "Lixisenatide", aliases: ["Adlyxin", "Lyxumia"] },
+  { name: "Cagrilintide", aliases: ["AM833"] },
+  { name: "CagriSema", aliases: ["Cagrilintide + Semaglutide"] },
   { name: "BPC-157" },
   { name: "TB-500", aliases: ["Thymosin Beta-4"] },
   { name: "MK-677", aliases: ["Ibutamoren"] },
@@ -255,6 +264,17 @@ const COMPOUND_POPULAR_ALIAS_WHITELIST = new Set([
   "Nolvadex",
   "Arimidex",
   "Aromasin"
+  ,
+  "Ozempic",
+  "Wegovy",
+  "Rybelsus",
+  "Mounjaro",
+  "Zepbound",
+  "Trulicity",
+  "Saxenda",
+  "Victoza",
+  "Byetta",
+  "Bydureon"
 ]);
 
 const compoundDisplayLabel = (entry: CompoundCatalogEntry): string => {
