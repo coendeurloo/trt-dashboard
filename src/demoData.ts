@@ -115,7 +115,7 @@ const defaultAnnotations = (): ReportAnnotations => ({
   supplementOverrides: null,
   symptoms: "",
   notes: "",
-  samplingTiming: "unknown"
+  samplingTiming: "trough"
 });
 
 const makeSupplementAnchor = (
@@ -394,7 +394,7 @@ export const getDemoReports = (): LabReport[] => [
       protocol: "Pre-TRT baseline",
       supplementAnchorState: "none",
       supplementOverrides: [],
-      samplingTiming: "unknown"
+      samplingTiming: "trough"
     },
     markers: [
       { marker: "Testosterone", value: 8.2 },

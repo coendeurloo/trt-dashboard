@@ -35,7 +35,6 @@ export interface ExtractionReviewTableProps {
   selectedProtocolId: string | null;
   parserDebugMode?: ParserDebugMode;
   language: AppLanguage;
-  showSamplingTiming: boolean;
   onDraftChange: (draft: ExtractionDraft) => void;
   onAnnotationsChange: (annotations: ReportAnnotations) => void;
   onSelectedProtocolIdChange: (protocolId: string | null) => void;
@@ -59,7 +58,6 @@ const ExtractionReviewTable = ({
   selectedProtocolId,
   parserDebugMode = "text_ocr_ai",
   language,
-  showSamplingTiming,
   onDraftChange,
   onAnnotationsChange,
   onSelectedProtocolIdChange,
@@ -667,7 +665,7 @@ const ExtractionReviewTable = ({
         </div>
       ) : null}
 
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${showSamplingTiming ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
           <input
@@ -718,26 +716,24 @@ const ExtractionReviewTable = ({
             </p>
           ) : null}
         </div>
-        {showSamplingTiming ? (
-          <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Meetmoment", "Sampling timing")}</label>
-            <select
-              value={annotations.samplingTiming}
-              onChange={(event) =>
-                onAnnotationsChange({
-                  ...annotations,
-                  samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
-                })
-              }
-              className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="unknown">{tr("Onbekend", "Unknown")}</option>
-              <option value="trough">Trough</option>
-              <option value="mid">{tr("Midden", "Mid")}</option>
-              <option value="peak">Peak</option>
-            </select>
-          </div>
-        ) : null}
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Meetmoment", "Sampling timing")}</label>
+          <select
+            value={annotations.samplingTiming}
+            onChange={(event) =>
+              onAnnotationsChange({
+                ...annotations,
+                samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
+              })
+            }
+            className="w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+          >
+            <option value="unknown">{tr("Onbekend", "Unknown")}</option>
+            <option value="trough">Trough</option>
+            <option value="mid">{tr("Tussenin", "In-between")}</option>
+            <option value="peak">Peak</option>
+          </select>
+        </div>
       </div>
 
       <div className="mt-3 overflow-x-auto rounded-xl border border-slate-700">

@@ -59,8 +59,8 @@ const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) 
       }`}
     >
       <span
-        className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform duration-200 ${
-          checked ? "translate-x-3 bg-cyan-400" : "translate-x-0.5 bg-slate-500"
+        className={`absolute left-0.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-transform duration-200 ${
+          checked ? "translate-x-[11px] bg-cyan-400" : "translate-x-0 bg-slate-500"
         }`}
       />
     </button>
@@ -291,16 +291,19 @@ const SettingsView = ({
               <ToggleSwitch
                 checked={settings.enableCalculatedFreeTestosterone}
                 onChange={(checked) => onUpdateSettings({ enableCalculatedFreeTestosterone: checked })}
-                label={tr("Calculated Free Testosterone", "Calculated Free Testosterone")}
+                label={tr(
+                  "Toon berekend Vrij Testosteron als het ontbreekt",
+                  "Show calculated Free Testosterone if missing"
+                )}
                 tooltip={tr(
-                  "Berekent Vrij Testosteron uit totaal testosteron + SHBG (+ albumine) als aanvulling op gemeten waarden.",
-                  "Calculates Free Testosterone from Total T + SHBG (+ Albumin) as an additional data layer."
+                  "Als een lab alleen totaal testosteron en SHBG bevat (optioneel met albumine), berekent de app automatisch een geschatte Vrij Testosteron-waarde zodat je trends beter kunt volgen.",
+                  "If a lab has Total Testosterone and SHBG (optionally Albumin) but no Free Testosterone, the app calculates an estimate so trend views stay complete."
                 )}
               />
               <ToggleSwitch
                 checked={samplingControlsEnabled}
                 onChange={(checked) => onUpdateSettings({ enableSamplingControls: checked })}
-                label={tr("Show sampling context controls", "Show sampling context controls")}
+                label={tr("Show trough/peak filter controls", "Show trough/peak filter controls")}
                 tooltip={tr(
                   "Toont trough/peak-filters en baseline-vergelijking op het dashboard om eerlijker te vergelijken tussen meetmomenten.",
                   "Shows trough/peak filters and baseline comparison on dashboard for fairer comparisons between sampling moments."

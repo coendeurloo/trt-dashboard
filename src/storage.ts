@@ -508,6 +508,13 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
     }
   };
 
+  if (isDemoReport && normalizedReport.annotations.samplingTiming === "unknown") {
+    normalizedReport.annotations = {
+      ...normalizedReport.annotations,
+      samplingTiming: "trough"
+    };
+  }
+
   return normalizedReport;
 };
 

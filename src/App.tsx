@@ -2060,7 +2060,6 @@ const App = () => {
                 selectedProtocolId={selectedProtocolId}
                 parserDebugMode={appData.settings.parserDebugMode}
                 language={appData.settings.language}
-                showSamplingTiming={samplingControlsEnabled}
                 onDraftChange={setDraft}
                 onAnnotationsChange={setDraftAnnotations}
                 onSelectedProtocolIdChange={setSelectedProtocolId}
