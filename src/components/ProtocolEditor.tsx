@@ -182,7 +182,10 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               onChange={(event) => setCompoundDoseInput(event.target.value)}
               onBlur={(event) => setCompoundDoseInput(normalizeDoseToWeekly(event.target.value))}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr("Totale weekdosis (bv. 280 mg/week of 40 mg/day)", "Total weekly dose (e.g. 280 mg/week or 40 mg/day)")}
+              placeholder={tr(
+                "Totale weekdosis (bv. Testosteron 125 mg/week of 18 mg/day)",
+                "Total weekly dose (e.g. Testosterone 125 mg/week or 18 mg/day)"
+              )}
             />
             <select
               value={compoundFrequencyInput}
@@ -220,8 +223,8 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
         <p className="mt-2 text-[11px] text-slate-400">{tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}</p>
         <p className="mt-1 text-[11px] text-slate-400">
           {tr(
-            "Dosis is altijd de totale weekdosis. Voorbeeld: 40 mg/dag = 280 mg/week.",
-            "Dose is always the total weekly dose. Example: 40 mg/day = 280 mg/week."
+            "Dosis is altijd de totale weekdosis. Voorbeeld (testosteron): 18 mg/dag = 125 mg/week.",
+            "Dose is always the total weekly dose. Testosterone example: 18 mg/day = 125 mg/week."
           )}
         </p>
 
