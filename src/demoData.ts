@@ -1,4 +1,4 @@
-import { format, subMonths } from "date-fns";
+import { format, subMonths, subWeeks } from "date-fns";
 import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod, SymptomCheckIn } from "./types";
 import { createId, deriveAbnormalFlag } from "./utils";
 
@@ -258,111 +258,115 @@ export const getDemoSupplementTimeline = (): SupplementPeriod[] => {
   ];
 };
 
-const dateAt = (monthsAgo: number, daysAdjust = 0): string =>
-  makeIsoDate(new Date(subMonths(new Date(), monthsAgo).getTime() + daysAdjust * 86_400_000));
+export const getDemoCheckIns = (): SymptomCheckIn[] => {
+  const entries: Omit<SymptomCheckIn, "id" | "date">[] = [
+    {
+      energy: 4,
+      libido: 3,
+      mood: 5,
+      sleep: 4,
+      motivation: 4,
+      notes: "Baseline week: low afternoon energy, waking up tired most days."
+    },
+    {
+      energy: 5,
+      libido: 4,
+      mood: 5,
+      sleep: 5,
+      motivation: 5,
+      notes: "First improvements in daytime focus; still occasional evening crash."
+    },
+    {
+      energy: 6,
+      libido: 5,
+      mood: 6,
+      sleep: 5,
+      motivation: 6,
+      notes: "Better training sessions and recovery, fewer low-energy mornings."
+    },
+    {
+      energy: 7,
+      libido: 6,
+      mood: 6,
+      sleep: 6,
+      motivation: 7,
+      notes: "Steadier mood this week, productive workdays, more consistent routine."
+    },
+    {
+      energy: 6,
+      libido: 5,
+      mood: 5,
+      sleep: 4,
+      motivation: 5,
+      notes: "Stressful week with shorter sleep; noticed mild dip in drive and patience."
+    },
+    {
+      energy: 7,
+      libido: 6,
+      mood: 7,
+      sleep: 6,
+      motivation: 7,
+      notes: "Recovered from previous dip; better stress control and stable workouts."
+    },
+    {
+      energy: 7,
+      libido: 7,
+      mood: 7,
+      sleep: 7,
+      motivation: 7,
+      notes: "Good week overall: strong mornings, stable mood, and no afternoon slump."
+    },
+    {
+      energy: 8,
+      libido: 7,
+      mood: 7,
+      sleep: 7,
+      motivation: 8,
+      notes: "High output week with solid recovery and better sleep consistency."
+    },
+    {
+      energy: 7,
+      libido: 6,
+      mood: 7,
+      sleep: 6,
+      motivation: 7,
+      notes: "Busy schedule but still stable; slight sleep drop after late training."
+    },
+    {
+      energy: 8,
+      libido: 7,
+      mood: 8,
+      sleep: 7,
+      motivation: 8,
+      notes: "Felt balanced most days, good mental clarity and productive evenings."
+    },
+    {
+      energy: 8,
+      libido: 8,
+      mood: 8,
+      sleep: 8,
+      motivation: 8,
+      notes: "Best week so far: strong motivation, calm mood, and restorative sleep."
+    },
+    {
+      energy: 7,
+      libido: 7,
+      mood: 8,
+      sleep: 7,
+      motivation: 7,
+      notes: "Stable maintenance week; kept momentum with no major complaints."
+    }
+  ];
 
-export const getDemoCheckIns = (): SymptomCheckIn[] => [
-  {
-    id: "demo-checkin-1",
-    date: dateAt(12, -2),
-    energy: 3,
-    mood: 4,
-    sleep: 6,
-    libido: 3,
-    motivation: 4,
-    notes: "Constantly tired, low drive and motivation"
-  },
-  {
-    id: "demo-checkin-2",
-    date: dateAt(11, 5),
-    energy: 5,
-    mood: 5,
-    sleep: 6,
-    libido: 5,
-    motivation: 5,
-    notes: "Starting to notice some changes after beginning protocol"
-  },
-  {
-    id: "demo-checkin-3",
-    date: dateAt(9, -3),
-    energy: 8,
-    mood: 6,
-    sleep: 5,
-    libido: 8,
-    motivation: 7,
-    notes: "Lots of energy but sleep is off — feeling a bit moody"
-  },
-  {
-    id: "demo-checkin-4",
-    date: dateAt(8, 3),
-    energy: 8,
-    mood: 6,
-    sleep: 5,
-    libido: 8,
-    motivation: 8,
-    notes: "Some water retention, mood still variable"
-  },
-  {
-    id: "demo-checkin-5",
-    date: dateAt(7, 7),
-    energy: 7,
-    mood: 8,
-    sleep: 7,
-    libido: 7,
-    motivation: 8,
-    notes: "Dose adjustment really helped — mood feels balanced again"
-  },
-  {
-    id: "demo-checkin-6",
-    date: dateAt(6, -4),
-    energy: 7,
-    mood: 7,
-    sleep: 7,
-    libido: 6,
-    motivation: 7,
-    notes: "Hematocrit flag in last test is a bit worrying"
-  },
-  {
-    id: "demo-checkin-7",
-    date: dateAt(4, 5),
-    energy: 8,
-    mood: 8,
-    sleep: 8,
-    libido: 7,
-    motivation: 8,
-    notes: "Split dosing feels noticeably smoother, fewer mood swings"
-  },
-  {
-    id: "demo-checkin-8",
-    date: dateAt(3, -2),
-    energy: 8,
-    mood: 8,
-    sleep: 9,
-    libido: 7,
-    motivation: 8,
-    notes: "Best sleep I've had in months"
-  },
-  {
-    id: "demo-checkin-9",
-    date: dateAt(2, 4),
-    energy: 8,
-    mood: 8,
-    sleep: 8,
-    libido: 8,
-    motivation: 9,
-    notes: "Cypionate switch going well, feeling solid"
-  },
-  {
-    id: "demo-checkin-10",
-    date: dateAt(1, -6),
-    energy: 9,
-    mood: 9,
-    sleep: 8,
-    libido: 8,
-    motivation: 9,
-    notes: "Feeling great — most stable and consistent I've been"
-  }
-];
+  return entries.map((entry, index) => {
+    const weeksAgo = entries.length - index - 1;
+    return {
+      id: `demo-checkin-${String(index + 1).padStart(2, "0")}`,
+      date: makeIsoDate(subWeeks(new Date(), weeksAgo)),
+      ...entry
+    };
+  });
+};
 
 export const getDemoReports = (): LabReport[] => [
   makeReport({
