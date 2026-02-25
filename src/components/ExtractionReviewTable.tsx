@@ -123,6 +123,7 @@ const ExtractionReviewTable = ({
   })();
   const resultOrigin = draft.extraction.aiUsed ? "ai" : "local";
   const resultOriginLabel = resultOrigin === "ai" ? tr("AI toegepast", "AI applied") : tr("Lokaal resultaat", "Local result");
+  const isManualEntry = draft.extraction.model === "manual-entry";
   const warningMessages = warningCodes
     .map((code) => {
       if (code === "PDF_TEXT_LAYER_EMPTY") {
@@ -523,33 +524,39 @@ const ExtractionReviewTable = ({
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-100">{tr("Controleer geëxtraheerde data", "Review extracted data")}</h2>
-          <p className="text-sm text-slate-300">
-            {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
-            <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
-            <span
-              className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
-                resultOrigin === "ai"
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
-                  : "border-slate-600 bg-slate-800/70 text-slate-300"
-              }`}
-            >
-              {resultOriginLabel}
-            </span>
-            <span className="ml-2 inline-flex items-center rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100">
-              {tr("gebruikt", "used")}: {routeUsedLabel}
-            </span>
-            {showParserDebugInfo ? (
-              <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
-                {tr("ingestelde parsermodus", "configured parser mode")}: {configuredParserModeLabel}
-              </span>
-            ) : null}
-          </p>
-          <p className="text-xs text-slate-400">
-            {resultOrigin === "ai"
-              ? tr("Je bekijkt nu: AI-resultaat", "You are viewing: AI result")
-              : tr("Je bekijkt nu: lokaal resultaat", "You are viewing: local result")}
-          </p>
+          <h2 className="text-lg font-semibold text-slate-100">
+            {isManualEntry ? tr("Handmatig waarden invoeren", "Enter values manually") : tr("Controleer geëxtraheerde data", "Review extracted data")}
+          </h2>
+          {!isManualEntry ? (
+            <>
+              <p className="text-sm text-slate-300">
+                {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
+                <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
+                <span
+                  className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
+                    resultOrigin === "ai"
+                      ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                      : "border-slate-600 bg-slate-800/70 text-slate-300"
+                  }`}
+                >
+                  {resultOriginLabel}
+                </span>
+                <span className="ml-2 inline-flex items-center rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100">
+                  {tr("gebruikt", "used")}: {routeUsedLabel}
+                </span>
+                {showParserDebugInfo ? (
+                  <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
+                    {tr("ingestelde parsermodus", "configured parser mode")}: {configuredParserModeLabel}
+                  </span>
+                ) : null}
+              </p>
+              <p className="text-xs text-slate-400">
+                {resultOrigin === "ai"
+                  ? tr("Je bekijkt nu: AI-resultaat", "You are viewing: AI result")
+                  : tr("Je bekijkt nu: lokaal resultaat", "You are viewing: local result")}
+              </p>
+            </>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {draft.extraction.needsReview ? (

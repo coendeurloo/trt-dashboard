@@ -745,10 +745,10 @@ const App = () => {
       markers: [
         {
           id: createId(),
-          marker: "Testosterone",
-          canonicalMarker: "Testosterone",
-          value: 13.8,
-          unit: "nmol/L",
+          marker: "",
+          canonicalMarker: "Unknown Marker",
+          value: 0,
+          unit: "",
           referenceMin: null,
           referenceMax: null,
           abnormal: "unknown",
