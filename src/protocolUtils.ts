@@ -62,8 +62,8 @@ export const getProtocolCompoundsText = (protocol: Protocol | null): string => {
     .join(" + ");
 };
 
-export const getReportSupplementsText = (report: LabReport, timeline: SupplementPeriod[]): string =>
-  supplementPeriodsToText(getEffectiveSupplements(report, timeline));
+export const getReportSupplementsText = (report: LabReport, timeline: SupplementPeriod[], reports: LabReport[] = [report]): string =>
+  supplementPeriodsToText(getEffectiveSupplements(report, timeline, reports));
 
 export const getProtocolDisplayLabel = (protocol: Protocol | null): string => {
   if (!protocol) {

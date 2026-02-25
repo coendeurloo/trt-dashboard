@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { LabReport, SupplementPeriod } from "../types";
-import { getActiveSupplementsAtDate, getEffectiveSupplements, supplementPeriodsToText } from "../supplementUtils";
+import {
+  getActiveSupplementsAtDate,
+  getCurrentInheritedSupplementContext,
+  getEffectiveSupplements,
+  resolveReportSupplementContexts,
+  supplementPeriodsToText
+} from "../supplementUtils";
 
 const timeline: SupplementPeriod[] = [
   {
@@ -21,16 +27,22 @@ const timeline: SupplementPeriod[] = [
   }
 ];
 
-const mkReport = (date: string, overrides: SupplementPeriod[] | null = null): LabReport => ({
-  id: `r-${date}`,
+const mkReport = (input: {
+  id: string;
+  date: string;
+  anchorState?: "inherit" | "anchor" | "none" | "unknown";
+  overrides?: SupplementPeriod[] | null;
+}): LabReport => ({
+  id: input.id,
   sourceFileName: "test.pdf",
-  testDate: date,
-  createdAt: `${date}T08:00:00.000Z`,
+  testDate: input.date,
+  createdAt: `${input.date}T08:00:00.000Z`,
   markers: [],
   annotations: {
     protocolId: null,
     protocol: "",
-    supplementOverrides: overrides,
+    supplementAnchorState: input.anchorState ?? "inherit",
+    supplementOverrides: input.overrides ?? null,
     symptoms: "",
     notes: "",
     samplingTiming: "unknown"
@@ -50,25 +62,93 @@ describe("supplement utils", () => {
     expect(getActiveSupplementsAtDate(timeline, "2025-03-02").map((item) => item.name)).toEqual(["Vitamin D3"]);
   });
 
-  it("uses report overrides over timeline auto-match", () => {
-    const override: SupplementPeriod[] = [
-      {
-        id: "o1",
-        name: "NAC",
-        dose: "600 mg",
-        frequency: "daily",
-        startDate: "2025-02-01",
-        endDate: "2025-02-01"
-      }
+  it("resolves report supplement contexts with forward-fill from anchors", () => {
+    const reports: LabReport[] = [
+      mkReport({ id: "r1", date: "2025-02-10", anchorState: "inherit" }),
+      mkReport({
+        id: "r2",
+        date: "2025-03-10",
+        anchorState: "anchor",
+        overrides: [
+          {
+            id: "o1",
+            name: "NAC",
+            dose: "600 mg",
+            frequency: "daily",
+            startDate: "2025-03-10",
+            endDate: "2025-03-10"
+          }
+        ]
+      }),
+      mkReport({ id: "r3", date: "2025-04-10", anchorState: "inherit" }),
+      mkReport({ id: "r4", date: "2025-05-10", anchorState: "none", overrides: [] }),
+      mkReport({ id: "r5", date: "2025-06-10", anchorState: "inherit" }),
+      mkReport({ id: "r6", date: "2025-07-10", anchorState: "unknown" }),
+      mkReport({ id: "r7", date: "2025-08-10", anchorState: "inherit" })
     ];
-    const report = mkReport("2025-02-10", override);
-    expect(getEffectiveSupplements(report, timeline).map((item) => item.name)).toEqual(["NAC"]);
+
+    const contexts = resolveReportSupplementContexts(reports, timeline);
+
+    expect(contexts["r1"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
+    expect(contexts["r2"]?.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
+    expect(contexts["r3"]?.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
+    expect(contexts["r4"]?.effectiveSupplements).toEqual([]);
+    expect(contexts["r5"]?.effectiveSupplements).toEqual([]);
+    expect(contexts["r6"]?.effectiveState).toBe("unknown");
+    expect(contexts["r7"]?.effectiveState).toBe("unknown");
+  });
+
+  it("uses resolved report context when asking effective supplements", () => {
+    const reports: LabReport[] = [
+      mkReport({
+        id: "ra",
+        date: "2025-02-10",
+        anchorState: "anchor",
+        overrides: [
+          {
+            id: "oa",
+            name: "NAC",
+            dose: "600 mg",
+            frequency: "daily",
+            startDate: "2025-02-10",
+            endDate: "2025-02-10"
+          }
+        ]
+      }),
+      mkReport({ id: "rb", date: "2025-03-10", anchorState: "inherit" })
+    ];
+
+    expect(getEffectiveSupplements(reports[1], timeline, reports).map((item) => item.name)).toEqual(["NAC"]);
+  });
+
+  it("returns the inherited context that will be used for the next report", () => {
+    const reports: LabReport[] = [
+      mkReport({ id: "r1", date: "2025-02-10", anchorState: "inherit" }),
+      mkReport({
+        id: "r2",
+        date: "2025-03-10",
+        anchorState: "anchor",
+        overrides: [
+          {
+            id: "o1",
+            name: "NAC",
+            dose: "600 mg",
+            frequency: "daily",
+            startDate: "2025-03-10",
+            endDate: "2025-03-10"
+          }
+        ]
+      })
+    ];
+
+    const next = getCurrentInheritedSupplementContext(reports, timeline);
+    expect(next.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
+    expect(next.sourceAnchorReportId).toBe("r2");
   });
 
   it("formats supplement text as readable stack string", () => {
-    const report = mkReport("2025-02-10");
-    const text = supplementPeriodsToText(getEffectiveSupplements(report, timeline));
+    const report = mkReport({ id: "r-text", date: "2025-02-10", anchorState: "inherit" });
+    const text = supplementPeriodsToText(getEffectiveSupplements(report, timeline, [report]));
     expect(text).toContain("Vitamin D3");
-    expect(text).toContain("Zinc");
   });
 });

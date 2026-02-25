@@ -69,5 +69,72 @@ describe("storage supplement schema", () => {
 
     expect((data.protocols[0] as unknown as Record<string, unknown>)?.supplements).toBeUndefined();
     expect(data.reports[0]?.annotations.supplementOverrides?.[0]?.name).toBe("NAC");
+    expect(data.reports[0]?.annotations.supplementAnchorState).toBe("anchor");
+  });
+
+  it("infers supplement anchor state from legacy overrides when missing", () => {
+    const data = coerceStoredAppData({
+      reports: [
+        {
+          id: "r-inherit",
+          sourceFileName: "a.pdf",
+          testDate: "2025-01-01",
+          createdAt: "2025-01-01T10:00:00.000Z",
+          markers: [
+            {
+              id: "m-1",
+              marker: "Testosterone",
+              canonicalMarker: "Testosterone",
+              value: 20,
+              unit: "nmol/L",
+              referenceMin: null,
+              referenceMax: null,
+              abnormal: "unknown",
+              confidence: 1
+            }
+          ],
+          annotations: {
+            protocolId: null,
+            protocol: "",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "unknown"
+          },
+          extraction: { provider: "fallback", model: "x", confidence: 1, needsReview: false }
+        },
+        {
+          id: "r-none",
+          sourceFileName: "b.pdf",
+          testDate: "2025-01-02",
+          createdAt: "2025-01-02T10:00:00.000Z",
+          markers: [
+            {
+              id: "m-2",
+              marker: "Testosterone",
+              canonicalMarker: "Testosterone",
+              value: 21,
+              unit: "nmol/L",
+              referenceMin: null,
+              referenceMax: null,
+              abnormal: "unknown",
+              confidence: 1
+            }
+          ],
+          annotations: {
+            protocolId: null,
+            protocol: "",
+            supplementOverrides: [],
+            symptoms: "",
+            notes: "",
+            samplingTiming: "unknown"
+          },
+          extraction: { provider: "fallback", model: "x", confidence: 1, needsReview: false }
+        }
+      ]
+    });
+
+    expect(data.reports.find((report) => report.id === "r-inherit")?.annotations.supplementAnchorState).toBe("inherit");
+    expect(data.reports.find((report) => report.id === "r-none")?.annotations.supplementAnchorState).toBe("none");
   });
 });

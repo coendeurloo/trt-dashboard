@@ -30,6 +30,8 @@ export interface ExtractionReviewTableProps {
   annotations: ReportAnnotations;
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
+  inheritedSupplementsPreview: SupplementPeriod[];
+  inheritedSupplementsSourceLabel: string;
   selectedProtocolId: string | null;
   parserDebugMode?: ParserDebugMode;
   language: AppLanguage;
@@ -52,6 +54,8 @@ const ExtractionReviewTable = ({
   annotations,
   protocols,
   supplementTimeline,
+  inheritedSupplementsPreview,
+  inheritedSupplementsSourceLabel,
   selectedProtocolId,
   parserDebugMode = "text_ocr_ai",
   language,
@@ -244,8 +248,26 @@ const ExtractionReviewTable = ({
     [supplementTimeline, draft.testDate]
   );
 
-  const activeSupplements = annotations.supplementOverrides ?? autoMatchedSupplements;
+  const supplementAnchorState =
+    annotations.supplementAnchorState === "inherit" ||
+    annotations.supplementAnchorState === "anchor" ||
+    annotations.supplementAnchorState === "none" ||
+    annotations.supplementAnchorState === "unknown"
+      ? annotations.supplementAnchorState
+      : annotations.supplementOverrides === null
+        ? "inherit"
+        : annotations.supplementOverrides.length > 0
+          ? "anchor"
+          : "none";
+
+  const inheritedSupplements = inheritedSupplementsPreview.length > 0 ? inheritedSupplementsPreview : autoMatchedSupplements;
   const overrideSupplements = annotations.supplementOverrides ?? [];
+  const activeSupplements =
+    supplementAnchorState === "anchor"
+      ? overrideSupplements
+      : supplementAnchorState === "none" || supplementAnchorState === "unknown"
+        ? []
+        : inheritedSupplements;
   const supplementSuggestions = useMemo(() => {
     const query = supplementNameInput.trim().toLowerCase();
     if (query.length < 2) {
@@ -295,6 +317,16 @@ const ExtractionReviewTable = ({
   const displayReferenceMax = (row: MarkerValue): number | null =>
     row.rawReferenceMax !== undefined ? row.rawReferenceMax : row.referenceMax;
 
+  const cloneSupplementsAsDraftOverrides = (periods: SupplementPeriod[]): SupplementPeriod[] =>
+    periods.map((period) => ({
+      id: createId(),
+      name: period.name,
+      dose: period.dose,
+      frequency: period.frequency,
+      startDate: draft.testDate,
+      endDate: draft.testDate
+    }));
+
   const addSupplementOverride = () => {
     const name = canonicalizeSupplement(supplementNameInput);
     if (!name) {
@@ -311,6 +343,7 @@ const ExtractionReviewTable = ({
     };
     onAnnotationsChange({
       ...annotations,
+      supplementAnchorState: "anchor",
       supplementOverrides: [...overrideSupplements, period]
     });
     setSupplementNameInput("");
@@ -319,18 +352,58 @@ const ExtractionReviewTable = ({
   };
 
   const removeSupplementOverride = (id: string) => {
+    const nextOverrides = overrideSupplements.filter((item) => item.id !== id);
     onAnnotationsChange({
       ...annotations,
-      supplementOverrides: overrideSupplements.filter((item) => item.id !== id)
+      supplementAnchorState: nextOverrides.length > 0 ? "anchor" : "none",
+      supplementOverrides: nextOverrides.length > 0 ? nextOverrides : []
     });
   };
 
-  const resetSupplementsToAuto = () => {
+  const resetSupplementsToInherited = () => {
     onAnnotationsChange({
       ...annotations,
+      supplementAnchorState: "inherit",
       supplementOverrides: null
     });
     setShowSupplementOverrideEditor(false);
+  };
+
+  const markSupplementsUnknown = () => {
+    onAnnotationsChange({
+      ...annotations,
+      supplementAnchorState: "unknown",
+      supplementOverrides: null
+    });
+    setShowSupplementOverrideEditor(false);
+  };
+
+  const markNoSupplements = () => {
+    onAnnotationsChange({
+      ...annotations,
+      supplementAnchorState: "none",
+      supplementOverrides: []
+    });
+    setShowSupplementOverrideEditor(false);
+  };
+
+  const markSupplementsUnchanged = () => {
+    onAnnotationsChange({
+      ...annotations,
+      supplementAnchorState: "inherit",
+      supplementOverrides: null
+    });
+    setShowSupplementOverrideEditor(false);
+  };
+
+  const startCustomSupplements = () => {
+    const seed = overrideSupplements.length > 0 ? overrideSupplements : cloneSupplementsAsDraftOverrides(inheritedSupplements);
+    onAnnotationsChange({
+      ...annotations,
+      supplementAnchorState: "anchor",
+      supplementOverrides: seed
+    });
+    setShowSupplementOverrideEditor(true);
   };
 
   const addOverridesToTimeline = () => {
@@ -835,43 +908,121 @@ const ExtractionReviewTable = ({
               <label className="block text-xs uppercase tracking-wide text-slate-400">
                 {tr("Supplementen op moment van test", "Supplements at time of test")}
               </label>
-              {annotations.supplementOverrides ? (
+              {supplementAnchorState === "anchor" ? (
                 <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
-                  {tr("Aangepaste override", "Custom override")}
+                  {tr("Aangepast op dit rapport", "Anchored on this report")}
+                </span>
+              ) : supplementAnchorState === "none" ? (
+                <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
+                  {tr("Geen supplementen", "No supplements")}
+                </span>
+              ) : supplementAnchorState === "unknown" ? (
+                <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                  {tr("Onbekend", "Unknown")}
                 </span>
               ) : (
                 <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                  {tr("Auto-match op datum", "Auto-matched by test date")}
+                  {tr("Zelfde als vorige", "Inherited from previous")}
                 </span>
               )}
             </div>
 
-            <p className="text-sm text-slate-300">
-              {supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active at this date.")}
+            <div className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+              <p className="font-medium text-slate-200">
+                {tr(
+                  "Is je supplementen stack veranderd sinds het vorige rapport?",
+                  "Has your supplement stack changed since the previous report?"
+                )}
+              </p>
+              <p className="mt-1 text-slate-400">
+                {tr("Huidige overname", "Current inherited stack")}:{" "}
+                {supplementPeriodsToText(inheritedSupplements) || tr("Geen actieve stack", "No active stack")}
+                {inheritedSupplementsSourceLabel ? ` · ${inheritedSupplementsSourceLabel}` : ""}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`rounded-md border px-2.5 py-1 text-xs ${
+                    supplementAnchorState === "inherit"
+                      ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
+                      : "border-slate-600 text-slate-200 hover:border-cyan-500/50"
+                  }`}
+                  onClick={markSupplementsUnchanged}
+                >
+                  {tr("Nee, zelfde", "No, same")}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border px-2.5 py-1 text-xs ${
+                    supplementAnchorState === "anchor"
+                      ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
+                      : "border-slate-600 text-slate-200 hover:border-cyan-500/50"
+                  }`}
+                  onClick={startCustomSupplements}
+                >
+                  {tr("Ja, aangepast", "Yes, changed")}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border px-2.5 py-1 text-xs ${
+                    supplementAnchorState === "unknown"
+                      ? "border-slate-500/70 bg-slate-800 text-slate-100"
+                      : "border-slate-600 text-slate-200 hover:border-slate-500"
+                  }`}
+                  onClick={markSupplementsUnknown}
+                >
+                  {tr("Onbekend", "Unknown")}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border px-2.5 py-1 text-xs ${
+                    supplementAnchorState === "none"
+                      ? "border-amber-500/60 bg-amber-500/15 text-amber-200"
+                      : "border-slate-600 text-slate-200 hover:border-amber-500/50"
+                  }`}
+                  onClick={markNoSupplements}
+                >
+                  {tr("Geen supplementen", "No supplements")}
+                </button>
+              </div>
+            </div>
+
+            <p className="mt-2 text-sm text-slate-300">
+              {supplementAnchorState === "unknown"
+                ? tr("Onbekend op deze testdatum.", "Unknown on this test date.")
+                : supplementAnchorState === "none"
+                  ? tr("Geen supplementen op deze testdatum.", "No supplements on this test date.")
+                  : supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active on this date.")}
             </p>
 
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-                onClick={() => setShowSupplementOverrideEditor((current) => !current)}
+                onClick={() => {
+                  if (supplementAnchorState !== "anchor") {
+                    startCustomSupplements();
+                    return;
+                  }
+                  setShowSupplementOverrideEditor((current) => !current);
+                }}
               >
-                {showSupplementOverrideEditor
+                {supplementAnchorState === "anchor" && showSupplementOverrideEditor
                   ? tr("Verberg aanpassen", "Hide customization")
-                  : tr("Deze kloppen niet - aanpassen", "These weren't my supplements - customize")}
+                  : tr("Ja, aangepast - aanpassen", "Yes, changed - edit stack")}
               </button>
-              {annotations.supplementOverrides ? (
+              {supplementAnchorState !== "inherit" ? (
                 <button
                   type="button"
                   className="rounded-md border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100"
-                  onClick={resetSupplementsToAuto}
+                  onClick={resetSupplementsToInherited}
                 >
-                  {tr("Terug naar auto-match", "Reset to auto-match")}
+                  {tr("Terug naar zelfde als vorige", "Reset to inherited")}
                 </button>
               ) : null}
             </div>
 
-            {showSupplementOverrideEditor ? (
+            {supplementAnchorState === "anchor" && showSupplementOverrideEditor ? (
               <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
             <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
               <div>

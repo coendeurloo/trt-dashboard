@@ -2,17 +2,21 @@ import { useMemo, useState } from "react";
 import { Clock3, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { canonicalizeSupplement, SUPPLEMENT_FREQUENCY_OPTIONS, SUPPLEMENT_OPTIONS, supplementFrequencyLabel } from "../protocolStandards";
 import { trLocale } from "../i18n";
-import { AppLanguage, SupplementPeriod } from "../types";
+import { AppLanguage, LabReport, SupplementPeriod } from "../types";
+import { ResolvedReportSupplementContext } from "../supplementUtils";
 import { createId, formatDate } from "../utils";
 
 interface SupplementsViewProps {
   language: AppLanguage;
+  reports: LabReport[];
   timeline: SupplementPeriod[];
+  resolvedSupplementContexts: Record<string, ResolvedReportSupplementContext>;
   isShareMode: boolean;
   onAddSupplementPeriod: (period: SupplementPeriod) => void;
   onUpdateSupplementPeriod: (id: string, updates: Partial<SupplementPeriod>) => void;
   onStopSupplement: (id: string, endDate?: string) => void;
   onDeleteSupplementPeriod: (id: string) => void;
+  onOpenReportForSupplementBackfill: (reportId: string) => void;
 }
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
@@ -51,12 +55,15 @@ const shiftIsoByDays = (isoDate: string, deltaDays: number): string => {
 
 const SupplementsView = ({
   language,
+  reports,
   timeline,
+  resolvedSupplementContexts,
   isShareMode,
   onAddSupplementPeriod,
   onUpdateSupplementPeriod,
   onStopSupplement,
-  onDeleteSupplementPeriod
+  onDeleteSupplementPeriod,
+  onOpenReportForSupplementBackfill
 }: SupplementsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
@@ -96,6 +103,15 @@ const SupplementsView = ({
   }, [sortedTimeline]);
 
   const suggestions = useMemo(() => buildSuggestions(nameInput, SUPPLEMENT_OPTIONS), [nameInput]);
+  const unknownReports = useMemo(
+    () =>
+      [...reports]
+        .filter((report) => resolvedSupplementContexts[report.id]?.effectiveState === "unknown")
+        .sort(
+          (left, right) => right.testDate.localeCompare(left.testDate) || right.createdAt.localeCompare(left.createdAt)
+        ),
+    [reports, resolvedSupplementContexts]
+  );
 
   const resetAddForm = () => {
     setNameInput("");
@@ -252,6 +268,52 @@ const SupplementsView = ({
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/8 p-3">
+        <p className="text-sm text-cyan-100">
+          {tr(
+            "Deze huidige stack wordt automatisch gebruikt voor nieuwe rapporten totdat je in een rapport expliciet aangeeft dat je stack is veranderd.",
+            "This current stack is automatically used for new reports until you explicitly mark a stack change inside a report."
+          )}
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold text-slate-100">
+            {tr("Historische backfill (onbekend)", "Historical backfill (unknown)")}
+          </h4>
+          <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+            {unknownReports.length} {tr("rapporten", "reports")}
+          </span>
+        </div>
+        {unknownReports.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">
+            {tr(
+              "Geen rapporten met onbekende supplementcontext.",
+              "No reports with unknown supplement context."
+            )}
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {unknownReports.slice(0, 10).map((report) => (
+              <div key={report.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-100">{formatDate(report.testDate)}</p>
+                  <p className="truncate text-xs text-slate-400">{report.sourceFileName}</p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                  onClick={() => onOpenReportForSupplementBackfill(report.id)}
+                >
+                  {tr("Open in All Reports", "Open in All Reports")}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">

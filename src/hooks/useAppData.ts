@@ -221,10 +221,37 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
+      const normalizedAnchorState =
+        annotations.supplementAnchorState === "inherit" ||
+        annotations.supplementAnchorState === "anchor" ||
+        annotations.supplementAnchorState === "none" ||
+        annotations.supplementAnchorState === "unknown"
+          ? annotations.supplementAnchorState
+          : annotations.supplementOverrides === null
+            ? "inherit"
+            : annotations.supplementOverrides.length > 0
+              ? "anchor"
+              : "none";
       const normalizedAnnotations: ReportAnnotations = samplingControlsEnabled
-        ? annotations
+        ? {
+            ...annotations,
+            supplementAnchorState: normalizedAnchorState,
+            supplementOverrides:
+              normalizedAnchorState === "anchor"
+                ? annotations.supplementOverrides ?? []
+                : normalizedAnchorState === "none"
+                  ? []
+                  : null
+          }
         : {
             ...annotations,
+            supplementAnchorState: normalizedAnchorState,
+            supplementOverrides:
+              normalizedAnchorState === "anchor"
+                ? annotations.supplementOverrides ?? []
+                : normalizedAnchorState === "none"
+                  ? []
+                  : null,
             samplingTiming: "trough"
           };
 

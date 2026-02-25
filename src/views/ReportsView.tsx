@@ -5,6 +5,7 @@ import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
+import { canonicalizeSupplement, SUPPLEMENT_FREQUENCY_OPTIONS, SUPPLEMENT_OPTIONS, supplementFrequencyLabel } from "../protocolStandards";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
@@ -12,9 +13,9 @@ import {
   getReportProtocol
 } from "../protocolUtils";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
-import { getEffectiveSupplements, supplementPeriodsToText } from "../supplementUtils";
+import { ResolvedReportSupplementContext, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
-import { deriveAbnormalFlag, formatDate } from "../utils";
+import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 
 // Markers to show as preview chips in the collapsed card header
 const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
@@ -27,12 +28,15 @@ interface ReportsViewProps {
   language: AppLanguage;
   samplingControlsEnabled: boolean;
   isShareMode: boolean;
+  resolvedSupplementContexts?: Record<string, ResolvedReportSupplementContext>;
   onDeleteReport: (reportId: string) => void;
   onDeleteReports: (reportIds: string[]) => void;
   onUpdateReportAnnotations: (reportId: string, annotations: ReportAnnotations) => void;
   onSetBaseline: (reportId: string) => void;
   onRenameMarker: (sourceCanonical: string) => void;
   onOpenProtocolTab: () => void;
+  focusedReportId?: string | null;
+  onFocusedReportHandled?: () => void;
 }
 
 const ReportsView = ({
@@ -43,12 +47,15 @@ const ReportsView = ({
   language,
   samplingControlsEnabled,
   isShareMode,
+  resolvedSupplementContexts,
   onDeleteReport,
   onDeleteReports,
   onUpdateReportAnnotations,
   onSetBaseline,
   onRenameMarker,
-  onOpenProtocolTab
+  onOpenProtocolTab,
+  focusedReportId,
+  onFocusedReportHandled
 }: ReportsViewProps) => {
   const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -59,6 +66,22 @@ const ReportsView = ({
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
+  const [supplementNameInput, setSupplementNameInput] = useState("");
+  const [supplementDoseInput, setSupplementDoseInput] = useState("");
+  const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("daily");
+
+  const reportSupplementContexts = useMemo(
+    () => resolvedSupplementContexts ?? resolveReportSupplementContexts(reports, supplementTimeline),
+    [resolvedSupplementContexts, reports, supplementTimeline]
+  );
+
+  const supplementSuggestions = useMemo(() => {
+    const query = supplementNameInput.trim().toLowerCase();
+    if (query.length < 2) {
+      return [];
+    }
+    return SUPPLEMENT_OPTIONS.filter((option) => option.toLowerCase().includes(query)).slice(0, 8);
+  }, [supplementNameInput]);
 
   const markerAbnormalStatus = (marker: MarkerValue): MarkerValue["abnormal"] =>
     deriveAbnormalFlag(marker.value, marker.referenceMin, marker.referenceMax);
@@ -67,6 +90,31 @@ const ReportsView = ({
     const abnormal = markerAbnormalStatus(marker);
     return abnormal === "high" || abnormal === "low";
   };
+
+  const normalizeAnchorState = (annotations: ReportAnnotations): ReportAnnotations["supplementAnchorState"] => {
+    if (
+      annotations.supplementAnchorState === "inherit" ||
+      annotations.supplementAnchorState === "anchor" ||
+      annotations.supplementAnchorState === "none" ||
+      annotations.supplementAnchorState === "unknown"
+    ) {
+      return annotations.supplementAnchorState;
+    }
+    if (annotations.supplementOverrides === null) {
+      return "inherit";
+    }
+    return annotations.supplementOverrides.length > 0 ? "anchor" : "none";
+  };
+
+  const toSingleDayOverrides = (periods: SupplementPeriod[], testDate: string): SupplementPeriod[] =>
+    periods.map((period) => ({
+      id: createId(),
+      name: period.name,
+      dose: period.dose,
+      frequency: period.frequency,
+      startDate: testDate,
+      endDate: testDate
+    }));
 
   useEffect(() => {
     const ids = new Set(reports.map((report) => report.id));
@@ -84,6 +132,23 @@ const ReportsView = ({
     }
     setExpandedReportIds((current) => (current.includes(editingReportId) ? current : [...current, editingReportId]));
   }, [editingReportId]);
+
+  useEffect(() => {
+    if (!focusedReportId) {
+      return;
+    }
+    const exists = reports.some((report) => report.id === focusedReportId);
+    if (!exists) {
+      onFocusedReportHandled?.();
+      return;
+    }
+    setExpandedReportIds((current) => (current.includes(focusedReportId) ? current : [...current, focusedReportId]));
+    const node = document.querySelector<HTMLElement>(`[data-report-id=\"${focusedReportId}\"]`);
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    onFocusedReportHandled?.();
+  }, [focusedReportId, reports, onFocusedReportHandled]);
 
   const sortedReportsForList = useMemo(() => {
     const withIndex = reports.map((report, index) => ({ report, index }));
@@ -139,24 +204,52 @@ const ReportsView = ({
     if (isShareMode) {
       return;
     }
+    const normalizedAnchorState = normalizeAnchorState(report.annotations);
     setEditingReportId(report.id);
     setEditingAnnotations({
-      ...report.annotations
+      ...report.annotations,
+      supplementAnchorState: normalizedAnchorState,
+      supplementOverrides:
+        normalizedAnchorState === "anchor"
+          ? report.annotations.supplementOverrides ?? []
+          : normalizedAnchorState === "none"
+            ? []
+            : null
     });
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+    setSupplementFrequencyInput("daily");
   };
 
   const cancelEditingReport = () => {
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+    setSupplementFrequencyInput("daily");
   };
 
   const saveEditedReport = () => {
     if (!editingReportId) {
       return;
     }
-    onUpdateReportAnnotations(editingReportId, editingAnnotations);
+    const normalizedAnchorState = normalizeAnchorState(editingAnnotations);
+    const normalizedAnnotations: ReportAnnotations = {
+      ...editingAnnotations,
+      supplementAnchorState: normalizedAnchorState,
+      supplementOverrides:
+        normalizedAnchorState === "anchor"
+          ? editingAnnotations.supplementOverrides ?? []
+          : normalizedAnchorState === "none"
+            ? []
+            : null
+    };
+    onUpdateReportAnnotations(editingReportId, normalizedAnnotations);
     setEditingReportId(null);
     setEditingAnnotations(blankAnnotations());
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+    setSupplementFrequencyInput("daily");
   };
 
   const deleteSelectedReports = () => {
@@ -181,6 +274,74 @@ const ReportsView = ({
       return tr("Midden", "Mid");
     }
     return "Peak";
+  };
+
+  const setEditingSupplementState = (state: ReportAnnotations["supplementAnchorState"], report: LabReport) => {
+    setEditingAnnotations((current) => {
+      if (state === "inherit") {
+        return {
+          ...current,
+          supplementAnchorState: "inherit",
+          supplementOverrides: null
+        };
+      }
+      if (state === "unknown") {
+        return {
+          ...current,
+          supplementAnchorState: "unknown",
+          supplementOverrides: null
+        };
+      }
+      if (state === "none") {
+        return {
+          ...current,
+          supplementAnchorState: "none",
+          supplementOverrides: []
+        };
+      }
+
+      const context = reportSupplementContexts[report.id];
+      const seeded = current.supplementOverrides ?? toSingleDayOverrides(context?.effectiveSupplements ?? [], report.testDate);
+      return {
+        ...current,
+        supplementAnchorState: "anchor",
+        supplementOverrides: seeded
+      };
+    });
+  };
+
+  const addEditingSupplementOverride = (report: LabReport) => {
+    const name = canonicalizeSupplement(supplementNameInput);
+    if (!name) {
+      return;
+    }
+    const period: SupplementPeriod = {
+      id: createId(),
+      name,
+      dose: supplementDoseInput.trim(),
+      frequency: supplementFrequencyInput.trim() || "unknown",
+      startDate: report.testDate,
+      endDate: report.testDate
+    };
+    setEditingAnnotations((current) => ({
+      ...current,
+      supplementAnchorState: "anchor",
+      supplementOverrides: [...(current.supplementOverrides ?? []), period]
+    }));
+    setSupplementNameInput("");
+    setSupplementDoseInput("");
+    setSupplementFrequencyInput("daily");
+  };
+
+  const removeEditingSupplementOverride = (id: string) => {
+    setEditingAnnotations((current) => {
+      const next = (current.supplementOverrides ?? []).filter((item) => item.id !== id);
+      return {
+        ...current,
+        supplementAnchorState: next.length > 0 ? "anchor" : "none",
+        supplementOverrides: next.length > 0 ? next : []
+      };
+    });
   };
 
   // Returns up to 3 highlight marker values for the collapsed card preview
@@ -337,6 +498,25 @@ const ReportsView = ({
         const isExpanded = expandedReportIds.includes(report.id);
         const protocol = getReportProtocol(report, protocols);
         const dose = getProtocolDoseMgPerWeek(protocol);
+        const supplementContext = reportSupplementContexts[report.id];
+        const supplementAnchorState = normalizeAnchorState(report.annotations);
+        const inheritedSourceLabel = supplementContext?.sourceAnchorDate
+          ? `${tr("van", "from")} ${formatDate(supplementContext.sourceAnchorDate)}`
+          : tr("op basis van huidige actieve stack", "from current active stack");
+        const supplementSummaryText =
+          supplementContext?.effectiveState === "unknown"
+            ? tr("Onbekend op testdatum", "Unknown at test date")
+            : supplementContext?.effectiveState === "none"
+              ? tr("Geen supplementen", "No supplements")
+              : supplementPeriodsToText(supplementContext?.effectiveSupplements ?? []);
+        const editingSupplementState = normalizeAnchorState(editingAnnotations);
+        const editingOverrideSupplements = editingAnnotations.supplementOverrides ?? [];
+        const editingEffectiveSupplements =
+          editingSupplementState === "anchor"
+            ? editingOverrideSupplements
+            : editingSupplementState === "none" || editingSupplementState === "unknown"
+              ? []
+              : supplementContext?.effectiveSupplements ?? [];
         const abnormalCount = abnormalCountForReport(report);
         const previewMarkers = getHighlightMarkers(report);
         const displayNumber = reportSortOrder === "asc" ? reportIndex + 1 : sortedReportsForList.length - reportIndex;
@@ -345,6 +525,7 @@ const ReportsView = ({
           <motion.article
             key={report.id}
             layout
+            data-report-id={report.id}
             className={`rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
           >
             {/* ── Collapsed header ── */}
@@ -385,6 +566,25 @@ const ReportsView = ({
                       {protocol.name}
                     </span>
                   )}
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                      supplementAnchorState === "anchor"
+                        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                        : supplementAnchorState === "none"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+                          : supplementAnchorState === "unknown"
+                            ? "border-slate-500/60 bg-slate-800 text-slate-300"
+                            : "border-slate-600 bg-slate-800 text-slate-300"
+                    }`}
+                  >
+                    {supplementAnchorState === "anchor"
+                      ? tr("Anchored", "Anchored")
+                      : supplementAnchorState === "none"
+                        ? tr("Geen supps", "No supps")
+                        : supplementAnchorState === "unknown"
+                          ? tr("Onbekend", "Unknown")
+                          : tr("Inherited", "Inherited")}
+                  </span>
                   {!protocol && dose === null && (
                     <span className="text-xs text-slate-500">{tr("Geen protocol", "No protocol")}</span>
                   )}
@@ -616,6 +816,157 @@ const ReportsView = ({
                         }
                       />
                     </label>
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2">
+                      <span className="mb-1 block text-slate-400">{tr("Supplementen op testdatum", "Supplements at test date")}</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className={`rounded-md border px-2.5 py-1 text-xs ${
+                            editingSupplementState === "inherit"
+                              ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
+                              : "border-slate-600 text-slate-200 hover:border-cyan-500/50"
+                          }`}
+                          onClick={() => setEditingSupplementState("inherit", report)}
+                        >
+                          {tr("Nee, zelfde", "No, same")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-md border px-2.5 py-1 text-xs ${
+                            editingSupplementState === "anchor"
+                              ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
+                              : "border-slate-600 text-slate-200 hover:border-cyan-500/50"
+                          }`}
+                          onClick={() => setEditingSupplementState("anchor", report)}
+                        >
+                          {tr("Ja, aangepast", "Yes, changed")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-md border px-2.5 py-1 text-xs ${
+                            editingSupplementState === "unknown"
+                              ? "border-slate-500/70 bg-slate-700 text-slate-100"
+                              : "border-slate-600 text-slate-200 hover:border-slate-500"
+                          }`}
+                          onClick={() => setEditingSupplementState("unknown", report)}
+                        >
+                          {tr("Onbekend", "Unknown")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-md border px-2.5 py-1 text-xs ${
+                            editingSupplementState === "none"
+                              ? "border-amber-500/60 bg-amber-500/15 text-amber-200"
+                              : "border-slate-600 text-slate-200 hover:border-amber-500/50"
+                          }`}
+                          onClick={() => setEditingSupplementState("none", report)}
+                        >
+                          {tr("Geen supplementen", "No supplements")}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-400">
+                        {editingSupplementState === "inherit"
+                          ? `${tr("Erft", "Inherits")} ${inheritedSourceLabel}.`
+                          : editingSupplementState === "unknown"
+                            ? tr("Gemarkeerd als onbekend voor deze datum.", "Marked as unknown for this date.")
+                            : editingSupplementState === "none"
+                              ? tr("Expliciet geen supplementen op deze datum.", "Explicitly no supplements on this date.")
+                              : tr("Dit rapport ankert een nieuwe stack voor volgende rapporten.", "This report anchors a new stack for following reports.")}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-200">
+                        {editingSupplementState === "unknown"
+                          ? tr("Onbekend op testdatum", "Unknown at test date")
+                          : editingSupplementState === "none"
+                            ? tr("Geen supplementen", "No supplements")
+                            : supplementPeriodsToText(editingEffectiveSupplements) || tr("Geen supplementen", "No supplements")}
+                      </p>
+
+                      {editingSupplementState === "anchor" ? (
+                        <div className="mt-3 space-y-3 rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                          <div className="grid gap-2 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+                            <div>
+                              <label className="mb-1 block text-xs text-slate-400">{tr("Supplement", "Supplement")}</label>
+                              <input
+                                value={supplementNameInput}
+                                onChange={(event) => setSupplementNameInput(event.target.value)}
+                                placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+                                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                              />
+                              {supplementSuggestions.length > 0 ? (
+                                <div className="mt-1 rounded-md border border-slate-700 bg-slate-900/95 p-1">
+                                  {supplementSuggestions.map((option) => (
+                                    <button
+                                      key={option}
+                                      type="button"
+                                      className="block w-full rounded px-2 py-1 text-left text-sm text-slate-200 hover:bg-slate-800"
+                                      onClick={() => setSupplementNameInput(option)}
+                                    >
+                                      {option}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-slate-400">{tr("Dosis", "Dose")}</label>
+                              <input
+                                value={supplementDoseInput}
+                                onChange={(event) => setSupplementDoseInput(event.target.value)}
+                                placeholder={tr("bijv. 4000 IU", "e.g. 4000 IU")}
+                                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-slate-400">{tr("Frequentie", "Frequency")}</label>
+                              <select
+                                value={supplementFrequencyInput}
+                                onChange={(event) => setSupplementFrequencyInput(event.target.value)}
+                                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                              >
+                                {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {tr(option.label.nl, option.label.en)}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-end">
+                              <button
+                                type="button"
+                                className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                                onClick={() => addEditingSupplementOverride(report)}
+                              >
+                                <Save className="mr-1 inline-block h-3.5 w-3.5" />
+                                {tr("Toevoegen", "Add")}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {editingOverrideSupplements.length === 0 ? (
+                              <p className="text-sm text-slate-400">{tr("Nog geen stack-items toegevoegd.", "No stack items added yet.")}</p>
+                            ) : (
+                              editingOverrideSupplements.map((supplement) => (
+                                <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
+                                  <p className="text-sm text-slate-200">
+                                    <span className="font-medium">{supplement.name}</span>
+                                    {supplement.dose ? ` · ${supplement.dose}` : ""}
+                                    {` · ${supplementFrequencyLabel(supplement.frequency, language)}`}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
+                                    onClick={() => removeEditingSupplementOverride(supplement.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                     {samplingControlsEnabled ? (
                       <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                         <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
@@ -667,9 +1018,12 @@ const ReportsView = ({
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Actief bij testdatum", "Active at test date")}</span>
-                      <strong className="text-sm text-slate-100">
-                        {supplementPeriodsToText(getEffectiveSupplements(report, supplementTimeline)) || "-"}
-                      </strong>
+                      <strong className="text-sm text-slate-100">{supplementSummaryText || "-"}</strong>
+                      {supplementAnchorState === "inherit" && supplementContext?.sourceAnchorDate ? (
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          {tr("Bron", "Source")}: {formatDate(supplementContext.sourceAnchorDate)}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>

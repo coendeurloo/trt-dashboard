@@ -26,6 +26,7 @@ export type TabKey =
   | "checkIns";
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
+export type SupplementAnchorState = "inherit" | "anchor" | "none" | "unknown";
 export type DashboardChartPreset = "clinical" | "protocol" | "minimal" | "custom";
 export type DashboardViewMode = "cards" | "compare2";
 
@@ -102,6 +103,7 @@ export interface MarkerValue {
 export interface ReportAnnotations {
   protocolId: string | null;
   protocol: string;
+  supplementAnchorState?: SupplementAnchorState;
   supplementOverrides: SupplementPeriod[] | null;
   symptoms: string;
   notes: string;

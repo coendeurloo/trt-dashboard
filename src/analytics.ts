@@ -330,8 +330,11 @@ const displayCompoundSet = (protocol: Protocol | null): string[] => {
   );
 };
 
-const canonicalSupplementSet = (report: LabReport, supplementTimeline: SupplementPeriod[]): string[] =>
-  buildSupplementStackKey(getEffectiveSupplements(report, supplementTimeline));
+const canonicalSupplementSet = (
+  report: LabReport,
+  reports: LabReport[],
+  supplementTimeline: SupplementPeriod[]
+): string[] => buildSupplementStackKey(getEffectiveSupplements(report, supplementTimeline, reports));
 
 const markerLagDays = (marker: string): number => {
   if (HORMONE_MARKERS.has(marker)) {
@@ -1310,7 +1313,7 @@ export const buildMarkerSeries = (
           compound: getProtocolCompoundsText(protocol),
           injectionFrequency: primaryFrequency,
           protocol: protocol?.name ?? report.annotations.protocol,
-          supplements: getReportSupplementsText(report, supplementTimeline),
+          supplements: getReportSupplementsText(report, supplementTimeline, reports),
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
           samplingTiming: report.annotations.samplingTiming
@@ -2178,8 +2181,8 @@ export const buildProtocolImpactDoseEvents = (
 
     const preSampling = dominantSamplingTiming(beforeReports);
     const postSampling = dominantSamplingTiming(baselineAfterReports);
-    const previousSupplements = canonicalSupplementSet(previous, supplementTimeline);
-    const currentSupplements = canonicalSupplementSet(current, supplementTimeline);
+    const previousSupplements = canonicalSupplementSet(previous, sorted, supplementTimeline);
+    const currentSupplements = canonicalSupplementSet(current, sorted, supplementTimeline);
     const previousSymptoms = normalizeProtocolText(previous.annotations.symptoms);
     const currentSymptoms = normalizeProtocolText(current.annotations.symptoms);
 

@@ -53,6 +53,19 @@ const normalizeSamplingTiming = (value: unknown): ReportAnnotations["samplingTim
   return value === "trough" || value === "mid" || value === "peak" || value === "unknown" ? value : "unknown";
 };
 
+const normalizeSupplementAnchorState = (
+  value: unknown,
+  normalizedOverrides: SupplementPeriod[] | null
+): ReportAnnotations["supplementAnchorState"] => {
+  if (value === "inherit" || value === "anchor" || value === "none" || value === "unknown") {
+    return value;
+  }
+  if (normalizedOverrides === null) {
+    return "inherit";
+  }
+  return normalizedOverrides.length > 0 ? "anchor" : "none";
+};
+
 const normalizeSupplementEntry = (value: unknown): SupplementEntry | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -206,11 +219,22 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
 const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
   const protocolIdRaw = annotations?.protocolId;
   const protocolId = typeof protocolIdRaw === "string" && protocolIdRaw.trim().length > 0 ? protocolIdRaw : null;
+  const normalizedOverrides = normalizeSupplementOverrides(annotations?.supplementOverrides);
+  const supplementAnchorState = normalizeSupplementAnchorState(annotations?.supplementAnchorState, normalizedOverrides);
+  const supplementOverrides =
+    supplementAnchorState === "anchor"
+      ? normalizedOverrides && normalizedOverrides.length > 0
+        ? normalizedOverrides
+        : []
+      : supplementAnchorState === "none"
+        ? []
+        : null;
 
   return {
     protocolId,
     protocol: String(annotations?.protocol ?? ""),
-    supplementOverrides: normalizeSupplementOverrides(annotations?.supplementOverrides),
+    supplementAnchorState,
+    supplementOverrides,
     symptoms: String(annotations?.symptoms ?? ""),
     notes: String(annotations?.notes ?? ""),
     samplingTiming: normalizeSamplingTiming(annotations?.samplingTiming)

@@ -44,6 +44,7 @@ import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
 import { buildExtractionDiffSummary } from "./extractionDiff";
+import { getCurrentInheritedSupplementContext, getCurrentActiveSupplementStack, resolveReportSupplementContexts } from "./supplementUtils";
 import {
   useCoreDerivedData,
   useDashboardDerivedData,
@@ -414,6 +415,7 @@ const App = () => {
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
   const [rightCompareMarker, setRightCompareMarker] = useState<string>(PRIMARY_MARKERS[2]);
   const [focusedAlertMarker, setFocusedAlertMarker] = useState<string | null>(null);
+  const [focusedReportId, setFocusedReportId] = useState<string | null>(null);
 
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
   const [protocolWindowSize, setProtocolWindowSize] = useState(45);
@@ -496,6 +498,23 @@ const App = () => {
     protocolWindowSize,
     doseResponseInput
   });
+  const resolvedSupplementContexts = useMemo(
+    () => resolveReportSupplementContexts(reports, appData.supplementTimeline),
+    [reports, appData.supplementTimeline]
+  );
+  const draftInheritedSupplementContext = useMemo(
+    () => getCurrentInheritedSupplementContext(reports, appData.supplementTimeline),
+    [reports, appData.supplementTimeline]
+  );
+  const draftInheritedSupplementsLabel = useMemo(() => {
+    if (draftInheritedSupplementContext.sourceAnchorDate) {
+      return `${tr("van rapport", "from report")} ${formatDate(draftInheritedSupplementContext.sourceAnchorDate)}`;
+    }
+    const activeStack = getCurrentActiveSupplementStack(appData.supplementTimeline);
+    return activeStack.length > 0
+      ? tr("huidige actieve stack", "current active stack")
+      : tr("geen actieve stack", "no active stack");
+  }, [draftInheritedSupplementContext.sourceAnchorDate, appData.supplementTimeline, tr]);
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
   const isDarkTheme = appData.settings.theme === "dark";
@@ -1198,6 +1217,28 @@ const App = () => {
       return;
     }
 
+    const normalizedDraftSupplementAnchorState =
+      draftAnnotations.supplementAnchorState === "inherit" ||
+      draftAnnotations.supplementAnchorState === "anchor" ||
+      draftAnnotations.supplementAnchorState === "none" ||
+      draftAnnotations.supplementAnchorState === "unknown"
+        ? draftAnnotations.supplementAnchorState
+        : draftAnnotations.supplementOverrides === null
+          ? "inherit"
+          : draftAnnotations.supplementOverrides.length > 0
+            ? "anchor"
+            : "none";
+    const normalizedDraftAnnotations: ReportAnnotations = {
+      ...draftAnnotations,
+      supplementAnchorState: normalizedDraftSupplementAnchorState,
+      supplementOverrides:
+        normalizedDraftSupplementAnchorState === "anchor"
+          ? draftAnnotations.supplementOverrides ?? []
+          : normalizedDraftSupplementAnchorState === "none"
+            ? []
+            : null
+    };
+
     const report: LabReport = {
       id: createId(),
       sourceFileName: draft.sourceFileName,
@@ -1206,11 +1247,11 @@ const App = () => {
       markers: sanitizedMarkers,
       annotations: samplingControlsEnabled
         ? {
-            ...draftAnnotations,
+            ...normalizedDraftAnnotations,
             protocolId: selectedProtocolId
           }
         : {
-            ...draftAnnotations,
+            ...normalizedDraftAnnotations,
             protocolId: selectedProtocolId,
             samplingTiming: "trough"
           },
@@ -1538,6 +1579,9 @@ const App = () => {
     if (nextTab === activeTab) {
       return;
     }
+    if (nextTab !== "reports") {
+      setFocusedReportId(null);
+    }
     if (draft && !isShareMode) {
       setPendingTabChange(nextTab);
       return;
@@ -1736,6 +1780,10 @@ const App = () => {
     setFocusedAlertMarker(marker);
     requestTabChange("alerts");
   };
+  const openReportForSupplementBackfill = (reportId: string) => {
+    setFocusedReportId(reportId);
+    requestTabChange("reports");
+  };
 
   useEffect(() => {
     closeMobileMenu();
@@ -1744,6 +1792,7 @@ const App = () => {
 
   const cancelPendingTabChange = () => {
     setPendingTabChange(null);
+    setFocusedReportId(null);
   };
   const confirmPendingTabChange = () => {
     if (!pendingTabChange) {
@@ -1762,6 +1811,9 @@ const App = () => {
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
     setUploadError("");
+    if (nextTab !== "reports") {
+      setFocusedReportId(null);
+    }
     setActiveTab(nextTab);
   };
 
@@ -1968,6 +2020,8 @@ const App = () => {
                 annotations={draftAnnotations}
                 protocols={appData.protocols}
                 supplementTimeline={appData.supplementTimeline}
+                inheritedSupplementsPreview={draftInheritedSupplementContext.effectiveSupplements}
+                inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
                 selectedProtocolId={selectedProtocolId}
                 parserDebugMode={appData.settings.parserDebugMode}
                 language={appData.settings.language}
@@ -2129,12 +2183,15 @@ const App = () => {
               {activeTab === "supplements" ? (
                 <SupplementsView
                   language={appData.settings.language}
+                  reports={reports}
                   timeline={appData.supplementTimeline}
+                  resolvedSupplementContexts={resolvedSupplementContexts}
                   isShareMode={isShareMode}
                   onAddSupplementPeriod={addSupplementPeriod}
                   onUpdateSupplementPeriod={updateSupplementPeriod}
                   onStopSupplement={stopSupplement}
                   onDeleteSupplementPeriod={deleteSupplementPeriod}
+                  onOpenReportForSupplementBackfill={openReportForSupplementBackfill}
                 />
               ) : null}
 
@@ -2202,12 +2259,15 @@ const App = () => {
                   language={appData.settings.language}
                   samplingControlsEnabled={samplingControlsEnabled}
                   isShareMode={isShareMode}
+                  resolvedSupplementContexts={resolvedSupplementContexts}
                   onDeleteReport={deleteReportFromData}
                   onDeleteReports={deleteReportsFromData}
                   onUpdateReportAnnotations={updateReportAnnotations}
                   onSetBaseline={setBaseline}
                   onRenameMarker={openRenameDialog}
                   onOpenProtocolTab={() => requestTabChange("protocol")}
+                  focusedReportId={focusedReportId}
+                  onFocusedReportHandled={() => setFocusedReportId(null)}
                 />
               ) : null}
 
