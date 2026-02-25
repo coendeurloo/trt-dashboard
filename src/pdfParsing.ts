@@ -1762,7 +1762,7 @@ const cleanMarkerName = (rawMarker: string): string => {
   marker = marker.replace(/\b(?:nz|us|usa)\s+ref(?:erence)?(?:\s*range|\s+[a-z]{1,4})*\b.*$/i, "").trim();
   marker = marker.replace(/\bref(?:erence)?\s*(?:r(?:ange)?)?\b.*$/i, "").trim();
   marker = marker.replace(/\b(?:discounted|dicounted)\s+lab'?s?\b.*$/i, "").trim();
-  marker = marker.replace(/\b[A-Za-z]{1,4}\)(?=\s|$)/g, "").replace(/\s+/g, " ").trim();
+  marker = marker.replace(/\b[A-Za-z]{2,4}\)(?=\s|$)/g, "").replace(/\s+/g, " ").trim();
   marker = trimEdgeNoiseTokens(marker);
   marker = marker.replace(/\s+\b[a-z]{1,3}\b\s*$/g, "").trim();
 
@@ -1820,7 +1820,10 @@ const applyProfileMarkerFixes = (markerName: string): string => {
   marker = marker.replace(/^Ratio:\s*T\/SHBG.*$/i, "SHBG");
   marker = marker.replace(/^MPV-Mean Platelet$/i, "MPV-Mean Platelet Volume");
   marker = marker.replace(/^IGF-?1\s*SDS\s*\*?\)?$/i, "IGF-1 SDS");
+  marker = marker.replace(/^IGF-?1\s*\(somatomedine\s*C\)$/i, "IGF-1 (somatomedine C)");
   marker = marker.replace(/^IGF-?1\s*\(somatomedine\s*C\)\s*CLIA$/i, "IGF-1 (somatomedine C)");
+  marker = marker.replace(/^Reactive Protein\s*\(High Sensitivity\)$/i, "C Reactive Protein (High Sensitivity)");
+  marker = marker.replace(/^Reactive Protein$/i, "C Reactive Protein");
   marker = marker.replace(/^25-?OH-?\s*Vitamin D\s*\(D3\s*\+\s*D2\)$/i, "25-OH- Vitamin D (D3+D2)");
   marker = marker.replace(/^25-?OH-?\s*Vitamin D$/i, "25-OH- Vitamin D (D3+D2)");
   marker = marker.replace(/\s*\(volgens\s*$/i, "").trim();
@@ -3421,6 +3424,38 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
     };
     if (shouldKeepParsedRow(row, profile)) {
       rows.push(row);
+    }
+  }
+
+  // Vitamin D rows can include a section header between the value line and the next indexed row.
+  const vitaminDPattern =
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+25-?OH-?\s*Vitamin D\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*(ng\/mL|nmol\/L)\b(?:\s*\(D3\s*\+\s*D2\))?/i;
+  const vitaminDMatch = normalized.match(vitaminDPattern);
+  if (vitaminDMatch) {
+    const value = safeNumber(vitaminDMatch[1]);
+    const referenceMin = safeNumber(vitaminDMatch[2]);
+    const referenceMax = safeNumber(vitaminDMatch[3]);
+    const unit = normalizeUnit(vitaminDMatch[4] ?? "");
+    if (value !== null) {
+      const row: ParsedFallbackRow = {
+        markerName: "25-OH- Vitamin D (D3+D2)",
+        value,
+        unit,
+        referenceMin,
+        referenceMax,
+        confidence: 0.86
+      };
+      if (
+        shouldKeepParsedRow(row, profile) &&
+        !rows.some(
+          (item) =>
+            /25-oh-?\s+vitamin\s+d/i.test(item.markerName) &&
+            Math.abs(item.value - value) < 0.0001 &&
+            normalizeUnit(item.unit) === unit
+        )
+      ) {
+        rows.push(row);
+      }
     }
   }
 
