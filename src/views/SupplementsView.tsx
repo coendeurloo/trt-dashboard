@@ -206,64 +206,76 @@ const SupplementsView = ({
         {isAdding ? (
           <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_170px_150px_auto]">
-              <div className="relative">
-                <input
-                  value={nameInput}
-                  onChange={(event) => {
-                    setNameInput(event.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => window.setTimeout(() => setShowSuggestions(false), 120)}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
-                />
-                {showSuggestions && suggestions.length > 0 ? (
-                  <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
-                    {suggestions.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          setNameInput(option);
-                          setShowSuggestions(false);
-                        }}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                {tr("Supplement", "Supplement")}
+                <div className="relative mt-1">
+                  <input
+                    value={nameInput}
+                    onChange={(event) => {
+                      setNameInput(event.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => window.setTimeout(() => setShowSuggestions(false), 120)}
+                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                    placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
+                  />
+                  {showSuggestions && suggestions.length > 0 ? (
+                    <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
+                      {suggestions.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setNameInput(option);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </label>
 
-              <input
-                value={doseInput}
-                onChange={(event) => setDoseInput(event.target.value)}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                placeholder={tr("Dosis", "Dose")}
-              />
-              <select
-                value={frequencyInput}
-                onChange={(event) => setFrequencyInput(event.target.value)}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              >
-                {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {tr(option.label.nl, option.label.en)}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="date"
-                value={startDateInput}
-                onChange={(event) => setStartDateInput(event.target.value)}
-                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              />
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                {tr("Dosis", "Dose")}
+                <input
+                  value={doseInput}
+                  onChange={(event) => setDoseInput(event.target.value)}
+                  className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  placeholder={tr("Dosis", "Dose")}
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                {tr("Frequentie", "Frequency")}
+                <select
+                  value={frequencyInput}
+                  onChange={(event) => setFrequencyInput(event.target.value)}
+                  className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                >
+                  {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {tr(option.label.nl, option.label.en)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                {tr("Startdatum", "Date started")}
+                <input
+                  type="date"
+                  value={startDateInput}
+                  onChange={(event) => setStartDateInput(event.target.value)}
+                  className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                className="inline-flex items-end justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
                 onClick={submitNewSupplement}
               >
                 <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
