@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, BadgeInfo, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, BadgeInfo, FlaskConical, Loader2, Sparkles } from "lucide-react";
 import { DosePrediction, projectDosePredictionAt } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import DoseMarkerCard from "../components/DoseMarkerCard";
 import useDoseResponsePremium from "../hooks/useDoseResponsePremium";
 import { trLocale } from "../i18n";
-import { AppLanguage, AppSettings, LabReport } from "../types";
+import { AppLanguage, AppSettings, LabReport, Protocol } from "../types";
 
 interface DoseResponseViewProps {
   dosePredictions: DosePrediction[];
@@ -13,9 +13,11 @@ interface DoseResponseViewProps {
   hasCustomDose: boolean;
   doseResponseInput: string;
   visibleReports: LabReport[];
+  protocols: Protocol[];
   settings: AppSettings;
   language: AppLanguage;
   onDoseResponseInputChange: (value: string) => void;
+  onNavigateToProtocol: () => void;
 }
 
 const median = (values: number[]): number => {
@@ -36,9 +38,11 @@ const DoseResponseView = ({
   hasCustomDose,
   doseResponseInput,
   visibleReports,
+  protocols,
   settings,
   language,
-  onDoseResponseInputChange
+  onDoseResponseInputChange,
+  onNavigateToProtocol
 }: DoseResponseViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const [markerScope, setMarkerScope] = useState<"top" | "all">("top");
@@ -218,11 +222,39 @@ const DoseResponseView = ({
       </div>
 
       {premiumPredictions.length === 0 ? (
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 text-sm text-slate-300">
-          {tr(
-            "Voeg meer blood reports met bekende weekdosis toe om dose-response simulaties te kunnen tonen.",
-            "Add more blood reports with known weekly dose to unlock dose-response simulations."
-          )}
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/8 p-5">
+          <div className="flex items-start gap-3">
+            <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-amber-200">
+                {tr("Protocol met dosisdata vereist", "Protocol with dose data required")}
+              </p>
+              <p className="text-sm text-slate-300">
+                {protocols.length === 0
+                  ? tr(
+                      "Je hebt nog geen TRT-protocol ingesteld. De Dose Simulator heeft je weekdosis (mg/week) nodig om voorspellingen te kunnen berekenen.",
+                      "You haven't set up a TRT protocol yet. The Dose Simulator needs your weekly dose (mg/week) to calculate predictions."
+                    )
+                  : tr(
+                      "Je labresultaten zijn nog niet gekoppeld aan een protocol met dosisdata. Controleer of je protocol een weekdosis heeft ingevuld.",
+                      "Your lab results aren't linked to a protocol with dose data yet. Check that your protocol has a weekly dose filled in."
+                    )}
+              </p>
+              <p className="text-xs text-slate-400">
+                {tr(
+                  "Ga naar het Protocol-tabblad, voeg je huidige protocol toe met de juiste testosterondosis, en kom dan terug.",
+                  "Go to the Protocol tab, add your current protocol with the correct testosterone dose, then come back here."
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={onNavigateToProtocol}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25"
+              >
+                {tr("Naar Protocol →", "Go to Protocol →")}
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <>
