@@ -1863,17 +1863,29 @@ const App = () => {
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
           <header className="space-y-3 px-1 py-0.5">
-            <div className="flex items-center gap-2 lg:hidden">
-              <img
-                src={appIcon}
-                alt="LabTracker"
-                className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
-              />
-              <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
-              <div className="flex-1" />
+            <div className="flex items-center justify-between gap-2 lg:hidden">
+              <div className="order-1 min-w-0 flex flex-1 items-center gap-2">
+                <button
+                  type="button"
+                  aria-expanded={isMobileMenuOpen}
+                  aria-controls="mobile-nav-drawer"
+                  aria-label={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
+                  title={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
+                  onClick={() => setIsMobileMenuOpen((current) => !current)}
+                >
+                  {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </button>
+                <img
+                  src={appIcon}
+                  alt="LabTracker"
+                  className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
+                />
+                <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
+              </div>
               <button
                 type="button"
-                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                className={`order-2 ml-2 inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
                   quickUploadDisabled
                     ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
                     : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
@@ -1883,17 +1895,6 @@ const App = () => {
               >
                 <Plus className="h-3.5 w-3.5" />
                 {tr("Snelle upload", "Quick Upload")}
-              </button>
-              <button
-                type="button"
-                aria-expanded={isMobileMenuOpen}
-                aria-controls="mobile-nav-drawer"
-                aria-label={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
-                title={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
-                onClick={() => setIsMobileMenuOpen((current) => !current)}
-              >
-                {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </button>
             </div>
             {activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
