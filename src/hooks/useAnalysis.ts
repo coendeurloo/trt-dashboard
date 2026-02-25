@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
+import { buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
-import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
+import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
   language: AppLanguage;
   visibleReports: LabReport[];
+  checkIns: SymptomCheckIn[];
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
   samplingControlsEnabled: boolean;
@@ -23,6 +25,7 @@ export const useAnalysis = ({
   settings,
   language,
   visibleReports,
+  checkIns,
   protocols,
   supplementTimeline,
   samplingControlsEnabled,
@@ -59,6 +62,14 @@ export const useAnalysis = ({
     setBetaRemaining(getRemainingAnalyses());
   };
 
+  const suggestedScopeNotice = useMemo(() => {
+    const scope = selectReportsForAnalysis({
+      reports: visibleReports,
+      analysisType: "full"
+    });
+    return scope.notice;
+  }, [visibleReports]);
+
   const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
     if (analysisType === "latestComparison" && visibleReports.length < 2) {
       setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
@@ -89,9 +100,18 @@ export const useAnalysis = ({
     setAnalysisCopied(false);
 
     try {
+      const scopeSelection = selectReportsForAnalysis({
+        reports: visibleReports,
+        analysisType
+      });
+      const selectedReports = scopeSelection.selectedReports;
+      const wellbeingSummary = buildWellbeingSummary({
+        reports: selectedReports,
+        checkIns
+      });
       const { analyzeLabDataWithClaude } = await import("../aiAnalysis");
       const result = await analyzeLabDataWithClaude({
-        reports: visibleReports,
+        reports: selectedReports,
         protocols,
         supplementTimeline,
         unitSystem: settings.unitSystem,
@@ -108,7 +128,8 @@ export const useAnalysis = ({
           alerts,
           trendByMarker,
           trtStability,
-          dosePredictions
+          dosePredictions,
+          wellbeingSummary
         }
       });
       setAnalysisResult(result);
@@ -150,6 +171,7 @@ export const useAnalysis = ({
     analysisCopied,
     analysisKind,
     analyzingKind,
+    analysisScopeNotice: suggestedScopeNotice,
     betaUsage,
     betaRemaining,
     betaLimits: BETA_LIMITS,

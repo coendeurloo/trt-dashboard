@@ -19,6 +19,7 @@ import {
 } from "./analytics";
 import { getRelevantBenchmarks } from "./data/studyBenchmarks";
 import { sanitizeAnalysisPayloadForAI } from "./privacy/sanitizeForAI";
+import type { WellbeingSummary } from "./analysisScope";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -46,6 +47,7 @@ interface AnalyzeLabDataOptions {
     trendByMarker: Record<string, MarkerTrendSummary>;
     trtStability: TrtStabilityResult;
     dosePredictions: DosePrediction[];
+    wellbeingSummary?: WellbeingSummary | null;
   };
 }
 
@@ -92,19 +94,25 @@ const ANALYSIS_MODEL_CANDIDATES = [
   "claude-3-5-sonnet-latest"
 ] as const;
 
-const MAX_FULL_REPORTS = 2;
 const BASE_ANALYSIS_MAX_TOKENS = 2400;
 const BASE_DEEP_ANALYSIS_MAX_TOKENS = 3200;
+const MAX_TRANSIENT_RETRIES_PER_MODEL = 2;
+const TRANSIENT_RETRY_BASE_DELAY_MS = 700;
+const TRANSIENT_RETRY_MAX_DELAY_MS = 4200;
+const MAX_MARKER_TRENDS_IN_PROMPT = 56;
+const MAX_PROTOCOL_CHANGES_IN_PROMPT = 12;
+const MAX_ALERTS_IN_PROMPT = 12;
+const MAX_DOSE_PREDICTIONS_IN_PROMPT = 10;
 const parseMarkerCap = (): number => {
-  const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 80);
+  const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 60);
   if (!Number.isFinite(raw)) {
-    return 80;
+    return 60;
   }
   return Math.min(200, Math.max(30, Math.round(raw)));
 };
 const MAX_MARKERS_PER_REPORT = parseMarkerCap();
 export const AI_ANALYSIS_MARKER_CAP = MAX_MARKERS_PER_REPORT;
-const MAX_CONTEXT_CHARS = 180;
+const MAX_CONTEXT_CHARS = 120;
 
 const SIGNAL_MARKERS = [
   "Testosterone",
@@ -121,37 +129,67 @@ const SIGNAL_MARKERS = [
 ] as const;
 
 const FORMAT_RULES = (outputLanguage: string): string[] => [
-  "FORMAT: No markdown tables, no pipes, no HTML. Use headings, bullets, and short paragraphs.",
+  "Format: headings, bullets, and short paragraphs only. No tables or HTML.",
   `Language: ${outputLanguage}.`
 ];
 
 const ANALYSIS_RULES: string[] = [
   "Use only data from the JSON block.",
-  "Cite concrete data (date + marker + value + unit) for each key claim.",
-  "Interpret timeline order, sampling timing (trough/peak), compound, injection frequency, protocol details, supplements, and symptoms together.",
-  "State uncertainties and confounders explicitly.",
-  "Action-neutral: no prescriptions or medical directives."
+  "For key claims, cite date + marker + value + unit.",
+  "Integrate timeline order, sampling timing, protocol, supplements, symptoms, and wellbeing together.",
+  "State uncertainty and confounders clearly.",
+  "Action-neutral: no diagnosis, prescriptions, or medical directives."
 ];
 
 const SUPPLEMENT_SECTION_TEMPLATE: string[] = [
   "Required section: '## Supplement Advice (for doctor discussion)'.",
-  "For each supplement, use '### [Name]' with these bullets:",
-  "- **Current dose:** [dose or 'not currently used']",
-  "- **Suggested change:** [Keep/Increase/Decrease/Stop/Consider adding]",
-  "- **Why:** [brief data-based rationale]",
-  "- **Expected effect:** [expected direction]",
-  "- **Evidence note:** [Author, year, study type, 1-line relevance]",
-  "- **Confidence:** [High/Medium/Low]",
-  "- **Doctor discussion point:** [1 specific question]",
-  "Consider potential new additions if data warrants.",
-  "If iron status appears low, include an iron discussion point with monitoring markers.",
-  "If markers conflict, state uncertainty clearly and avoid definitive claims."
+  "For each relevant item, use '### [Name]' and include: Current dose, Suggested change, Why, Expected effect, Evidence note (author/year/study type), Confidence, Doctor discussion point.",
+  "If a marker is low/high and commonly correctable with supplementation, suggest practical options and what to monitor.",
+  "If markers conflict or evidence is weak, state uncertainty clearly."
 ];
 
 const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or medical advice.";
 
 const KEY_LEGEND =
   "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming.";
+
+const waitMs = (delayMs: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, delayMs));
+  });
+
+const parseRetryAfterSeconds = (value: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return Math.ceil(numeric);
+  }
+  return null;
+};
+
+const shouldRetryTransientAnalysisError = (status: number, errorCode: string): boolean => {
+  if (status === 529) {
+    return true;
+  }
+  if (status >= 500 && status <= 599) {
+    return !(status === 503 && errorCode === "AI_LIMITS_UNAVAILABLE");
+  }
+  return false;
+};
+
+const nextTransientRetryDelayMs = (attemptIndex: number, retryAfterSeconds: number | null): number => {
+  if (typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(TRANSIENT_RETRY_MAX_DELAY_MS, retryAfterSeconds * 1000);
+  }
+  const exponential = Math.min(
+    TRANSIENT_RETRY_MAX_DELAY_MS,
+    TRANSIENT_RETRY_BASE_DELAY_MS * Math.pow(2, Math.max(0, attemptIndex))
+  );
+  const jitter = Math.floor(Math.random() * 260);
+  return exponential + jitter;
+};
 
 const buildBenchmarkContext = (markerNames: string[]): string => {
   const relevant = getRelevantBenchmarks(markerNames);
@@ -239,6 +277,46 @@ const markerDeviationFromRange = (marker: AnalysisMarkerRow): number => {
     return Math.abs(marker.v - center) / Math.max(1, Math.abs(center));
   }
   return 0;
+};
+
+const markerTrendPromptPriorityScore = (trend: {
+  marker: string;
+  measurements: number;
+  outOfRangeCount: number;
+  percentChange: number | null;
+}): number => {
+  let score = SIGNAL_MARKER_SET.has(trend.marker) ? 100 : 0;
+  score += Math.min(48, trend.outOfRangeCount * 12);
+  score += Math.min(28, Math.abs(trend.percentChange ?? 0) / 4);
+  score += Math.min(20, trend.measurements * 2);
+  return score;
+};
+
+const compactDosePredictionsForPrompt = (predictions: DosePrediction[] | undefined) => {
+  if (!predictions || predictions.length === 0) {
+    return [];
+  }
+
+  return [...predictions]
+    .sort((left, right) => (right.relevanceScore ?? 0) - (left.relevanceScore ?? 0))
+    .slice(0, MAX_DOSE_PREDICTIONS_IN_PROMPT)
+    .map((prediction) => ({
+      marker: prediction.marker,
+      unit: prediction.unit,
+      currentDose: prediction.currentDose,
+      suggestedDose: prediction.suggestedDose,
+      currentEstimate: toRounded(prediction.currentEstimate),
+      suggestedEstimate: toRounded(prediction.suggestedEstimate),
+      predictedLow: prediction.predictedLow === null ? null : toRounded(prediction.predictedLow),
+      predictedHigh: prediction.predictedHigh === null ? null : toRounded(prediction.predictedHigh),
+      suggestedPercentChange:
+        prediction.suggestedPercentChange === null ? null : toRounded(prediction.suggestedPercentChange),
+      confidence: prediction.confidence,
+      status: prediction.status,
+      statusReason: truncateContextText(prediction.statusReason, 140),
+      samplingMode: prediction.samplingMode,
+      source: prediction.source
+    }));
 };
 
 const SIGNAL_MARKER_SET = new Set<string>(SIGNAL_MARKERS);
@@ -332,7 +410,7 @@ const buildPayload = (
           frequency: injectionFrequencyLabel(injectionFrequency, "en"),
           frequencyPerWeek: getProtocolFrequencyPerWeek(protocol),
           protocol: protocol?.name ?? "",
-          supps: truncateContextText(getReportSupplementsText(report, supplementTimeline), 220),
+          supps: truncateContextText(getReportSupplementsText(report, supplementTimeline), 150),
           symptoms: truncateContextText(report.annotations.symptoms),
           notes: truncateContextText(report.annotations.notes),
           timing: report.annotations.samplingTiming
@@ -665,19 +743,40 @@ const buildSignals = (
   context: AnalyzeLabDataOptions["context"]
 ) => ({
   period: derivedSignals.period,
-  markerTrends: derivedSignals.markerSummaries,
-  protocolChanges: derivedSignals.protocolChangeEvents,
+  markerTrends: [...derivedSignals.markerSummaries]
+    .sort((left, right) => {
+      const scoreDelta = markerTrendPromptPriorityScore(right) - markerTrendPromptPriorityScore(left);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      if (right.measurements !== left.measurements) {
+        return right.measurements - left.measurements;
+      }
+      return left.marker.localeCompare(right.marker);
+    })
+    .slice(0, MAX_MARKER_TRENDS_IN_PROMPT),
+  protocolChanges: derivedSignals.protocolChangeEvents.slice(-MAX_PROTOCOL_CHANGES_IN_PROMPT),
   stability: context?.trtStability ?? null,
   alerts:
     context?.alerts
       ?.filter((alert) => alert.severity === "high" || alert.severity === "medium")
+      ?.sort((left, right) => {
+        const severityRank = (value: MarkerAlert["severity"]): number => (value === "high" ? 2 : value === "medium" ? 1 : 0);
+        const bySeverity = severityRank(right.severity) - severityRank(left.severity);
+        if (bySeverity !== 0) {
+          return bySeverity;
+        }
+        return right.date.localeCompare(left.date);
+      })
+      ?.slice(0, MAX_ALERTS_IN_PROMPT)
       ?.map((alert) => ({
         marker: alert.marker,
         type: alert.type,
         severity: alert.severity,
         message: alert.message
       })) ?? [],
-  dosePredictions: context?.dosePredictions ?? [],
+  dosePredictions: compactDosePredictionsForPrompt(context?.dosePredictions),
+  wellbeing: context?.wellbeingSummary ?? null,
   gaps: derivedSignals.contextCompleteness,
   samplingFilter: context?.samplingFilter ?? "all"
 });
@@ -716,8 +815,6 @@ export const analyzeLabDataWithClaude = async ({
   const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
   const benchmarkSection = buildBenchmarkContext(trackedMarkerNames);
   const preferredOutputLanguage = "English";
-  const recentPayload = payload.slice(-MAX_FULL_REPORTS);
-  const olderReportCount = Math.max(0, payload.length - MAX_FULL_REPORTS);
   const maxTokens = deepMode ? BASE_DEEP_ANALYSIS_MAX_TOKENS : BASE_ANALYSIS_MAX_TOKENS;
 
   const fullPrompt = [
@@ -725,20 +822,19 @@ export const analyzeLabDataWithClaude = async ({
     "Goal: pattern recognition, protocol correlations, and discussion options for doctor/patient.",
     ...FORMAT_RULES(preferredOutputLanguage),
     ...ANALYSIS_RULES,
-    "The 'recentReports' array contains the most recent reports in full detail. Older reports are summarized in 'signals.markerTrends' which covers the full history. Use both for your analysis.",
+    "The 'reports' array contains all selected reports for this run. Use these together with the compact signals.",
     "Use a natural structure with headings. No fixed section order or required bullet counts.",
     ...SUPPLEMENT_SECTION_TEMPLATE,
     SAFETY_NOTE,
     KEY_LEGEND,
     benchmarkSection,
     "DATA START",
-    JSON.stringify({
-      type: analysisType,
-      units: unitSystem,
-      recentReports: recentPayload,
-      olderReportsSummarized: olderReportCount,
-      signals
-    }),
+      JSON.stringify({
+        type: analysisType,
+        units: unitSystem,
+        reports: payload,
+        signals
+      }),
     "DATA END"
   ].join("\n");
 
@@ -783,7 +879,9 @@ export const analyzeLabDataWithClaude = async ({
 
   const prompt = analysisType === "latestComparison" ? latestComparisonPrompt : fullPrompt;
 
-  const tryModel = async (model: string): Promise<{ status: number; body: ClaudeResponse }> => {
+  const tryModel = async (
+    model: string
+  ): Promise<{ status: number; body: ClaudeResponse; retryAfterSeconds: number | null }> => {
     let response: Response;
     try {
       response = await fetch("/api/claude/messages", {
@@ -818,52 +916,72 @@ export const analyzeLabDataWithClaude = async ({
           }
         : {};
     }
-    return { status: response.status, body };
+    return {
+      status: response.status,
+      body,
+      retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after"))
+    };
   };
 
   let lastStatus = 0;
   let lastErrorMessage = "";
 
-  for (const model of ANALYSIS_MODEL_CANDIDATES) {
-    let result: { status: number; body: ClaudeResponse };
-    try {
-      result = await tryModel(model);
-    } catch (error) {
-      if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
-        throw new Error("AI_PROXY_UNREACHABLE");
+  modelLoop: for (const model of ANALYSIS_MODEL_CANDIDATES) {
+    for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES_PER_MODEL; attempt += 1) {
+      let result: { status: number; body: ClaudeResponse; retryAfterSeconds: number | null };
+      try {
+        result = await tryModel(model);
+      } catch (error) {
+        if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
+          throw new Error("AI_PROXY_UNREACHABLE");
+        }
+        throw error;
       }
-      throw error;
-    }
-    lastStatus = result.status;
+      lastStatus = result.status;
 
-    if (result.status >= 200 && result.status < 300) {
-      const text = result.body.content?.find((item) => item.type === "text")?.text?.trim();
-      if (!text) {
-        throw new Error("AI_EMPTY_RESPONSE");
+      if (result.status >= 200 && result.status < 300) {
+        const text = result.body.content?.find((item) => item.type === "text")?.text?.trim();
+        if (!text) {
+          throw new Error("AI_EMPTY_RESPONSE");
+        }
+        const maybeTruncated =
+          result.body.stop_reason === "max_tokens"
+            ? `${text}\n\n_Note: output may be incomplete due to output token limit._`
+            : text;
+        return stripComplexFormatting(maybeTruncated);
       }
-      const maybeTruncated =
-        result.body.stop_reason === "max_tokens"
-          ? `${text}\n\n_Note: output may be incomplete due to output token limit._`
-          : text;
-      return stripComplexFormatting(maybeTruncated);
-    }
 
-    const errorMessage = result.body.error?.message ?? "";
-    const errorCode = (result.body as { error?: { code?: string } })?.error?.code ?? "";
-    if (result.status === 429) {
-      const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
-      const retryAfter = typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
-      throw new Error(`AI_RATE_LIMITED:${retryAfter}`);
+      const errorMeta = (result.body as { error?: { code?: string; detail?: string; message?: string } }).error;
+      const errorMessage = errorMeta?.message ?? errorMeta?.detail ?? "";
+      const errorCode = errorMeta?.code ?? "";
+
+      if (result.status === 429) {
+        const retryAfterRaw = (result.body as { retryAfter?: number })?.retryAfter;
+        const retryAfter =
+          typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) ? Math.max(1, Math.round(retryAfterRaw)) : 0;
+        throw new Error(`AI_RATE_LIMITED:${retryAfter}`);
+      }
+      if (result.status === 503 && errorCode === "AI_LIMITS_UNAVAILABLE") {
+        throw new Error("AI_LIMITS_UNAVAILABLE");
+      }
+
+      const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
+      if (missingModel) {
+        continue modelLoop;
+      }
+
+      const transientError = shouldRetryTransientAnalysisError(result.status, errorCode);
+      lastErrorMessage = errorMessage;
+      if (transientError) {
+        if (attempt < MAX_TRANSIENT_RETRIES_PER_MODEL) {
+          await waitMs(nextTransientRetryDelayMs(attempt, result.retryAfterSeconds));
+          continue;
+        }
+        continue modelLoop;
+      }
+
+      break modelLoop;
     }
-    if (result.status === 503 && errorCode === "AI_LIMITS_UNAVAILABLE") {
-      throw new Error("AI_LIMITS_UNAVAILABLE");
-    }
-    lastErrorMessage = errorMessage;
-    const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
-    if (missingModel) {
-      continue;
-    }
-    break;
   }
 
   throw new Error(`AI_REQUEST_FAILED:${lastStatus || "unknown"}:${lastErrorMessage || ""}`);

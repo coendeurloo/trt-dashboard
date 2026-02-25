@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { Suspense, lazy, useMemo } from "react";
 import { FileText, Loader2, Sparkles } from "lucide-react";
+import { AnalysisScopeNotice } from "../analysisScope";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
@@ -16,6 +17,7 @@ interface AnalysisViewProps {
   analysisCopied: boolean;
   analysisKind: "full" | "latestComparison" | null;
   analyzingKind: "full" | "latestComparison" | null;
+  analysisScopeNotice: AnalysisScopeNotice | null;
   reportsInScope: number;
   markersTracked: number;
   analysisMarkerNames: string[];
@@ -43,6 +45,7 @@ const AnalysisView = ({
   analysisCopied,
   analysisKind,
   analyzingKind,
+  analysisScopeNotice,
   reportsInScope,
   markersTracked,
   analysisMarkerNames,
@@ -90,10 +93,34 @@ const AnalysisView = ({
     ? "rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/80 to-slate-950/70 p-4 shadow-xl shadow-slate-950/20"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60";
   const outputBodyClass = isDarkTheme ? "prose-premium-dark mt-3 overflow-x-auto" : "prose-premium-light mt-3 overflow-x-auto";
+  const scopeNoticeClassName = isDarkTheme
+    ? "rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
+    : "rounded-xl border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900";
   const relevantBenchmarks = useMemo(
     () => getRelevantBenchmarks(analysisMarkerNames),
     [analysisMarkerNames]
   );
+  const scopeReasonText = (() => {
+    if (!analysisScopeNotice) {
+      return "";
+    }
+    if (analysisScopeNotice.reason === "lookback_and_cap") {
+      return tr(
+        "Alleen rapporten uit de laatste 24 maanden zijn meegenomen en beperkt tot het maximum om requestgrootte stabiel te houden.",
+        "Only reports from the last 24 months were included and then capped to keep request size stable."
+      );
+    }
+    if (analysisScopeNotice.reason === "lookback_only") {
+      return tr(
+        "Alleen rapporten uit de laatste 24 maanden zijn meegenomen om de analyse relevant en compact te houden.",
+        "Only reports from the last 24 months were included to keep analysis relevant and compact."
+      );
+    }
+    return tr(
+      "Er waren geen rapporten in de laatste 24 maanden, daarom zijn de meest recente rapporten gebruikt met een veilige limiet.",
+      "No reports were within the last 24 months, so the most recent reports were used with a safe cap."
+    );
+  })();
 
   return (
     <section className="space-y-3 fade-in">
@@ -103,8 +130,8 @@ const AnalysisView = ({
         </h3>
         <p className={scopeMutedClassName}>
           {tr(
-            "Gebruik AI om je trends te interpreteren op basis van rapporten, protocol, supplementen en symptomen.",
-            "Use AI to interpret your trends using reports, protocol, supplements, and symptoms."
+            "Gebruik AI om je trends te interpreteren op basis van rapporten, protocol, supplementen en wellbeing check-ins.",
+            "Use AI to interpret your trends using reports, protocol, supplements, and wellbeing check-ins."
           )}
         </p>
 
@@ -152,6 +179,14 @@ const AnalysisView = ({
           ) : null}
         </div>
       </div>
+
+      {analysisScopeNotice ? (
+        <div className={scopeNoticeClassName}>
+          {tr("AI gebruikt", "AI uses")} {analysisScopeNotice.usedReports} {tr("van", "of")} {analysisScopeNotice.totalReports} {tr("rapporten voor deze run.", "reports for this run.")}
+          {" "}
+          {scopeReasonText}
+        </div>
+      ) : null}
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div className={actionCardBaseClass}>

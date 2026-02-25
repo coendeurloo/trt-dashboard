@@ -36,8 +36,19 @@ const sampleReport: LabReport = {
   }
 };
 
+const extractDataBlock = (prompt: string): Record<string, unknown> => {
+  const start = prompt.indexOf("DATA START\n");
+  const end = prompt.indexOf("\nDATA END");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Could not locate DATA block in AI prompt.");
+  }
+  const json = prompt.slice(start + "DATA START\n".length, end).trim();
+  return JSON.parse(json) as Record<string, unknown>;
+};
+
 describe("analyzeLabDataWithClaude", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -125,5 +136,186 @@ describe("analyzeLabDataWithClaude", () => {
     expect(prompts[0]).not.toContain("test@example.com");
     expect(prompts[1]).toContain("Headache on peak day");
     expect(prompts[1]).toContain("[REDACTED_EMAIL]");
+  });
+
+  it("retries overloaded responses with backoff before succeeding", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      if (calls < 3) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Overloaded"
+            }
+          }),
+          { status: 529 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Recovered analysis" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+    await vi.runAllTimersAsync();
+    const result = await pending;
+
+    expect(result).toContain("Recovered analysis");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("includes wellbeing summary and keeps full selected report set in full analysis payload", async () => {
+    const reports: LabReport[] = [
+      sampleReport,
+      {
+        ...sampleReport,
+        id: "r2",
+        testDate: "2026-01-28",
+        createdAt: "2026-01-28T10:00:00.000Z"
+      },
+      {
+        ...sampleReport,
+        id: "r3",
+        testDate: "2026-02-04",
+        createdAt: "2026-02-04T10:00:00.000Z"
+      }
+    ];
+
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports,
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      analysisType: "full",
+      context: {
+        samplingFilter: "all",
+        protocolImpact: {
+          events: [],
+          insights: []
+        },
+        alerts: [],
+        trendByMarker: {},
+        trtStability: {
+          score: null,
+          components: {}
+        },
+        dosePredictions: [],
+        wellbeingSummary: {
+          windowStart: "2026-01-21",
+          windowEnd: "2026-02-04",
+          count: 2,
+          latestDate: "2026-02-01",
+          latestAverage: 7,
+          metricAverages: {
+            energy: 7,
+            mood: 7,
+            sleep: 6,
+            libido: 6,
+            motivation: 8
+          },
+          metricTrends: {
+            energy: "rising",
+            mood: "stable",
+            sleep: "stable",
+            libido: "stable",
+            motivation: "rising"
+          },
+          recentPoints: [
+            {
+              date: "2026-01-25",
+              energy: 6,
+              mood: 7,
+              sleep: 6,
+              libido: 6,
+              motivation: 7
+            },
+            {
+              date: "2026-02-01",
+              energy: 8,
+              mood: 7,
+              sleep: 6,
+              libido: 6,
+              motivation: 9
+            }
+          ]
+        }
+      }
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const promptReports = data.reports as unknown[] | undefined;
+    const promptSignals = data.signals as { wellbeing?: unknown } | undefined;
+    expect(promptReports).toHaveLength(3);
+    expect(promptSignals?.wellbeing).toEqual({
+      windowStart: "2026-01-21",
+      windowEnd: "2026-02-04",
+      count: 2,
+      latestDate: "2026-02-01",
+      latestAverage: 7,
+      metricAverages: {
+        energy: 7,
+        mood: 7,
+        sleep: 6,
+        libido: 6,
+        motivation: 8
+      },
+      metricTrends: {
+        energy: "rising",
+        mood: "stable",
+        sleep: "stable",
+        libido: "stable",
+        motivation: "rising"
+      },
+      recentPoints: [
+        {
+          date: "2026-01-25",
+          energy: 6,
+          mood: 7,
+          sleep: 6,
+          libido: 6,
+          motivation: 7
+        },
+        {
+          date: "2026-02-01",
+          energy: 8,
+          mood: 7,
+          sleep: 6,
+          libido: 6,
+          motivation: 9
+        }
+      ]
+    });
   });
 });

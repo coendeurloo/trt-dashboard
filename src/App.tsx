@@ -280,6 +280,7 @@ const App = () => {
     analysisCopied,
     analysisKind,
     analyzingKind,
+    analysisScopeNotice,
     betaUsage,
     betaLimits,
     setAnalysisError,
@@ -289,6 +290,7 @@ const App = () => {
     settings: appData.settings,
     language: appData.settings.language,
     visibleReports,
+    checkIns: appData.checkIns,
     protocols: appData.protocols,
     supplementTimeline: appData.supplementTimeline,
     samplingControlsEnabled,
@@ -1647,6 +1649,7 @@ const App = () => {
                 analysisCopied={analysisCopied}
                 analysisKind={analysisKind}
                 analyzingKind={analyzingKind}
+                analysisScopeNotice={analysisScopeNotice}
                 reportsInScope={visibleReports.length}
                 markersTracked={allMarkers.length}
                 analysisMarkerNames={analysisMarkerNames}
