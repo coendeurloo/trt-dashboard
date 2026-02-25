@@ -20,6 +20,14 @@ import {
 import { getRelevantBenchmarks } from "./data/studyBenchmarks";
 import { sanitizeAnalysisPayloadForAI } from "./privacy/sanitizeForAI";
 import type { WellbeingSummary } from "./analysisScope";
+import {
+  buildPremiumInsightPack,
+  buildSupplementActionabilityDecision,
+  hasForbiddenSupplementAdviceLanguage,
+  PremiumInsightPack,
+  PremiumTrendSignal,
+  SupplementActionabilityDecision
+} from "./analysisPremium";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -60,7 +68,10 @@ export interface AnalyzeLabDataResult {
   actionsNeeded: boolean;
   actionReasons: string[];
   actionConfidence: "high" | "medium" | "low";
+  supplementActionsNeeded: boolean;
   supplementAdviceIncluded: boolean;
+  qualityGuardApplied: boolean;
+  qualityIssues: string[];
 }
 
 interface AnalysisMarkerRow {
@@ -97,14 +108,6 @@ interface LatestComparisonRow {
   percentChange: number | null;
   previousAbnormal: "low" | "high" | "normal" | "unknown";
   latestAbnormal: "low" | "high" | "normal" | "unknown";
-}
-
-interface CompactMarkerTrend {
-  marker: string;
-  directionTag: "improving" | "worsening" | "stable";
-  severityTag: "high" | "medium" | "low";
-  outOfRangeFlag: boolean;
-  relevanceTag: "critical" | "important" | "background";
 }
 
 interface AnalysisActionabilityDecision {
@@ -167,44 +170,49 @@ const FORMAT_RULES = (outputLanguage: string): string[] => [
 
 const ANALYSIS_RULES: string[] = [
   "Use only data from the JSON block.",
-  "Use only a few anchor data points; avoid long marker-by-marker number lists.",
+  "Write in plain language that a non-technical user can read quickly.",
+  "Use short sentences and avoid jargon unless you explain it in one short phrase.",
+  "Avoid marker-by-marker recap and avoid listing unchanged markers.",
+  "Use only a few anchor data points; do not dump numeric lists.",
   "Integrate timeline order, sampling timing, protocol, supplements, symptoms, and wellbeing together.",
   "Prioritize insights and likely drivers over raw value repetition.",
   "Do not restate what a dashboard already shows unless needed for context or safety.",
-  "Avoid marker-by-marker recap and avoid listing unchanged markers.",
+  "Every recommendation must link to a concrete signal in the data.",
   "Cite studies only when needed for a recommendation or risk statement (max 2 citations total).",
-  "State uncertainty and confounders clearly.",
+  "State uncertainty and confounders in plain language.",
   "Action-neutral: no diagnosis, prescriptions, or medical directives."
 ];
 
-const BASE_SECTION_TEMPLATE: string[] = [
+const NARRATIVE_SECTION_TEMPLATE: string[] = [
   "Required sections (in this order):",
-  "1) '## Clinical Story' (short narrative: what changed and why it likely changed).",
-  "2) '## What Matters Most Now' (top 3-5 priorities with rationale).",
-  "3) '## Protocol, Supplements, and Wellbeing Links' (explicit cross-links, not raw marker dump)."
+  "1) '## The Story So Far' (one short paragraph in plain language).",
+  "2) '## Why This Likely Happened' (2-4 causal links only, no marker dump).",
+  "3) '## What Matters Most Now' (max 3 priorities).",
+  "4) '## What To Do Next' (Now / Next test / When to revise)."
 ];
 
 const SUPPLEMENT_SECTION_REQUIRED_TEMPLATE: string[] = [
-  "4) '## Supplement Advice (for doctor discussion)' (focused, practical, minimal).",
-  "In Supplement Advice, discuss only true change actions: add/start/increase/decrease/stop/switch/reintroduce (no keep/continue/maintain-only advice).",
-  "Each supplement item should include current dose, suggested change, rationale, expected direction, confidence, and one doctor discussion point.",
+  "5) '## Supplement Changes (for doctor discussion)' (only when true change is needed).",
+  "In this section, only true change actions are allowed: add/start/increase/decrease/stop/switch/reintroduce.",
+  "Never include keep/maintain/continue-only advice.",
+  "Each item should include current dose, suggested change, rationale, expected direction, confidence, and one doctor discussion point.",
   "If a marker is low/high and commonly correctable with supplementation, suggest practical options and what to monitor."
 ];
 
 const SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE: string[] = [
-  "Do NOT include any 'Supplement Advice' section when no action is needed."
+  "Do NOT include any 'Supplement Changes' section when no supplement action is needed."
 ];
 
 const OUTPUT_STYLE_LIMITS: Record<"full" | "latestComparison", string[]> = {
   full: [
-    "Keep it concise: max 420 words total.",
-    "Use at most 8 numeric anchors in total.",
-    "Mention at most 4 specific markers unless a safety concern requires more."
+    "Target length: 300-450 words.",
+    "Use at most 10 numeric anchors in total.",
+    "Mention at most 5 specific markers unless a safety concern requires more."
   ],
   latestComparison: [
-    "Keep it concise: max 280 words total.",
-    "Use at most 5 numeric anchors in total.",
-    "Mention at most 3 specific markers unless a safety concern requires more."
+    "Target length: 220-320 words.",
+    "Use at most 7 numeric anchors in total.",
+    "Mention at most 4 specific markers unless a safety concern requires more."
   ]
 };
 
@@ -372,7 +380,7 @@ const trendDirectionFromSummary = (summary: {
   delta: number;
   percentChange: number | null;
   latestAbnormalFlag: "low" | "high" | "normal" | "unknown";
-}): CompactMarkerTrend["directionTag"] => {
+}): PremiumTrendSignal["directionTag"] => {
   const delta = summary.delta;
   const absPct = Math.abs(summary.percentChange ?? 0);
 
@@ -411,7 +419,7 @@ const compactTrendSeverity = (summary: {
   outOfRangeCount: number;
   percentChange: number | null;
   latestAbnormalFlag: "low" | "high" | "normal" | "unknown";
-}): CompactMarkerTrend["severityTag"] => {
+}): PremiumTrendSignal["severityTag"] => {
   const absPct = Math.abs(summary.percentChange ?? 0);
   const hasLatestAbnormal = summary.latestAbnormalFlag === "high" || summary.latestAbnormalFlag === "low";
   if ((hasLatestAbnormal && absPct >= 10) || summary.outOfRangeCount >= 2) {
@@ -423,7 +431,7 @@ const compactTrendSeverity = (summary: {
   return "low";
 };
 
-const compactTrendRelevance = (marker: string): CompactMarkerTrend["relevanceTag"] => {
+const compactTrendRelevance = (marker: string): PremiumTrendSignal["relevanceTag"] => {
   if (CRITICAL_MARKERS.has(marker)) {
     return "critical";
   }
@@ -433,7 +441,7 @@ const compactTrendRelevance = (marker: string): CompactMarkerTrend["relevanceTag
   return "background";
 };
 
-const compactTrendPriorityScore = (trend: CompactMarkerTrend): number => {
+const compactTrendPriorityScore = (trend: PremiumTrendSignal): number => {
   const relevance = trend.relevanceTag === "critical" ? 100 : trend.relevanceTag === "important" ? 60 : 20;
   const severity = trend.severityTag === "high" ? 30 : trend.severityTag === "medium" ? 16 : 4;
   const direction = trend.directionTag === "worsening" ? 16 : trend.directionTag === "improving" ? 10 : 0;
@@ -933,7 +941,7 @@ const buildSignals = (
   derivedSignals: ReturnType<typeof buildDerivedSignals>,
   context: AnalyzeLabDataOptions["context"]
 ) => {
-  const markerTrends: CompactMarkerTrend[] = [...derivedSignals.markerSummaries]
+  const markerTrends: PremiumTrendSignal[] = [...derivedSignals.markerSummaries]
     .map((summary) => {
       const outOfRangeFlag =
         summary.outOfRangeCount > 0 || summary.latestAbnormalFlag === "high" || summary.latestAbnormalFlag === "low";
@@ -1053,40 +1061,203 @@ const buildActionabilityDecision = ({
   };
 };
 
-const isSupplementAdviceHeading = (line: string): boolean => {
-  const trimmed = line.trim().toLowerCase();
-  return /^#{1,6}\s+/.test(trimmed) && trimmed.includes("supplement advice");
+interface ParsedNarrativeSection {
+  heading: string;
+  lines: string[];
+}
+
+interface QualityGuardResult {
+  text: string;
+  supplementAdviceIncluded: boolean;
+  qualityGuardApplied: boolean;
+  qualityIssues: string[];
+}
+
+const H2_HEADING_PATTERN = /^##\s+(.+?)\s*$/;
+const SUPPLEMENT_SECTION_HEADING = "Supplement Changes (for doctor discussion)";
+const REQUIRED_NARRATIVE_SECTIONS = [
+  "The Story So Far",
+  "Why This Likely Happened",
+  "What Matters Most Now",
+  "What To Do Next"
+] as const;
+
+const canonicalNarrativeHeading = (heading: string): string => {
+  const normalized = heading.trim().toLowerCase();
+  if (normalized.includes("clinical story")) {
+    return "The Story So Far";
+  }
+  if (normalized.includes("the story so far")) {
+    return "The Story So Far";
+  }
+  if (normalized.includes("protocol, supplements, and wellbeing links")) {
+    return "Why This Likely Happened";
+  }
+  if (normalized.includes("why this likely happened")) {
+    return "Why This Likely Happened";
+  }
+  if (normalized.includes("what matters most now")) {
+    return "What Matters Most Now";
+  }
+  if (normalized.includes("what to do next")) {
+    return "What To Do Next";
+  }
+  if (normalized.includes("supplement advice") || normalized.includes("supplement changes")) {
+    return SUPPLEMENT_SECTION_HEADING;
+  }
+  return heading.trim();
 };
 
-const hasSupplementAdviceSection = (text: string): boolean =>
-  text
-    .split(/\r?\n/)
-    .some((line) => isSupplementAdviceHeading(line));
-
-const stripSupplementAdviceSection = (text: string): { text: string; removed: boolean } => {
+const parseNarrativeSections = (text: string): { preamble: string[]; sections: ParsedNarrativeSection[] } => {
   const lines = text.split(/\r?\n/);
-  const output: string[] = [];
-  let index = 0;
-  let removed = false;
+  const preamble: string[] = [];
+  const sections: ParsedNarrativeSection[] = [];
+  let activeSection: ParsedNarrativeSection | null = null;
 
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!isSupplementAdviceHeading(line)) {
-      output.push(line);
-      index += 1;
-      continue;
+  lines.forEach((line) => {
+    const headingMatch = line.match(H2_HEADING_PATTERN);
+    if (headingMatch) {
+      const heading = canonicalNarrativeHeading(headingMatch[1] ?? "");
+      activeSection = {
+        heading,
+        lines: []
+      };
+      sections.push(activeSection);
+      return;
     }
 
-    removed = true;
-    index += 1;
-    while (index < lines.length && !/^##\s+/.test(lines[index].trim())) {
-      index += 1;
+    if (!activeSection) {
+      preamble.push(line);
+      return;
+    }
+    activeSection.lines.push(line);
+  });
+
+  return {
+    preamble,
+    sections
+  };
+};
+
+const serializeNarrativeSections = ({ preamble, sections }: { preamble: string[]; sections: ParsedNarrativeSection[] }): string => {
+  const lines: string[] = [];
+  if (preamble.some((line) => line.trim().length > 0)) {
+    lines.push(...preamble);
+    if (lines[lines.length - 1]?.trim() !== "") {
+      lines.push("");
     }
   }
 
+  sections.forEach((section, index) => {
+    lines.push(`## ${section.heading}`);
+    lines.push(...section.lines);
+    if (index < sections.length - 1 && lines[lines.length - 1]?.trim() !== "") {
+      lines.push("");
+    }
+  });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+};
+
+const hasSupplementSection = (sections: ParsedNarrativeSection[]): boolean =>
+  sections.some((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+
+const applyNarrativeQualityGuard = ({
+  text,
+  supplementActionsNeeded
+}: {
+  text: string;
+  supplementActionsNeeded: boolean;
+}): QualityGuardResult => {
+  const qualityIssues: string[] = [];
+  let qualityGuardApplied = false;
+  const parsed = parseNarrativeSections(text);
+  const sections = [...parsed.sections];
+  const supplementIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+
+  if (!supplementActionsNeeded && supplementIndex !== -1) {
+    sections.splice(supplementIndex, 1);
+    qualityIssues.push("supplement_section_removed_without_actionability");
+    qualityGuardApplied = true;
+  }
+
+  const supplementSectionIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+  if (supplementSectionIndex !== -1) {
+    const section = sections[supplementSectionIndex];
+    const filteredLines = section.lines.filter((line) => !hasForbiddenSupplementAdviceLanguage(line));
+    if (filteredLines.length !== section.lines.length) {
+      section.lines = filteredLines;
+      qualityIssues.push("supplement_keep_language_removed");
+      qualityGuardApplied = true;
+    }
+    const hasMeaningfulContent = section.lines.some((line) => line.trim().length > 0);
+    if (!hasMeaningfulContent) {
+      sections.splice(supplementSectionIndex, 1);
+      qualityIssues.push("empty_supplement_section_removed");
+      qualityGuardApplied = true;
+    }
+  }
+
+  const sectionHeadings = new Set(sections.map((section) => section.heading));
+  REQUIRED_NARRATIVE_SECTIONS.forEach((heading) => {
+    if (sectionHeadings.has(heading)) {
+      return;
+    }
+    qualityGuardApplied = true;
+    qualityIssues.push(`missing_section_${heading.toLowerCase().replace(/\s+/g, "_")}`);
+    if (heading === "The Story So Far") {
+      sections.unshift({
+        heading,
+        lines: ["A clear narrative summary could not be fully inferred from the model output."]
+      });
+      return;
+    }
+    if (heading === "Why This Likely Happened") {
+      sections.push({
+        heading,
+        lines: ["The likely drivers were partially unclear due to limited or conflicting context signals."]
+      });
+      return;
+    }
+    if (heading === "What Matters Most Now") {
+      sections.push({
+        heading,
+        lines: ["- Prioritize stable protocol execution.", "- Re-check key risk markers on the next test."]
+      });
+      return;
+    }
+    sections.push({
+      heading: "What To Do Next",
+      lines: [
+        "- Now: keep data collection consistent and avoid multiple simultaneous changes.",
+        "- Next test: repeat key markers in the same sampling context.",
+        "- Revisit decisions when the new panel confirms direction."
+      ]
+    });
+  });
+
+  if (supplementActionsNeeded && !hasSupplementSection(sections)) {
+    sections.push({
+      heading: SUPPLEMENT_SECTION_HEADING,
+      lines: [
+        "- A supplement change is likely warranted based on current risk signals.",
+        "- Discuss add/increase/decrease/switch options with your clinician."
+      ]
+    });
+    qualityIssues.push("supplement_section_added_from_actionability");
+    qualityGuardApplied = true;
+  }
+
+  const outputText = serializeNarrativeSections({
+    preamble: parsed.preamble,
+    sections
+  });
+
   return {
-    text: output.join("\n").replace(/\n{3,}/g, "\n\n").trim(),
-    removed
+    text: outputText,
+    supplementAdviceIncluded: hasSupplementSection(sections),
+    qualityGuardApplied,
+    qualityIssues
   };
 };
 
@@ -1103,6 +1274,7 @@ export const analyzeLabDataWithClaude = async ({
   providerPreference = "auto",
   context
 }: AnalyzeLabDataOptions): Promise<AnalyzeLabDataResult> => {
+  void providerPreference;
   if (reports.length === 0) {
     throw new Error("Er zijn nog geen rapporten om te analyseren.");
   }
@@ -1127,6 +1299,21 @@ export const analyzeLabDataWithClaude = async ({
     signals,
     analysisType: "full"
   });
+  const fullPremiumInsightPack: PremiumInsightPack = buildPremiumInsightPack({
+    reports: sanitizedPayload,
+    markerTrends: signals.markerTrends,
+    alerts: signals.alerts,
+    protocolImpact: context?.protocolImpact ?? { events: [], insights: [] },
+    trtStability: signals.stability,
+    wellbeing: signals.wellbeing,
+    samplingFilter: signals.samplingFilter
+  });
+  const fullSupplementActionability: SupplementActionabilityDecision = buildSupplementActionabilityDecision({
+    generalActionability: fullActionability,
+    markerTrends: signals.markerTrends,
+    alerts: signals.alerts,
+    premiumInsightPack: fullPremiumInsightPack
+  });
   const latestComparison = buildLatestVsPrevious(sanitizedPayload);
   const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
   const benchmarkSection = buildBenchmarkContext(trackedMarkerNames.slice(0, MAX_BENCHMARK_MARKERS_IN_PROMPT));
@@ -1135,13 +1322,16 @@ export const analyzeLabDataWithClaude = async ({
 
   const fullPrompt = [
     `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
-    "Goal: produce insight-first conclusions that add value beyond the dashboard.",
+    "Goal: write a premium narrative that is easy to read and adds insight beyond the dashboard.",
     ...FORMAT_RULES(preferredOutputLanguage),
     ...ANALYSIS_RULES,
     ...OUTPUT_STYLE_LIMITS.full,
-    ...BASE_SECTION_TEMPLATE,
-    ...(fullActionability.actionsNeeded ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
+    ...NARRATIVE_SECTION_TEMPLATE,
+    ...(fullSupplementActionability.supplementActionsNeeded
+      ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE
+      : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
     "The 'reports' array contains all selected reports for this run. Use these together with compact signals only.",
+    "Keep the tone calm, direct, and non-technical.",
     SAFETY_NOTE,
     KEY_LEGEND,
     benchmarkSection,
@@ -1151,7 +1341,11 @@ export const analyzeLabDataWithClaude = async ({
       units: unitSystem,
       reports: payload,
       signals,
-      actionability: fullActionability
+      premiumInsights: fullPremiumInsightPack,
+      actionability: {
+        clinical: fullActionability,
+        supplement: fullSupplementActionability
+      }
     }),
     "DATA END"
   ].join("\n");
@@ -1178,39 +1372,64 @@ export const analyzeLabDataWithClaude = async ({
       signals: comparisonSignals,
       analysisType: "latestComparison"
     });
+    const comparisonPremiumInsightPack: PremiumInsightPack = buildPremiumInsightPack({
+      reports: relevantPayload,
+      markerTrends: comparisonSignals.markerTrends,
+      alerts: comparisonSignals.alerts,
+      protocolImpact: context?.protocolImpact ?? { events: [], insights: [] },
+      trtStability: comparisonSignals.stability,
+      wellbeing: comparisonSignals.wellbeing,
+      samplingFilter: comparisonSignals.samplingFilter
+    });
+    const comparisonSupplementActionability: SupplementActionabilityDecision = buildSupplementActionabilityDecision({
+      generalActionability: comparisonActionability,
+      markerTrends: comparisonSignals.markerTrends,
+      alerts: comparisonSignals.alerts,
+      premiumInsightPack: comparisonPremiumInsightPack
+    });
 
     return {
       prompt: [
-      `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
-      "Analyze only the latest report versus the immediately previous report.",
-      ...FORMAT_RULES(preferredOutputLanguage),
-      ...ANALYSIS_RULES,
-      ...OUTPUT_STYLE_LIMITS.latestComparison,
-      ...BASE_SECTION_TEMPLATE,
-      ...(comparisonActionability.actionsNeeded
-        ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE
-        : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
-      "Focus on what changed and why it matters clinically. Do not dump marker-by-marker differences.",
-      SAFETY_NOTE,
-      KEY_LEGEND,
-      relevantBenchmarkSection,
-      "DATA START",
-      JSON.stringify({
-        type: "latestComparison",
-        units: unitSystem,
-        latestComparison: relevantComparison ?? latestComparison,
-        reports: relevantPayload,
-        signals: comparisonSignals,
-        actionability: comparisonActionability
-      }),
-      "DATA END"
+        `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
+        "Analyze only the latest report versus the immediately previous report.",
+        ...FORMAT_RULES(preferredOutputLanguage),
+        ...ANALYSIS_RULES,
+        ...OUTPUT_STYLE_LIMITS.latestComparison,
+        ...NARRATIVE_SECTION_TEMPLATE,
+        ...(comparisonSupplementActionability.supplementActionsNeeded
+          ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE
+          : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
+        "Focus on what changed and why it matters clinically. Avoid raw marker recaps.",
+        "Keep the tone calm, direct, and non-technical.",
+        SAFETY_NOTE,
+        KEY_LEGEND,
+        relevantBenchmarkSection,
+        "DATA START",
+        JSON.stringify({
+          type: "latestComparison",
+          units: unitSystem,
+          latestComparison: relevantComparison ?? latestComparison,
+          reports: relevantPayload,
+          signals: comparisonSignals,
+          premiumInsights: comparisonPremiumInsightPack,
+          actionability: {
+            clinical: comparisonActionability,
+            supplement: comparisonSupplementActionability
+          }
+        }),
+        "DATA END"
       ].join("\n"),
-      actionability: comparisonActionability
+      actionability: comparisonActionability,
+      supplementActionability: comparisonSupplementActionability
     };
   })();
 
   const prompt = analysisType === "latestComparison" ? latestComparisonConfig.prompt : fullPrompt;
   const actionability = analysisType === "latestComparison" ? latestComparisonConfig.actionability : fullActionability;
+  const supplementActionability =
+    analysisType === "latestComparison"
+      ? latestComparisonConfig.supplementActionability
+      : fullSupplementActionability;
 
   const tryModel = async (
     model: string,
@@ -1263,12 +1482,7 @@ export const analyzeLabDataWithClaude = async ({
   let lastStatus = 0;
   let lastErrorMessage = "";
 
-  const providerPlan: AnalysisProvider[] =
-    providerPreference === "claude"
-      ? ["claude"]
-      : providerPreference === "gemini"
-        ? ["gemini"]
-        : ["claude", "gemini"];
+  const providerPlan: AnalysisProvider[] = ["claude", "gemini"];
 
   const primaryProvider = providerPlan[0] ?? "claude";
   providerLoop: for (const provider of providerPlan) {
@@ -1326,24 +1540,23 @@ export const analyzeLabDataWithClaude = async ({
           const maybeTruncated = truncated
             ? `${finalized}\n\n_Note: output may be incomplete due to output token limit._`
             : finalized;
-          let outputText = stripComplexFormatting(maybeTruncated);
-          let supplementAdviceIncluded = hasSupplementAdviceSection(outputText);
-          if (!actionability.actionsNeeded && supplementAdviceIncluded) {
-            const stripped = stripSupplementAdviceSection(outputText);
-            if (stripped.removed) {
-              outputText = stripped.text;
-              supplementAdviceIncluded = hasSupplementAdviceSection(outputText);
-            }
-          }
-          return {
+          const outputText = stripComplexFormatting(maybeTruncated);
+          const qualityResult = applyNarrativeQualityGuard({
             text: outputText,
+            supplementActionsNeeded: supplementActionability.supplementActionsNeeded
+          });
+          return {
+            text: qualityResult.text,
             provider,
             model,
             fallbackUsed: provider !== primaryProvider,
             actionsNeeded: actionability.actionsNeeded,
             actionReasons: actionability.actionReasons,
             actionConfidence: actionability.actionConfidence,
-            supplementAdviceIncluded
+            supplementActionsNeeded: supplementActionability.supplementActionsNeeded,
+            supplementAdviceIncluded: qualityResult.supplementAdviceIncluded,
+            qualityGuardApplied: qualityResult.qualityGuardApplied,
+            qualityIssues: qualityResult.qualityIssues
           };
         }
 

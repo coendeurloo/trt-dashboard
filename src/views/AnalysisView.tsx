@@ -22,7 +22,10 @@ interface AnalysisViewProps {
     actionsNeeded: boolean;
     actionReasons: string[];
     actionConfidence: "high" | "medium" | "low";
+    supplementActionsNeeded: boolean;
     supplementAdviceIncluded: boolean;
+    qualityGuardApplied: boolean;
+    qualityIssues: string[];
   } | null;
   analysisKind: "full" | "latestComparison" | null;
   analyzingKind: "full" | "latestComparison" | null;
@@ -274,6 +277,15 @@ const AnalysisView = ({
                     : "rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700"
                 }
               >
+                {tr("Stijl", "Style")}: {tr("Narrative premium", "Narrative premium")}
+              </span>
+              <span
+                className={
+                  isDarkTheme
+                    ? "rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-slate-300"
+                    : "rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700"
+                }
+              >
                 {tr("Model", "Model")}: {analysisModelInfo.model}
                 {" · "}
                 {tr("Provider", "Provider")}: {analysisModelInfo.provider}
@@ -287,8 +299,19 @@ const AnalysisView = ({
                 }
               >
                 {tr("Supplement acties", "Supplement actions")}:{" "}
-                {analysisModelInfo.actionsNeeded ? analysisModelInfo.actionReasons.length : tr("geen", "none")}
+                {analysisModelInfo.supplementActionsNeeded ? analysisModelInfo.actionReasons.length : tr("geen", "none")}
               </span>
+              {analysisModelInfo.qualityGuardApplied ? (
+                <span
+                  className={
+                    isDarkTheme
+                      ? "rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-100"
+                      : "rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900"
+                  }
+                >
+                  {tr("Output guard toegepast", "Output guard applied")}
+                </span>
+              ) : null}
             </div>
           ) : null}
           {analysisResult ? (

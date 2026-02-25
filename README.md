@@ -66,11 +66,13 @@ Server-only (Vercel + local server):
 - `AI_DAILY_BUDGET_EUR` (optional, `0` = disabled)
 - `AI_MONTHLY_BUDGET_EUR` (optional, `0` = disabled)
 - `AI_PARSER_MAX_CALLS_PER_USER_PER_DAY` (optional)
+- `AI_LIMITS_DISABLED` (optional debug switch; `true` disables server-side AI limits/budget checks)
 
 Client/build flags:
 - `VITE_ENABLE_PARSER_DEBUG` (optional, keep `false` for normal production)
 - `VITE_GEMINI_API_KEY` (dev-only fallback, do not use in production)
 - `VITE_AI_ANALYSIS_MARKER_CAP` (optional)
+- `VITE_DISABLE_BETA_LIMITS` (optional debug switch; `true` disables client beta usage caps)
 - `VITE_SHARE_PUBLIC_ORIGIN` (optional, defaults to `https://labtracker.app`)
 
 ## Tech stack

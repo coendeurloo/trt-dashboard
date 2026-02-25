@@ -109,7 +109,10 @@ describe("AnalysisView", () => {
           actionsNeeded: false,
           actionReasons: [],
           actionConfidence: "low",
-          supplementAdviceIncluded: false
+          supplementActionsNeeded: false,
+          supplementAdviceIncluded: false,
+          qualityGuardApplied: false,
+          qualityIssues: []
         }}
       />
     );

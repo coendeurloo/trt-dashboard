@@ -19,6 +19,11 @@ interface ProxyRequestBody {
 
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 
+const aiLimitsDisabled = (): boolean => {
+  const raw = String(process.env.AI_LIMITS_DISABLED ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+};
+
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
@@ -128,38 +133,40 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const ip = getClientIp(req);
-    let limit: Awaited<ReturnType<typeof checkRateLimit>>;
-    try {
-      limit = await checkRateLimit(ip, "analysis");
-    } catch (error) {
-      if (
-        error instanceof RedisStoreUnavailableError ||
-        (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")
-      ) {
-        sendJson(res, 503, {
+    if (!aiLimitsDisabled()) {
+      const ip = getClientIp(req);
+      let limit: Awaited<ReturnType<typeof checkRateLimit>>;
+      try {
+        limit = await checkRateLimit(ip, "analysis");
+      } catch (error) {
+        if (
+          error instanceof RedisStoreUnavailableError ||
+          (typeof error === "object" && error !== null && (error as { code?: string }).code === "AI_LIMITS_UNAVAILABLE")
+        ) {
+          sendJson(res, 503, {
+            error: {
+              code: "AI_LIMITS_UNAVAILABLE",
+              message: "AI limits store unavailable. Try again later."
+            }
+          });
+          return;
+        }
+        throw error;
+      }
+      const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+      res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+      res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+      if (!limit.allowed) {
+        sendJson(res, 429, {
           error: {
-            code: "AI_LIMITS_UNAVAILABLE",
-            message: "AI limits store unavailable. Try again later."
-          }
+            code: "AI_RATE_LIMIT",
+            message: "Rate limit exceeded"
+          },
+          retryAfter,
+          remaining: limit.remaining
         });
         return;
       }
-      throw error;
-    }
-    const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
-    res.setHeader("x-ratelimit-remaining", String(limit.remaining));
-    res.setHeader("x-ratelimit-reset", String(limit.resetAt));
-    if (!limit.allowed) {
-      sendJson(res, 429, {
-        error: {
-          code: "AI_RATE_LIMIT",
-          message: "Rate limit exceeded"
-        },
-        retryAfter,
-        remaining: limit.remaining
-      });
-      return;
     }
 
     try {
@@ -221,4 +228,3 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
   }
 }
-

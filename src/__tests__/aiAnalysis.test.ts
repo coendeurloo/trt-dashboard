@@ -348,8 +348,11 @@ describe("analyzeLabDataWithClaude", () => {
       externalAiAllowed: true
     });
 
-    expect(capturedPrompt).toContain("Do NOT include any 'Supplement Advice' section when no action is needed.");
+    expect(capturedPrompt).toContain(
+      "Do NOT include any 'Supplement Changes' section when no supplement action is needed."
+    );
     expect(result.actionsNeeded).toBe(false);
+    expect(result.supplementActionsNeeded).toBe(false);
     expect(result.supplementAdviceIncluded).toBe(false);
   });
 
@@ -409,8 +412,9 @@ describe("analyzeLabDataWithClaude", () => {
       }
     });
 
-    expect(capturedPrompt).toContain("## Supplement Advice (for doctor discussion)");
+    expect(capturedPrompt).toContain("## Supplement Changes (for doctor discussion)");
     expect(result.actionsNeeded).toBe(true);
+    expect(result.supplementActionsNeeded).toBe(true);
     expect(result.supplementAdviceIncluded).toBe(true);
     expect(result.actionReasons.length).toBeGreaterThan(0);
   });
@@ -442,8 +446,10 @@ describe("analyzeLabDataWithClaude", () => {
     });
 
     expect(result.actionsNeeded).toBe(false);
+    expect(result.supplementActionsNeeded).toBe(false);
     expect(result.supplementAdviceIncluded).toBe(false);
     expect(result.text.toLowerCase()).not.toContain("supplement advice");
+    expect(result.text.toLowerCase()).not.toContain("supplement changes");
     expect(result.text).toContain("What Matters Most Now");
   });
 });

@@ -49,7 +49,10 @@ export const useAnalysis = ({
     actionsNeeded: boolean;
     actionReasons: string[];
     actionConfidence: "high" | "medium" | "low";
+    supplementActionsNeeded: boolean;
     supplementAdviceIncluded: boolean;
+    qualityGuardApplied: boolean;
+    qualityIssues: string[];
   } | null>(null);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
   const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
@@ -151,7 +154,10 @@ export const useAnalysis = ({
         actionsNeeded: result.actionsNeeded,
         actionReasons: result.actionReasons,
         actionConfidence: result.actionConfidence,
-        supplementAdviceIncluded: result.supplementAdviceIncluded
+        supplementActionsNeeded: result.supplementActionsNeeded,
+        supplementAdviceIncluded: result.supplementAdviceIncluded,
+        qualityGuardApplied: result.qualityGuardApplied,
+        qualityIssues: result.qualityIssues
       });
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
