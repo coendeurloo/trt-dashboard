@@ -38,11 +38,11 @@ import labtrackerLogoLight from "./assets/labtracker-logo-light.svg";
 import labtrackerLogoDark from "./assets/labtracker-logo-dark.svg";
 import appIcon from "../favicon.svg";
 import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
-import { buildShareSubsetData, buildShareToken, ShareOptions, SHARE_REPORT_CAP_SEQUENCE } from "./share";
-import { createShortShareLink, ShareClientError } from "./shareClient";
+import { ShareClientError } from "./shareClient";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
+import { useShareGeneration } from "./hooks/useShareGeneration";
 import {
   useShareBootstrap,
   shareBootstrapText
@@ -85,21 +85,8 @@ const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
 
-type ShareGenerationStatus = "idle" | "loading" | "success" | "error";
-
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
-
-  const [shareOptions, setShareOptions] = useState<ShareOptions>({
-    hideNotes: false,
-    hideProtocol: false,
-    hideSymptoms: false
-  });
-  const [shareLink, setShareLink] = useState("");
-  const [shareStatus, setShareStatus] = useState<ShareGenerationStatus>("idle");
-  const [shareMessage, setShareMessage] = useState("");
-  const [shareIncludedReports, setShareIncludedReports] = useState<number | null>(null);
-  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
 
   const {
     appData,
@@ -133,6 +120,16 @@ const App = () => {
     isShareMode
   });
   const tr = (nl: string, en: string): string => trLocale(appData.settings.language, nl, en);
+  const {
+    shareOptions,
+    setShareOptions,
+    shareLink,
+    shareStatus,
+    shareMessage,
+    shareIncludedReports,
+    shareExpiresAt,
+    generateShareLink
+  } = useShareGeneration({ appData, tr });
   const mapServiceErrorToMessage = (
     error: unknown,
     scope: "ai" | "pdf"
@@ -1292,110 +1289,6 @@ const App = () => {
       "De deellink kon niet worden aangemaakt. Probeer later opnieuw.",
       "Could not create the share link. Please try again later."
     );
-  };
-
-  const generateShareLink = async () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const host = window.location.hostname.toLowerCase();
-    const isLocalHost =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host === "::1" ||
-      host.endsWith(".local");
-
-    setShareStatus("loading");
-    setShareMessage(tr("Korte deellink wordt aangemaakt...", "Creating short share link..."));
-    setShareLink("");
-    setShareIncludedReports(null);
-    setShareExpiresAt(null);
-
-    let sawSnapshotTooLarge = false;
-    for (const cap of SHARE_REPORT_CAP_SEQUENCE) {
-      const subset = buildShareSubsetData(appData, cap);
-      const token = buildShareToken(subset, shareOptions);
-      if (!token) {
-        continue;
-      }
-
-      const publishDirectShareLink = async (reason: "local" | "fallback") => {
-        const shareUrl = `${window.location.origin}/?share=${encodeURIComponent(token)}`;
-        const includedReports = subset.reports.length;
-        setShareStatus("success");
-        setShareLink(shareUrl);
-        setShareIncludedReports(includedReports);
-        setShareExpiresAt(null);
-        setShareMessage(
-          reason === "local"
-            ? tr(
-                `Lokale share-link klaar. Gedeeld: laatste ${includedReports} rapporten.`,
-                `Local share link ready. Shared: latest ${includedReports} reports.`
-              )
-            : tr(
-                `Fallback share-link klaar. Gedeeld: laatste ${includedReports} rapporten.`,
-                `Fallback share link ready. Shared: latest ${includedReports} reports.`
-              )
-        );
-        try {
-          await navigator.clipboard.writeText(shareUrl);
-        } catch {
-          // Clipboard is optional; link is shown in UI.
-        }
-      };
-
-      if (isLocalHost) {
-        await publishDirectShareLink("local");
-        return;
-      }
-
-      try {
-        const response = await createShortShareLink(token);
-        const includedReports = subset.reports.length;
-        const expiresAt = response.expiresAt || null;
-        const expiryLabel = expiresAt ? formatDate(expiresAt) : tr("ongeveer 30 dagen", "about 30 days");
-
-        setShareStatus("success");
-        setShareLink(response.shareUrl);
-        setShareIncludedReports(includedReports);
-        setShareExpiresAt(expiresAt);
-        setShareMessage(
-          tr(
-            `Korte deellink klaar. Gedeeld: laatste ${includedReports} rapporten. Vervalt: ${expiryLabel}.`,
-            `Short share link ready. Shared: latest ${includedReports} reports. Expires: ${expiryLabel}.`
-          )
-        );
-
-        try {
-          await navigator.clipboard.writeText(response.shareUrl);
-        } catch {
-          // Clipboard is optional; link is shown in UI.
-        }
-        return;
-      } catch (error) {
-        if (!(error instanceof ShareClientError) || error.code !== "SHARE_SNAPSHOT_TOO_LARGE") {
-          await publishDirectShareLink("fallback");
-          return;
-        }
-        sawSnapshotTooLarge = true;
-        continue;
-      }
-    }
-
-    if (sawSnapshotTooLarge) {
-      setShareStatus("error");
-      setShareMessage(
-        tr(
-          "Zelfs met 1 rapport is deze snapshot te groot voor delen. Verberg extra velden of probeer een kleinere dataset.",
-          "Even with 1 report this snapshot is too large to share. Hide additional fields or use a smaller dataset."
-        )
-      );
-      return;
-    }
-
-    setShareStatus("error");
-    setShareMessage(tr("Korte deellink kon niet worden aangemaakt.", "Could not create a short share link."));
   };
 
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
