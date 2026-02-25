@@ -86,6 +86,23 @@ const buildGeminiPrompt = (fileName, pdfText) =>
     "TEXT LAYER END"
   ].join("\n");
 
+const buildGeminiAnalysisPayload = (body) => {
+  const prompt = body?.payload?.messages?.[0]?.content;
+  const userText = typeof prompt === "string" ? prompt : "";
+  return {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: userText }]
+      }
+    ],
+    generationConfig: {
+      temperature: Number.isFinite(Number(body?.payload?.temperature)) ? Number(body.payload.temperature) : 0.3,
+      maxOutputTokens: Number.isFinite(Number(body?.payload?.max_tokens)) ? Number(body.payload.max_tokens) : 2400
+    }
+  };
+};
+
 const claudeProxyPlugin = () => ({
   name: "local-claude-proxy",
   configureServer(server) {
@@ -219,6 +236,62 @@ const claudeProxyPlugin = () => ({
           testDate: extraction.testDate,
           markers: Array.isArray(extraction.markers) ? extraction.markers : []
         });
+        return;
+      }
+
+      if (pathname === "/api/gemini/analysis") {
+        if (req.method !== "POST") {
+          sendJson(res, 405, { error: { message: "Method not allowed" } });
+          return;
+        }
+
+        const env = loadEnv(server.config.mode, server.config.root, "");
+        const apiKey = (env.GEMINI_API_KEY ?? "").trim();
+        if (!apiKey) {
+          sendJson(res, 401, { error: { message: "Missing GEMINI_API_KEY on server" } });
+          return;
+        }
+
+        let body;
+        try {
+          body = await readJsonBody(req);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Invalid request body";
+          sendJson(res, 400, { error: { message } });
+          return;
+        }
+
+        const model = typeof body?.payload?.model === "string" ? body.payload.model : GEMINI_MODELS[0];
+        try {
+          const geminiResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(buildGeminiAnalysisPayload(body))
+            }
+          );
+          const responseText = await geminiResponse.text();
+          if (!geminiResponse.ok) {
+            sendJson(res, geminiResponse.status, { error: { message: responseText.slice(0, 1200) } });
+            return;
+          }
+
+          let parsed = {};
+          try {
+            parsed = responseText ? JSON.parse(responseText) : {};
+          } catch {
+            parsed = {};
+          }
+          const text = parsed?.candidates?.[0]?.content?.parts?.map((part) => part?.text ?? "").join("\n").trim() ?? "";
+          const finishReason = parsed?.candidates?.[0]?.finishReason === "MAX_TOKENS" ? "max_tokens" : "end_turn";
+          sendJson(res, 200, {
+            content: [{ type: "text", text }],
+            stop_reason: finishReason
+          });
+        } catch {
+          sendJson(res, 502, { error: { message: "Gemini API unreachable" } });
+        }
         return;
       }
 

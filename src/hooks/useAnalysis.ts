@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
+import { buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
-import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod } from "../types";
+import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
   language: AppLanguage;
   visibleReports: LabReport[];
+  checkIns: SymptomCheckIn[];
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
   samplingControlsEnabled: boolean;
@@ -23,6 +25,7 @@ export const useAnalysis = ({
   settings,
   language,
   visibleReports,
+  checkIns,
   protocols,
   supplementTimeline,
   samplingControlsEnabled,
@@ -39,6 +42,15 @@ export const useAnalysis = ({
   const [analysisResult, setAnalysisResult] = useState("");
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
+  const [analysisModelInfo, setAnalysisModelInfo] = useState<{
+    provider: "claude" | "gemini";
+    model: string;
+    fallbackUsed: boolean;
+    actionsNeeded: boolean;
+    actionReasons: string[];
+    actionConfidence: "high" | "medium" | "low";
+    supplementAdviceIncluded: boolean;
+  } | null>(null);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
   const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
   const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
@@ -58,6 +70,14 @@ export const useAnalysis = ({
     });
     setBetaRemaining(getRemainingAnalyses());
   };
+
+  const suggestedScopeNotice = useMemo(() => {
+    const scope = selectReportsForAnalysis({
+      reports: visibleReports,
+      analysisType: "full"
+    });
+    return scope.notice;
+  }, [visibleReports]);
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
     if (analysisType === "latestComparison" && visibleReports.length < 2) {
@@ -87,11 +107,21 @@ export const useAnalysis = ({
     setAnalyzingKind(analysisType);
     setAnalysisError("");
     setAnalysisCopied(false);
+    setAnalysisModelInfo(null);
 
     try {
+      const scopeSelection = selectReportsForAnalysis({
+        reports: visibleReports,
+        analysisType
+      });
+      const selectedReports = scopeSelection.selectedReports;
+      const wellbeingSummary = buildWellbeingSummary({
+        reports: selectedReports,
+        checkIns
+      });
       const { analyzeLabDataWithClaude } = await import("../aiAnalysis");
       const result = await analyzeLabDataWithClaude({
-        reports: visibleReports,
+        reports: selectedReports,
         protocols,
         supplementTimeline,
         unitSystem: settings.unitSystem,
@@ -108,10 +138,21 @@ export const useAnalysis = ({
           alerts,
           trendByMarker,
           trtStability,
-          dosePredictions
-        }
+          dosePredictions,
+          wellbeingSummary
+        },
+        providerPreference: settings.aiAnalysisProvider
       });
-      setAnalysisResult(result);
+      setAnalysisResult(result.text);
+      setAnalysisModelInfo({
+        provider: result.provider,
+        model: result.model,
+        fallbackUsed: result.fallbackUsed,
+        actionsNeeded: result.actionsNeeded,
+        actionReasons: result.actionReasons,
+        actionConfidence: result.actionConfidence,
+        supplementAdviceIncluded: result.supplementAdviceIncluded
+      });
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
       recordAnalysisUsage();
@@ -148,8 +189,10 @@ export const useAnalysis = ({
     analysisResult,
     analysisGeneratedAt,
     analysisCopied,
+    analysisModelInfo,
     analysisKind,
     analyzingKind,
+    analysisScopeNotice: suggestedScopeNotice,
     betaUsage,
     betaRemaining,
     betaLimits: BETA_LIMITS,

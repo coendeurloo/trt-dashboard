@@ -29,6 +29,7 @@ export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 export type SupplementAnchorState = "inherit" | "anchor" | "none" | "unknown";
 export type DashboardChartPreset = "clinical" | "protocol" | "minimal" | "custom";
 export type DashboardViewMode = "cards" | "compare2";
+export type AIAnalysisProvider = "auto" | "claude" | "gemini";
 
 export type DosePredictionSource = "personal" | "hybrid" | "study_prior";
 
@@ -297,6 +298,7 @@ export interface AppSettings {
   customRangeStart: string;
   customRangeEnd: string;
   aiExternalConsent: boolean;
+  aiAnalysisProvider: AIAnalysisProvider;
   aiCostMode: AICostMode;
   aiAutoImproveEnabled: boolean;
   parserDebugMode: ParserDebugMode;

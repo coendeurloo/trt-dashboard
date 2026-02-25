@@ -17,8 +17,10 @@ describe("AnalysisView", () => {
     analysisResultDisplay: "",
     analysisGeneratedAt: null,
     analysisCopied: false,
+    analysisModelInfo: null,
     analysisKind: null,
     analyzingKind: null,
+    analysisScopeNotice: null,
     reportsInScope: 1,
     markersTracked: 35,
     analysisMarkerNames: ["Testosterone", "Estradiol", "Hematocrit"],
@@ -72,5 +74,47 @@ describe("AnalysisView", () => {
     render(<AnalysisView {...baseProps} reportsInScope={1} />);
     const latestButton = screen.getByRole("button", { name: /compare latest report/i });
     expect(latestButton.getAttribute("disabled")).not.toBeNull();
+  });
+
+  it("shows scope notice only when reports are truncated", () => {
+    const { rerender } = render(<AnalysisView {...baseProps} />);
+    expect(screen.queryByText(/AI uses/i)).toBeNull();
+
+    rerender(
+      <AnalysisView
+        {...baseProps}
+        analysisScopeNotice={{
+          usedReports: 10,
+          totalReports: 27,
+          lookbackApplied: true,
+          capApplied: true,
+          reason: "lookback_and_cap"
+        }}
+      />
+    );
+
+    expect(screen.getByText(/AI uses 10 of 27 reports for this run/i)).toBeTruthy();
+  });
+
+  it("shows supplement action badge when model metadata is present", () => {
+    render(
+      <AnalysisView
+        {...baseProps}
+        analysisResult="## Clinical Story"
+        analysisResultDisplay="Clinical Story"
+        analysisModelInfo={{
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          fallbackUsed: false,
+          actionsNeeded: false,
+          actionReasons: [],
+          actionConfidence: "low",
+          supplementAdviceIncluded: false
+        }}
+      />
+    );
+
+    expect(screen.getByText(/Model: gemini-2.5-flash/i)).toBeTruthy();
+    expect(screen.getByText(/Supplement actions: none/i)).toBeTruthy();
   });
 });

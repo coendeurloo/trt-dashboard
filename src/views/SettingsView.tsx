@@ -276,6 +276,25 @@ const SettingsView = ({
             </select>
           </label>
 
+          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
+            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("AI analyse provider", "AI analysis provider")}</span>
+            <select
+              className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+              value={settings.aiAnalysisProvider}
+              onChange={(event) => onUpdateSettings({ aiAnalysisProvider: event.target.value as AppSettings["aiAnalysisProvider"] })}
+            >
+              <option value="auto">{tr("Auto (Claude met Gemini fallback)", "Auto (Claude with Gemini fallback)")}</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              {tr(
+                "Gebruik Gemini tijdelijk als Claude overbelast is.",
+                "Use Gemini temporarily if Claude is overloaded."
+              )}
+            </p>
+          </label>
+
           <div className="settings-core-toggles rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm md:col-span-2">
             <span className="block text-xs uppercase tracking-wide text-emerald-300">{tr("Core toggles", "Core toggles")}</span>
             <div className="settings-toggle-row mt-2 flex flex-wrap gap-2">

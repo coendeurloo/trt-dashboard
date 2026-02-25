@@ -44,7 +44,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-soft">
+      <div className="ai-consent-modal w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-soft">
         <div className="flex items-start gap-3">
           <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
             <ShieldCheck className="h-5 w-5 text-cyan-300" />
@@ -67,7 +67,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
           </div>
         </div>
 
-        <div className="mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
+        <div className="ai-consent-panel mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
           <p className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
             <FileText className="h-3.5 w-3.5" />
             {tr("Wat sturen we?", "What do we send?")}
@@ -75,21 +75,23 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
 
           {action === "parser_rescue" ? (
             <>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
+              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("AI gebruiken om extractie te verbeteren", "Use AI to improve extraction")}</span>
                 <input
                   type="checkbox"
                   checked={parserRescueEnabled}
                   onChange={(event) => setParserRescueEnabled(event.target.checked)}
+                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
                 />
               </label>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
+              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Volledig PDF-bestand meesturen (alleen deze run)", "Send full PDF too (this run only)")}</span>
                 <input
                   type="checkbox"
                   checked={allowPdfAttachment}
                   onChange={(event) => setAllowPdfAttachment(event.target.checked)}
                   disabled={!parserRescueEnabled}
+                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400 disabled:opacity-40"
                 />
               </label>
               <p className="text-xs text-slate-400">
@@ -101,13 +103,23 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             </>
           ) : (
             <>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
+              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Symptomen meesturen", "Include symptoms")}</span>
-                <input type="checkbox" checked={includeSymptoms} onChange={(event) => setIncludeSymptoms(event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={includeSymptoms}
+                  onChange={(event) => setIncludeSymptoms(event.target.checked)}
+                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
+                />
               </label>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
+              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Notities meesturen", "Include notes")}</span>
-                <input type="checkbox" checked={includeNotes} onChange={(event) => setIncludeNotes(event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={includeNotes}
+                  onChange={(event) => setIncludeNotes(event.target.checked)}
+                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
+                />
               </label>
               <p className="text-xs text-slate-400">
                 {tr(
@@ -118,7 +130,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             </>
           )}
 
-          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
+          <div className="ai-consent-warning flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5" />
             <p>
               {tr(
