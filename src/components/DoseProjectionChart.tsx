@@ -119,6 +119,12 @@ const DoseProjectionChart = ({
     "data"
   );
 
+  const showSteadyStateNote =
+    typeof latest.value === "number" &&
+    Number.isFinite(latest.value) &&
+    projectedEstimate > latest.value &&
+    Math.abs(projectedDose - prediction.currentDose) < 5;
+
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
       <p className="mb-1 text-[11px] text-slate-300">
@@ -243,6 +249,14 @@ const DoseProjectionChart = ({
           />
         </LineChart>
       </ResponsiveContainer>
+      {showSteadyStateNote && (
+        <p className="mt-1.5 text-[11px] text-slate-400">
+          {tr(
+            "De modelinschatting ligt boven je laatste meting bij dezelfde dosis — mogelijk was je nog niet op steady-state toen die meting werd gedaan.",
+            "The model estimate is above your last measurement at the same dose — your last test may have been taken before reaching steady-state at this dose level."
+          )}
+        </p>
+      )}
     </div>
   );
 };

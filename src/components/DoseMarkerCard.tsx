@@ -157,6 +157,26 @@ const DoseMarkerCard = ({
         )}
       </p>
 
+      {prediction.source === "study_prior" && (
+        <div className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <strong>{tr("Let op:", "Note:")}</strong>{" "}
+          {tr(
+            "Deze voorspelling is gebaseerd op gemiddelden uit TRT-populatiestudies, niet op jouw eigen meetdata. Individuele respons op testosteron varieert sterk — gebruik dit alleen als ruwe richtlijn.",
+            "This prediction is based on population study averages only — not your personal measurement data. Individual dose-response varies significantly. Use this as a rough reference only."
+          )}
+        </div>
+      )}
+
+      {prediction.source === "hybrid" && (
+        <div className="mt-2 rounded-lg border border-slate-500/40 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
+          <strong>{tr("Hybride model:", "Hybrid model:")}</strong>{" "}
+          {tr(
+            "Dit model combineert jouw eigen meetdata met gemiddelden uit TRT-studies, omdat je nog niet genoeg persoonlijke datapunten hebt voor een volledig persoonlijk model. Voeg meer labresultaten toe om de nauwkeurigheid te verbeteren.",
+            "This model blends your own measurement data with population study averages, because you don't yet have enough personal data points for a fully personal model. Add more lab results to improve accuracy."
+          )}
+        </div>
+      )}
+
       <div className="mt-2">
         <DoseProjectionChart
           prediction={prediction}
