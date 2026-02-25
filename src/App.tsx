@@ -21,9 +21,8 @@ import ParserUncertaintyModal from "./components/ParserUncertaintyModal";
 import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
-import { getMarkerDisplayName, getTabLabel, t, trLocale } from "./i18n";
+import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
 import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
-import { ShareClientError } from "./shareClient";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
@@ -41,6 +40,7 @@ import {
 } from "./hooks/useDerivedData";
 import { resolveUploadTriggerAction } from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
+import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import DashboardView from "./views/DashboardView";
 import {
   AIConsentAction,
@@ -115,70 +115,13 @@ const App = () => {
     shareExpiresAt,
     generateShareLink
   } = useShareGeneration({ appData, tr });
-  const mapServiceErrorToMessage = (
-    error: unknown,
-    scope: "ai" | "pdf"
-  ): string => {
-    if (!(error instanceof Error)) {
-      return scope === "ai"
-        ? tr("AI-analyse kon niet worden uitgevoerd.", "AI analysis could not be completed.")
-        : t(appData.settings.language, "pdfProcessFailed");
-    }
-
-    const code = error.message ?? "";
-    if (scope === "ai") {
-      if (code === "AI_CONSENT_REQUIRED") {
-        return tr(
-          "AI staat uit. Geef eerst expliciete toestemming in Instellingen > Privacy & AI.",
-          "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
-        );
-      }
-      if (code === "AI_LIMITS_UNAVAILABLE") {
-        return tr(
-          "AI is tijdelijk niet beschikbaar omdat de limietservice niet reageert. Probeer later opnieuw.",
-          "AI is temporarily unavailable because the limits service is unreachable. Please try again later."
-        );
-      }
-      if (code.startsWith("AI_RATE_LIMITED:")) {
-        const seconds = Number(code.split(":")[1] ?? "0");
-        const minutes = Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 0) / 60));
-        return t(appData.settings.language, "aiRateLimited").replace("{minutes}", String(minutes));
-      }
-      if (code === "AI_PROXY_UNREACHABLE") {
-        return t(appData.settings.language, "aiProxyUnreachable");
-      }
-      if (code === "AI_EMPTY_RESPONSE") {
-        return t(appData.settings.language, "aiEmptyResponse");
-      }
-      if (code.startsWith("AI_REQUEST_FAILED:")) {
-        const [, status, ...rest] = code.split(":");
-        const details = rest.join(":").trim();
-        const suffix = details ? ` (${status || "unknown"}: ${details})` : ` (${status || "unknown"})`;
-        return `${t(appData.settings.language, "aiRequestFailed")}${suffix}`;
-      }
-      return error.message;
-    }
-
-    if (code === "PDF_PROXY_UNREACHABLE") {
-      return t(appData.settings.language, "pdfProxyUnreachable");
-    }
-    if (code === "AI_LIMITS_UNAVAILABLE") {
-      return tr(
-        "AI parserfallback is tijdelijk niet beschikbaar omdat de limietservice niet reageert.",
-        "AI parser fallback is temporarily unavailable because the limits service is unreachable."
-      );
-    }
-    if (code === "PDF_EMPTY_RESPONSE") {
-      return t(appData.settings.language, "pdfEmptyResponse");
-    }
-    if (code.startsWith("PDF_EXTRACTION_FAILED:")) {
-      const [, status, ...rest] = code.split(":");
-      const details = rest.join(":").trim();
-      const suffix = details ? ` (${status || "unknown"}: ${details})` : ` (${status || "unknown"})`;
-      return `${t(appData.settings.language, "pdfExtractionFailed")}${suffix}`;
-    }
-    return t(appData.settings.language, "pdfProcessFailed");
-  };
+  const mapErrorToMessage = (error: unknown, scope: "ai" | "pdf"): string =>
+    mapServiceErrorToMessage({
+      error,
+      scope,
+      language: appData.settings.language,
+      tr
+    });
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
@@ -354,7 +297,7 @@ const App = () => {
     trendByMarker,
     trtStability,
     dosePredictions,
-    mapErrorToMessage: mapServiceErrorToMessage,
+    mapErrorToMessage: mapErrorToMessage,
     tr
   });
 
@@ -761,7 +704,7 @@ const App = () => {
         });
       }
     } catch (error) {
-      setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
       setIsProcessing(false);
@@ -827,7 +770,7 @@ const App = () => {
         );
       }
     } catch (error) {
-      setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
       setIsImprovingExtraction(false);
@@ -951,7 +894,7 @@ const App = () => {
         usedOcr: routeSummary.usedOcr
       });
     } catch (error) {
-      setUploadError(mapServiceErrorToMessage(error, "pdf"));
+      setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
       setIsProcessing(false);
@@ -1241,41 +1184,6 @@ const App = () => {
     await runAiAnalysis(analysisType, decision);
   };
 
-  const mapShareServiceErrorToMessage = (error: unknown): string => {
-    if (!(error instanceof ShareClientError)) {
-      return tr(
-        "De deellink kon niet worden aangemaakt. Probeer later opnieuw.",
-        "Could not create the share link. Please try again later."
-      );
-    }
-
-    if (error.code === "SHARE_PROXY_UNREACHABLE" || error.code === "SHARE_STORE_UNAVAILABLE") {
-      return tr(
-        "De deellinkservice is tijdelijk niet bereikbaar. Probeer later opnieuw.",
-        "The share-link service is temporarily unreachable. Please try again later."
-      );
-    }
-
-    if (error.code === "SHARE_CRYPTO_MISCONFIGURED") {
-      return tr(
-        "De deellinkservice is tijdelijk verkeerd geconfigureerd. Probeer later opnieuw.",
-        "The share-link service is temporarily misconfigured. Please try again later."
-      );
-    }
-
-    if (error.code === "SHARE_TOKEN_REQUIRED" || error.code === "SHARE_CODE_INVALID") {
-      return tr(
-        "De deellink kon niet worden opgebouwd door ongeldige data.",
-        "The share link could not be created due to invalid data."
-      );
-    }
-
-    return tr(
-      "De deellink kon niet worden aangemaakt. Probeer later opnieuw.",
-      "Could not create the share link. Please try again later."
-    );
-  };
-
   const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
   const activeTabSubtitle = (() => {
     if (isShareMode) {
@@ -1431,38 +1339,44 @@ const App = () => {
   return (
     <>
       <AppShell
-        activeTab={activeTab}
-        activeTabTitle={activeTabTitle}
-        activeTabSubtitle={activeTabSubtitle}
-        visibleTabKeys={visibleTabKeys}
-        onRequestTabChange={requestTabChange}
-        isMobileMenuOpen={isMobileMenuOpen}
-        onToggleMobileMenu={() => setIsMobileMenuOpen((current) => !current)}
-        onCloseMobileMenu={closeMobileMenu}
-        quickUploadDisabled={quickUploadDisabled}
-        onQuickUpload={startSecondUpload}
-        language={appData.settings.language}
-        onLanguageChange={(language) => updateSettings({ language })}
-        theme={appData.settings.theme}
-        onToggleTheme={() => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" })}
-        isShareMode={isShareMode}
-        isNl={isNl}
-        sharedSnapshotGeneratedAt={sharedSnapshot?.generatedAt ?? null}
-        hasReports={hasReports}
-        activeProtocolCompound={activeProtocolCompound}
-        outOfRangeCount={outOfRangeCount}
-        reportsCount={reports.length}
-        uploadPanelRef={uploadPanelRef}
-        hiddenUploadInputRef={hiddenUploadInputRef}
-        isProcessing={isProcessing}
-        uploadStage={uploadStage}
-        uploadError={uploadError}
-        uploadNotice={uploadNotice}
-        onUploadFileSelected={handleUpload}
-        onUploadIntent={() => {
-          void ensurePdfParsingModule();
+        shellState={{
+          activeTab,
+          activeTabTitle,
+          activeTabSubtitle,
+          visibleTabKeys,
+          isMobileMenuOpen,
+          quickUploadDisabled,
+          language: appData.settings.language,
+          theme: appData.settings.theme,
+          isShareMode,
+          isNl,
+          sharedSnapshotGeneratedAt: sharedSnapshot?.generatedAt ?? null,
+          hasReports,
+          activeProtocolCompound,
+          outOfRangeCount,
+          reportsCount: reports.length
         }}
-        onStartManualEntry={startManualEntry}
+        uploadState={{
+          uploadPanelRef,
+          hiddenUploadInputRef,
+          isProcessing,
+          uploadStage,
+          uploadError,
+          uploadNotice
+        }}
+        actions={{
+          onRequestTabChange: requestTabChange,
+          onToggleMobileMenu: () => setIsMobileMenuOpen((current) => !current),
+          onCloseMobileMenu: closeMobileMenu,
+          onQuickUpload: startSecondUpload,
+          onLanguageChange: (language) => updateSettings({ language }),
+          onToggleTheme: () => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" }),
+          onUploadFileSelected: handleUpload,
+          onUploadIntent: () => {
+            void ensurePdfParsingModule();
+          },
+          onStartManualEntry: startManualEntry
+        }}
         tr={tr}
       >
         <AnimatePresence mode="wait">

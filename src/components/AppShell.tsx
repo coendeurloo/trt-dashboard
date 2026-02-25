@@ -22,21 +22,15 @@ import { AppSettings, CompoundEntry, ParserStage, TabKey } from "../types";
 import MobileNavDrawer from "./MobileNavDrawer";
 import UploadPanel from "./UploadPanel";
 
-interface AppShellProps {
+export interface AppShellState {
   activeTab: TabKey;
   activeTabTitle: string;
   activeTabSubtitle: string | null;
   visibleTabKeys: Set<TabKey>;
-  onRequestTabChange: (tab: TabKey) => void;
   isMobileMenuOpen: boolean;
-  onToggleMobileMenu: () => void;
-  onCloseMobileMenu: () => void;
   quickUploadDisabled: boolean;
-  onQuickUpload: () => void;
   language: AppSettings["language"];
-  onLanguageChange: (language: AppSettings["language"]) => void;
   theme: AppSettings["theme"];
-  onToggleTheme: () => void;
   isShareMode: boolean;
   isNl: boolean;
   sharedSnapshotGeneratedAt: string | null;
@@ -44,53 +38,81 @@ interface AppShellProps {
   activeProtocolCompound: CompoundEntry | null;
   outOfRangeCount: number;
   reportsCount: number;
+}
+
+export interface AppShellUploadState {
   uploadPanelRef: RefObject<HTMLDivElement>;
   hiddenUploadInputRef: RefObject<HTMLInputElement>;
   isProcessing: boolean;
   uploadStage: ParserStage | null;
   uploadError: string;
   uploadNotice: string;
+}
+
+export interface AppShellActions {
+  onRequestTabChange: (tab: TabKey) => void;
+  onToggleMobileMenu: () => void;
+  onCloseMobileMenu: () => void;
+  onQuickUpload: () => void;
+  onLanguageChange: (language: AppSettings["language"]) => void;
+  onToggleTheme: () => void;
   onUploadFileSelected: (file: File) => void | Promise<void>;
   onUploadIntent: () => void;
   onStartManualEntry: () => void;
+}
+
+interface AppShellProps {
+  shellState: AppShellState;
+  uploadState: AppShellUploadState;
+  actions: AppShellActions;
   tr: (nl: string, en: string) => string;
   children: ReactNode;
 }
 
 const AppShell = ({
-  activeTab,
-  activeTabTitle,
-  activeTabSubtitle,
-  visibleTabKeys,
-  onRequestTabChange,
-  isMobileMenuOpen,
-  onToggleMobileMenu,
-  onCloseMobileMenu,
-  quickUploadDisabled,
-  onQuickUpload,
-  language,
-  onLanguageChange,
-  theme,
-  onToggleTheme,
-  isShareMode,
-  isNl,
-  sharedSnapshotGeneratedAt,
-  hasReports,
-  activeProtocolCompound,
-  outOfRangeCount,
-  reportsCount,
-  uploadPanelRef,
-  hiddenUploadInputRef,
-  isProcessing,
-  uploadStage,
-  uploadError,
-  uploadNotice,
-  onUploadFileSelected,
-  onUploadIntent,
-  onStartManualEntry,
+  shellState,
+  uploadState,
+  actions,
   tr,
   children
 }: AppShellProps) => {
+  const {
+    activeTab,
+    activeTabTitle,
+    activeTabSubtitle,
+    visibleTabKeys,
+    isMobileMenuOpen,
+    quickUploadDisabled,
+    language,
+    theme,
+    isShareMode,
+    isNl,
+    sharedSnapshotGeneratedAt,
+    hasReports,
+    activeProtocolCompound,
+    outOfRangeCount,
+    reportsCount
+  } = shellState;
+  const {
+    uploadPanelRef,
+    hiddenUploadInputRef,
+    isProcessing,
+    uploadStage,
+    uploadError,
+    uploadNotice
+  } = uploadState;
+  const {
+    onRequestTabChange,
+    onToggleMobileMenu,
+    onCloseMobileMenu,
+    onQuickUpload,
+    onLanguageChange,
+    onToggleTheme,
+    onUploadFileSelected,
+    onUploadIntent,
+    onStartManualEntry
+  } = actions;
+
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
     if (!visibleTabKeys.has(key)) {
       return null;
