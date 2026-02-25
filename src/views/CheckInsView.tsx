@@ -221,7 +221,7 @@ const CheckInCard = ({
   }
 
   return (
-    <div className="h-full rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-3.5 shadow-soft">
+    <div className="checkins-history-card h-full rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-3.5 shadow-soft">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-semibold text-slate-100">
@@ -329,7 +329,7 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   if (data.length < 2) return null;
 
   return (
-    <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
+    <div className="checkins-trend-card rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
       <div className="mb-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
           {tr("Trend over tijd", "Trend over time")}
@@ -342,13 +342,18 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
         </p>
       </div>
       <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }} className="checkins-trend-chart">
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" />
           <YAxis domain={[1, 10]} ticks={[1, 3, 5, 7, 10]} tick={{ fontSize: 11, fill: "#64748b" }} width={26} />
           <Tooltip
-            contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 10, fontSize: 12 }}
-            labelStyle={{ color: "#94a3b8" }}
+            contentStyle={{
+              background: "var(--chart-tooltip-bg)",
+              border: "1px solid var(--chart-tooltip-border)",
+              borderRadius: 10,
+              fontSize: 12
+            }}
+            labelStyle={{ color: "var(--chart-tooltip-label)" }}
           />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 8 }} />
           {METRICS.map((m) => (
@@ -427,7 +432,7 @@ const CheckInsView = ({
 
   return (
     <div className="space-y-4 px-1 py-2">
-      <section className="rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/65 to-slate-900/35 p-5 shadow-soft">
+      <section className="checkins-hero rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/65 to-slate-900/35 p-5 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <p className="text-xl font-semibold text-slate-100">{tr("Welzijns check-in", "Wellbeing check-in")}</p>
@@ -448,7 +453,7 @@ const CheckInsView = ({
               <button
                 type="button"
                 onClick={() => setShowForm(true)}
-                className="rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-sm font-semibold text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+                className="checkin-primary-btn rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-sm font-semibold text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
               >
                 {tr("Inchecken", "Check in")}
               </button>

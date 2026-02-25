@@ -600,7 +600,7 @@ const ReportsView = ({
                       return (
                         <span
                           key={m.id}
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+                          className={`report-highlight-chip inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
                             isAbnormal
                               ? abnormal === "high"
                                 ? "bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20"

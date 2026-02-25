@@ -1481,6 +1481,13 @@ const App = () => {
       return;
     }
 
+    const host = window.location.hostname.toLowerCase();
+    const isLocalHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".local");
+
     setShareStatus("loading");
     setShareMessage(tr("Korte deellink wordt aangemaakt...", "Creating short share link..."));
     setShareLink("");
@@ -1493,6 +1500,36 @@ const App = () => {
       const token = buildShareToken(subset, shareOptions);
       if (!token) {
         continue;
+      }
+
+      const publishDirectShareLink = async (reason: "local" | "fallback") => {
+        const shareUrl = `${window.location.origin}/?share=${encodeURIComponent(token)}`;
+        const includedReports = subset.reports.length;
+        setShareStatus("success");
+        setShareLink(shareUrl);
+        setShareIncludedReports(includedReports);
+        setShareExpiresAt(null);
+        setShareMessage(
+          reason === "local"
+            ? tr(
+                `Lokale share-link klaar. Gedeeld: laatste ${includedReports} rapporten.`,
+                `Local share link ready. Shared: latest ${includedReports} reports.`
+              )
+            : tr(
+                `Fallback share-link klaar. Gedeeld: laatste ${includedReports} rapporten.`,
+                `Fallback share link ready. Shared: latest ${includedReports} reports.`
+              )
+        );
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+        } catch {
+          // Clipboard is optional; link is shown in UI.
+        }
+      };
+
+      if (isLocalHost) {
+        await publishDirectShareLink("local");
+        return;
       }
 
       try {
@@ -1519,14 +1556,12 @@ const App = () => {
         }
         return;
       } catch (error) {
-        if (error instanceof ShareClientError && error.code === "SHARE_SNAPSHOT_TOO_LARGE") {
-          sawSnapshotTooLarge = true;
-          continue;
+        if (!(error instanceof ShareClientError) || error.code !== "SHARE_SNAPSHOT_TOO_LARGE") {
+          await publishDirectShareLink("fallback");
+          return;
         }
-
-        setShareStatus("error");
-        setShareMessage(mapShareServiceErrorToMessage(error));
-        return;
+        sawSnapshotTooLarge = true;
+        continue;
       }
     }
 
@@ -1746,20 +1781,20 @@ const App = () => {
             className="brand-logo mx-auto w-full max-w-[230px]"
           />
           {hasReports && activeProtocolCompound ? (
-            <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2.5">
-              <p className="truncate text-[11px] font-medium text-slate-400">
-                <span className="text-slate-600">{tr("Protocol", "Protocol")} · </span>
-                {activeProtocolCompound.name} {activeProtocolCompound.doseMg}
+            <div className="sidebar-protocol-card mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tr("Huidig protocol", "Current protocol")}</p>
+              <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
+                {activeProtocolCompound.name} {activeProtocolCompound.doseMg} mg
               </p>
               {outOfRangeCount > 0 ? (
-                <p className="mt-0.5 text-[11px] text-amber-400">
+                <p className="mt-2 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
                   {tr(
                     `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} buiten bereik`,
                     `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} out of range`
                   )}
                 </p>
               ) : (
-                <p className="mt-0.5 text-[11px] text-emerald-400">
+                <p className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
                   {tr("Alle markers binnen bereik", "All markers in range")}
                 </p>
               )}

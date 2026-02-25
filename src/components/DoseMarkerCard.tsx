@@ -190,7 +190,7 @@ const DoseMarkerCard = ({
         />
       </div>
 
-      <details className="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2.5 text-[11px] text-slate-300">
+      <details className="dose-model-details mt-2 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2.5 text-[11px] text-slate-300">
         <summary className="cursor-pointer list-none font-medium text-slate-200">
           <span className="inline-flex items-center gap-1">
             <BarChart3 className="h-3.5 w-3.5" />

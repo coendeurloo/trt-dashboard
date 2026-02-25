@@ -1,12 +1,11 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, Copy, Download, FileText, Link2, Lock, Pencil } from "lucide-react";
+import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
-import { AI_ANALYSIS_MARKER_CAP } from "../aiAnalysis";
 
 interface MarkerUsageRow {
   marker: string;
@@ -108,12 +107,9 @@ const SettingsView = ({
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [csvMarkerSelection, setCsvMarkerSelection] = useState<string[]>(allMarkers);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
-  const showParserDebugControls =
-    import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
   const mergeFromSpecimen = inferSpecimenFromCanonicalMarker(mergeFromMarker);
   const mergeTargetOptions = editableMarkers.filter(
     (marker) => marker !== mergeFromMarker && inferSpecimenFromCanonicalMarker(marker) === mergeFromSpecimen
@@ -224,44 +220,9 @@ const SettingsView = ({
     setDeleteInput("");
   };
 
-  const aiCostMetrics = useMemo(() => {
-    const totalUploads = reports.length;
-    const aiReports = reports.filter((report) => report.extraction?.aiUsed);
-    const localSuccessReports = reports.filter((report) => !report.extraction?.aiUsed && report.markers.length > 0);
-    const aiCallRate = totalUploads > 0 ? aiReports.length / totalUploads : 0;
-    const localSuccessRate = totalUploads > 0 ? localSuccessReports.length / totalUploads : 0;
-
-    const usageRows = aiReports
-      .map((report) => ({
-        input: report.extraction?.debug?.aiInputTokens ?? 0,
-        output: report.extraction?.debug?.aiOutputTokens ?? 0
-      }))
-      .filter((usage) => usage.input > 0 || usage.output > 0);
-
-    const totalInputTokens = usageRows.reduce((sum, usage) => sum + usage.input, 0);
-    const totalOutputTokens = usageRows.reduce((sum, usage) => sum + usage.output, 0);
-    const avgInputTokens = usageRows.length > 0 ? Math.round(totalInputTokens / usageRows.length) : 0;
-    const avgOutputTokens = usageRows.length > 0 ? Math.round(totalOutputTokens / usageRows.length) : 0;
-    const estimatedCostEur =
-      (totalInputTokens / 1_000_000) * 0.08 +
-      (totalOutputTokens / 1_000_000) * 0.3;
-    const estimatedCostPer100Uploads =
-      totalUploads > 0 ? (estimatedCostEur / totalUploads) * 100 : 0;
-
-    return {
-      totalUploads,
-      aiCalls: aiReports.length,
-      aiCallRate,
-      localSuccessRate,
-      avgInputTokens,
-      avgOutputTokens,
-      estimatedCostPer100Uploads
-    };
-  }, [reports]);
-
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
@@ -304,18 +265,6 @@ const SettingsView = ({
           </label>
 
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-            <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Grafiek Y-as", "Chart Y-axis")}</span>
-            <select
-              className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
-              value={settings.yAxisMode}
-              onChange={(event) => onUpdateSettings({ yAxisMode: event.target.value as AppSettings["yAxisMode"] })}
-            >
-              <option value="zero">{tr("Start op nul", "Start at zero")}</option>
-              <option value="data">{tr("Gebruik databereik", "Use data range")}</option>
-            </select>
-          </label>
-
-          <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
             <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Tooltip-detail", "Tooltip detail")}</span>
             <select
               className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
@@ -327,121 +276,38 @@ const SettingsView = ({
             </select>
           </label>
 
-          <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm md:col-span-2">
-            <span className="block text-xs uppercase tracking-wide text-emerald-300">{tr("Privacy & AI", "Privacy & AI")}</span>
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 p-3">
-              <div>
-                <p className="text-sm text-slate-200">{tr("Externe AI toestaan", "Allow external AI")}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {tr(
-                    "Zonder permanente toestemming tonen we per run eerst een consent-check.",
-                    "Without persistent consent, we show a consent check before each run."
-                  )}
-                </p>
-              </div>
-              <button
-                type="button"
-                className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
-                  settings.aiExternalConsent ? "border-emerald-500/60 bg-emerald-500/25" : "border-slate-600 bg-slate-700"
-                }`}
-                onClick={() => onUpdateSettings({ aiExternalConsent: !settings.aiExternalConsent })}
-                aria-label={tr("Externe AI toestaan", "Allow external AI")}
-                aria-pressed={settings.aiExternalConsent}
-              >
-                <span
-                  className={`h-4 w-4 rounded-full transition ${
-                    settings.aiExternalConsent ? "translate-x-5 bg-emerald-300" : "translate-x-1 bg-slate-300"
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              {tr(
-                "Standaard verwerken we lokaal op je apparaat. Pas na opt-in sturen we alleen noodzakelijke velden naar externe AI.",
-                "By default processing stays local on your device. Only after opt-in do we send required fields to external AI."
-              )}
-            </p>
-          </div>
-
-          {showParserDebugControls ? (
-            <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3 text-sm md:col-span-2">
-              <span className="block text-xs uppercase tracking-wide text-cyan-300">
-                {tr("Parser debug (intern)", "Parser debug (internal)")}
-              </span>
-
-              <label className="mt-2 block rounded-md border border-slate-700 bg-slate-900/50 p-3 text-sm">
-                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("PDF parsermodus", "PDF parser mode")}</span>
-                <select
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
-                  value={settings.parserDebugMode}
-                  onChange={(event) => onUpdateSettings({ parserDebugMode: event.target.value as AppSettings["parserDebugMode"] })}
-                >
-                  <option value="text_only">{tr("Alleen tekstlaag", "Text layer only")}</option>
-                  <option value="text_ocr">{tr("Tekstlaag + OCR", "Text layer + OCR")}</option>
-                  <option value="text_ocr_ai">{tr("Tekstlaag + OCR + AI", "Text layer + OCR + AI")}</option>
-                </select>
-                <p className="mt-1 text-xs text-slate-500">
-                  {tr(
-                    "Debug-only keuze voor parserpad. Niet bedoeld voor eindgebruikers.",
-                    "Debug-only parser pipeline selector. Not meant for end users."
-                  )}
-                </p>
-              </label>
-
-              <label className="mt-2 block rounded-md border border-slate-700 bg-slate-900/50 p-3 text-sm">
-                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("AI kostenmodus", "AI cost mode")}</span>
-                <select
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
-                  value={settings.aiCostMode}
-                  onChange={(event) => onUpdateSettings({ aiCostMode: event.target.value as AppSettings["aiCostMode"] })}
-                >
-                  <option value="balanced">{tr("Gebalanceerd", "Balanced")}</option>
-                  <option value="ultra_low_cost">{tr("Ultra lage kosten", "Ultra low cost")}</option>
-                  <option value="max_accuracy">{tr("Maximale nauwkeurigheid", "Max extraction accuracy")}</option>
-                </select>
-              </label>
-
-              <div className="mt-2 rounded-md border border-slate-700 bg-slate-900/50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-slate-300">{tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}</p>
-                  <button
-                    type="button"
-                    className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
-                      settings.aiAutoImproveEnabled ? "border-cyan-500/60 bg-cyan-500/25" : "border-slate-600 bg-slate-700"
-                    }`}
-                    onClick={() => onUpdateSettings({ aiAutoImproveEnabled: !settings.aiAutoImproveEnabled })}
-                    aria-label={tr("Automatisch verbeteren met AI", "Auto-improve extraction with AI")}
-                    aria-pressed={settings.aiAutoImproveEnabled}
-                  >
-                    <span
-                      className={`h-4 w-4 rounded-full transition ${
-                        settings.aiAutoImproveEnabled ? "translate-x-5 bg-cyan-300" : "translate-x-1 bg-slate-300"
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-400">
-                {tr(
-                  `AI Analysis gebruikt maximaal ${AI_ANALYSIS_MARKER_CAP} markers per rapport in promptcontext (alleen voor AI Analysis, niet voor parser-output).`,
-                  `AI Analysis uses a maximum of ${AI_ANALYSIS_MARKER_CAP} markers per report in prompt context (AI Analysis only, not parser output).`
+          <div className="settings-core-toggles rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm md:col-span-2">
+            <span className="block text-xs uppercase tracking-wide text-emerald-300">{tr("Core toggles", "Core toggles")}</span>
+            <div className="settings-toggle-row mt-2 flex flex-wrap gap-2">
+              <ToggleSwitch
+                checked={settings.aiExternalConsent}
+                onChange={(checked) => onUpdateSettings({ aiExternalConsent: checked })}
+                label={tr("Allow external AI", "Allow external AI")}
+                tooltip={tr(
+                  "Standaard blijft alles lokaal. Met deze optie kan de app externe AI gebruiken na jouw toestemming.",
+                  "By default everything stays local. This allows the app to use external AI after your consent."
                 )}
-              </p>
-
-              <div className="mt-2 grid gap-2 text-sm text-slate-200 sm:grid-cols-2 lg:grid-cols-3">
-                <p>{tr("Uploads", "Uploads")}: {aiCostMetrics.totalUploads}</p>
-                <p>{tr("AI calls", "AI calls")}: {aiCostMetrics.aiCalls}</p>
-                <p>{tr("AI call-rate", "AI call rate")}: {(aiCostMetrics.aiCallRate * 100).toFixed(1)}%</p>
-                <p>{tr("Lokale succesrate", "Local success rate")}: {(aiCostMetrics.localSuccessRate * 100).toFixed(1)}%</p>
-                <p>{tr("Gem. input tokens/call", "Avg input tokens/call")}: {aiCostMetrics.avgInputTokens}</p>
-                <p>{tr("Gem. output tokens/call", "Avg output tokens/call")}: {aiCostMetrics.avgOutputTokens}</p>
-              </div>
-              <p className="mt-1 text-sm font-medium text-cyan-200">
-                {tr("Geschatte kosten per 100 uploads", "Estimated cost per 100 uploads")}: €{aiCostMetrics.estimatedCostPer100Uploads.toFixed(2)}
-              </p>
+              />
+              <ToggleSwitch
+                checked={settings.enableCalculatedFreeTestosterone}
+                onChange={(checked) => onUpdateSettings({ enableCalculatedFreeTestosterone: checked })}
+                label={tr("Calculated Free Testosterone", "Calculated Free Testosterone")}
+                tooltip={tr(
+                  "Berekent Vrij Testosteron uit totaal testosteron + SHBG (+ albumine) als aanvulling op gemeten waarden.",
+                  "Calculates Free Testosterone from Total T + SHBG (+ Albumin) as an additional data layer."
+                )}
+              />
+              <ToggleSwitch
+                checked={samplingControlsEnabled}
+                onChange={(checked) => onUpdateSettings({ enableSamplingControls: checked })}
+                label={tr("Show sampling context controls", "Show sampling context controls")}
+                tooltip={tr(
+                  "Toont trough/peak-filters en baseline-vergelijking op het dashboard om eerlijker te vergelijken tussen meetmomenten.",
+                  "Shows trough/peak filters and baseline comparison on dashboard for fairer comparisons between sampling moments."
+                )}
+              />
             </div>
-          ) : null}
+          </div>
         </div>
       </div>
 
@@ -456,7 +322,7 @@ const SettingsView = ({
               "Create a JSON backup of all your data. You can later import it as a merge or full restore."
             )}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="settings-action-row mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
@@ -476,7 +342,7 @@ const SettingsView = ({
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-red-800/60 bg-red-900/30 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-900/50 hover:text-red-200"
+              className="settings-restore-btn inline-flex items-center gap-1 rounded-md border border-red-800/60 bg-red-900/30 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-900/50 hover:text-red-200"
               onClick={() => {
                 setImportMode("replace");
                 importFileInputRef.current?.click();
@@ -506,68 +372,6 @@ const SettingsView = ({
         </div>
 
         <div className="mt-6 border-t border-slate-800 pt-6">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Export", "Export")}</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {tr(
-              "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
-              "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
-            )}
-          </p>
-
-          <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {allMarkers.map((marker) => {
-                const selected = csvMarkerSelection.includes(marker);
-                return (
-                  <button
-                    key={marker}
-                    type="button"
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
-                    }`}
-                    onClick={() => {
-                      setCsvMarkerSelection((current) => {
-                        if (current.includes(marker)) {
-                          return current.filter((item) => item !== marker);
-                        }
-                        return [...current, marker];
-                      });
-                    }}
-                  >
-                    {getMarkerDisplayName(marker, language)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={onExportJson}
-            >
-              <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={() => onExportCsv(csvMarkerSelection)}
-            >
-              <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={onExportPdf}
-            >
-              <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 border-t border-slate-800 pt-6">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Delen", "Share")}</h3>
           <p className="mt-1 text-sm text-slate-400">
             {tr(
@@ -575,7 +379,7 @@ const SettingsView = ({
               "Generate a short read-only snapshot link without API keys. We smartly share only recent reports when needed."
             )}
           </p>
-          <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
+          <div className="settings-action-row mt-3 flex flex-wrap gap-3 text-sm text-slate-200">
             <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-2.5 py-1.5">
               <input
                 type="checkbox"
@@ -602,7 +406,7 @@ const SettingsView = ({
             </label>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="settings-action-row mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
@@ -626,21 +430,6 @@ const SettingsView = ({
                 <Copy className="h-4 w-4" /> {tr("Kopieer link", "Copy link")}
               </button>
             ) : null}
-            <span
-              className="group relative inline-flex"
-              title={tr("Binnenkort beschikbaar", "Coming soon")}
-            >
-              <button
-                type="button"
-                disabled
-                className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-slate-600/50 bg-slate-800/50 px-3 py-1.5 text-sm text-slate-500 opacity-60"
-              >
-                <Lock className="h-4 w-4" /> {tr("Artsen-PDF (Premium)", "Doctor PDF (Premium)")}
-              </button>
-              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-700 px-2 py-1 text-xs text-slate-200 opacity-0 transition-opacity group-hover:opacity-100">
-                {tr("Binnenkort beschikbaar", "Coming soon")}
-              </span>
-            </span>
           </div>
           {shareStatus !== "idle" || shareMessage ? (
             <p className={`mt-2 text-xs ${shareStatus === "error" ? "text-rose-300" : shareStatus === "success" ? "text-emerald-300" : "text-slate-300"}`}>
@@ -669,12 +458,18 @@ const SettingsView = ({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
             "Beheer markernaam-normalisatie zonder je dashboard te verstoren. Je kunt markers handmatig samenvoegen of hernoemen.",
             "Manage marker-name normalization without cluttering the dashboard. You can manually merge or rename markers."
+          )}
+        </p>
+        <p className="mt-2 text-xs text-slate-400">
+          {tr(
+            "Gebruik merge wanneer twee markers inhoudelijk hetzelfde zijn maar net anders heten (bijv. spelling, afkorting, lab-variant).",
+            "Use merge when two markers mean the same thing but have slightly different names (spelling, abbreviation, lab variant)."
           )}
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
@@ -710,7 +505,18 @@ const SettingsView = ({
             type="button"
             className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 disabled:opacity-50"
             disabled={!mergeFromMarker || !mergeIntoMarker || mergeFromMarker === mergeIntoMarker}
-            onClick={() => onRemapMarker(mergeFromMarker, mergeIntoMarker)}
+            onClick={() => {
+              const confirmed = window.confirm(
+                tr(
+                  `Weet je zeker dat je "${getMarkerDisplayName(mergeFromMarker, language)}" wilt samenvoegen in "${getMarkerDisplayName(mergeIntoMarker, language)}"? Dit werkt alle bestaande rapporten bij.`,
+                  `Are you sure you want to merge "${getMarkerDisplayName(mergeFromMarker, language)}" into "${getMarkerDisplayName(mergeIntoMarker, language)}"? This updates all existing reports.`
+                )
+              );
+              if (!confirmed) {
+                return;
+              }
+              onRemapMarker(mergeFromMarker, mergeIntoMarker);
+            }}
           >
             {tr("Voer merge uit", "Merge markers")}
           </button>
@@ -755,57 +561,10 @@ const SettingsView = ({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="flex w-full items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-100">{tr("Geavanceerd", "Advanced")}</h2>
-          {showAdvanced ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
-        </button>
-
-        {showAdvanced ? (
-          <div className="mt-4 space-y-4">
-            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                {tr("Geavanceerde meetmoment-filters", "Advanced sampling filters")}
-              </h3>
-              <div className="mt-2">
-                <ToggleSwitch
-                  checked={samplingControlsEnabled}
-                  onChange={(checked) => onUpdateSettings({ enableSamplingControls: checked })}
-                  label={tr("Toon sampling filter + baseline vergelijking op dashboard", "Show sampling filter + baseline comparison on dashboard")}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-400">
-                {tr(
-                  "Standaard uit. Als uitgeschakeld worden trough/peak- en baseline-opties verborgen.",
-                  "Off by default. When disabled, trough/peak and baseline options are hidden."
-                )}
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Afgeleide marker", "Derived marker")}</h3>
-              <div className="mt-2">
-                <ToggleSwitch
-                  checked={settings.enableCalculatedFreeTestosterone}
-                  onChange={(checked) => onUpdateSettings({ enableCalculatedFreeTestosterone: checked })}
-                  label={tr("Bereken Vrij Testosteron (afgeleid)", "Enable calculated Free Testosterone (derived)")}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-400">
-                {tr(
-                  "Berekend uit totaal testosteron + SHBG (+ albumine). Vervangt gemeten vrij testosteron nooit en vult alleen ontbrekende punten aan.",
-                  "Computed from Total T + SHBG (+ Albumin). Never replaces measured Free T; it only fills missing points."
-                )}
-              </p>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
 
-        <div className="mt-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
+        <div className="settings-danger-card mt-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
           <h3 className="text-sm font-semibold text-red-400">{tr("Verwijder alle data", "Delete all data")}</h3>
           <p className="mt-1 text-sm text-slate-400">
             {tr(
@@ -816,7 +575,7 @@ const SettingsView = ({
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            className="mt-3 rounded-lg border border-red-800/60 bg-red-900/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
+            className="settings-danger-btn mt-3 rounded-lg border border-red-800/60 bg-red-900/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
           >
             {tr("Verwijder alle data", "Delete all data")}
           </button>
@@ -830,7 +589,7 @@ const SettingsView = ({
         </p>
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Feedback", "Feedback")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
@@ -847,6 +606,68 @@ const SettingsView = ({
           <AlertTriangle className="h-4 w-4" />
           {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
         </a>
+      </div>
+
+      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+        <h2 className="text-lg font-semibold text-slate-100">{tr("Export", "Export")}</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          {tr(
+            "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
+            "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
+          )}
+        </p>
+
+        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {allMarkers.map((marker) => {
+              const selected = csvMarkerSelection.includes(marker);
+              return (
+                <button
+                  key={marker}
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-xs ${
+                    selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
+                  }`}
+                  onClick={() => {
+                    setCsvMarkerSelection((current) => {
+                      if (current.includes(marker)) {
+                        return current.filter((item) => item !== marker);
+                      }
+                      return [...current, marker];
+                    });
+                  }}
+                >
+                  {getMarkerDisplayName(marker, language)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+            onClick={onExportJson}
+          >
+            <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+            onClick={() => onExportCsv(csvMarkerSelection)}
+          >
+            <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+            onClick={onExportPdf}
+          >
+            <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
+          </button>
+        </div>
       </div>
 
       {showDeleteConfirm ? (

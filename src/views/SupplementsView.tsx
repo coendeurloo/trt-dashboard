@@ -382,7 +382,7 @@ const SupplementsView = ({
                 <h5 className="text-sm font-semibold text-slate-100">{name}</h5>
                 <div className="mt-2 space-y-1.5">
                   {periods.map((period) => (
-                    <div key={period.id} className="rounded-lg border border-slate-700/70 bg-slate-800/40 px-2.5 py-2 text-xs text-slate-200">
+                    <div key={period.id} className="supplement-history-row rounded-lg border border-slate-700/70 bg-slate-800/40 px-2.5 py-2 text-xs text-slate-200">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>
                           {formatDate(period.startDate)} → {period.endDate ? formatDate(period.endDate) : tr("nu", "now")}
