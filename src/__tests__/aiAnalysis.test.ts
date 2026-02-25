@@ -55,15 +55,17 @@ describe("analyzeLabDataWithClaude", () => {
 
   it("does not make an extra retry call when response is cut at max_tokens", async () => {
     const requests: Array<{ payload?: { max_tokens?: number } }> = [];
+    let callIndex = 0;
 
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
       requests.push(body);
+      callIndex += 1;
 
       return new Response(
         JSON.stringify({
-          content: [{ type: "text", text: "## Partial analysis\n- cut" }],
-          stop_reason: "max_tokens"
+          content: [{ type: "text", text: callIndex === 1 ? "## Partial analysis\n- cut" : "continued and completed" }],
+          stop_reason: callIndex === 1 ? "max_tokens" : "end_turn"
         }),
         { status: 200 }
       );
@@ -80,9 +82,12 @@ describe("analyzeLabDataWithClaude", () => {
       externalAiAllowed: true
     });
 
-    expect(result).toContain("Partial analysis");
-    expect(result).toContain("output may be incomplete");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.text).toContain("Partial analysis");
+    expect(result.text).toContain("continued and completed");
+    expect(result.text).not.toContain("output may be incomplete");
+    expect(result.model).toBeTruthy();
+    expect(result.provider).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(requests[0]?.payload?.max_tokens).toBe(2400);
   });
 
@@ -175,7 +180,7 @@ describe("analyzeLabDataWithClaude", () => {
     await vi.runAllTimersAsync();
     const result = await pending;
 
-    expect(result).toContain("Recovered analysis");
+    expect(result.text).toContain("Recovered analysis");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -317,5 +322,128 @@ describe("analyzeLabDataWithClaude", () => {
         }
       ]
     });
+  });
+
+  it("uses no-supplement prompt contract when no actions are needed", async () => {
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "## Clinical Story\nStable." }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+
+    expect(capturedPrompt).toContain("Do NOT include any 'Supplement Advice' section when no action is needed.");
+    expect(result.actionsNeeded).toBe(false);
+    expect(result.supplementAdviceIncluded).toBe(false);
+  });
+
+  it("uses supplement prompt contract and retains supplement section when actions are needed", async () => {
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: "## Clinical Story\nRisk signs.\n\n## Supplement Advice (for doctor discussion)\n- Consider dose adjustment."
+            }
+          ],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      context: {
+        samplingFilter: "all",
+        protocolImpact: {
+          events: [],
+          insights: []
+        },
+        alerts: [
+          {
+            id: "a1",
+            marker: "Hematocrit",
+            type: "threshold",
+            severity: "medium",
+            tone: "attention",
+            actionNeeded: true,
+            message: "Hematocrit trend needs follow-up",
+            suggestion: "Discuss interventions",
+            date: "2026-01-21"
+          }
+        ],
+        trendByMarker: {},
+        trtStability: {
+          score: null,
+          components: {}
+        },
+        dosePredictions: [],
+        wellbeingSummary: null
+      }
+    });
+
+    expect(capturedPrompt).toContain("## Supplement Advice (for doctor discussion)");
+    expect(result.actionsNeeded).toBe(true);
+    expect(result.supplementAdviceIncluded).toBe(true);
+    expect(result.actionReasons.length).toBeGreaterThan(0);
+  });
+
+  it("strips supplement section when output includes it but actions are not needed", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: "## Clinical Story\nStable context.\n\n## Supplement Advice (for doctor discussion)\n- Keep everything unchanged.\n\n## What Matters Most Now\nNo urgent issues."
+            }
+          ],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+
+    expect(result.actionsNeeded).toBe(false);
+    expect(result.supplementAdviceIncluded).toBe(false);
+    expect(result.text.toLowerCase()).not.toContain("supplement advice");
+    expect(result.text).toContain("What Matters Most Now");
   });
 });

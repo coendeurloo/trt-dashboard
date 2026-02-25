@@ -15,6 +15,15 @@ interface AnalysisViewProps {
   analysisResultDisplay: string;
   analysisGeneratedAt: string | null;
   analysisCopied: boolean;
+  analysisModelInfo: {
+    provider: "claude" | "gemini";
+    model: string;
+    fallbackUsed: boolean;
+    actionsNeeded: boolean;
+    actionReasons: string[];
+    actionConfidence: "high" | "medium" | "low";
+    supplementAdviceIncluded: boolean;
+  } | null;
   analysisKind: "full" | "latestComparison" | null;
   analyzingKind: "full" | "latestComparison" | null;
   analysisScopeNotice: AnalysisScopeNotice | null;
@@ -43,6 +52,7 @@ const AnalysisView = ({
   analysisResultDisplay,
   analysisGeneratedAt,
   analysisCopied,
+  analysisModelInfo,
   analysisKind,
   analyzingKind,
   analysisScopeNotice,
@@ -255,6 +265,32 @@ const AnalysisView = ({
               ? tr("Analyse-output (laatste vs vorige)", "Analysis output (latest vs previous)")
               : tr("Analyse-output", "Analysis output")}
           </h4>
+          {analysisModelInfo ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={
+                  isDarkTheme
+                    ? "rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-slate-300"
+                    : "rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700"
+                }
+              >
+                {tr("Model", "Model")}: {analysisModelInfo.model}
+                {" · "}
+                {tr("Provider", "Provider")}: {analysisModelInfo.provider}
+                {analysisModelInfo.fallbackUsed ? ` · ${tr("fallback gebruikt", "fallback used")}` : ""}
+              </span>
+              <span
+                className={
+                  isDarkTheme
+                    ? "rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1 text-xs text-slate-300"
+                    : "rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs text-slate-700"
+                }
+              >
+                {tr("Supplement acties", "Supplement actions")}:{" "}
+                {analysisModelInfo.actionsNeeded ? analysisModelInfo.actionReasons.length : tr("geen", "none")}
+              </span>
+            </div>
+          ) : null}
           {analysisResult ? (
             <button
               type="button"

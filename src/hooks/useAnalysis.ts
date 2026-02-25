@@ -42,6 +42,15 @@ export const useAnalysis = ({
   const [analysisResult, setAnalysisResult] = useState("");
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
+  const [analysisModelInfo, setAnalysisModelInfo] = useState<{
+    provider: "claude" | "gemini";
+    model: string;
+    fallbackUsed: boolean;
+    actionsNeeded: boolean;
+    actionReasons: string[];
+    actionConfidence: "high" | "medium" | "low";
+    supplementAdviceIncluded: boolean;
+  } | null>(null);
   const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
   const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
   const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
@@ -98,6 +107,7 @@ export const useAnalysis = ({
     setAnalyzingKind(analysisType);
     setAnalysisError("");
     setAnalysisCopied(false);
+    setAnalysisModelInfo(null);
 
     try {
       const scopeSelection = selectReportsForAnalysis({
@@ -130,9 +140,19 @@ export const useAnalysis = ({
           trtStability,
           dosePredictions,
           wellbeingSummary
-        }
+        },
+        providerPreference: settings.aiAnalysisProvider
       });
-      setAnalysisResult(result);
+      setAnalysisResult(result.text);
+      setAnalysisModelInfo({
+        provider: result.provider,
+        model: result.model,
+        fallbackUsed: result.fallbackUsed,
+        actionsNeeded: result.actionsNeeded,
+        actionReasons: result.actionReasons,
+        actionConfidence: result.actionConfidence,
+        supplementAdviceIncluded: result.supplementAdviceIncluded
+      });
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
       recordAnalysisUsage();
@@ -169,6 +189,7 @@ export const useAnalysis = ({
     analysisResult,
     analysisGeneratedAt,
     analysisCopied,
+    analysisModelInfo,
     analysisKind,
     analyzingKind,
     analysisScopeNotice: suggestedScopeNotice,

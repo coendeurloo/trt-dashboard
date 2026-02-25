@@ -17,6 +17,7 @@ describe("AnalysisView", () => {
     analysisResultDisplay: "",
     analysisGeneratedAt: null,
     analysisCopied: false,
+    analysisModelInfo: null,
     analysisKind: null,
     analyzingKind: null,
     analysisScopeNotice: null,
@@ -93,5 +94,27 @@ describe("AnalysisView", () => {
     );
 
     expect(screen.getByText(/AI uses 10 of 27 reports for this run/i)).toBeTruthy();
+  });
+
+  it("shows supplement action badge when model metadata is present", () => {
+    render(
+      <AnalysisView
+        {...baseProps}
+        analysisResult="## Clinical Story"
+        analysisResultDisplay="Clinical Story"
+        analysisModelInfo={{
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          fallbackUsed: false,
+          actionsNeeded: false,
+          actionReasons: [],
+          actionConfidence: "low",
+          supplementAdviceIncluded: false
+        }}
+      />
+    );
+
+    expect(screen.getByText(/Model: gemini-2.5-flash/i)).toBeTruthy();
+    expect(screen.getByText(/Supplement actions: none/i)).toBeTruthy();
   });
 });
