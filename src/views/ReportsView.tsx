@@ -14,7 +14,7 @@ import {
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 import { getEffectiveSupplements, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
-import { formatDate } from "../utils";
+import { deriveAbnormalFlag, formatDate } from "../utils";
 
 // Markers to show as preview chips in the collapsed card header
 const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
@@ -59,6 +59,14 @@ const ReportsView = ({
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
+
+  const markerAbnormalStatus = (marker: MarkerValue): MarkerValue["abnormal"] =>
+    deriveAbnormalFlag(marker.value, marker.referenceMin, marker.referenceMax);
+
+  const isMarkerOutOfRange = (marker: MarkerValue): boolean => {
+    const abnormal = markerAbnormalStatus(marker);
+    return abnormal === "high" || abnormal === "low";
+  };
 
   useEffect(() => {
     const ids = new Set(reports.map((report) => report.id));
@@ -117,7 +125,7 @@ const ReportsView = ({
     let reportsWithAbnormal = 0;
     reports.forEach((r) => {
       r.markers.forEach((m) => allMarkers.add(m.canonicalMarker));
-      if (r.markers.some((m) => m.abnormal && m.abnormal !== "normal")) reportsWithAbnormal++;
+      if (r.markers.some((marker) => isMarkerOutOfRange(marker))) reportsWithAbnormal++;
     });
     return {
       earliest: dates[0],
@@ -190,14 +198,14 @@ const ReportsView = ({
 
   // Left border + health indicator color based on abnormal count
   const cardHealthClass = (report: LabReport): string => {
-    const abnormalCount = report.markers.filter((m) => m.abnormal && m.abnormal !== "normal").length;
+    const abnormalCount = report.markers.filter((marker) => isMarkerOutOfRange(marker)).length;
     if (abnormalCount === 0) return "border-l-slate-700/60";
     if (abnormalCount <= 2) return "border-l-amber-500/60";
     return "border-l-rose-500/60";
   };
 
   const abnormalCountForReport = (report: LabReport): number =>
-    report.markers.filter((m) => m.abnormal && m.abnormal !== "normal").length;
+    report.markers.filter((marker) => isMarkerOutOfRange(marker)).length;
 
   return (
     <section className="space-y-3 fade-in">
@@ -387,13 +395,14 @@ const ReportsView = ({
                   <span className="flex flex-wrap items-center gap-2">
                     {previewMarkers.map((m) => {
                       const converted = convertBySystem(m.canonicalMarker, m.value, m.unit, settings.unitSystem);
-                      const isAbnormal = m.abnormal && m.abnormal !== "normal";
+                      const abnormal = markerAbnormalStatus(m);
+                      const isAbnormal = abnormal === "high" || abnormal === "low";
                       return (
                         <span
                           key={m.id}
                           className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
                             isAbnormal
-                              ? m.abnormal === "high"
+                              ? abnormal === "high"
                                 ? "bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20"
                                 : "bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20"
                               : "bg-slate-800/60 text-slate-300"
@@ -417,9 +426,15 @@ const ReportsView = ({
               <span className="ml-2 flex shrink-0 flex-col items-end justify-center gap-1.5">
                 <span className="flex items-center gap-1.5">
                   {abnormalCount > 0 && (
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      abnormalCount >= 3 ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"
-                    }`}>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        abnormalCount >= 3
+                          ? "bg-rose-500/15 text-rose-300"
+                          : "bg-amber-500/15 text-amber-300"
+                      }`}
+                      aria-label={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
+                      title={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
+                    >
                       <AlertTriangle className="h-3 w-3" />
                       {abnormalCount}
                     </span>
@@ -520,7 +535,49 @@ const ReportsView = ({
                 {isEditing ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{tr("Protocoldetails", "Protocol details")}</span>
+                      <span className="mb-1 block text-slate-400">{tr("Protocol koppelen", "Link protocol")}</span>
+                      <select
+                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                        value={editingAnnotations.protocolId ?? ""}
+                        onChange={(event) =>
+                          setEditingAnnotations((current) => ({
+                            ...current,
+                            protocolId: event.target.value ? event.target.value : null
+                          }))
+                        }
+                      >
+                        <option value="">{tr("Geen gekoppeld protocol", "No linked protocol")}</option>
+                        {protocols.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                      {protocols.length === 0 ? (
+                        <span className="mt-1 block text-[11px] text-amber-300">
+                          {tr(
+                            "Nog geen protocol aangemaakt. Maak er eerst een in Protocols; je kunt dit rapport later altijd koppelen.",
+                            "No protocol exists yet. Create one in Protocols first; you can always link this report later."
+                          )}
+                        </span>
+                      ) : (
+                        <span className="mt-1 block text-[11px] text-slate-400">
+                          {tr(
+                            "Je kunt nu koppelen of later aanpassen; dit blijft bewerkbaar.",
+                            "You can link now or later; this stays editable."
+                          )}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="mt-2 inline-flex items-center gap-1 rounded-md border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-500/20"
+                        onClick={onOpenProtocolTab}
+                      >
+                        {tr("Open Protocols", "Open Protocols")}
+                      </button>
+                    </label>
+                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{tr("Protocoldetails (optioneel)", "Protocol details (optional)")}</span>
                       <input
                         className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
                         value={editingAnnotations.protocol}
@@ -530,7 +587,7 @@ const ReportsView = ({
                             protocol: event.target.value
                           }))
                         }
-                        placeholder={tr("bijv. SubQ, injectieplek, timing", "e.g. SubQ, injection site, timing")}
+                        placeholder={tr("bijv. injectieplek, timing, bijzonderheden", "e.g. injection site, timing, notes")}
                       />
                     </label>
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
@@ -646,6 +703,7 @@ const ReportsView = ({
                       <tbody className="divide-y divide-slate-800">
                         {report.markers.map((marker) => {
                           const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
+                          const markerAbnormal = markerAbnormalStatus(marker);
                           const min =
                             marker.referenceMin === null
                               ? null
@@ -687,14 +745,14 @@ const ReportsView = ({
                               <td className="px-3 py-2 text-right">
                                 <span
                                   className={`inline-flex rounded-full px-2 py-0.5 text-xs ${
-                                    marker.abnormal === "high"
+                                    markerAbnormal === "high"
                                       ? "bg-rose-500/20 text-rose-300"
-                                      : marker.abnormal === "low"
+                                      : markerAbnormal === "low"
                                         ? "bg-amber-500/20 text-amber-300"
                                         : "bg-emerald-500/20 text-emerald-300"
                                   }`}
                                 >
-                                  {abnormalStatusLabel(marker.abnormal, language)}
+                                  {abnormalStatusLabel(markerAbnormal, language)}
                                 </span>
                               </td>
                             </tr>

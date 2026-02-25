@@ -2032,22 +2032,30 @@ const App = () => {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {isDemoMode ? (
-                      // In demo mode: single primary CTA — uploading IS starting fresh
-                      <button
-                        type="button"
-                        className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
-                        onClick={clearDemoAndUpload}
-                        disabled={isProcessing}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
-                            {tr("PDF wordt verwerkt...", "Processing PDF...")}
-                          </>
-                        ) : (
-                          tr("Upload je eigen PDF", "Upload your own PDF")
-                        )}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
+                          onClick={clearDemoAndUpload}
+                          disabled={isProcessing}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                              {tr("PDF wordt verwerkt...", "Processing PDF...")}
+                            </>
+                          ) : (
+                            tr("Upload je eigen PDF", "Upload your own PDF")
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className={clearDemoButtonClassName}
+                          onClick={clearDemoData}
+                        >
+                          {tr("Begin opnieuw", "Start fresh")}
+                        </button>
+                      </>
                     ) : (
                       // Mixed state (demo + own data): offer to clear demo
                       <button
