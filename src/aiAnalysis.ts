@@ -119,13 +119,14 @@ const ANALYSIS_MODEL_CANDIDATES = [
   "claude-3-7-sonnet-latest",
   "claude-3-5-sonnet-latest"
 ] as const;
-const GEMINI_ANALYSIS_MODEL_CANDIDATES = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+const GEMINI_ANALYSIS_MODEL_CANDIDATES = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"] as const;
 type AnalysisProvider = "claude" | "gemini";
 
 const BASE_ANALYSIS_MAX_TOKENS = 2400;
 const BASE_DEEP_ANALYSIS_MAX_TOKENS = 3200;
-const GEMINI_MIN_OUTPUT_TOKENS = 4096;
+const GEMINI_MIN_OUTPUT_TOKENS = 6144;
 const MAX_TRANSIENT_RETRIES_PER_MODEL = 2;
+const MAX_CONTINUATION_CALLS = 2;
 const TRANSIENT_RETRY_BASE_DELAY_MS = 700;
 const TRANSIENT_RETRY_MAX_DELAY_MS = 4200;
 const MAX_MARKER_TRENDS_IN_PROMPT = 56;
@@ -185,7 +186,8 @@ const BASE_SECTION_TEMPLATE: string[] = [
 
 const SUPPLEMENT_SECTION_REQUIRED_TEMPLATE: string[] = [
   "4) '## Supplement Advice (for doctor discussion)' (focused, practical, minimal).",
-  "In Supplement Advice, discuss only relevant changes and include current dose, suggested change, rationale, expected direction, confidence, and one doctor discussion point.",
+  "In Supplement Advice, discuss only true change actions: add/start/increase/decrease/stop/switch/reintroduce (no keep/continue/maintain-only advice).",
+  "Each supplement item should include current dose, suggested change, rationale, expected direction, confidence, and one doctor discussion point.",
   "If a marker is low/high and commonly correctable with supplementation, suggest practical options and what to monitor."
 ];
 
@@ -1293,24 +1295,32 @@ export const analyzeLabDataWithClaude = async ({
           let finalized = text;
           let truncated = result.body.stop_reason === "max_tokens";
           if (truncated) {
-            const continuationPrompt = [
-              prompt,
-              "",
-              "The previous answer was cut off by token limit.",
-              "Continue from where you stopped, do not repeat earlier text, keep it concise and insight-focused.",
-              "",
-              "PARTIAL ANSWER START",
-              text,
-              "PARTIAL ANSWER END"
-            ].join("\n");
-            const continuation = await tryModel(model, provider, continuationPrompt);
-            if (continuation.status >= 200 && continuation.status < 300) {
+            for (let continuationIndex = 0; continuationIndex < MAX_CONTINUATION_CALLS; continuationIndex += 1) {
+              const continuationPrompt = [
+                prompt,
+                "",
+                "The previous answer was cut off by token limit.",
+                "Continue from where you stopped, do not repeat earlier text, keep it concise and insight-focused.",
+                "",
+                "PARTIAL ANSWER START",
+                finalized,
+                "PARTIAL ANSWER END"
+              ].join("\n");
+              const continuation = await tryModel(model, provider, continuationPrompt);
+              if (!(continuation.status >= 200 && continuation.status < 300)) {
+                break;
+              }
               const continuationText =
                 continuation.body.content?.find((item) => item.type === "text")?.text?.trim() ?? "";
-              if (continuationText) {
-                finalized = `${text}\n\n${continuationText}`;
+              if (!continuationText) {
+                truncated = false;
+                break;
               }
+              finalized = `${finalized}\n\n${continuationText}`;
               truncated = continuation.body.stop_reason === "max_tokens";
+              if (!truncated) {
+                break;
+              }
             }
           }
           const maybeTruncated = truncated
