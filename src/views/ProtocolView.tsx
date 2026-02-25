@@ -102,6 +102,9 @@ const ProtocolView = ({
         notes: draft.notes
       });
       setFeedback(tr("Protocol bijgewerkt.", "Protocol updated."));
+      setEditorMode(null);
+      setEditingId(null);
+      setDraft(blankProtocolDraft());
       return;
     }
 
