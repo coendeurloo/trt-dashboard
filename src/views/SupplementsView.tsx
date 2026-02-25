@@ -187,7 +187,10 @@ const SupplementsView = ({
           <div>
             <h3 className="text-base font-semibold text-slate-100">{tr("Supplementen", "Supplements")}</h3>
             <p className="text-sm text-slate-300">
-              {tr("Volg je actieve stack en bekijk de volledige tijdlijn per supplement.", "Track your active stack and full timeline per supplement.")}
+              {tr(
+                "Volg je actieve stack en bekijk de volledige tijdlijn per supplement. Deze huidige stack wordt automatisch gebruikt voor nieuwe rapporten totdat je in een rapport expliciet aangeeft dat je stack is veranderd.",
+                "Track your active stack and full timeline per supplement. This current stack is automatically used for new reports until you explicitly mark a stack change inside a report."
+              )}
             </p>
           </div>
           <button
@@ -268,52 +271,6 @@ const SupplementsView = ({
             </div>
           </div>
         ) : null}
-      </div>
-
-      <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/8 p-3">
-        <p className="text-sm text-cyan-100">
-          {tr(
-            "Deze huidige stack wordt automatisch gebruikt voor nieuwe rapporten totdat je in een rapport expliciet aangeeft dat je stack is veranderd.",
-            "This current stack is automatically used for new reports until you explicitly mark a stack change inside a report."
-          )}
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold text-slate-100">
-            {tr("Historische backfill (onbekend)", "Historical backfill (unknown)")}
-          </h4>
-          <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-            {unknownReports.length} {tr("rapporten", "reports")}
-          </span>
-        </div>
-        {unknownReports.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-400">
-            {tr(
-              "Geen rapporten met onbekende supplementcontext.",
-              "No reports with unknown supplement context."
-            )}
-          </p>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {unknownReports.slice(0, 10).map((report) => (
-              <div key={report.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-100">{formatDate(report.testDate)}</p>
-                  <p className="truncate text-xs text-slate-400">{report.sourceFileName}</p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
-                  onClick={() => onOpenReportForSupplementBackfill(report.id)}
-                >
-                  {tr("Open in All Reports", "Open in All Reports")}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
@@ -442,6 +399,36 @@ const SupplementsView = ({
           </div>
         )}
       </div>
+
+      {unknownReports.length > 0 ? (
+        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-slate-100">
+              {tr("Historische backfill (onbekend)", "Historical backfill (unknown)")}
+            </h4>
+            <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+              {unknownReports.length} {tr("rapporten", "reports")}
+            </span>
+          </div>
+          <div className="mt-2 space-y-2">
+            {unknownReports.slice(0, 10).map((report) => (
+              <div key={report.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-100">{formatDate(report.testDate)}</p>
+                  <p className="truncate text-xs text-slate-400">{report.sourceFileName}</p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                  onClick={() => onOpenReportForSupplementBackfill(report.id)}
+                >
+                  {tr("Open in All Reports", "Open in All Reports")}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 };

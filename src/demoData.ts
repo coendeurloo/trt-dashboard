@@ -111,10 +111,26 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 const defaultAnnotations = (): ReportAnnotations => ({
   protocolId: null,
   protocol: "",
+  supplementAnchorState: "inherit",
   supplementOverrides: null,
   symptoms: "",
   notes: "",
   samplingTiming: "unknown"
+});
+
+const makeSupplementAnchor = (
+  monthsAgo: number,
+  slug: string,
+  name: string,
+  dose: string,
+  frequency = "daily"
+): SupplementPeriod => ({
+  id: `demo-report-supp-${monthsAgo}-${slug}`,
+  name,
+  dose,
+  frequency,
+  startDate: makeIsoDate(subMonths(new Date(), monthsAgo)),
+  endDate: null
 });
 
 const makeReport = (input: {
@@ -376,6 +392,8 @@ export const getDemoReports = (): LabReport[] => [
     annotations: {
       ...defaultAnnotations(),
       protocol: "Pre-TRT baseline",
+      supplementAnchorState: "none",
+      supplementOverrides: [],
       samplingTiming: "unknown"
     },
     markers: [
@@ -398,6 +416,11 @@ export const getDemoReports = (): LabReport[] => [
       ...defaultAnnotations(),
       protocolId: DEMO_PROTOCOL_CRUISE_ID,
       protocol: "Started TRT cruise",
+      supplementAnchorState: "anchor",
+      supplementOverrides: [
+        makeSupplementAnchor(9, "vitd3", "Vitamin D3", "2000 IU"),
+        makeSupplementAnchor(9, "omega3", "Omega-3", "1 g")
+      ],
       samplingTiming: "trough"
     },
     markers: [
@@ -443,6 +466,12 @@ export const getDemoReports = (): LabReport[] => [
       ...defaultAnnotations(),
       protocolId: DEMO_PROTOCOL_ADJUSTED_ID,
       protocol: "Dose adjusted downward",
+      supplementAnchorState: "anchor",
+      supplementOverrides: [
+        makeSupplementAnchor(7, "vitd3", "Vitamin D3", "4000 IU"),
+        makeSupplementAnchor(7, "omega3", "Omega-3", "2 g"),
+        makeSupplementAnchor(7, "mag", "Magnesium Glycinate", "300 mg")
+      ],
       symptoms: "More balanced mood after lowering dose",
       samplingTiming: "trough"
     },
@@ -489,6 +518,13 @@ export const getDemoReports = (): LabReport[] => [
       ...defaultAnnotations(),
       protocolId: DEMO_PROTOCOL_SPLIT_ID,
       protocol: "Frequency split trial",
+      supplementAnchorState: "anchor",
+      supplementOverrides: [
+        makeSupplementAnchor(4, "vitd3", "Vitamin D3", "4000 IU"),
+        makeSupplementAnchor(4, "omega3", "Omega-3", "2 g"),
+        makeSupplementAnchor(4, "mag", "Magnesium Glycinate", "400 mg"),
+        makeSupplementAnchor(4, "nac", "NAC", "600 mg")
+      ],
       symptoms: "Smoother mood and fewer peaks",
       samplingTiming: "trough"
     },
