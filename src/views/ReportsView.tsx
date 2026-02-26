@@ -739,16 +739,8 @@ const ReportsView = ({
                   )}
 
                   {!isShareMode ? (
-                    <button
-                      type="button"
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs ${
-                        report.isBaseline
-                          ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-200"
-                          : baselineSetBlocked
-                            ? "cursor-not-allowed border-slate-700 bg-slate-800/60 text-slate-500"
-                          : "border-slate-600 bg-slate-800/70 text-slate-200 hover:border-slate-500"
-                      }`}
-                      disabled={baselineSetBlocked}
+                    <span
+                      className={baselineSetBlocked ? "inline-flex cursor-help" : "inline-flex"}
                       title={
                         baselineSetBlocked
                           ? tr(
@@ -757,13 +749,25 @@ const ReportsView = ({
                             )
                           : undefined
                       }
-                      onClick={() => onSetBaseline(report.id)}
                     >
-                      <Lock className="h-3.5 w-3.5" />{" "}
-                      {report.isBaseline
-                        ? tr("Verwijder baseline", "Remove baseline")
-                        : tr("Zet als baseline", "Set baseline")}
-                    </button>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs ${
+                          report.isBaseline
+                            ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-200"
+                            : baselineSetBlocked
+                              ? "pointer-events-none cursor-not-allowed border-slate-700 bg-slate-800/60 text-slate-500"
+                            : "border-slate-600 bg-slate-800/70 text-slate-200 hover:border-slate-500"
+                        }`}
+                        disabled={baselineSetBlocked}
+                        onClick={() => onSetBaseline(report.id)}
+                      >
+                        <Lock className="h-3.5 w-3.5" />{" "}
+                        {report.isBaseline
+                          ? tr("Verwijder baseline", "Remove baseline")
+                          : tr("Zet als baseline", "Set baseline")}
+                      </button>
+                    </span>
                   ) : null}
 
                   <button
