@@ -100,13 +100,69 @@ const AlertsView = ({
 
         <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-900/60 p-3 text-xs text-slate-300">
           {tr(
-            "Leesvolgorde: 1) bekijk eerst 'Positieve signalen', 2) zie wat al goed gaat, 3) ga daarna naar 'Actie nodig' voor de aandachtspunten.",
-            "Reading order: 1) review 'Positive signals' first, 2) see what is already going well, 3) then review 'Action needed' for attention points."
+            "Leesvolgorde: 1) bekijk eerst 'Voorspellend', 2) ga daarna naar 'Actie nodig', 3) gebruik 'Positieve signalen' als bevestiging.",
+            "Reading order: 1) review 'Predictive' first, 2) then review 'Action needed', 3) use 'Positive signals' as confirmation."
           )}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      {predictiveAlerts.length > 0 ? (
+        <section className="alerts-panel-predictive rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+          <div className="mb-4 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-100">{tr("Voorspellend", "Predictive")}</h4>
+            <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20">
+              {tr("Op basis van trend", "Trend-based")}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {predictiveAlerts.map((alert) => (
+              <article
+                key={`${alert.marker}-${alert.threshold}`}
+                className="alerts-card-predictive rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-100">
+                      {getMarkerDisplayName(alert.marker, language)}
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                      {language === "nl" ? alert.narrativeNl : alert.narrativeEn}
+                    </p>
+                    {alert.confidence === "low" ? (
+                      <p className="mt-1.5 text-[11px] text-slate-500">
+                        {tr(
+                          "Gebaseerd op slechts 2 metingen. Meer metingen maken deze projectie betrouwbaarder.",
+                          "Based on only 2 data points. More measurements make this projection more reliable."
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={
+                      alert.daysUntil <= 60
+                        ? "shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/25"
+                        : "shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300 ring-1 ring-slate-700"
+                    }
+                  >
+                    ~{Math.max(1, Math.round(alert.daysUntil / 30))}
+                    {tr("mnd", "mo")}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <p className="mt-4 text-[11px] text-slate-500">
+            {tr(
+              "Projecties zijn gebaseerd op lineaire extrapolatie van je meetgeschiedenis en houden geen rekening met protocolwijzigingen of leefstijlfactoren. Geen medisch advies.",
+              "Projections are based on linear extrapolation of your measurement history and do not account for protocol changes or lifestyle factors. Not medical advice."
+            )}
+          </p>
+        </section>
+      ) : null}
+
+      <div className="alerts-panel-positive rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Positieve signalen", "Positive signals")}</h4>
         <p className="mt-1 text-xs text-slate-400">
           {tr("Waarden of trends die momenteel gunstig ogen worden hier groen gemarkeerd.", "Values or trends that currently look favorable are shown here in green.")}
@@ -121,7 +177,7 @@ const AlertsView = ({
                 <article
                   key={alert.id}
                   data-alert-marker={alert.marker}
-                  className={`positive-alert-card mb-3 break-inside-avoid rounded-xl border bg-emerald-500/10 p-3 text-emerald-100 ${
+                  className={`alerts-card-positive positive-alert-card mb-3 break-inside-avoid rounded-xl border bg-emerald-500/10 p-3 text-emerald-100 ${
                     focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : "border-emerald-500/35"
                   }`}
                 >
@@ -154,7 +210,7 @@ const AlertsView = ({
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="alerts-panel-actionable rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
         <p className="mt-1 text-xs text-slate-400">
           {tr("Dit zijn signalen waarbij vaak een bespreekactie of extra monitoring zinvol is.", "These signals often benefit from discussion or additional monitoring.")}
@@ -180,7 +236,7 @@ const AlertsView = ({
                 <article
                   key={alert.id}
                   data-alert-marker={alert.marker}
-                  className={`mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass} ${
+                  className={`alerts-card-actionable mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass} ${
                     focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : ""
                   }`}
                 >
@@ -223,61 +279,6 @@ const AlertsView = ({
         )}
       </div>
 
-      {predictiveAlerts.length > 0 ? (
-        <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-slate-100">{tr("Voorspellend", "Predictive")}</h4>
-            <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20">
-              {tr("Op basis van trend", "Trend-based")}
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {predictiveAlerts.map((alert) => (
-              <article
-                key={`${alert.marker}-${alert.threshold}`}
-                className="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-100">
-                      {getMarkerDisplayName(alert.marker, language)}
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-300">
-                      {language === "nl" ? alert.narrativeNl : alert.narrativeEn}
-                    </p>
-                    {alert.confidence === "low" ? (
-                      <p className="mt-1.5 text-[11px] text-slate-500">
-                        {tr(
-                          "Gebaseerd op slechts 2 metingen. Meer metingen maken deze projectie betrouwbaarder.",
-                          "Based on only 2 data points. More measurements make this projection more reliable."
-                        )}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span
-                    className={
-                      alert.daysUntil <= 60
-                        ? "shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/25"
-                        : "shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300 ring-1 ring-slate-700"
-                    }
-                  >
-                    ~{Math.max(1, Math.round(alert.daysUntil / 30))}
-                    {tr("mnd", "mo")}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <p className="mt-4 text-[11px] text-slate-500">
-            {tr(
-              "Projecties zijn gebaseerd op lineaire extrapolatie van je meetgeschiedenis en houden geen rekening met protocolwijzigingen of leefstijlfactoren. Geen medisch advies.",
-              "Projections are based on linear extrapolation of your measurement history and do not account for protocol changes or lifestyle factors. Not medical advice."
-            )}
-          </p>
-        </section>
-      ) : null}
     </section>
   );
 };

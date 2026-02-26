@@ -483,9 +483,80 @@ body.light .analysis-latest-btn:disabled {
   background-color: rgba(226, 232, 240, 0.8) !important;
 }
 
+.alerts-panel-predictive,
+.alerts-panel-actionable,
+.alerts-panel-positive {
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.14);
+}
+
+.alerts-panel-predictive {
+  background: linear-gradient(
+      150deg,
+      rgba(129, 140, 248, 0.09) 0%,
+      rgba(34, 211, 238, 0.07) 35%,
+      rgba(15, 23, 42, 0.84) 100%
+    ) !important;
+}
+
+.alerts-panel-actionable {
+  background: linear-gradient(
+      160deg,
+      rgba(245, 158, 11, 0.11) 0%,
+      rgba(244, 63, 94, 0.08) 42%,
+      rgba(15, 23, 42, 0.84) 100%
+    ) !important;
+}
+
+.alerts-panel-positive {
+  background: linear-gradient(
+      160deg,
+      rgba(16, 185, 129, 0.11) 0%,
+      rgba(45, 212, 191, 0.08) 40%,
+      rgba(15, 23, 42, 0.84) 100%
+    ) !important;
+}
+
+.alerts-card-predictive,
+.alerts-card-actionable,
+.alerts-card-positive {
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.14),
+    0 10px 24px -22px rgba(2, 6, 23, 0.55);
+}
+
 body.light .alerts-hero {
   background: linear-gradient(180deg, rgba(226, 239, 250, 0.96) 0%, rgba(216, 232, 245, 0.94) 100%) !important;
   border-color: rgba(148, 163, 184, 0.5) !important;
+}
+
+body.light .alerts-panel-predictive {
+  background: linear-gradient(
+      150deg,
+      rgba(224, 231, 255, 0.95) 0%,
+      rgba(224, 242, 254, 0.93) 45%,
+      rgba(241, 245, 249, 0.94) 100%
+    ) !important;
+  border-color: rgba(129, 140, 248, 0.32) !important;
+}
+
+body.light .alerts-panel-actionable {
+  background: linear-gradient(
+      155deg,
+      rgba(255, 237, 213, 0.94) 0%,
+      rgba(255, 228, 230, 0.92) 42%,
+      rgba(248, 250, 252, 0.94) 100%
+    ) !important;
+  border-color: rgba(244, 114, 182, 0.3) !important;
+}
+
+body.light .alerts-panel-positive {
+  background: linear-gradient(
+      155deg,
+      rgba(220, 252, 231, 0.92) 0%,
+      rgba(204, 251, 241, 0.9) 45%,
+      rgba(240, 253, 250, 0.92) 100%
+    ) !important;
+  border-color: rgba(16, 185, 129, 0.32) !important;
 }
 
 body.light .positive-alert-card {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckSquare, ChevronDown, ClipboardList, FlaskConical, Lock, Pencil, Save, Square, Trash2, X } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
@@ -531,9 +531,8 @@ const ReportsView = ({
         const displayNumber = reportSortOrder === "asc" ? reportIndex + 1 : sortedReportsForList.length - reportIndex;
 
         return (
-          <motion.article
+          <article
             key={report.id}
-            layout
             data-report-id={report.id}
             className={`rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
           >
@@ -656,8 +655,17 @@ const ReportsView = ({
               </span>
             </button>
 
-            {isExpanded ? (
-              <div className="border-t border-slate-700/50 px-4 pb-4 pt-3">
+            <AnimatePresence initial={false}>
+              {isExpanded ? (
+                <motion.div
+                  key={`${report.id}-expanded`}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div className="border-t border-slate-700/50 px-4 pb-4 pt-3">
                 {/* Action buttons */}
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -1120,9 +1128,11 @@ const ReportsView = ({
                     </table>
                   </div>
                 </div>
-              </div>
-            ) : null}
-          </motion.article>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </article>
         );
       })}
     </section>
