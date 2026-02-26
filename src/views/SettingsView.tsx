@@ -189,6 +189,41 @@ const SettingsView = ({
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, [isNl, tr]);
 
+  const settingsFeedbackGmailHref = useMemo(() => {
+    const subject = tr("Feedback PDF-verwerking", "PDF Parsing Feedback");
+    const body = isNl
+      ? [
+          "Hoi,",
+          "",
+          "Ik loop tegen problemen aan met het verwerken van lab-PDF's.",
+          "",
+          "Lab / land: [vul in]",
+          "Wat ging er mis: [vul in]",
+          "",
+          "---",
+          "Voeg bij voorkeur je originele lab-PDF toe, zodat we parsing kunnen verbeteren.",
+          "Je privacy wordt gerespecteerd: je PDF wordt alleen gebruikt voor parse-optimalisatie.",
+          "Je PDF wordt niet voor andere doeleinden gebruikt.",
+          "Je kunt gevoelige persoonsgegevens (zoals naam/adres) desgewenst vooraf afschermen."
+        ].join("\n")
+      : [
+          "Hi,",
+          "",
+          "I'm having trouble with lab PDF parsing.",
+          "",
+          "Lab / country: [fill in]",
+          "What went wrong: [fill in]",
+          "",
+          "---",
+          "Please attach your original lab PDF when possible so we can improve parsing.",
+          "Your privacy is respected: your PDF is used only for parsing optimization.",
+          "Your PDF is not used for any other purpose.",
+          "You can redact sensitive personal details (name/address) first if you prefer."
+        ].join("\n");
+    const to = encodeURIComponent(FEEDBACK_EMAIL);
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [isNl, tr]);
+
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -631,6 +666,14 @@ const SettingsView = ({
         >
           <AlertTriangle className="h-4 w-4" />
           {tr("Meld een probleem", "Report an issue")}
+        </a>
+        <a
+          href={settingsFeedbackGmailHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200"
+        >
+          {tr("Open in Gmail (als e-mailapp faalt)", "Open in Gmail (if mail app fails)")}
         </a>
       </div>
 

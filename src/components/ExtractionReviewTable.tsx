@@ -298,6 +298,30 @@ const ExtractionReviewTable = ({
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   })();
 
+  const parsingFeedbackGmailHref = (() => {
+    const subject = `PDF Parsing Feedback - ${draft.sourceFileName}`;
+    const body = [
+      "Hi,",
+      "",
+      "I uploaded a lab PDF and the extraction didn't work correctly.",
+      "",
+      `File: ${draft.sourceFileName}`,
+      `Confidence: ${draft.extraction.confidence}`,
+      `Markers extracted: ${draft.markers.length}`,
+      "",
+      "Lab / country: [user fills in]",
+      "What went wrong: [user fills in]",
+      "",
+      "---",
+      "Please attach your original lab PDF when possible so we can improve parsing.",
+      "Your privacy is respected: your PDF is used only for parsing optimization.",
+      "Your PDF is not used for any other purpose.",
+      "You can redact sensitive personal details (name/address) first if you prefer."
+    ].join("\n");
+    const to = encodeURIComponent(FEEDBACK_EMAIL);
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  })();
+
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
     if (value === "high") {
       return tr("Hoog", "High");
@@ -669,6 +693,14 @@ const ExtractionReviewTable = ({
               className="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-500/20 sm:text-sm"
             >
               {tr("Geanonimiseerde feedback sturen", "Send anonymized feedback")}
+            </a>
+            <a
+              href={parsingFeedbackGmailHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 sm:text-sm"
+            >
+              {tr("Open in Gmail", "Open in Gmail")}
             </a>
           </div>
         </div>
