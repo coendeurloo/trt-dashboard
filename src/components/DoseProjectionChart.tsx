@@ -63,7 +63,7 @@ const DoseProjectionChart = ({
   if (!latest) {
     return null;
   }
-  const projectionStartValue = isSameDoseScenario ? latest.value : prediction.currentEstimate;
+  const projectionStartValue = latest.value;
   const projectionValue = isSameDoseScenario ? latest.value : projectedEstimate;
   const projectionLow = isSameDoseScenario ? latest.value : projectedLow;
   const projectionHigh = isSameDoseScenario ? latest.value : projectedHigh;
@@ -142,12 +142,12 @@ const DoseProjectionChart = ({
       ? null
       : `${measuredVsModelPct > 0 ? "+" : ""}${formatAxisTick(measuredVsModelPct)}%`;
   const modelNowAndCloseNote = tr(
-    "Zelfde dosis als je huidige protocol. Verandering vs model nu is {delta}. De projectie blijft vlak vanaf je laatste meting; model en meting liggen nu ook dicht bij elkaar (binnen afronding).",
-    "Same dose as your current protocol. Change vs model now is {delta}. The projection stays flat from your latest measurement; model and measurement are also currently close (within rounding)."
+    "Zelfde dosis als je huidige protocol. Verandering vs nu is {delta}. De projectie blijft vlak vanaf je laatste meting.",
+    "Same dose as your current protocol. Change vs now is {delta}. The projection stays flat from your latest measurement."
   ).replace("{delta}", modelNowLabel);
   const modelNowWithGapNote = tr(
-    "Zelfde dosis als je huidige protocol. Verandering vs model nu is {delta}; daarom blijft de projectie vlak op je laatste meting. Ter context: het modelpunt kan toch {gap} van die meting verschillen door afnametiming, biologische ruis of model-fit.",
-    "Same dose as your current protocol. Change vs model now is {delta}; that is why the projection stays flat at your latest measurement. For context: the model point can still differ by {gap} due to sampling timing, biological noise, or model fitting."
+    "Zelfde dosis als je huidige protocol. Verandering vs nu is {delta}; daarom blijft de projectie vlak op je laatste meting. Ter context kan een modelpunt {gap} afwijken door afnametiming, biologische ruis of model-fit.",
+    "Same dose as your current protocol. Change vs now is {delta}; that is why the projection stays flat at your latest measurement. For context, a model point can still differ by {gap} due to sampling timing, biological noise, or model fitting."
   )
     .replace("{delta}", modelNowLabel)
     .replace("{gap}", measuredVsModelLabel ?? tr("onbekend", "unknown"));

@@ -33,7 +33,29 @@ const DoseMarkerCard = ({
 }: DoseMarkerCardProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(prediction.marker, language);
-  const deltaPct = calculatePercentChange(targetEstimate, prediction.currentEstimate);
+  const markerSeries = useMemo(
+    () => buildMarkerSeries(reports, prediction.marker, settings.unitSystem),
+    [reports, prediction.marker, settings.unitSystem]
+  );
+  const latestMeasuredValue =
+    markerSeries.length > 0 ? markerSeries[markerSeries.length - 1]?.value ?? null : null;
+  const currentDisplayEstimate =
+    latestMeasuredValue !== null && Number.isFinite(latestMeasuredValue) ? latestMeasuredValue : prediction.currentEstimate;
+  const measurementOffset = currentDisplayEstimate - prediction.currentEstimate;
+  const scenarioDisplayEstimate = isSameDoseScenario
+    ? currentDisplayEstimate
+    : Math.max(0, targetEstimate + measurementOffset);
+  const scenarioDisplayLow = isSameDoseScenario
+    ? currentDisplayEstimate
+    : targetLow === null
+      ? null
+      : Math.max(0, targetLow + measurementOffset);
+  const scenarioDisplayHigh = isSameDoseScenario
+    ? currentDisplayEstimate
+    : targetHigh === null
+      ? null
+      : Math.max(0, targetHigh + measurementOffset);
+  const deltaPct = calculatePercentChange(scenarioDisplayEstimate, currentDisplayEstimate);
   const deltaRounded = deltaPct === null ? null : Math.round(deltaPct);
   const deltaLabel =
     deltaRounded === null ? tr("Onbekend", "Unknown") : `${deltaRounded > 0 ? "+" : ""}${deltaRounded}%`;
@@ -53,20 +75,19 @@ const DoseMarkerCard = ({
         : tr("Laag", "Low");
 
   const targetRangeLabel =
-    targetLow === null || targetHigh === null
+    scenarioDisplayLow === null || scenarioDisplayHigh === null
       ? tr("Onzekerheidsbereik nog niet beschikbaar", "Uncertainty range not available yet")
-      : `${formatAxisTick(targetLow)} - ${formatAxisTick(targetHigh)} ${prediction.unit}`;
+      : `${formatAxisTick(scenarioDisplayLow)} - ${formatAxisTick(scenarioDisplayHigh)} ${prediction.unit}`;
 
   const latestReference = useMemo(() => {
-    const series = buildMarkerSeries(reports, prediction.marker, settings.unitSystem);
-    const latestWithReference = [...series].reverse().find((point) => point.referenceMin !== null || point.referenceMax !== null);
+    const latestWithReference = [...markerSeries].reverse().find((point) => point.referenceMin !== null || point.referenceMax !== null);
     return latestWithReference
       ? {
           min: latestWithReference.referenceMin,
           max: latestWithReference.referenceMax
         }
       : null;
-  }, [reports, prediction.marker, settings.unitSystem]);
+  }, [markerSeries]);
 
   const optimalZone = getTargetZone(prediction.marker, "trt", settings.unitSystem);
   const longevityZone = getTargetZone(prediction.marker, "longevity", settings.unitSystem);
@@ -74,8 +95,8 @@ const DoseMarkerCard = ({
     !!zone && value >= zone.min && value <= zone.max;
   const inReferenceRange =
     latestReference !== null &&
-    (latestReference.min === null || targetEstimate >= latestReference.min) &&
-    (latestReference.max === null || targetEstimate <= latestReference.max);
+    (latestReference.min === null || scenarioDisplayEstimate >= latestReference.min) &&
+    (latestReference.max === null || scenarioDisplayEstimate <= latestReference.max);
 
   const zoneMessage = (() => {
     if (latestReference && inReferenceRange) {
@@ -84,10 +105,10 @@ const DoseMarkerCard = ({
     if (latestReference && !inReferenceRange) {
       return tr("Buiten meest recente referentiebereik", "Outside latest reference range");
     }
-    if (inZone(targetEstimate, optimalZone)) {
+    if (inZone(scenarioDisplayEstimate, optimalZone)) {
       return tr("Valt binnen de optimal zone", "Falls inside the optimal zone");
     }
-    if (inZone(targetEstimate, longevityZone)) {
+    if (inZone(scenarioDisplayEstimate, longevityZone)) {
       return tr("Valt binnen de longevity zone", "Falls inside the longevity zone");
     }
     if (optimalZone || longevityZone) {
@@ -115,7 +136,7 @@ const DoseMarkerCard = ({
     .replace("{dose}", formatAxisTick(targetDose))
     .replace("{marker}", markerLabel)
     .replace("{trajectory}", trajectoryText)
-    .replace("{estimate}", formatAxisTick(targetEstimate))
+    .replace("{estimate}", formatAxisTick(scenarioDisplayEstimate))
     .replace("{unit}", prediction.unit);
 
   return (
@@ -130,7 +151,7 @@ const DoseMarkerCard = ({
             {tr("Bij", "At")} {formatAxisTick(targetDose)} mg
           </span>
           <span className="dose-accordion-chip rounded-full border px-2 py-0.5 text-slate-200">
-            {formatAxisTick(targetEstimate)} {prediction.unit}
+            {formatAxisTick(scenarioDisplayEstimate)} {prediction.unit}
           </span>
           <span className="dose-accordion-chip rounded-full border px-2 py-0.5 text-emerald-200">{deltaLabel}</span>
           <span className="dose-accordion-chip rounded-full border px-2 py-0.5 text-slate-200">{confidenceLabel}</span>
@@ -156,9 +177,9 @@ const DoseMarkerCard = ({
 
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="dose-stat-card rounded-xl border p-2.5">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Huidige modelwaarde", "Current model value")}</p>
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Huidige waarde", "Current value")}</p>
             <p className="mt-1 text-lg font-semibold text-slate-100">
-              {formatAxisTick(prediction.currentEstimate)} <span className="text-xs font-medium text-slate-400">{prediction.unit}</span>
+              {formatAxisTick(currentDisplayEstimate)} <span className="text-xs font-medium text-slate-400">{prediction.unit}</span>
             </p>
           </div>
           <div className="dose-stat-card rounded-xl border p-2.5">
@@ -166,11 +187,11 @@ const DoseMarkerCard = ({
               {tr("Scenario bij", "Scenario at")} {formatAxisTick(targetDose)} mg/week
             </p>
             <p className="mt-1 text-lg font-semibold text-cyan-200">
-              {formatAxisTick(targetEstimate)} <span className="text-xs font-medium text-slate-400">{prediction.unit}</span>
+              {formatAxisTick(scenarioDisplayEstimate)} <span className="text-xs font-medium text-slate-400">{prediction.unit}</span>
             </p>
           </div>
           <div className="dose-stat-card rounded-xl border p-2.5">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Verandering vs model nu", "Change vs model now")}</p>
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Verandering vs nu", "Change vs now")}</p>
             <p className="mt-1 text-lg font-semibold text-emerald-200">{deltaLabel}</p>
           </div>
         </div>
@@ -215,9 +236,9 @@ const DoseMarkerCard = ({
             settings={settings}
             language={language}
             targetDose={targetDose}
-            targetEstimate={targetEstimate}
-            targetLow={targetLow}
-            targetHigh={targetHigh}
+            targetEstimate={scenarioDisplayEstimate}
+            targetLow={scenarioDisplayLow}
+            targetHigh={scenarioDisplayHigh}
             isSameDoseScenario={isSameDoseScenario}
             sameDoseDeltaPct={deltaPct}
           />
