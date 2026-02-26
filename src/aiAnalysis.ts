@@ -28,6 +28,7 @@ import {
   PremiumTrendSignal,
   SupplementActionabilityDecision
 } from "./analysisPremium";
+import { getActiveSupplementsAtDate, sortSupplementPeriods, supplementPeriodsToText } from "./supplementUtils";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -116,6 +117,20 @@ interface AnalysisActionabilityDecision {
   actionConfidence: "high" | "medium" | "low";
 }
 
+interface AnalysisSupplementChangeRow {
+  supplement: string;
+  effectiveDate: string;
+  from: string;
+  to: string;
+}
+
+interface AnalysisSupplementContextRow {
+  latestReportDate: string | null;
+  activeAtLatestTestDate: string;
+  activeToday: string;
+  recentDoseOrFrequencyChanges: AnalysisSupplementChangeRow[];
+}
+
 const ANALYSIS_MODEL_CANDIDATES = [
   "claude-sonnet-4-20250514",
   "claude-3-7-sonnet-20250219",
@@ -138,6 +153,7 @@ const MAX_ALERTS_IN_PROMPT = 12;
 const MAX_DOSE_PREDICTIONS_IN_PROMPT = 10;
 const MAX_TOTAL_MARKERS_IN_PROMPT = 160;
 const MAX_BENCHMARK_MARKERS_IN_PROMPT = 10;
+const MAX_SUPPLEMENT_CHANGES_IN_PROMPT = 8;
 const parseMarkerCap = (): number => {
   const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 60);
   if (!Number.isFinite(raw)) {
@@ -178,6 +194,7 @@ const ANALYSIS_RULES: string[] = [
   "Prioritize insights and likely drivers over raw value repetition.",
   "Do not restate what a dashboard already shows unless needed for context or safety.",
   "Every recommendation must link to a concrete signal in the data.",
+  "Treat currentSupplements as current truth. Do not re-suggest a supplement start/increase that is already active, including completed dose increases in recentDoseOrFrequencyChanges, unless a further change is justified from the current dose.",
   "Cite studies only when needed for a recommendation or risk statement (max 2 citations total).",
   "State uncertainty and confounders in plain language.",
   "Action-neutral: no diagnosis, prescriptions, or medical directives."
@@ -219,7 +236,7 @@ const OUTPUT_STYLE_LIMITS: Record<"full" | "latestComparison", string[]> = {
 const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or medical advice.";
 
 const KEY_LEGEND =
-  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming.";
+  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming, currentSupplements=active supplement snapshots with recent dose/frequency changes.";
 
 const CRITICAL_MARKERS = new Set<string>([
   "Testosterone",
@@ -358,6 +375,109 @@ const truncateContextText = (value: string, maxChars = MAX_CONTEXT_CHARS): strin
     return compact;
   }
   return `${compact.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+};
+
+const supplementDoseFrequencyLabel = (dose: string, frequency: string): string => {
+  const dosePart = dose.trim();
+  const frequencyPart = frequency.trim();
+  if (dosePart && frequencyPart && normalizeText(frequencyPart) !== "unknown") {
+    return `${dosePart} ${frequencyPart}`.trim();
+  }
+  if (dosePart) {
+    return dosePart;
+  }
+  if (frequencyPart && normalizeText(frequencyPart) !== "unknown") {
+    return frequencyPart;
+  }
+  return "unspecified";
+};
+
+const supplementTextOrNone = (value: string): string => {
+  const compact = value.trim();
+  return compact.length > 0 ? compact : "none";
+};
+
+const buildRecentSupplementDoseChanges = (
+  timeline: SupplementPeriod[],
+  relevantSupplementNames: Set<string>
+): AnalysisSupplementChangeRow[] => {
+  if (timeline.length === 0) {
+    return [];
+  }
+
+  const grouped = new Map<string, SupplementPeriod[]>();
+  sortSupplementPeriods(timeline).forEach((period) => {
+    const key = normalizeText(period.name);
+    if (relevantSupplementNames.size > 0 && !relevantSupplementNames.has(key)) {
+      return;
+    }
+    const existing = grouped.get(key) ?? [];
+    existing.push(period);
+    grouped.set(key, existing);
+  });
+
+  const changes: AnalysisSupplementChangeRow[] = [];
+  grouped.forEach((periods) => {
+    const ordered = [...periods].sort(
+      (left, right) =>
+        left.startDate.localeCompare(right.startDate) ||
+        (left.endDate ?? "9999-12-31").localeCompare(right.endDate ?? "9999-12-31") ||
+        left.id.localeCompare(right.id)
+    );
+
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      const doseChanged = normalizeText(current.dose) !== normalizeText(previous.dose);
+      const frequencyChanged = normalizeText(current.frequency) !== normalizeText(previous.frequency);
+      if (!doseChanged && !frequencyChanged) {
+        continue;
+      }
+
+      changes.push({
+        supplement: current.name.trim() || "Unknown supplement",
+        effectiveDate: current.startDate,
+        from: supplementDoseFrequencyLabel(previous.dose, previous.frequency),
+        to: supplementDoseFrequencyLabel(current.dose, current.frequency)
+      });
+    }
+  });
+
+  return changes
+    .sort((left, right) => {
+      const byDate = right.effectiveDate.localeCompare(left.effectiveDate);
+      if (byDate !== 0) {
+        return byDate;
+      }
+      return left.supplement.localeCompare(right.supplement);
+    })
+    .slice(0, MAX_SUPPLEMENT_CHANGES_IN_PROMPT);
+};
+
+const buildSupplementContext = (
+  reports: AnalysisReportRow[],
+  supplementTimeline: SupplementPeriod[],
+  currentDate: string
+): AnalysisSupplementContextRow => {
+  const latestReport = reports[reports.length - 1] ?? null;
+  const latestReportDate = latestReport?.date ?? null;
+  const activeAtLatestByTimeline = latestReportDate ? getActiveSupplementsAtDate(supplementTimeline, latestReportDate) : [];
+  const activeTodayByTimeline = getActiveSupplementsAtDate(supplementTimeline, currentDate);
+  const relevantSupplementNames = new Set<string>(
+    [...activeAtLatestByTimeline, ...activeTodayByTimeline].map((period) => normalizeText(period.name))
+  );
+  const latestSupplementsText =
+    latestReport?.ann.supps && latestReport.ann.supps.trim().length > 0
+      ? latestReport.ann.supps
+      : supplementPeriodsToText(activeAtLatestByTimeline);
+  const activeTodayText = supplementPeriodsToText(activeTodayByTimeline);
+
+  return {
+    latestReportDate,
+    activeAtLatestTestDate: truncateContextText(supplementTextOrNone(latestSupplementsText), 220),
+    activeToday: truncateContextText(supplementTextOrNone(activeTodayText), 220),
+    recentDoseOrFrequencyChanges: buildRecentSupplementDoseChanges(supplementTimeline, relevantSupplementNames)
+  };
 };
 
 const markerDeviationFromRange = (marker: AnalysisMarkerRow): number => {
@@ -1315,6 +1435,7 @@ export const analyzeLabDataWithClaude = async ({
     premiumInsightPack: fullPremiumInsightPack
   });
   const latestComparison = buildLatestVsPrevious(sanitizedPayload);
+  const supplementContext = buildSupplementContext(sanitizedPayload, supplementTimeline, today);
   const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
   const benchmarkSection = buildBenchmarkContext(trackedMarkerNames.slice(0, MAX_BENCHMARK_MARKERS_IN_PROMPT));
   const preferredOutputLanguage = "English";
@@ -1340,6 +1461,7 @@ export const analyzeLabDataWithClaude = async ({
       type: "full",
       units: unitSystem,
       reports: payload,
+      currentSupplements: supplementContext,
       signals,
       premiumInsights: fullPremiumInsightPack,
       actionability: {
@@ -1353,6 +1475,7 @@ export const analyzeLabDataWithClaude = async ({
   const latestComparisonConfig = (() => {
     const relevantPayload = payload.slice(-2);
     const relevantComparison = buildLatestVsPrevious(relevantPayload);
+    const relevantSupplementContext = buildSupplementContext(relevantPayload, supplementTimeline, today);
     const relevantMarkers = new Set(relevantPayload.flatMap((report) => report.markers.map((marker) => marker.m)));
     const relevantBenchmarkSection = buildBenchmarkContext(
       Array.from(relevantMarkers).slice(0, MAX_BENCHMARK_MARKERS_IN_PROMPT)
@@ -1410,6 +1533,7 @@ export const analyzeLabDataWithClaude = async ({
           units: unitSystem,
           latestComparison: relevantComparison ?? latestComparison,
           reports: relevantPayload,
+          currentSupplements: relevantSupplementContext,
           signals: comparisonSignals,
           premiumInsights: comparisonPremiumInsightPack,
           actionability: {

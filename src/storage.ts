@@ -16,6 +16,7 @@ import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocol
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { inferDashboardChartPresetFromSettings } from "./chartHelpers";
 import { createId, deriveAbnormalFlag } from "./utils";
+import { normalizeBaselineFlagsByMarkerOverlap } from "./baselineUtils";
 
 declare global {
   interface Window {
@@ -615,21 +616,8 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
         .sort((left, right) => left.date.localeCompare(right.date))
     : [];
 
-  // Ensure exactly one baseline when legacy data has multiple baseline flags.
-  let baselineTaken = false;
-  const normalizedReports = reports.map((report) => {
-    if (!report.isBaseline) {
-      return report;
-    }
-    if (!baselineTaken) {
-      baselineTaken = true;
-      return report;
-    }
-    return {
-      ...report,
-      isBaseline: false
-    };
-  });
+  // Allow multiple baselines only when they do not overlap by marker.
+  const normalizedReports = normalizeBaselineFlagsByMarkerOverlap(reports);
 
   return {
     schemaVersion: APP_SCHEMA_VERSION,

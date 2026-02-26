@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeLabDataWithClaude } from "../aiAnalysis";
-import { LabReport } from "../types";
+import { LabReport, SupplementPeriod } from "../types";
 
 const sampleReport: LabReport = {
   id: "r1",
@@ -322,6 +322,78 @@ describe("analyzeLabDataWithClaude", () => {
         }
       ]
     });
+  });
+
+  it("adds current supplement stack context with dose change history to avoid duplicate increase advice", async () => {
+    const latestReport: LabReport = {
+      ...sampleReport,
+      id: "r2",
+      testDate: "2026-02-21",
+      createdAt: "2026-02-21T10:00:00.000Z"
+    };
+    const supplementTimeline: SupplementPeriod[] = [
+      {
+        id: "s1",
+        name: "Omega-3",
+        dose: "1000 mg",
+        frequency: "daily",
+        startDate: "2025-08-01",
+        endDate: "2025-11-30"
+      },
+      {
+        id: "s2",
+        name: "Omega-3",
+        dose: "2000 mg",
+        frequency: "daily",
+        startDate: "2025-12-01",
+        endDate: null
+      }
+    ];
+
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport, latestReport],
+      protocols: [],
+      supplementTimeline,
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+
+    expect(capturedPrompt).toContain("Treat currentSupplements as current truth.");
+    const data = extractDataBlock(capturedPrompt);
+    const currentSupplements = data.currentSupplements as
+      | {
+          activeAtLatestTestDate?: string;
+          activeToday?: string;
+          recentDoseOrFrequencyChanges?: Array<{ supplement?: string; from?: string; to?: string }>;
+        }
+      | undefined;
+
+    expect(currentSupplements?.activeAtLatestTestDate).toContain("Omega-3 2000 mg daily");
+    expect(currentSupplements?.activeToday).toContain("Omega-3 2000 mg daily");
+    expect(currentSupplements?.recentDoseOrFrequencyChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          supplement: "Omega-3",
+          from: "1000 mg daily",
+          to: "2000 mg daily"
+        })
+      ])
+    );
   });
 
   it("uses no-supplement prompt contract when no actions are needed", async () => {

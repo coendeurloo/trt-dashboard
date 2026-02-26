@@ -205,7 +205,7 @@ const App = () => {
     editableMarkers,
     markerUsage,
     primaryMarkers,
-    baselineReport,
+    baselineReportByMarker,
     dosePhaseBlocks
   } = useCoreDerivedData({
     appData,
@@ -1062,6 +1062,7 @@ const App = () => {
   };
 
   const markerBaselineDelta = (marker: string): number | null => {
+    const baselineReport = baselineReportByMarker.get(marker);
     if (!baselineReport) {
       return null;
     }

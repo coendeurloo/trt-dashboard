@@ -20,6 +20,7 @@ import {
 import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
+import { findBaselineOverlapMarkers, normalizeBaselineFlagsByMarkerOverlap } from "../baselineUtils";
 
 export interface MarkerMergeSuggestion {
   sourceCanonical: string;
@@ -38,22 +39,8 @@ interface UseAppDataOptions {
   isShareMode: boolean;
 }
 
-const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] => {
-  let baselineSeen = false;
-  return reportsToNormalize.map((report) => {
-    if (!report.isBaseline) {
-      return report;
-    }
-    if (!baselineSeen) {
-      baselineSeen = true;
-      return report;
-    }
-    return {
-      ...report,
-      isBaseline: false
-    };
-  });
-};
+const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] =>
+  normalizeBaselineFlagsByMarkerOverlap(reportsToNormalize);
 
 const mergeProtocolsById = (existing: Protocol[], incoming: Protocol[]): Protocol[] => {
   const byId = new Map<string, Protocol>();
@@ -333,15 +320,44 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
+      const targetReport = appData.reports.find((report) => report.id === reportId);
+      if (!targetReport) {
+        return;
+      }
+
+      if (targetReport.isBaseline) {
+        setAppData((prev) => ({
+          ...prev,
+          reports: prev.reports.map((report) =>
+            report.id === reportId
+              ? {
+                  ...report,
+                  isBaseline: false
+                }
+              : report
+          )
+        }));
+        return;
+      }
+
+      const overlappingMarkers = findBaselineOverlapMarkers(targetReport, appData.reports);
+      if (overlappingMarkers.length > 0) {
+        return;
+      }
+
       setAppData((prev) => ({
         ...prev,
-        reports: prev.reports.map((report) => ({
-          ...report,
-          isBaseline: report.id === reportId
-        }))
+        reports: prev.reports.map((report) =>
+          report.id === reportId
+            ? {
+                ...report,
+                isBaseline: true
+              }
+            : report
+        )
       }));
     },
-    [isShareMode]
+    [isShareMode, appData.reports]
   );
 
   const remapMarker = useCallback(
@@ -356,34 +372,36 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       }
       setAppData((prev) => ({
         ...prev,
-        reports: prev.reports.map((report) => {
-          const rewritten = report.markers.map((marker) => {
-            if (marker.canonicalMarker !== sourceCanonical || marker.isCalculated) {
-              return marker;
-            }
-            const normalized = normalizeMarkerMeasurement({
-              canonicalMarker: targetCanonical,
-              value: marker.value,
-              unit: marker.unit,
-              referenceMin: marker.referenceMin,
-              referenceMax: marker.referenceMax
+        reports: normalizeBaselineFlags(
+          prev.reports.map((report) => {
+            const rewritten = report.markers.map((marker) => {
+              if (marker.canonicalMarker !== sourceCanonical || marker.isCalculated) {
+                return marker;
+              }
+              const normalized = normalizeMarkerMeasurement({
+                canonicalMarker: targetCanonical,
+                value: marker.value,
+                unit: marker.unit,
+                referenceMin: marker.referenceMin,
+                referenceMax: marker.referenceMax
+              });
+              return {
+                ...marker,
+                marker: cleanLabel,
+                canonicalMarker: targetCanonical,
+                value: normalized.value,
+                unit: normalized.unit,
+                referenceMin: normalized.referenceMin,
+                referenceMax: normalized.referenceMax,
+                abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+              };
             });
             return {
-              ...marker,
-              marker: cleanLabel,
-              canonicalMarker: targetCanonical,
-              value: normalized.value,
-              unit: normalized.unit,
-              referenceMin: normalized.referenceMin,
-              referenceMax: normalized.referenceMax,
-              abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+              ...report,
+              markers: dedupeMarkersInReport(rewritten)
             };
-          });
-          return {
-            ...report,
-            markers: dedupeMarkersInReport(rewritten)
-          };
-        })
+          })
+        )
       }));
     },
     [isShareMode]

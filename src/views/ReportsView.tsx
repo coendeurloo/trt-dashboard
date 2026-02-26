@@ -16,6 +16,7 @@ import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnot
 import { ResolvedReportSupplementContext, getActiveSupplementsAtDate, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
 import { createId, deriveAbnormalFlag, formatDate } from "../utils";
+import { findBaselineOverlapMarkers } from "../baselineUtils";
 
 // Markers to show as preview chips in the collapsed card header
 const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
@@ -170,6 +171,18 @@ const ReportsView = ({
     () => reports.filter((report) => selectedReports.includes(report.id)).sort((left, right) => left.testDate.localeCompare(right.testDate)),
     [reports, selectedReports]
   );
+
+  const baselineOverlapByReportId = useMemo(() => {
+    const byReportId = new Map<string, string[]>();
+    reports.forEach((report) => {
+      if (report.isBaseline) {
+        byReportId.set(report.id, []);
+        return;
+      }
+      byReportId.set(report.id, findBaselineOverlapMarkers(report, reports));
+    });
+    return byReportId;
+  }, [reports]);
 
   const comparedMarkerRows = useMemo(() => {
     if (compareReports.length < 2) {
@@ -529,6 +542,12 @@ const ReportsView = ({
         const abnormalCount = abnormalCountForReport(report);
         const previewMarkers = getHighlightMarkers(report);
         const displayNumber = reportSortOrder === "asc" ? reportIndex + 1 : sortedReportsForList.length - reportIndex;
+        const baselineOverlapMarkers = baselineOverlapByReportId.get(report.id) ?? [];
+        const baselineSetBlocked = !report.isBaseline && baselineOverlapMarkers.length > 0;
+        const overlapPreview =
+          baselineOverlapMarkers.length > 3
+            ? `${baselineOverlapMarkers.slice(0, 3).join(", ")} +${baselineOverlapMarkers.length - 3}`
+            : baselineOverlapMarkers.join(", ");
 
         return (
           <article
@@ -725,11 +744,25 @@ const ReportsView = ({
                       className={`inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs ${
                         report.isBaseline
                           ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-200"
+                          : baselineSetBlocked
+                            ? "cursor-not-allowed border-slate-700 bg-slate-800/60 text-slate-500"
                           : "border-slate-600 bg-slate-800/70 text-slate-200 hover:border-slate-500"
                       }`}
+                      disabled={baselineSetBlocked}
+                      title={
+                        baselineSetBlocked
+                          ? tr(
+                              `Niet mogelijk: marker-overlap met bestaande baseline (${overlapPreview}).`,
+                              `Not possible: marker overlap with existing baseline (${overlapPreview}).`
+                            )
+                          : undefined
+                      }
                       onClick={() => onSetBaseline(report.id)}
                     >
-                      <Lock className="h-3.5 w-3.5" /> {report.isBaseline ? "Baseline" : tr("Zet als baseline", "Set baseline")}
+                      <Lock className="h-3.5 w-3.5" />{" "}
+                      {report.isBaseline
+                        ? tr("Verwijder baseline", "Remove baseline")
+                        : tr("Zet als baseline", "Set baseline")}
                     </button>
                   ) : null}
 
@@ -748,6 +781,15 @@ const ReportsView = ({
                     <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijder", "Delete")}
                   </button>
                 </div>
+
+                {!isShareMode && baselineSetBlocked ? (
+                  <p className="mt-2 text-xs text-amber-300">
+                    {tr(
+                      `Kan dit rapport niet als baseline zetten: marker-overlap met bestaande baseline (${overlapPreview}).`,
+                      `Cannot set this report as baseline: marker overlap with existing baseline (${overlapPreview}).`
+                    )}
+                  </p>
+                ) : null}
 
                 {isEditing ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">

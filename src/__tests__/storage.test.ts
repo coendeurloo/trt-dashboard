@@ -8,7 +8,7 @@ describe("storage.coerceStoredAppData", () => {
     expect(coerceStoredAppData({})).toMatchObject({ schemaVersion: expect.any(Number), reports: [] });
   });
 
-  it("normalizes reports, deduplicates markers, and keeps single baseline", () => {
+  it("normalizes reports, deduplicates markers, and keeps multiple baselines when marker sets do not overlap", () => {
     const coerced = coerceStoredAppData({
       reports: [
         {
@@ -85,12 +85,80 @@ describe("storage.coerceStoredAppData", () => {
 
     expect(coerced.reports).toHaveLength(2);
     const baselineCount = coerced.reports.filter((report) => report.isBaseline).length;
-    expect(baselineCount).toBe(1);
+    expect(baselineCount).toBe(2);
 
     const firstMarkers = coerced.reports[0]?.markers ?? [];
     expect(firstMarkers).toHaveLength(1);
     expect(firstMarkers[0]?.canonicalMarker).toBe("Hematocrit");
     expect(firstMarkers[0]?.value).toBe(52);
     expect(firstMarkers[0]?.unit).toBe("%");
+  });
+
+  it("removes overlapping baseline flags so each marker has at most one baseline report", () => {
+    const coerced = coerceStoredAppData({
+      reports: [
+        {
+          id: "a",
+          sourceFileName: "a.pdf",
+          testDate: "2025-01-01",
+          createdAt: "2025-01-01T10:00:00.000Z",
+          isBaseline: true,
+          annotations: {
+            protocolId: null,
+            protocol: "",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "unknown"
+          },
+          markers: [
+            {
+              id: "m1",
+              marker: "Testosterone",
+              canonicalMarker: "Testosterone",
+              value: 20,
+              unit: "nmol/L",
+              referenceMin: null,
+              referenceMax: null,
+              abnormal: "unknown",
+              confidence: 0.9
+            }
+          ],
+          extraction: { provider: "fallback", model: "x", confidence: 1, needsReview: false }
+        },
+        {
+          id: "b",
+          sourceFileName: "b.pdf",
+          testDate: "2025-02-01",
+          createdAt: "2025-02-01T10:00:00.000Z",
+          isBaseline: true,
+          annotations: {
+            protocolId: null,
+            protocol: "",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "unknown"
+          },
+          markers: [
+            {
+              id: "m2",
+              marker: "Testosterone",
+              canonicalMarker: "Testosterone",
+              value: 22,
+              unit: "nmol/L",
+              referenceMin: null,
+              referenceMax: null,
+              abnormal: "unknown",
+              confidence: 0.9
+            }
+          ],
+          extraction: { provider: "fallback", model: "x", confidence: 1, needsReview: false }
+        }
+      ]
+    });
+
+    expect(coerced.reports.find((report) => report.id === "a")?.isBaseline).toBe(true);
+    expect(coerced.reports.find((report) => report.id === "b")?.isBaseline).toBe(false);
   });
 });

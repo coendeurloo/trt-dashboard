@@ -25,6 +25,7 @@ import {
 import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS } from "../constants";
 import { AppSettings, Protocol, StoredAppData, SupplementPeriod } from "../types";
 import { safeNumber, sortReportsChronological, withinRange } from "../utils";
+import { buildBaselineReportByMarker } from "../baselineUtils";
 
 interface UseCoreDerivedDataOptions {
   appData: StoredAppData;
@@ -186,7 +187,8 @@ export const useCoreDerivedData = ({
     return Array.from(new Set(base));
   }, [allMarkers]);
 
-  const baselineReport = useMemo(() => reports.find((report) => report.isBaseline) ?? null, [reports]);
+  const baselineReports = useMemo(() => reports.filter((report) => report.isBaseline), [reports]);
+  const baselineReportByMarker = useMemo(() => buildBaselineReportByMarker(baselineReports), [baselineReports]);
   const dosePhaseBlocks = useMemo(() => buildDosePhaseBlocks(visibleReports, protocols), [visibleReports, protocols]);
 
   return {
@@ -197,7 +199,8 @@ export const useCoreDerivedData = ({
     editableMarkers,
     markerUsage,
     primaryMarkers,
-    baselineReport,
+    baselineReports,
+    baselineReportByMarker,
     dosePhaseBlocks
   };
 };
