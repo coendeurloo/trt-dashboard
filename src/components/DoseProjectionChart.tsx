@@ -159,7 +159,7 @@ const DoseProjectionChart = ({
         {tr("Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario.", "Solid line = measured. Dotted line = model estimate for this dose scenario.")}
       </p>
       <ResponsiveContainer width="100%" height={140}>
-        <LineChart data={chartData} margin={{ left: 2, right: 110, top: 6, bottom: 4 }}>
+        <LineChart data={chartData} margin={{ left: 8, right: 110, top: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
             dataKey="x"
@@ -176,7 +176,6 @@ const DoseProjectionChart = ({
             minTickGap={16}
           />
           <YAxis
-            orientation="right"
             tick={{ fill: "#94a3b8", fontSize: 10 }}
             tickFormatter={(value) => formatAxisTick(Number(value))}
             stroke="#334155"
