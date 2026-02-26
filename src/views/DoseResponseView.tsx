@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, BadgeInfo, FlaskConical, Loader2, Sparkles } from "lucide-react";
 import { DosePrediction, projectDosePredictionAt } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
@@ -50,7 +50,6 @@ const DoseResponseView = ({
 }: DoseResponseViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const [markerScope, setMarkerScope] = useState<"top" | "all">("top");
-  const [expandedMarkerKey, setExpandedMarkerKey] = useState<string | null>(null);
   const {
     predictions: premiumPredictions,
     loading,
@@ -135,17 +134,6 @@ const DoseResponseView = ({
     scenarioDeltaPct === null
       ? `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg`
       : `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg · ${scenarioDeltaPct > 0 ? "+" : ""}${Math.round(scenarioDeltaPct)}%`;
-
-  useEffect(() => {
-    if (visiblePredictions.length === 0) {
-      setExpandedMarkerKey(null);
-      return;
-    }
-    const hasExpanded = expandedMarkerKey !== null && visiblePredictions.some((prediction) => predictionKey(prediction) === expandedMarkerKey);
-    if (!hasExpanded) {
-      setExpandedMarkerKey(predictionKey(visiblePredictions[0]));
-    }
-  }, [visiblePredictions, expandedMarkerKey]);
 
   return (
     <section className="space-y-3 fade-in">
@@ -357,8 +345,6 @@ const DoseResponseView = ({
                   reports={visibleReports}
                   settings={settings}
                   language={language}
-                  isExpanded={expandedMarkerKey === key}
-                  onToggle={() => setExpandedMarkerKey(key)}
                   isSameDoseScenario={isSameDoseScenario}
                 />
               );
