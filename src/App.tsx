@@ -22,7 +22,13 @@ import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
-import { getMostRecentlyUsedProtocolId, getPrimaryProtocolCompound, getProtocolDisplayLabel, getReportProtocol } from "./protocolUtils";
+import {
+  getMostRecentlyUsedProtocolId,
+  getPrimaryProtocolCompound,
+  getProtocolDisplayLabel,
+  getProtocolDoseMgPerWeek,
+  getReportProtocol
+} from "./protocolUtils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
@@ -1111,6 +1117,10 @@ const App = () => {
     () => getPrimaryProtocolCompound(activeProtocol),
     [activeProtocol]
   );
+  const activeProtocolDose = useMemo(
+    () => getProtocolDoseMgPerWeek(activeProtocol),
+    [activeProtocol]
+  );
   const activeAnalysisProtocolLabel = useMemo(() => {
     if (visibleReports.length === 0) {
       return tr("Geen protocol", "No protocol");
@@ -1609,6 +1619,7 @@ const App = () => {
                 protocols={appData.protocols}
                 settings={appData.settings}
                 language={appData.settings.language}
+                currentProtocolDose={activeProtocolDose}
                 onDoseResponseInputChange={setDoseResponseInput}
                 onNavigateToProtocol={() => setActiveTab("protocol")}
               />

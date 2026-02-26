@@ -12,6 +12,7 @@ interface DoseResponseViewProps {
   customDoseValue: number | null;
   hasCustomDose: boolean;
   doseResponseInput: string;
+  currentProtocolDose: number | null;
   visibleReports: LabReport[];
   protocols: Protocol[];
   settings: AppSettings;
@@ -37,6 +38,7 @@ const DoseResponseView = ({
   customDoseValue,
   hasCustomDose,
   doseResponseInput,
+  currentProtocolDose,
   visibleReports,
   protocols,
   settings,
@@ -64,21 +66,40 @@ const DoseResponseView = ({
     [premiumPredictions]
   );
 
-  const baselineDose = useMemo(() => {
+  const modelBaselineDose = useMemo(() => {
     if (currentDoseValues.length === 0) {
-      return 120;
+      return null;
     }
     return Number(median(currentDoseValues).toFixed(1));
   }, [currentDoseValues]);
 
+  const baselineDose = useMemo(() => {
+    if (currentProtocolDose !== null && Number.isFinite(currentProtocolDose) && currentProtocolDose > 0) {
+      return Number(currentProtocolDose.toFixed(1));
+    }
+    if (modelBaselineDose !== null) {
+      return modelBaselineDose;
+    }
+    return 120;
+  }, [currentProtocolDose, modelBaselineDose]);
+
   const scenarioDose = hasCustomDose && customDoseValue !== null ? customDoseValue : baselineDose;
-  const minObservedDose = currentDoseValues.length === 0 ? 80 : Math.min(...currentDoseValues);
-  const maxObservedDose = currentDoseValues.length === 0 ? 180 : Math.max(...currentDoseValues);
+
+  const observedDoseValues = useMemo(() => {
+    const values = [...currentDoseValues, baselineDose].filter((value) => Number.isFinite(value) && value > 0);
+    return values;
+  }, [currentDoseValues, baselineDose]);
+
+  const minObservedDose = observedDoseValues.length === 0 ? 80 : Math.min(...observedDoseValues);
+  const maxObservedDose = observedDoseValues.length === 0 ? 180 : Math.max(...observedDoseValues);
   const sliderMin = Math.max(20, Math.floor((minObservedDose * 0.8) / 5) * 5);
   const sliderMax = Math.max(sliderMin + 10, Math.ceil((maxObservedDose * 1.2) / 5) * 5);
   const sliderValue = Math.min(Math.max(scenarioDose, sliderMin), sliderMax);
   const topPredictions = premiumPredictions.slice(0, 8);
   const visiblePredictions = markerScope === "top" ? topPredictions : premiumPredictions;
+  const hasDifferentModelBaseline =
+    modelBaselineDose !== null &&
+    Math.abs(modelBaselineDose - baselineDose) > 0.2;
 
   const quickScenarios = [
     { key: "minus20", delta: -0.2 },
@@ -186,7 +207,13 @@ const DoseResponseView = ({
           <p className="mt-2 text-xs text-slate-300">
             {tr("Actief scenario", "Active scenario")}: {formatAxisTick(scenarioDose)} mg/week
             {" · "}
-            {tr("Baseline", "Baseline")}: {formatAxisTick(baselineDose)} mg/week
+            {tr("Huidig protocol", "Current protocol")}: {formatAxisTick(baselineDose)} mg/week
+            {hasDifferentModelBaseline ? (
+              <>
+                {" · "}
+                {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week
+              </>
+            ) : null}
           </p>
         </div>
 
