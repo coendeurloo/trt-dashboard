@@ -62,7 +62,7 @@ describe("supplement utils", () => {
     expect(getActiveSupplementsAtDate(timeline, "2025-03-02").map((item) => item.name)).toEqual(["Vitamin D3"]);
   });
 
-  it("resolves report supplement contexts with forward-fill from anchors", () => {
+  it("resolves report supplement contexts from timeline by test date unless explicitly overridden", () => {
     const reports: LabReport[] = [
       mkReport({ id: "r1", date: "2025-02-10", anchorState: "inherit" }),
       mkReport({
@@ -89,13 +89,13 @@ describe("supplement utils", () => {
 
     const contexts = resolveReportSupplementContexts(reports, timeline);
 
-    expect(contexts["r1"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
+    expect(contexts["r1"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3", "Zinc"]);
     expect(contexts["r2"]?.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
-    expect(contexts["r3"]?.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
+    expect(contexts["r3"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
     expect(contexts["r4"]?.effectiveSupplements).toEqual([]);
-    expect(contexts["r5"]?.effectiveSupplements).toEqual([]);
+    expect(contexts["r5"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
     expect(contexts["r6"]?.effectiveState).toBe("unknown");
-    expect(contexts["r7"]?.effectiveState).toBe("unknown");
+    expect(contexts["r7"]?.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
   });
 
   it("uses resolved report context when asking effective supplements", () => {
@@ -118,7 +118,7 @@ describe("supplement utils", () => {
       mkReport({ id: "rb", date: "2025-03-10", anchorState: "inherit" })
     ];
 
-    expect(getEffectiveSupplements(reports[1], timeline, reports).map((item) => item.name)).toEqual(["NAC"]);
+    expect(getEffectiveSupplements(reports[1], timeline, reports).map((item) => item.name)).toEqual(["Vitamin D3"]);
   });
 
   it("returns the inherited context that will be used for the next report", () => {
@@ -142,8 +142,35 @@ describe("supplement utils", () => {
     ];
 
     const next = getCurrentInheritedSupplementContext(reports, timeline);
-    expect(next.effectiveSupplements.map((item) => item.name)).toEqual(["NAC"]);
-    expect(next.sourceAnchorReportId).toBe("r2");
+    expect(next.effectiveSupplements.map((item) => item.name)).toEqual(["Vitamin D3"]);
+    expect(next.sourceAnchorReportId).toBeNull();
+  });
+
+  it("updates report supplements retroactively when supplement timeline changes", () => {
+    const reports: LabReport[] = [mkReport({ id: "r1", date: "2025-02-20", anchorState: "inherit" })];
+    const oldTimeline: SupplementPeriod[] = [
+      {
+        id: "s1",
+        name: "Vitamin D3",
+        dose: "2000 IU",
+        frequency: "daily",
+        startDate: "2025-01-01",
+        endDate: null
+      }
+    ];
+    const updatedTimeline: SupplementPeriod[] = [
+      {
+        id: "s1",
+        name: "Vitamin D3",
+        dose: "4000 IU",
+        frequency: "daily",
+        startDate: "2025-01-15",
+        endDate: null
+      }
+    ];
+
+    expect(getEffectiveSupplements(reports[0], oldTimeline, reports).map((item) => item.dose)).toEqual(["2000 IU"]);
+    expect(getEffectiveSupplements(reports[0], updatedTimeline, reports).map((item) => item.dose)).toEqual(["4000 IU"]);
   });
 
   it("formats supplement text as readable stack string", () => {

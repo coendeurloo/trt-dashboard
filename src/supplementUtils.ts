@@ -76,46 +76,42 @@ export const resolveReportSupplementContexts = (
   timeline: SupplementPeriod[]
 ): Record<string, ResolvedReportSupplementContext> => {
   const sortedReports = sortReportsForSupplementResolution(reports);
-  const baseStack = getCurrentActiveSupplementStack(timeline);
-
-  let currentState: EffectiveSupplementState = baseStack.length > 0 ? "anchor" : "none";
-  let currentSupplements: SupplementPeriod[] = [...baseStack];
-  let sourceAnchorReportId: string | null = null;
-  let sourceAnchorDate: string | null = null;
-
   const contexts: Record<string, ResolvedReportSupplementContext> = {};
 
   sortedReports.forEach((report) => {
     const anchorState = normalizeSupplementAnchorState(report.annotations);
+    let effectiveState: EffectiveSupplementState = "none";
+    let effectiveSupplements: SupplementPeriod[] = [];
+    let sourceAnchorReportId: string | null = null;
+    let sourceAnchorDate: string | null = null;
 
     if (anchorState === "anchor") {
       const anchoredSupplements = sortSupplementPeriods(report.annotations.supplementOverrides ?? []);
-      if (anchoredSupplements.length > 0) {
-        currentState = "anchor";
-        currentSupplements = anchoredSupplements;
-      } else {
-        currentState = "none";
-        currentSupplements = [];
-      }
+      effectiveState = anchoredSupplements.length > 0 ? "anchor" : "none";
+      effectiveSupplements = anchoredSupplements;
       sourceAnchorReportId = report.id;
       sourceAnchorDate = report.testDate;
     } else if (anchorState === "none") {
-      currentState = "none";
-      currentSupplements = [];
+      effectiveState = "none";
+      effectiveSupplements = [];
       sourceAnchorReportId = report.id;
       sourceAnchorDate = report.testDate;
     } else if (anchorState === "unknown") {
-      currentState = "unknown";
-      currentSupplements = [];
+      effectiveState = "unknown";
+      effectiveSupplements = [];
       sourceAnchorReportId = report.id;
       sourceAnchorDate = report.testDate;
+    } else {
+      const inheritedSupplements = getActiveSupplementsAtDate(timeline, report.testDate);
+      effectiveState = inheritedSupplements.length > 0 ? "anchor" : "none";
+      effectiveSupplements = inheritedSupplements;
     }
 
     contexts[report.id] = {
       reportId: report.id,
       anchorState,
-      effectiveState: currentState,
-      effectiveSupplements: [...currentSupplements],
+      effectiveState,
+      effectiveSupplements: [...effectiveSupplements],
       sourceAnchorReportId,
       sourceAnchorDate
     };
@@ -147,34 +143,13 @@ export const getCurrentInheritedSupplementContext = (
   reports: LabReport[],
   timeline: SupplementPeriod[]
 ): Pick<ResolvedReportSupplementContext, "effectiveState" | "effectiveSupplements" | "sourceAnchorReportId" | "sourceAnchorDate"> => {
-  const sortedReports = sortReportsForSupplementResolution(reports);
-  if (sortedReports.length === 0) {
-    const baseStack = getCurrentActiveSupplementStack(timeline);
-    return {
-      effectiveState: baseStack.length > 0 ? "anchor" : "none",
-      effectiveSupplements: baseStack,
-      sourceAnchorReportId: null,
-      sourceAnchorDate: null
-    };
-  }
-
-  const latest = sortedReports[sortedReports.length - 1];
-  const contexts = resolveReportSupplementContexts(sortedReports, timeline);
-  const resolved = latest ? contexts[latest.id] : null;
-  if (!resolved) {
-    return {
-      effectiveState: "none",
-      effectiveSupplements: [],
-      sourceAnchorReportId: null,
-      sourceAnchorDate: null
-    };
-  }
-
+  void reports;
+  const baseStack = getCurrentActiveSupplementStack(timeline);
   return {
-    effectiveState: resolved.effectiveState,
-    effectiveSupplements: resolved.effectiveSupplements,
-    sourceAnchorReportId: resolved.sourceAnchorReportId,
-    sourceAnchorDate: resolved.sourceAnchorDate
+    effectiveState: baseStack.length > 0 ? "anchor" : "none",
+    effectiveSupplements: baseStack,
+    sourceAnchorReportId: null,
+    sourceAnchorDate: null
   };
 };
 

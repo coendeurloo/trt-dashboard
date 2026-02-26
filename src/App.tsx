@@ -32,7 +32,7 @@ import {
   shareBootstrapText
 } from "./hooks/useShareBootstrap";
 import { buildExtractionDiffSummary } from "./extractionDiff";
-import { getCurrentInheritedSupplementContext, getCurrentActiveSupplementStack, resolveReportSupplementContexts } from "./supplementUtils";
+import { getActiveSupplementsAtDate, resolveReportSupplementContexts } from "./supplementUtils";
 import {
   useCoreDerivedData,
   useDashboardDerivedData,
@@ -245,19 +245,14 @@ const App = () => {
     () => resolveReportSupplementContexts(reports, appData.supplementTimeline),
     [reports, appData.supplementTimeline]
   );
-  const draftInheritedSupplementContext = useMemo(
-    () => getCurrentInheritedSupplementContext(reports, appData.supplementTimeline),
-    [reports, appData.supplementTimeline]
+  const draftDateForSupplements = draft?.testDate ?? new Date().toISOString().slice(0, 10);
+  const draftInheritedSupplements = useMemo(
+    () => getActiveSupplementsAtDate(appData.supplementTimeline, draftDateForSupplements),
+    [appData.supplementTimeline, draftDateForSupplements]
   );
   const draftInheritedSupplementsLabel = useMemo(() => {
-    if (draftInheritedSupplementContext.sourceAnchorDate) {
-      return `${tr("van rapport", "from report")} ${formatDate(draftInheritedSupplementContext.sourceAnchorDate)}`;
-    }
-    const activeStack = getCurrentActiveSupplementStack(appData.supplementTimeline);
-    return activeStack.length > 0
-      ? tr("huidige actieve stack", "current active stack")
-      : tr("geen actieve stack", "no active stack");
-  }, [draftInheritedSupplementContext.sourceAnchorDate, appData.supplementTimeline, tr]);
+    return `${tr("op basis van schema op", "based on schedule on")} ${formatDate(draftDateForSupplements)}`;
+  }, [draftDateForSupplements, tr]);
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
   const isDarkTheme = appData.settings.theme === "dark";
@@ -1390,7 +1385,7 @@ const App = () => {
                 annotations={draftAnnotations}
                 protocols={appData.protocols}
                 supplementTimeline={appData.supplementTimeline}
-                inheritedSupplementsPreview={draftInheritedSupplementContext.effectiveSupplements}
+                inheritedSupplementsPreview={draftInheritedSupplements}
                 inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
                 selectedProtocolId={selectedProtocolId}
                 parserDebugMode={appData.settings.parserDebugMode}

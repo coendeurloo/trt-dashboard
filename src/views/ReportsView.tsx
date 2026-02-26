@@ -13,7 +13,7 @@ import {
   getReportProtocol
 } from "../protocolUtils";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
-import { ResolvedReportSupplementContext, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
+import { ResolvedReportSupplementContext, getActiveSupplementsAtDate, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
 import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 
@@ -500,15 +500,24 @@ const ReportsView = ({
         const dose = getProtocolDoseMgPerWeek(protocol);
         const supplementContext = reportSupplementContexts[report.id];
         const supplementAnchorState = normalizeAnchorState(report.annotations);
-        const inheritedSourceLabel = supplementContext?.sourceAnchorDate
-          ? `${tr("van", "from")} ${formatDate(supplementContext.sourceAnchorDate)}`
-          : tr("op basis van huidige actieve stack", "from current active stack");
+        const timelineSupplementsAtDate = getActiveSupplementsAtDate(supplementTimeline, report.testDate);
+        const inheritedFallbackSupplements =
+          supplementAnchorState === "inherit" && supplementContext?.effectiveState === "unknown"
+            ? timelineSupplementsAtDate
+            : supplementContext?.effectiveSupplements ?? [];
+        const inheritedFallbackState =
+          supplementAnchorState === "inherit" && supplementContext?.effectiveState === "unknown"
+            ? timelineSupplementsAtDate.length > 0
+              ? "anchor"
+              : "none"
+            : supplementContext?.effectiveState ?? "none";
+        const inheritedSourceLabel = `${tr("op basis van schema op", "based on schedule on")} ${formatDate(report.testDate)}`;
         const supplementSummaryText =
-          supplementContext?.effectiveState === "unknown"
+          inheritedFallbackState === "unknown"
             ? tr("Onbekend op testdatum", "Unknown at test date")
-            : supplementContext?.effectiveState === "none"
+            : inheritedFallbackState === "none"
               ? tr("Geen supplementen", "No supplements")
-              : supplementPeriodsToText(supplementContext?.effectiveSupplements ?? []);
+              : supplementPeriodsToText(inheritedFallbackSupplements);
         const editingSupplementState = normalizeAnchorState(editingAnnotations);
         const editingOverrideSupplements = editingAnnotations.supplementOverrides ?? [];
         const editingEffectiveSupplements =
@@ -516,7 +525,7 @@ const ReportsView = ({
             ? editingOverrideSupplements
             : editingSupplementState === "none" || editingSupplementState === "unknown"
               ? []
-              : supplementContext?.effectiveSupplements ?? [];
+              : inheritedFallbackSupplements;
         const abnormalCount = abnormalCountForReport(report);
         const previewMarkers = getHighlightMarkers(report);
         const displayNumber = reportSortOrder === "asc" ? reportIndex + 1 : sortedReportsForList.length - reportIndex;
@@ -871,7 +880,7 @@ const ReportsView = ({
                             ? tr("Gemarkeerd als onbekend voor deze datum.", "Marked as unknown for this date.")
                             : editingSupplementState === "none"
                               ? tr("Expliciet geen supplementen op deze datum.", "Explicitly no supplements on this date.")
-                              : tr("Dit rapport ankert een nieuwe stack voor volgende rapporten.", "This report anchors a new stack for following reports.")}
+                              : tr("Dit rapport gebruikt een aangepaste stack voor alleen deze testdatum.", "This report uses a custom stack for this test date only.")}
                       </p>
                       <p className="mt-1 text-sm text-slate-200">
                         {editingSupplementState === "unknown"
@@ -1019,11 +1028,6 @@ const ReportsView = ({
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Actief bij testdatum", "Active at test date")}</span>
                       <strong className="text-sm text-slate-100">{supplementSummaryText || "-"}</strong>
-                      {supplementAnchorState === "inherit" && supplementContext?.sourceAnchorDate ? (
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                          {tr("Bron", "Source")}: {formatDate(supplementContext.sourceAnchorDate)}
-                        </p>
-                      ) : null}
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
