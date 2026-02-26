@@ -782,15 +782,6 @@ const ReportsView = ({
                   </button>
                 </div>
 
-                {!isShareMode && baselineSetBlocked ? (
-                  <p className="mt-2 text-xs text-amber-300">
-                    {tr(
-                      `Kan dit rapport niet als baseline zetten: marker-overlap met bestaande baseline (${overlapPreview}).`,
-                      `Cannot set this report as baseline: marker overlap with existing baseline (${overlapPreview}).`
-                    )}
-                  </p>
-                ) : null}
-
                 {isEditing ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
