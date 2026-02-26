@@ -167,8 +167,10 @@ const SettingsView = ({
           "Wat ging er mis: [vul in]",
           "",
           "---",
-          "Stuur bij voorkeur geen PDF mee vanwege medische privacy.",
-          "Omschrijf liever welke markers ontbraken of verkeerd waren."
+          "Voeg bij voorkeur je originele lab-PDF toe, zodat we parsing kunnen verbeteren.",
+          "Je privacy wordt gerespecteerd: je PDF wordt alleen gebruikt voor parse-optimalisatie.",
+          "Je PDF wordt niet voor andere doeleinden gebruikt.",
+          "Je kunt gevoelige persoonsgegevens (zoals naam/adres) desgewenst vooraf afschermen."
         ].join("\n")
       : [
           "Hi,",
@@ -179,8 +181,10 @@ const SettingsView = ({
           "What went wrong: [fill in]",
           "",
           "---",
-          "Please avoid attaching medical PDFs for privacy.",
-          "Describe which markers were missing or incorrect."
+          "Please attach your original lab PDF when possible so we can improve parsing.",
+          "Your privacy is respected: your PDF is used only for parsing optimization.",
+          "Your PDF is not used for any other purpose.",
+          "You can redact sensitive personal details (name/address) first if you prefer."
         ].join("\n");
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, [isNl, tr]);
@@ -626,7 +630,7 @@ const SettingsView = ({
           className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
         >
           <AlertTriangle className="h-4 w-4" />
-          {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
+          {tr("Meld een probleem", "Report an issue")}
         </a>
       </div>
 

@@ -290,8 +290,10 @@ const ExtractionReviewTable = ({
       "What went wrong: [user fills in]",
       "",
       "---",
-      "Please do NOT attach your PDF as it contains personal medical data.",
-      "Describe which markers were missing or incorrectly extracted instead."
+      "Please attach your original lab PDF when possible so we can improve parsing.",
+      "Your privacy is respected: your PDF is used only for parsing optimization.",
+      "Your PDF is not used for any other purpose.",
+      "You can redact sensitive personal details (name/address) first if you prefer."
     ].join("\n");
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   })();
@@ -874,7 +876,7 @@ const ExtractionReviewTable = ({
           className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300"
         >
           <AlertTriangle className="h-3.5 w-3.5" />
-          {tr("Meld een verwerkingsprobleem", "Report a parsing issue")}
+          {tr("Meld een probleem", "Report an issue")}
         </a>
       </div>
 

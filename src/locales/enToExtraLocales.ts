@@ -343,7 +343,7 @@ export const EN_TO_EXTRA_LOCALES: ExtraLocaleMap = {
   "Remove": { es: "Eliminar", pt: "Remover", de: "Entfernen" , ru: "Удалять", zh: "消除"},
   "Remove row": { es: "Quitar fila", pt: "Remover linha", de: "Zeile entfernen" , ru: "Удалить строку", zh: "删除行"},
   "Rename marker": { es: "Cambiar nombre de marcador", pt: "Renomear marcador", de: "Markierung umbenennen" , ru: "Переименовать маркер", zh: "重命名标记"},
-  "Report a parsing issue": { es: "Informar un problema de análisis", pt: "Informar um problema de análise", de: "Melden Sie ein Parsing-Problem" , ru: "Сообщить о проблеме анализа", zh: "报告解析问题"},
+  "Report an issue": { es: "Informar un problema", pt: "Relatar um problema", de: "Problem melden" , ru: "Сообщить о проблеме", zh: "报告问题"},
   "Reports": { es: "Informes", pt: "Relatórios", de: "Berichte", ru: "Отчёты", zh: "报告" },
   "Reports in scope": { es: "Informes en alcance", pt: "Relatórios no escopo", de: "Berichte im Umfang" , ru: "Отчеты в объеме", zh: "范围内的报告"},
   "Restore backup (replace)": { es: "Restaurar copia de seguridad (reemplazar)", pt: "Restaurar backup (substituir)", de: "Backup wiederherstellen (ersetzen)" , ru: "Восстановить резервную копию (заменить)", zh: "恢复备份（替换）"},
