@@ -254,6 +254,9 @@ const DashboardView = ({
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center whitespace-nowrap px-1 text-xs font-medium text-slate-400 sm:text-sm">
+                {tr("Periode:", "Range:")}
+              </span>
               {timeRangeOptions.map(([value, label]) => (
                 <button
                   key={value}
@@ -285,8 +288,8 @@ const DashboardView = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
-                {tr("Weergave", "View")}
+              <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400 sm:text-sm">
+                {tr("Weergave:", "View:")}
               </span>
               <button
                 type="button"
@@ -307,8 +310,8 @@ const DashboardView = ({
                 {tr("Vergelijk 2 markers", "Compare 2 markers")}
               </button>
 
-              <span className="ml-0 inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:ml-2 sm:text-sm">
-                {tr("Preset", "Preset")}
+              <span className="ml-1 inline-flex items-center px-1 text-xs font-medium text-slate-400 sm:ml-2 sm:text-sm">
+                {tr("Preset:", "Preset:")}
               </span>
               {(
                 [
@@ -354,7 +357,7 @@ const DashboardView = ({
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Data & schaal", "Data & scale")}</p>
                 <div className="mt-2 space-y-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300">{tr("Eenheden", "Units")}</span>
+                    <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400">{tr("Eenheden:", "Units:")}</span>
                     {(["eu", "us"] as const).map((unitSystem) => (
                       <button
                         key={unitSystem}
@@ -369,7 +372,7 @@ const DashboardView = ({
                     ))}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300">{tr("Y-as", "Y-axis")}</span>
+                    <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400">{tr("Y-as:", "Y-axis:")}</span>
                     <button
                       type="button"
                       className={`rounded-md px-2.5 py-1 text-xs ${

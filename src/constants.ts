@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compareToBaseline: false,
   comparisonScale: "absolute",
   dashboardChartPreset: "clinical",
-  timeRange: "12m",
+  timeRange: "all",
   customRangeStart: "",
   customRangeEnd: "",
   aiExternalConsent: false,
