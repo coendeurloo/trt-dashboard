@@ -1,6 +1,6 @@
 import { addDays, format, parseISO } from "date-fns";
 import { Area, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { DosePrediction, buildMarkerSeries } from "../analytics";
+import { DosePrediction, buildMarkerSeries, calculatePercentChange } from "../analytics";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { formatDate } from "../utils";
@@ -16,6 +16,8 @@ export interface DoseProjectionChartProps {
   targetEstimate?: number;
   targetLow?: number | null;
   targetHigh?: number | null;
+  isSameDoseScenario?: boolean;
+  sameDoseDeltaPct?: number | null;
 }
 
 const DoseProjectionChart = ({
@@ -26,7 +28,9 @@ const DoseProjectionChart = ({
   targetDose,
   targetEstimate,
   targetLow,
-  targetHigh
+  targetHigh,
+  isSameDoseScenario = false,
+  sameDoseDeltaPct = null
 }: DoseProjectionChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(prediction.marker, language);
@@ -59,6 +63,9 @@ const DoseProjectionChart = ({
   if (!latest) {
     return null;
   }
+  const projectionValue = isSameDoseScenario ? latest.value : projectedEstimate;
+  const projectionLow = isSameDoseScenario ? latest.value : projectedLow;
+  const projectionHigh = isSameDoseScenario ? latest.value : projectedHigh;
 
   const projectionSpacingDays =
     recentHistorical.length >= 2
@@ -99,31 +106,49 @@ const DoseProjectionChart = ({
     x: projectionKey,
     date: projectionDateIso,
     actual: null,
-    projected: projectedEstimate,
-    bandBase: projectedLow,
+    projected: projectionValue,
+    bandBase: projectionLow,
     bandSpan:
-      projectedLow !== null && projectedHigh !== null && projectedHigh >= projectedLow
-        ? projectedHigh - projectedLow
+      projectionLow !== null && projectionHigh !== null && projectionHigh >= projectionLow
+        ? projectionHigh - projectionLow
         : null,
-    projectedLow,
-    projectedHigh
+    projectedLow: projectionLow,
+    projectedHigh: projectionHigh
   });
 
   const yDomain = buildYAxisDomain(
     [
       ...recentHistorical.map((point) => point.value),
-      projectedEstimate,
-      projectedLow ?? projectedEstimate,
-      projectedHigh ?? projectedEstimate
+      projectionValue,
+      projectionLow ?? projectionValue,
+      projectionHigh ?? projectionValue
     ].filter((value): value is number => Number.isFinite(value)),
     "data"
   );
 
-  const showSteadyStateNote =
-    typeof latest.value === "number" &&
-    Number.isFinite(latest.value) &&
-    projectedEstimate > latest.value &&
-    Math.abs(projectedDose - prediction.currentDose) < 5;
+  const measuredVsModelPct =
+    typeof latest.value === "number" && Number.isFinite(latest.value)
+      ? calculatePercentChange(projectedEstimate, latest.value)
+      : null;
+  const modelVsMeasuredRoundedEqual = measuredVsModelPct !== null && Math.round(measuredVsModelPct) === 0;
+  const modelNowLabel =
+    sameDoseDeltaPct === null
+      ? tr("onbekend", "unknown")
+      : `${sameDoseDeltaPct > 0 ? "+" : ""}${Math.round(sameDoseDeltaPct)}%`;
+  const measuredVsModelLabel =
+    measuredVsModelPct === null
+      ? null
+      : `${measuredVsModelPct > 0 ? "+" : ""}${formatAxisTick(measuredVsModelPct)}%`;
+  const modelNowAndCloseNote = tr(
+    "Zelfde dosis als je huidige protocol. Verandering vs model nu is {delta}. De projectie blijft vlak vanaf je laatste meting; model en meting liggen nu ook dicht bij elkaar (binnen afronding).",
+    "Same dose as your current protocol. Change vs model now is {delta}. The projection stays flat from your latest measurement; model and measurement are also currently close (within rounding)."
+  ).replace("{delta}", modelNowLabel);
+  const modelNowWithGapNote = tr(
+    "Zelfde dosis als je huidige protocol. Verandering vs model nu is {delta}; daarom blijft de projectie vlak op je laatste meting. Ter context: het modelpunt kan toch {gap} van die meting verschillen door afnametiming, biologische ruis of model-fit.",
+    "Same dose as your current protocol. Change vs model now is {delta}; that is why the projection stays flat at your latest measurement. For context: the model point can still differ by {gap} due to sampling timing, biological noise, or model fitting."
+  )
+    .replace("{delta}", modelNowLabel)
+    .replace("{gap}", measuredVsModelLabel ?? tr("onbekend", "unknown"));
 
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
@@ -178,7 +203,7 @@ const DoseProjectionChart = ({
                   </p>
                   {isProjectionPoint ? (
                     <>
-                      {point.projectedLow !== null && point.projectedHigh !== null ? (
+                      {!isSameDoseScenario && point.projectedLow !== null && point.projectedHigh !== null ? (
                         <p className="mt-1 text-[10px] text-amber-200">
                           {tr(
                             `Waarschijnlijk bereik: ${formatAxisTick(point.projectedLow)} - ${formatAxisTick(point.projectedHigh)} ${prediction.unit}`,
@@ -187,10 +212,15 @@ const DoseProjectionChart = ({
                         </p>
                       ) : null}
                       <p className="mt-1 text-[10px] text-amber-200">
-                        {tr(
-                          `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`,
-                          `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`
-                        )}
+                        {isSameDoseScenario
+                          ? tr(
+                              "Vlakke projectie op je huidige protocoldosis, verankerd op je laatste meting.",
+                              "Flat projection at your current protocol dose, anchored to your latest measurement."
+                            )
+                          : tr(
+                              `Hypothetische modelwaarde bij ${formatAxisTick(projectedDose)} mg/week`,
+                              `Hypothetical model value at ${formatAxisTick(projectedDose)} mg/week`
+                            )}
                       </p>
                     </>
                   ) : null}
@@ -249,12 +279,11 @@ const DoseProjectionChart = ({
           />
         </LineChart>
       </ResponsiveContainer>
-      {showSteadyStateNote && (
-        <p className="mt-1.5 text-[11px] text-slate-400">
-          {tr(
-            "De modelinschatting ligt boven je laatste meting bij dezelfde dosis — mogelijk was je nog niet op steady-state toen die meting werd gedaan.",
-            "The model estimate is above your last measurement at the same dose — your last test may have been taken before reaching steady-state at this dose level."
-          )}
+      {isSameDoseScenario && (
+        <p className="dose-projection-context-note mt-1.5 rounded-md border border-slate-700/60 bg-slate-900/35 px-2.5 py-2 text-[11px] text-slate-300">
+          {modelVsMeasuredRoundedEqual
+            ? modelNowAndCloseNote
+            : modelNowWithGapNote}
         </p>
       )}
     </div>

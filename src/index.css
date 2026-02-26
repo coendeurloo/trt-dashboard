@@ -686,19 +686,19 @@ body.light .review-suggestion-item:hover {
 }
 
 .dose-premium-shell {
-  border-color: rgba(100, 116, 139, 0.55);
+  border-color: rgba(100, 116, 139, 0.45);
   background:
-    radial-gradient(circle at 80% 12%, rgba(56, 189, 248, 0.1), transparent 38%),
-    radial-gradient(circle at 20% 85%, rgba(16, 185, 129, 0.08), transparent 40%),
-    rgba(15, 23, 42, 0.58);
+    radial-gradient(circle at 80% 12%, rgba(56, 189, 248, 0.08), transparent 38%),
+    radial-gradient(circle at 20% 85%, rgba(16, 185, 129, 0.06), transparent 40%),
+    rgba(15, 23, 42, 0.52);
 }
 
 .dose-premium-card {
-  border-color: rgba(100, 116, 139, 0.58);
+  border-color: rgba(100, 116, 139, 0.46);
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.74) 0%, rgba(15, 23, 42, 0.52) 100%),
-    rgba(15, 23, 42, 0.6);
-  box-shadow: 0 18px 34px -26px rgba(2, 6, 23, 0.9);
+    linear-gradient(180deg, rgba(15, 23, 42, 0.68) 0%, rgba(15, 23, 42, 0.46) 100%),
+    rgba(15, 23, 42, 0.56);
+  box-shadow: 0 14px 24px -20px rgba(2, 6, 23, 0.72);
 }
 
 .dose-premium-card-locked {
@@ -718,8 +718,37 @@ body.light .review-suggestion-item:hover {
 }
 
 .dose-stat-card {
-  border-color: rgba(71, 85, 105, 0.72);
-  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(71, 85, 105, 0.6);
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.dose-control-chip {
+  border-color: rgba(100, 116, 139, 0.55);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.dose-accordion-card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.dose-accordion-card:has(.dose-accordion-trigger[aria-expanded="true"]) {
+  border-color: rgba(6, 182, 212, 0.36);
+  box-shadow: 0 16px 30px -24px rgba(8, 145, 178, 0.42);
+}
+
+.dose-accordion-trigger {
+  border-radius: 0.8rem;
+  padding: 0.15rem;
+}
+
+.dose-accordion-chip {
+  border-color: rgba(100, 116, 139, 0.52);
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.dose-projection-context-note {
+  border-color: rgba(100, 116, 139, 0.56);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 body.light .dose-premium-shell {
@@ -733,8 +762,8 @@ body.light .dose-premium-shell {
 
 body.light .dose-premium-card {
   border-color: rgba(148, 163, 184, 0.48);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(238, 246, 254, 0.92) 100%);
-  box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 247, 254, 0.92) 100%);
+  box-shadow: 0 12px 22px -18px rgba(15, 23, 42, 0.24);
 }
 
 body.light .dose-source-badge {
@@ -751,7 +780,44 @@ body.light .dose-confidence-badge {
 
 body.light .dose-stat-card {
   border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+body.light .dose-control-chip {
+  border-color: rgba(148, 163, 184, 0.55);
   background: rgba(255, 255, 255, 0.8);
+}
+
+body.light .dose-accordion-chip {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+body.light .dose-accordion-card:has(.dose-accordion-trigger[aria-expanded="true"]) {
+  border-color: rgba(8, 145, 178, 0.36);
+  box-shadow: 0 14px 22px -16px rgba(8, 145, 178, 0.22);
+}
+
+body.light .dose-projection-context-note {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+@media (max-width: 640px) {
+  .dose-control-chip-row {
+    gap: 0.3rem;
+  }
+
+  .dose-control-chip {
+    padding-inline: 0.5rem;
+    padding-block: 0.2rem;
+    font-size: 0.68rem;
+  }
+
+  .dose-accordion-chip {
+    font-size: 0.64rem;
+    padding-inline: 0.4rem;
+  }
 }
 
 .protocol-impact-premium-shell {

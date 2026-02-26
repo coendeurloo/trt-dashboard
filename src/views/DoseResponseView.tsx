@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BadgeInfo, FlaskConical, Loader2, Sparkles } from "lucide-react";
 import { DosePrediction, projectDosePredictionAt } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
@@ -33,6 +33,8 @@ const median = (values: number[]): number => {
   return sorted[middle];
 };
 
+const predictionKey = (prediction: DosePrediction): string => `${prediction.marker}|${prediction.unit}`;
+
 const DoseResponseView = ({
   dosePredictions,
   customDoseValue,
@@ -48,6 +50,7 @@ const DoseResponseView = ({
 }: DoseResponseViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const [markerScope, setMarkerScope] = useState<"top" | "all">("top");
+  const [expandedMarkerKey, setExpandedMarkerKey] = useState<string | null>(null);
   const {
     predictions: premiumPredictions,
     loading,
@@ -84,6 +87,10 @@ const DoseResponseView = ({
   }, [currentProtocolDose, modelBaselineDose]);
 
   const scenarioDose = hasCustomDose && customDoseValue !== null ? customDoseValue : baselineDose;
+  const sameDoseReference = currentProtocolDose !== null && Number.isFinite(currentProtocolDose) && currentProtocolDose > 0
+    ? currentProtocolDose
+    : baselineDose;
+  const isSameDoseScenario = Math.abs(scenarioDose - sameDoseReference) <= 0.2;
 
   const observedDoseValues = useMemo(() => {
     const values = [...currentDoseValues, baselineDose].filter((value) => Number.isFinite(value) && value > 0);
@@ -119,6 +126,27 @@ const DoseResponseView = ({
     return `${delta > 0 ? "+" : ""}${Math.round(delta * 100)}%`;
   };
 
+  const scenarioDeltaMg = Number((scenarioDose - baselineDose).toFixed(1));
+  const scenarioDeltaPct =
+    Math.abs(baselineDose) <= 0.000001
+      ? null
+      : Number((((scenarioDose - baselineDose) / baselineDose) * 100).toFixed(1));
+  const scenarioDeltaLabel =
+    scenarioDeltaPct === null
+      ? `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg`
+      : `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg · ${scenarioDeltaPct > 0 ? "+" : ""}${Math.round(scenarioDeltaPct)}%`;
+
+  useEffect(() => {
+    if (visiblePredictions.length === 0) {
+      setExpandedMarkerKey(null);
+      return;
+    }
+    const hasExpanded = expandedMarkerKey !== null && visiblePredictions.some((prediction) => predictionKey(prediction) === expandedMarkerKey);
+    if (!hasExpanded) {
+      setExpandedMarkerKey(predictionKey(visiblePredictions[0]));
+    }
+  }, [visiblePredictions, expandedMarkerKey]);
+
   return (
     <section className="space-y-3 fade-in">
       <div className="dose-premium-shell rounded-2xl border p-4">
@@ -130,30 +158,75 @@ const DoseResponseView = ({
             </h3>
             <p className="mt-1 text-sm text-slate-300">
               {tr(
-                "Zie per relevante marker wat er waarschijnlijk verandert als je je testosterondosis aanpast.",
-                "See what is likely to change per relevant marker when your testosterone dose changes."
+                "Modelleer hoe je markers waarschijnlijk reageren bij een dosisaanpassing.",
+                "Model how your markers are likely to respond when your dose changes."
               )}
             </p>
             <p className="mt-1 text-xs text-slate-400">
               {tr(
-                "Educatief hulpmiddel voor bespreking met je arts, niet als medisch voorschrift.",
-                "Educational aid for doctor discussion, not a medical prescription."
-              )}
+                "In beeld: {focus} relevante markers van {total} totaal.",
+                "In view: {focus} relevant markers out of {total} total."
+              )
+                .replace("{focus}", String(Math.min(8, premiumPredictions.length)))
+                .replace("{total}", String(premiumPredictions.length))}
             </p>
-          </div>
-          <div className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
-            {tr("Relevante markers in focus", "Relevant markers in focus")}: {Math.min(8, premiumPredictions.length)}
-            {" · "}
-            {tr("Totaal", "Total")}: {premiumPredictions.length}
           </div>
         </div>
 
-        <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-cyan-200">
-              {tr("Dose scenario (mg/week)", "Dose scenario (mg/week)")}
-            </label>
-            <div className="flex items-center gap-2">
+        <div className="dose-control-panel mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
+          <div className="dose-control-chip-row flex flex-wrap gap-1.5">
+            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-200">
+              {tr("Huidig protocol", "Current protocol")}: {formatAxisTick(baselineDose)} mg/week
+            </span>
+            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-cyan-100">
+              {tr("Scenario", "Scenario")}: {formatAxisTick(scenarioDose)} mg/week
+            </span>
+            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-emerald-200">
+              {tr("Delta vs huidig", "Delta vs current")}: {scenarioDeltaLabel}
+            </span>
+            {hasDifferentModelBaseline ? (
+              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-300">
+                {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week
+              </span>
+            ) : null}
+          </div>
+
+          <div className="dose-control-grid mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <label className="text-xs font-medium uppercase tracking-wide text-cyan-200">
+                {tr("Dose scenario (mg/week)", "Dose scenario (mg/week)")}
+              </label>
+              <input
+                type="range"
+                min={sliderMin}
+                max={sliderMax}
+                step={0.5}
+                value={sliderValue}
+                onChange={(event) => onDoseResponseInputChange(event.target.value)}
+                className="mt-2 w-full accent-cyan-400"
+              />
+              <div className="dose-quick-segment mt-2 inline-flex flex-wrap gap-1 rounded-xl border border-slate-700/80 bg-slate-900/45 p-1">
+                {quickScenarios.map((scenario) => {
+                  const active = Math.abs(scenarioDose - scenario.value) <= 0.2;
+                  return (
+                    <button
+                      key={scenario.key}
+                      type="button"
+                      onClick={() => onDoseResponseInputChange(String(scenario.value))}
+                      className={`rounded-lg px-2.5 py-1 text-xs ${
+                        active
+                          ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                          : "border border-transparent text-slate-300 hover:border-cyan-500/45 hover:text-cyan-200"
+                      }`}
+                    >
+                      {scenarioLabel(scenario.delta)} ({formatAxisTick(scenario.value)} mg)
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
               <input
                 type="number"
                 step="0.1"
@@ -173,51 +246,8 @@ const DoseResponseView = ({
               </button>
             </div>
           </div>
-
-          <input
-            type="range"
-            min={sliderMin}
-            max={sliderMax}
-            step={0.5}
-            value={sliderValue}
-            onChange={(event) => onDoseResponseInputChange(event.target.value)}
-            className="mt-3 w-full accent-cyan-400"
-          />
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            {quickScenarios.map((scenario) => {
-              const active = Math.abs(scenarioDose - scenario.value) <= 0.2;
-              return (
-                <button
-                  key={scenario.key}
-                  type="button"
-                  onClick={() => onDoseResponseInputChange(String(scenario.value))}
-                  className={`rounded-full border px-2.5 py-1 text-xs ${
-                    active
-                      ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                      : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                  }`}
-                >
-                  {scenarioLabel(scenario.delta)} ({formatAxisTick(scenario.value)} mg)
-                </button>
-              );
-            })}
-          </div>
-
-          <p className="mt-2 text-xs text-slate-300">
-            {tr("Actief scenario", "Active scenario")}: {formatAxisTick(scenarioDose)} mg/week
-            {" · "}
-            {tr("Huidig protocol", "Current protocol")}: {formatAxisTick(baselineDose)} mg/week
-            {hasDifferentModelBaseline ? (
-              <>
-                {" · "}
-                {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week
-              </>
-            ) : null}
-          </p>
         </div>
 
-        {/* Status indicators — only show when there is something actionable to tell the user */}
         {(loading || limitReason || offlinePriorFallback) && (
           <div className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
             {loading && (
@@ -286,14 +316,14 @@ const DoseResponseView = ({
       ) : (
         <>
           {premiumPredictions.length > 8 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="inline-flex gap-1 rounded-xl border border-slate-700/80 bg-slate-900/45 p-1">
               <button
                 type="button"
                 onClick={() => setMarkerScope("top")}
-                className={`rounded-full border px-3 py-1.5 text-xs ${
+                className={`rounded-lg px-3 py-1.5 text-xs ${
                   markerScope === "top"
-                    ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                    : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                    ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                    : "border border-transparent text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
                 }`}
               >
                 {tr("Top 8 relevant", "Top 8 relevant")}
@@ -301,10 +331,10 @@ const DoseResponseView = ({
               <button
                 type="button"
                 onClick={() => setMarkerScope("all")}
-                className={`rounded-full border px-3 py-1.5 text-xs ${
+                className={`rounded-lg px-3 py-1.5 text-xs ${
                   markerScope === "all"
-                    ? "border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                    : "border-slate-600 bg-slate-900/55 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                    ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
+                    : "border border-transparent text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
                 }`}
               >
                 {tr("Alle markers", "All markers")}
@@ -312,12 +342,13 @@ const DoseResponseView = ({
             </div>
           ) : null}
 
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {visiblePredictions.map((prediction) => {
               const projected = projectDosePredictionAt(prediction, scenarioDose);
+              const key = predictionKey(prediction);
               return (
                 <DoseMarkerCard
-                  key={`${prediction.marker}|${prediction.unit}`}
+                  key={key}
                   prediction={prediction}
                   targetDose={scenarioDose}
                   targetEstimate={projected.estimate}
@@ -326,6 +357,9 @@ const DoseResponseView = ({
                   reports={visibleReports}
                   settings={settings}
                   language={language}
+                  isExpanded={expandedMarkerKey === key}
+                  onToggle={() => setExpandedMarkerKey(key)}
+                  isSameDoseScenario={isSameDoseScenario}
                 />
               );
             })}
