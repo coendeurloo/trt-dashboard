@@ -1,5 +1,5 @@
 import { addDays, format, parseISO } from "date-fns";
-import { Area, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DosePrediction, buildMarkerSeries, calculatePercentChange } from "../analytics";
 import { AppLanguage, AppSettings, LabReport } from "../types";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -63,6 +63,7 @@ const DoseProjectionChart = ({
   if (!latest) {
     return null;
   }
+  const projectionStartValue = isSameDoseScenario ? latest.value : prediction.currentEstimate;
   const projectionValue = isSameDoseScenario ? latest.value : projectedEstimate;
   const projectionLow = isSameDoseScenario ? latest.value : projectedLow;
   const projectionHigh = isSameDoseScenario ? latest.value : projectedHigh;
@@ -95,11 +96,11 @@ const DoseProjectionChart = ({
     x: point.key,
     date: point.date,
     actual: point.value,
-    projected: index === recentHistorical.length - 1 ? point.value : null,
-    bandBase: index === recentHistorical.length - 1 ? point.value : null,
+    projected: index === recentHistorical.length - 1 ? projectionStartValue : null,
+    bandBase: index === recentHistorical.length - 1 ? projectionStartValue : null,
     bandSpan: index === recentHistorical.length - 1 ? 0 : null,
-    projectedLow: index === recentHistorical.length - 1 ? point.value : null,
-    projectedHigh: index === recentHistorical.length - 1 ? point.value : null
+    projectedLow: index === recentHistorical.length - 1 ? projectionStartValue : null,
+    projectedHigh: index === recentHistorical.length - 1 ? projectionStartValue : null
   }));
 
   chartData.push({
@@ -119,6 +120,7 @@ const DoseProjectionChart = ({
   const yDomain = buildYAxisDomain(
     [
       ...recentHistorical.map((point) => point.value),
+      projectionStartValue,
       projectionValue,
       projectionLow ?? projectionValue,
       projectionHigh ?? projectionValue
@@ -149,6 +151,7 @@ const DoseProjectionChart = ({
   )
     .replace("{delta}", modelNowLabel)
     .replace("{gap}", measuredVsModelLabel ?? tr("onbekend", "unknown"));
+  const projectionAxisLabel = `${formatAxisTick(projectionValue)} ${prediction.unit}`;
 
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
@@ -156,7 +159,7 @@ const DoseProjectionChart = ({
         {tr("Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario.", "Solid line = measured. Dotted line = model estimate for this dose scenario.")}
       </p>
       <ResponsiveContainer width="100%" height={140}>
-        <LineChart data={chartData} margin={{ left: 2, right: 6, top: 6, bottom: 4 }}>
+        <LineChart data={chartData} margin={{ left: 2, right: 110, top: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
             dataKey="x"
@@ -173,10 +176,13 @@ const DoseProjectionChart = ({
             minTickGap={16}
           />
           <YAxis
+            orientation="right"
             tick={{ fill: "#94a3b8", fontSize: 10 }}
             tickFormatter={(value) => formatAxisTick(Number(value))}
             stroke="#334155"
-            width={40}
+            width={48}
+            axisLine={false}
+            tickLine={false}
             domain={yDomain ?? ["auto", "auto"]}
           />
           <Tooltip
@@ -247,6 +253,20 @@ const DoseProjectionChart = ({
             isAnimationActive={false}
             connectNulls
           />
+          <ReferenceLine
+            y={projectionValue}
+            stroke="#fb7185"
+            strokeDasharray="3 4"
+            strokeOpacity={0.55}
+            ifOverflow="extendDomain"
+            label={{
+              value: projectionAxisLabel,
+              position: "right",
+              fill: "#fda4af",
+              fontSize: 10,
+              fontWeight: 600
+            }}
+          />
           <Line
             type="monotone"
             dataKey="actual"
@@ -262,17 +282,19 @@ const DoseProjectionChart = ({
             strokeWidth={2}
             strokeDasharray="5 4"
             dot={(props) => {
-              const payload = props.payload as { x: string } | undefined;
+              const payload = props.payload as { x: string; projected?: number | null } | undefined;
               const isProjectionPoint = payload?.x === projectionKey;
               return (
-                <circle
-                  cx={props.cx}
-                  cy={props.cy}
-                  r={isProjectionPoint ? 4 : 0}
-                  fill={isProjectionPoint ? "#fb7185" : "transparent"}
-                  stroke="#0f172a"
-                  strokeWidth={1.3}
-                />
+                <g>
+                  <circle
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={isProjectionPoint ? 4 : 0}
+                    fill={isProjectionPoint ? "#fb7185" : "transparent"}
+                    stroke="#0f172a"
+                    strokeWidth={1.3}
+                  />
+                </g>
               );
             }}
             connectNulls

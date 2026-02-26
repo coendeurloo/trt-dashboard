@@ -342,7 +342,7 @@ const DoseResponseView = ({
             </div>
           ) : null}
 
-          <div className="grid gap-2.5">
+          <div className="grid gap-2.5 lg:grid-cols-2">
             {visiblePredictions.map((prediction) => {
               const projected = projectDosePredictionAt(prediction, scenarioDose);
               const key = predictionKey(prediction);
