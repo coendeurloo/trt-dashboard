@@ -25,6 +25,7 @@ describe("AnalysisView", () => {
     markersTracked: 35,
     analysisMarkerNames: ["Testosterone", "Estradiol", "Hematocrit"],
     activeProtocolLabel: "No protocol",
+    memory: null,
     betaUsage: {
       dailyCount: 0,
       monthlyCount: 0
@@ -119,5 +120,32 @@ describe("AnalysisView", () => {
 
     expect(screen.getByText(/Model: gemini-2.5-flash/i)).toBeTruthy();
     expect(screen.getByText(/Supplement actions: none/i)).toBeTruthy();
+  });
+
+  it("shows analyst memory status after enough analyses", () => {
+    render(
+      <AnalysisView
+        {...baseProps}
+        memory={{
+          version: 1,
+          lastUpdated: "2026-03-01",
+          analysisCount: 4,
+          responderProfile: {
+            testosteroneResponse: "moderate",
+            aromatizationTendency: "unknown",
+            hematocritSensitivity: "unknown",
+            notes: ""
+          },
+          personalBaselines: {},
+          supplementHistory: [],
+          protocolHistory: [],
+          watchList: [],
+          analystNotes: ""
+        }}
+      />
+    );
+
+    expect(screen.getByText(/Analyst memory:/i)).toBeTruthy();
+    expect(screen.getByText(/active · 4 analyses/i)).toBeTruthy();
   });
 });

@@ -64,7 +64,9 @@ import {
   DashboardViewMode,
   TimeRangeKey
 } from "./types";
+import { AnalystMemory } from "./types/analystMemory";
 import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
+import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
 const SupplementsView = lazy(() => import("./views/SupplementsView"));
@@ -78,6 +80,7 @@ const SettingsView = lazy(() => import("./views/SettingsView"));
 
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
+  const [analystMemory, setAnalystMemory] = useState<AnalystMemory | null>(() => loadAnalystMemory());
 
   const {
     appData,
@@ -291,10 +294,16 @@ const App = () => {
   } = useAnalysis({
     settings: appData.settings,
     language: appData.settings.language,
+    allReports: reports,
     visibleReports,
     checkIns: appData.checkIns,
     protocols: appData.protocols,
     supplementTimeline: appData.supplementTimeline,
+    analystMemory: isShareMode ? null : analystMemory,
+    onAnalystMemoryUpdate: (memory) => {
+      setAnalystMemory(memory);
+      saveAnalystMemory(memory);
+    },
     samplingControlsEnabled,
     protocolImpactSummary,
     alerts,
@@ -1663,6 +1672,7 @@ const App = () => {
                 markersTracked={allMarkers.length}
                 analysisMarkerNames={analysisMarkerNames}
                 activeProtocolLabel={activeAnalysisProtocolLabel}
+                memory={isShareMode ? null : analystMemory}
                 betaUsage={betaUsage}
                 betaLimits={betaLimits}
                 settings={appData.settings}
@@ -1694,7 +1704,10 @@ const App = () => {
                 onExportCsv={exportCsv}
                 onExportPdf={exportPdf}
                 onImportData={importData}
-                onClearAllData={clearAllData}
+                onClearAllData={() => {
+                  clearAllData();
+                  setAnalystMemory(null);
+                }}
                 onAddMarkerSuggestions={appendMarkerSuggestions}
                 onShareOptionsChange={setShareOptions}
                 onGenerateShareLink={generateShareLink}

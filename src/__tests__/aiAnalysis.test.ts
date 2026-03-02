@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeLabDataWithClaude } from "../aiAnalysis";
 import { LabReport, SupplementPeriod } from "../types";
+import { AnalystMemory } from "../types/analystMemory";
 
 const sampleReport: LabReport = {
   id: "r1",
@@ -489,6 +490,60 @@ describe("analyzeLabDataWithClaude", () => {
     expect(result.supplementActionsNeeded).toBe(true);
     expect(result.supplementAdviceIncluded).toBe(true);
     expect(result.actionReasons.length).toBeGreaterThan(0);
+  });
+
+  it("injects analyst memory context before DATA START from the second analysis onward", async () => {
+    const memory: AnalystMemory = {
+      version: 1,
+      lastUpdated: "2026-02-20",
+      analysisCount: 3,
+      responderProfile: {
+        testosteroneResponse: "moderate",
+        aromatizationTendency: "high",
+        hematocritSensitivity: "unknown",
+        notes: "Clear trough sensitivity."
+      },
+      personalBaselines: {
+        Testosterone: {
+          mean: 18.4,
+          sd: 1.2,
+          unit: "nmol/L",
+          basedOnN: 4
+        }
+      },
+      supplementHistory: [],
+      protocolHistory: [],
+      watchList: [],
+      analystNotes: "Responds well to steadier frequency."
+    };
+
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      memory
+    });
+
+    expect(capturedPrompt).toContain("## Analyst memory (3 analyses · last updated 2026-02-20)");
+    expect(capturedPrompt).toContain("Do NOT list or repeat the memory contents.");
+    expect(capturedPrompt.indexOf("## Analyst memory")).toBeLessThan(capturedPrompt.indexOf("DATA START"));
   });
 
   it("strips supplement section when output includes it but actions are not needed", async () => {

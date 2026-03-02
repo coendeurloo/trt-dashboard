@@ -17,6 +17,8 @@ import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion
 import { inferDashboardChartPresetFromSettings } from "./chartHelpers";
 import { createId, deriveAbnormalFlag } from "./utils";
 import { normalizeBaselineFlagsByMarkerOverlap } from "./baselineUtils";
+import { AnalystMemory } from "./types/analystMemory";
+import { coerceAnalystMemory } from "./analystMemory";
 
 declare global {
   interface Window {
@@ -49,6 +51,8 @@ const createDefaultData = (): StoredAppData => ({
   markerAliasOverrides: {},
   settings: DEFAULT_SETTINGS
 });
+
+const ANALYST_MEMORY_KEY = "analyst-memory";
 
 const normalizeSamplingTiming = (value: unknown): ReportAnnotations["samplingTiming"] => {
   return value === "trough" || value === "mid" || value === "peak" || value === "unknown" ? value : "unknown";
@@ -658,4 +662,45 @@ export const saveAppData = (data: StoredAppData): void => {
     return;
   }
   storage.setItem(APP_STORAGE_KEY, JSON.stringify({ ...data, schemaVersion: APP_SCHEMA_VERSION }));
+};
+
+export const loadAnalystMemory = (): AnalystMemory | null => {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+  const raw = storage.getItem(ANALYST_MEMORY_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return coerceAnalystMemory(parsed);
+  } catch {
+    return null;
+  }
+};
+
+export const saveAnalystMemory = (memory: AnalystMemory): void => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.setItem(ANALYST_MEMORY_KEY, JSON.stringify(memory));
+  } catch (error) {
+    console.error("Failed to save analyst memory:", error);
+  }
+};
+
+export const clearAnalystMemory = (): void => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.removeItem(ANALYST_MEMORY_KEY);
+  } catch (error) {
+    console.error("Failed to clear analyst memory:", error);
+  }
 };

@@ -3,14 +3,18 @@ import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary,
 import { buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
+import { AnalystMemory } from "../types/analystMemory";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
   language: AppLanguage;
+  allReports: LabReport[];
   visibleReports: LabReport[];
   checkIns: SymptomCheckIn[];
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
+  analystMemory: AnalystMemory | null;
+  onAnalystMemoryUpdate?: (memory: AnalystMemory) => void;
   samplingControlsEnabled: boolean;
   protocolImpactSummary: ProtocolImpactSummary;
   alerts: MarkerAlert[];
@@ -24,10 +28,13 @@ interface UseAnalysisOptions {
 export const useAnalysis = ({
   settings,
   language,
+  allReports,
   visibleReports,
   checkIns,
   protocols,
   supplementTimeline,
+  analystMemory,
+  onAnalystMemoryUpdate,
   samplingControlsEnabled,
   protocolImpactSummary,
   alerts,
@@ -128,6 +135,7 @@ export const useAnalysis = ({
         protocols,
         supplementTimeline,
         unitSystem: settings.unitSystem,
+        memory: analystMemory,
         language,
         analysisType,
         externalAiAllowed,
@@ -161,6 +169,30 @@ export const useAnalysis = ({
       });
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisKind(analysisType);
+
+      void (async () => {
+        try {
+          const { generateAnalystMemory } = await import("../aiAnalysis");
+          const nextMemory = await generateAnalystMemory({
+            reports: allReports,
+            protocols,
+            supplementTimeline,
+            unitSystem: settings.unitSystem,
+            currentMemory: analystMemory,
+            analysisResult: result.text,
+            aiConsent: {
+              includeSymptoms: consentOverride?.includeSymptoms ?? false,
+              includeNotes: consentOverride?.includeNotes ?? false
+            }
+          });
+          if (nextMemory) {
+            onAnalystMemoryUpdate?.(nextMemory);
+          }
+        } catch (error) {
+          console.error("Analyst memory generation failed (non-fatal):", error);
+        }
+      })();
+
       recordAnalysisUsage();
       refreshBetaUsage();
     } catch (error) {

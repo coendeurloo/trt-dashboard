@@ -29,6 +29,8 @@ import {
   SupplementActionabilityDecision
 } from "./analysisPremium";
 import { getActiveSupplementsAtDate, sortSupplementPeriods, supplementPeriodsToText } from "./supplementUtils";
+import { AnalystMemory } from "./types/analystMemory";
+import { coerceAnalystMemory } from "./analystMemory";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -44,6 +46,7 @@ interface AnalyzeLabDataOptions {
   protocols: Protocol[];
   supplementTimeline?: SupplementPeriod[];
   unitSystem: UnitSystem;
+  memory?: AnalystMemory | null;
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
   deepMode?: boolean;
@@ -59,6 +62,16 @@ interface AnalyzeLabDataOptions {
     dosePredictions: DosePrediction[];
     wellbeingSummary?: WellbeingSummary | null;
   };
+}
+
+interface GenerateAnalystMemoryOptions {
+  reports: LabReport[];
+  protocols: Protocol[];
+  supplementTimeline?: SupplementPeriod[];
+  unitSystem: UnitSystem;
+  currentMemory: AnalystMemory | null;
+  analysisResult: string;
+  aiConsent?: Pick<AIConsentDecision, "includeSymptoms" | "includeNotes">;
 }
 
 export interface AnalyzeLabDataResult {
@@ -154,6 +167,12 @@ const MAX_DOSE_PREDICTIONS_IN_PROMPT = 10;
 const MAX_TOTAL_MARKERS_IN_PROMPT = 160;
 const MAX_BENCHMARK_MARKERS_IN_PROMPT = 10;
 const MAX_SUPPLEMENT_CHANGES_IN_PROMPT = 8;
+const MAX_MEMORY_BASELINES_IN_PROMPT = 8;
+const MAX_MEMORY_SUPPLEMENTS_IN_PROMPT = 4;
+const MAX_MEMORY_WATCHLIST_IN_PROMPT = 4;
+const MEMORY_ANALYSIS_SUMMARY_MAX_CHARS = 1200;
+const MEMORY_GENERATION_MAX_TOKENS = 700;
+const MEMORY_GENERATION_MODEL = ANALYSIS_MODEL_CANDIDATES[ANALYSIS_MODEL_CANDIDATES.length - 1];
 const parseMarkerCap = (): number => {
   const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 60);
   if (!Number.isFinite(raw)) {
@@ -302,9 +321,104 @@ const buildBenchmarkContext = (markerNames: string[]): string => {
   ].join("\n");
 };
 
+const buildMemoryContext = (memory: AnalystMemory | null): string => {
+  if (!memory || memory.analysisCount < 2) {
+    return "";
+  }
+
+  const priorityMarkers = new Set<string>(SIGNAL_MARKERS);
+  const lines: string[] = [
+    `## Analyst memory (${memory.analysisCount} analyses · last updated ${memory.lastUpdated})`,
+    "",
+    "Returning user memory. Use it silently for personalization.",
+    "Do NOT list or repeat the memory contents. Use it as silent background context.",
+    ""
+  ];
+
+  const responder = memory.responderProfile;
+  const hasResponderProfile =
+    responder.testosteroneResponse !== "unknown" ||
+    responder.aromatizationTendency !== "unknown" ||
+    responder.hematocritSensitivity !== "unknown";
+
+  if (hasResponderProfile) {
+    lines.push("**Responder profile:**");
+    if (responder.testosteroneResponse !== "unknown") {
+      lines.push(`- Testosterone response: ${responder.testosteroneResponse}`);
+    }
+    if (responder.aromatizationTendency !== "unknown") {
+      lines.push(`- Aromatization tendency: ${responder.aromatizationTendency}`);
+    }
+    if (responder.hematocritSensitivity !== "unknown") {
+      lines.push(`- Hematocrit sensitivity: ${responder.hematocritSensitivity}`);
+    }
+    if (responder.notes.trim()) {
+      lines.push(`- ${responder.notes.trim()}`);
+    }
+    lines.push("");
+  }
+
+  const baselines = Object.entries(memory.personalBaselines)
+    .sort((left, right) => {
+      const leftPriority = priorityMarkers.has(left[0]) ? 1 : 0;
+      const rightPriority = priorityMarkers.has(right[0]) ? 1 : 0;
+      if (leftPriority !== rightPriority) {
+        return rightPriority - leftPriority;
+      }
+      return (right[1].basedOnN ?? 0) - (left[1].basedOnN ?? 0);
+    })
+    .slice(0, MAX_MEMORY_BASELINES_IN_PROMPT);
+  if (baselines.length > 0) {
+    lines.push("**Personal baselines:**");
+    baselines.forEach(([marker, baseline]) => {
+      lines.push(`- ${marker}: ${baseline.mean.toFixed(1)} ± ${baseline.sd.toFixed(1)} ${baseline.unit} (n=${baseline.basedOnN})`);
+    });
+    const baselineOverflow = Math.max(0, Object.keys(memory.personalBaselines).length - baselines.length);
+    if (baselineOverflow > 0) {
+      lines.push(`- +${baselineOverflow} more baselines in memory.`);
+    }
+    lines.push("");
+  }
+
+  const supplementHistory = memory.supplementHistory.slice(0, MAX_MEMORY_SUPPLEMENTS_IN_PROMPT);
+  if (supplementHistory.length > 0) {
+    lines.push("**Supplement history:**");
+    supplementHistory.forEach((entry) => {
+      lines.push(`- ${entry.name}: ${entry.effect} — ${entry.observation}`);
+    });
+    const supplementOverflow = Math.max(0, memory.supplementHistory.length - supplementHistory.length);
+    if (supplementOverflow > 0) {
+      lines.push(`- +${supplementOverflow} more supplement notes.`);
+    }
+    lines.push("");
+  }
+
+  const watchList = memory.watchList.slice(0, MAX_MEMORY_WATCHLIST_IN_PROMPT);
+  if (watchList.length > 0) {
+    lines.push("**Watch list:**");
+    watchList.forEach((entry) => {
+      lines.push(`- ${entry.marker}: ${entry.reason}`);
+    });
+    const watchOverflow = Math.max(0, memory.watchList.length - watchList.length);
+    if (watchOverflow > 0) {
+      lines.push(`- +${watchOverflow} more watch items.`);
+    }
+    lines.push("");
+  }
+
+  if (memory.analystNotes.trim()) {
+    lines.push("**Analyst notes:**");
+    lines.push(memory.analystNotes.trim());
+    lines.push("");
+  }
+
+  return lines.join("\n");
+};
+
 interface FullAnalysisParams {
   today: string;
   unitSystem: UnitSystem;
+  memory: AnalystMemory | null;
   payload: AnalysisReportRow[];
   supplementContext: AnalysisSupplementContextRow;
   signals: unknown;
@@ -318,6 +432,7 @@ interface FullAnalysisParams {
 interface ComparisonParams {
   today: string;
   unitSystem: UnitSystem;
+  memory: AnalystMemory | null;
   relevantComparison: unknown;
   latestComparison: unknown;
   relevantPayload: AnalysisReportRow[];
@@ -334,6 +449,7 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
   const {
     today,
     unitSystem,
+    memory,
     payload,
     supplementContext,
     signals,
@@ -365,6 +481,7 @@ ${supplementSection}
 ${SAFETY_FOOTER}
 
 ${benchmarkSection}
+${buildMemoryContext(memory)}
 DATA START
 ${JSON.stringify({
   type: "full",
@@ -382,6 +499,7 @@ function buildComparisonPrompt(params: ComparisonParams): string {
   const {
     today,
     unitSystem,
+    memory,
     relevantComparison,
     latestComparison,
     relevantPayload,
@@ -419,6 +537,7 @@ ${supplementSection}
 ${SAFETY_FOOTER}
 
 ${relevantBenchmarkSection}
+${buildMemoryContext(memory)}
 DATA START
 ${JSON.stringify({
   type: "latestComparison",
@@ -432,6 +551,251 @@ ${JSON.stringify({
 })}
 DATA END`;
 }
+
+const buildMemoryPrompt = ({
+  today,
+  currentMemory,
+  compactInput
+}: {
+  today: string;
+  currentMemory: AnalystMemory | null;
+  compactInput: Record<string, unknown>;
+}): string => {
+  const analysisCount = (currentMemory?.analysisCount ?? 0) + 1;
+  return `Update AnalystMemory (v1) for a TRT user.
+Today: ${today}. Analysis #${analysisCount}.
+Return valid JSON only (full AnalystMemory object). No markdown.
+
+Rules:
+- Conservative: use "unknown" when uncertain.
+- Preserve confirmed facts from currentMemory; revise uncertain facts if new data clarifies.
+- personalBaselines: add marker only if >=3 points, using all available points.
+- supplementHistory: include only clear before/after effects across >=2 reports; ignore supplements first seen in latest report.
+- protocolHistory: max 4 entries (drop oldest first).
+- watchList: max 5; remove marker if normalized in latest report.
+- analystNotes: 2-4 specific sentences.
+
+currentMemory:
+${JSON.stringify(currentMemory)}
+
+input:
+${JSON.stringify(compactInput)}
+
+Output only the updated AnalystMemory JSON.`;
+};
+
+const buildCompactMemoryInput = ({
+  reports,
+  supplementTimeline,
+  analysisResult
+}: {
+  reports: AnalysisReportRow[];
+  supplementTimeline: SupplementPeriod[];
+  analysisResult: string;
+}): Record<string, unknown> => {
+  const markerSeries = new Map<
+    string,
+    {
+      u: string;
+      p: Array<[string, number, "h" | "l" | "n" | "u"]>;
+    }
+  >();
+
+  reports.forEach((report) => {
+    report.markers.forEach((marker) => {
+      const abnormal = deriveAbnormalFromReference(marker.v, marker.ref);
+      const abnormalCode: "h" | "l" | "n" | "u" =
+        abnormal === "high" ? "h" : abnormal === "low" ? "l" : abnormal === "normal" ? "n" : "u";
+      const existing = markerSeries.get(marker.m) ?? { u: marker.u, p: [] };
+      existing.p.push([report.date, marker.v, abnormalCode]);
+      if (!existing.u) {
+        existing.u = marker.u;
+      }
+      markerSeries.set(marker.m, existing);
+    });
+  });
+
+  const latestComparison = buildLatestVsPrevious(reports);
+  const topMovers = latestComparison?.overlapping
+    .slice(0, 8)
+    .map((row) => ({
+      m: row.marker,
+      d: row.delta,
+      p: row.percentChange
+    })) ?? [];
+
+  const compactSummary = stripComplexFormatting(analysisResult).replace(/\s+/g, " ").trim();
+
+  return {
+    rc: reports.length,
+    rt: reports.map((report) => ({
+      d: report.date,
+      p: [report.ann.dose, report.ann.frequency, report.ann.compound],
+      t: report.ann.timing,
+      s: report.ann.supps
+    })),
+    ms: Array.from(markerSeries.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([m, series]) => ({
+        m,
+        u: series.u,
+        p: series.p
+      })),
+    st: sortSupplementPeriods(supplementTimeline).map((period) => ({
+      n: period.name,
+      d: period.dose,
+      f: period.frequency,
+      s: period.startDate,
+      e: period.endDate
+    })),
+    mv: topMovers,
+    as: compactSummary.slice(0, MEMORY_ANALYSIS_SUMMARY_MAX_CHARS)
+  };
+};
+
+const extractJsonPayload = (text: string): string => {
+  const withoutFences = text.replace(/```json|```/gi, "").trim();
+  const start = withoutFences.indexOf("{");
+  const end = withoutFences.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    return withoutFences;
+  }
+  return withoutFences.slice(start, end + 1).trim();
+};
+
+export const generateAnalystMemory = async ({
+  reports,
+  protocols,
+  supplementTimeline = [],
+  unitSystem,
+  currentMemory,
+  analysisResult,
+  aiConsent
+}: GenerateAnalystMemoryOptions): Promise<AnalystMemory | null> => {
+  if (reports.length === 0) {
+    return null;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const memoryPayload: AnalysisReportRow[] = sortReportsChronological(reports).map((report) => {
+    const protocol = getReportProtocol(report, protocols);
+    const injectionFrequency = getProtocolInjectionFrequency(protocol);
+    return {
+      date: report.testDate,
+      ann: {
+        dose: getProtocolDoseMgPerWeek(protocol),
+        compound: getProtocolCompoundsText(protocol),
+        frequency: injectionFrequencyLabel(injectionFrequency, "en"),
+        frequencyPerWeek: getProtocolFrequencyPerWeek(protocol),
+        protocol: protocol?.name ?? "",
+        supps: truncateContextText(getReportSupplementsText(report, supplementTimeline), 90),
+        symptoms: truncateContextText(report.annotations.symptoms, 80),
+        notes: truncateContextText(report.annotations.notes, 80),
+        timing: report.annotations.samplingTiming
+      },
+      markers: report.markers.map((marker) => {
+        const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
+        const convertedMin =
+          marker.referenceMin === null
+            ? null
+            : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, unitSystem).value;
+        const convertedMax =
+          marker.referenceMax === null
+            ? null
+            : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+        return {
+          m: marker.canonicalMarker,
+          v: toRounded(converted.value),
+          u: converted.unit,
+          ref: [
+            convertedMin === null ? null : toRounded(convertedMin),
+            convertedMax === null ? null : toRounded(convertedMax)
+          ]
+        };
+      })
+    };
+  });
+  const sanitizedMemoryPayload = sanitizeAnalysisPayloadForAI(memoryPayload, {
+    includeSymptoms: aiConsent?.includeSymptoms ?? false,
+    includeNotes: aiConsent?.includeNotes ?? false
+  });
+  const compactInput = buildCompactMemoryInput({
+    reports: sanitizedMemoryPayload,
+    supplementTimeline,
+    analysisResult
+  });
+  const memoryPrompt = buildMemoryPrompt({
+    today,
+    currentMemory,
+    compactInput
+  });
+
+  let response: Response;
+  try {
+    response = await fetch("/api/claude/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        requestType: "analysis",
+        payload: {
+          model: MEMORY_GENERATION_MODEL,
+          max_tokens: MEMORY_GENERATION_MAX_TOKENS,
+          temperature: 0.2,
+          messages: [{ role: "user", content: memoryPrompt }]
+        }
+      })
+    });
+  } catch (error) {
+    console.error("Analyst memory generation failed (non-fatal):", error);
+    return null;
+  }
+
+  const responseText = await response.text();
+  if (!(response.status >= 200 && response.status < 300)) {
+    console.error("Analyst memory generation failed (non-fatal):", {
+      status: response.status,
+      body: responseText.slice(0, 280)
+    });
+    return null;
+  }
+
+  let body: ClaudeResponse = {};
+  try {
+    body = responseText ? (JSON.parse(responseText) as ClaudeResponse) : {};
+  } catch {
+    console.error("Analyst memory generation failed (non-fatal): invalid response JSON.");
+    return null;
+  }
+
+  const modelText = body.content
+    ?.filter((item) => item.type === "text" && typeof item.text === "string")
+    .map((item) => item.text ?? "")
+    .join("\n")
+    .trim();
+  if (!modelText) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(extractJsonPayload(modelText)) as unknown;
+    const normalized = coerceAnalystMemory(parsed);
+    if (!normalized) {
+      return null;
+    }
+    const expectedCount = (currentMemory?.analysisCount ?? 0) + 1;
+    return {
+      ...normalized,
+      version: 1,
+      lastUpdated: today,
+      analysisCount: Math.max(expectedCount, normalized.analysisCount)
+    };
+  } catch (error) {
+    console.error("Analyst memory generation failed (non-fatal):", error);
+    return null;
+  }
+};
 
 const toRounded = (value: number): number => {
   if (Math.abs(value) >= 100) {
@@ -1493,6 +1857,7 @@ export const analyzeLabDataWithClaude = async ({
   protocols,
   supplementTimeline = [],
   unitSystem,
+  memory = null,
   language = "nl",
   analysisType = "full",
   deepMode = false,
@@ -1550,6 +1915,7 @@ export const analyzeLabDataWithClaude = async ({
   const fullPrompt = buildFullAnalysisPrompt({
     today,
     unitSystem,
+    memory,
     payload,
     supplementContext,
     signals,
@@ -1603,6 +1969,7 @@ export const analyzeLabDataWithClaude = async ({
       prompt: buildComparisonPrompt({
         today,
         unitSystem,
+        memory,
         relevantComparison,
         latestComparison,
         relevantPayload,

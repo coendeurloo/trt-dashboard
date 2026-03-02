@@ -12,7 +12,7 @@ import {
   SupplementPeriod,
   SymptomCheckIn
 } from "../types";
-import { coerceStoredAppData, loadAppData, saveAppData } from "../storage";
+import { clearAnalystMemory, coerceStoredAppData, loadAppData, saveAppData } from "../storage";
 import {
   normalizeMarkerAliasOverrides,
   setMarkerAliasOverrides
@@ -530,6 +530,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     if (isShareMode) {
       return;
     }
+    clearAnalystMemory();
     setAppData(coerceStoredAppData({}));
   }, [isShareMode]);
 

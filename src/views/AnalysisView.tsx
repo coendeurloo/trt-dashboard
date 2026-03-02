@@ -6,6 +6,7 @@ import { betaLimitsDisabled } from "../betaLimits";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
+import { AnalystMemory } from "../types/analystMemory";
 
 const AnalysisMarkdownBlock = lazy(() => import("../components/AnalysisMarkdownBlock"));
 
@@ -35,6 +36,7 @@ interface AnalysisViewProps {
   markersTracked: number;
   analysisMarkerNames: string[];
   activeProtocolLabel: string;
+  memory: AnalystMemory | null;
   betaUsage: {
     dailyCount: number;
     monthlyCount: number;
@@ -64,6 +66,7 @@ const AnalysisView = ({
   markersTracked,
   analysisMarkerNames,
   activeProtocolLabel,
+  memory,
   betaUsage,
   betaLimits,
   settings,
@@ -190,6 +193,14 @@ const AnalysisView = ({
                 "AI staat standaard uit. Voor elke run zie je eerst een toestemmingscheck.",
                 "AI is off by default. You will see a consent check before each run."
               )}
+            </div>
+          ) : null}
+          {memory && memory.analysisCount >= 2 ? (
+            <div className={isDarkTheme ? "mt-2 text-xs text-slate-400" : "mt-2 text-xs text-slate-600"}>
+              Analyst memory:{" "}
+              <span className={isDarkTheme ? "font-medium text-slate-200" : "font-medium text-slate-800"}>
+                active · {memory.analysisCount} analyses
+              </span>
             </div>
           ) : null}
         </div>
