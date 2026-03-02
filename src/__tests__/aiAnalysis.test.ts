@@ -373,7 +373,7 @@ describe("analyzeLabDataWithClaude", () => {
       externalAiAllowed: true
     });
 
-    expect(capturedPrompt).toContain("Treat currentSupplements as current truth.");
+    expect(capturedPrompt).toContain("currentSupplements = current truth.");
     const data = extractDataBlock(capturedPrompt);
     const currentSupplements = data.currentSupplements as
       | {
@@ -421,7 +421,7 @@ describe("analyzeLabDataWithClaude", () => {
     });
 
     expect(capturedPrompt).toContain(
-      "Do NOT include any 'Supplement Changes' section when no supplement action is needed."
+      "State no changes are recommended and briefly explain why the current stack appears adequate, citing the specific signals that support this."
     );
     expect(result.actionsNeeded).toBe(false);
     expect(result.supplementActionsNeeded).toBe(false);

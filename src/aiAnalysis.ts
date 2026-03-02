@@ -179,64 +179,40 @@ const SIGNAL_MARKERS = [
   "Hemoglobin"
 ] as const;
 
-const FORMAT_RULES = (outputLanguage: string): string[] => [
-  "Format: headings, bullets, and short paragraphs only. No tables or HTML.",
-  `Language: ${outputLanguage}.`
-];
+const FORMAT_RULES = (anchorLimit: number, markerLimit: number): string =>
+  `Format: markdown headings and short paragraphs. No tables, no HTML, no bullet dumps.
+Plain language. Short sentences. Define jargon inline if unavoidable.
+At most ${anchorLimit} numeric anchors total. At most ${markerLimit} markers unless a safety concern requires more.`;
 
-const ANALYSIS_RULES: string[] = [
-  "Use only data from the JSON block.",
-  "Write in plain language that a non-technical user can read quickly.",
-  "Use short sentences and avoid jargon unless you explain it in one short phrase.",
-  "Avoid marker-by-marker recap and avoid listing unchanged markers.",
-  "Use only a few anchor data points; do not dump numeric lists.",
-  "Integrate timeline order, sampling timing, protocol, supplements, symptoms, and wellbeing together.",
-  "Prioritize insights and likely drivers over raw value repetition.",
-  "Do not restate what a dashboard already shows unless needed for context or safety.",
-  "Every recommendation must link to a concrete signal in the data.",
-  "Treat currentSupplements as current truth. Do not re-suggest a supplement start/increase that is already active, including completed dose increases in recentDoseOrFrequencyChanges, unless a further change is justified from the current dose.",
-  "Cite studies only when needed for a recommendation or risk statement (max 2 citations total).",
-  "State uncertainty and confounders in plain language.",
-  "Action-neutral: no diagnosis, prescriptions, or medical directives."
-];
+const ANALYSIS_RULES = `Link every recommendation to a concrete signal in the data.
+currentSupplements = current truth. Never re-suggest an active supplement or completed dose increase unless further change is justified by current data.
+State uncertainty and confounders plainly.
+Action-neutral: no diagnosis, prescriptions, or medical directives.
+Cite studies only when needed for a recommendation or risk statement (max 2 total).
+Avoid marker-by-marker recaps and unchanged markers.`;
 
-const NARRATIVE_SECTION_TEMPLATE: string[] = [
-  "Required sections (in this order):",
-  "1) '## The Story So Far' (one short paragraph in plain language).",
-  "2) '## Why This Likely Happened' (2-4 causal links only, no marker dump).",
-  "3) '## What Matters Most Now' (max 3 priorities).",
-  "4) '## What To Do Next' (Now / Next test / When to revise)."
-];
+const WELLBEING_RULES = `If wellbeing data is present, treat it as a first-class data source - not a footnote.
+For each wellbeing score that correlates with a lab period: state the specific score, the specific timeframe, and the most likely biological link.
+Do not summarize wellbeing in aggregate averages only. Surface the pattern behind the number.
+Aim for: "Your energy score dropped to 4/10 in October, the same period testosterone hit its lowest trough. Two weeks after the dose change it recovered to 7/10 - suggesting you respond strongly to trough depth."`;
 
-const SUPPLEMENT_SECTION_REQUIRED_TEMPLATE: string[] = [
-  "5) '## Supplement Changes (for doctor discussion)' (only when true change is needed).",
-  "In this section, only true change actions are allowed: add/start/increase/decrease/stop/switch/reintroduce.",
-  "Never include keep/maintain/continue-only advice.",
-  "Each item should include current dose, suggested change, rationale, expected direction, confidence, and one doctor discussion point.",
-  "If a marker is low/high and commonly correctable with supplementation, suggest practical options and what to monitor."
-];
+const CAUSAL_RULES = `For every observed change, state the most likely cause - not just the observation.
+Reason in chains: protocol change -> mechanism -> expected effect -> actual effect -> implication.
+If actual differs from expected, flag it as a confounder worth watching.
+Use mechanism language: "because", "which caused", "suggesting" - not "showed", "was", "remained".`;
 
-const SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE: string[] = [
-  "Do NOT include any 'Supplement Changes' section when no supplement action is needed."
-];
+const PREDICTIVE_RULES = `If 3 or more data points exist for a marker approaching a clinically meaningful threshold, add one forward-looking sentence.
+Example: "At the current hematocrit trajectory, you may approach the 52% threshold within 2-3 test cycles."
+Keep predictive language brief (1-2 sentences) and appropriately uncertain.`;
 
-const OUTPUT_STYLE_LIMITS: Record<"full" | "latestComparison", string[]> = {
-  full: [
-    "Target length: 300-450 words.",
-    "Use at most 10 numeric anchors in total.",
-    "Mention at most 5 specific markers unless a safety concern requires more."
-  ],
-  latestComparison: [
-    "Target length: 220-320 words.",
-    "Use at most 7 numeric anchors in total.",
-    "Mention at most 4 specific markers unless a safety concern requires more."
-  ]
-};
+const SUPPLEMENT_SECTION_ACTIVE = `5) ## Supplement Changes (for doctor discussion)
+For each change: current state -> rationale (cite the specific trend) -> expected outcome with timeframe -> what to do if no improvement by that timeframe.`;
 
-const SAFETY_NOTE = "End with a brief safety note: this is not a diagnosis or medical advice.";
+const SUPPLEMENT_SECTION_NONE = `5) ## Supplement Changes (for doctor discussion)
+State no changes are recommended and briefly explain why the current stack appears adequate, citing the specific signals that support this.`;
 
-const KEY_LEGEND =
-  "Key legend: m=marker, v=value, u=unit, ref=[min,max], ann=annotations, dose=mg/week, compound=compound, frequency=injectionFrequency, frequencyPerWeek=doses/week, supps=supplements, timing=samplingTiming, currentSupplements=active supplement snapshots with recent dose/frequency changes.";
+const SAFETY_FOOTER =
+  "*This analysis is for informational purposes only and does not constitute medical advice or diagnosis. Discuss all changes with your healthcare provider.*";
 
 const CRITICAL_MARKERS = new Set<string>([
   "Testosterone",
@@ -325,6 +301,137 @@ const buildBenchmarkContext = (markerNames: string[]): string => {
     ""
   ].join("\n");
 };
+
+interface FullAnalysisParams {
+  today: string;
+  unitSystem: UnitSystem;
+  payload: AnalysisReportRow[];
+  supplementContext: AnalysisSupplementContextRow;
+  signals: unknown;
+  fullPremiumInsightPack: PremiumInsightPack;
+  fullActionability: AnalysisActionabilityDecision;
+  fullSupplementActionability: SupplementActionabilityDecision;
+  benchmarkSection: string;
+  supplementActionsNeeded: boolean;
+}
+
+interface ComparisonParams {
+  today: string;
+  unitSystem: UnitSystem;
+  relevantComparison: unknown;
+  latestComparison: unknown;
+  relevantPayload: AnalysisReportRow[];
+  relevantSupplementContext: AnalysisSupplementContextRow;
+  comparisonSignals: unknown;
+  comparisonPremiumInsightPack: PremiumInsightPack;
+  comparisonActionability: AnalysisActionabilityDecision;
+  comparisonSupplementActionability: SupplementActionabilityDecision;
+  relevantBenchmarkSection: string;
+  supplementActionsNeeded: boolean;
+}
+
+function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
+  const {
+    today,
+    unitSystem,
+    payload,
+    supplementContext,
+    signals,
+    fullPremiumInsightPack,
+    fullActionability,
+    fullSupplementActionability,
+    benchmarkSection,
+    supplementActionsNeeded
+  } = params;
+
+  const supplementSection = supplementActionsNeeded ? SUPPLEMENT_SECTION_ACTIVE : SUPPLEMENT_SECTION_NONE;
+
+  return `You are a senior clinical analyst for TRT monitoring. Today: ${today}.
+Language: English. Target length: 300-450 words.
+
+${FORMAT_RULES(10, 5)}
+${ANALYSIS_RULES}
+${WELLBEING_RULES}
+${CAUSAL_RULES}
+${PREDICTIVE_RULES}
+
+Required sections in this order:
+1) ## The Story So Far - one short paragraph as a causal timeline (not a fact list). Show how decisions led to outcomes.
+2) ## Why This Likely Happened - 2-4 causal chains only. Each must follow: cause -> mechanism -> effect. No marker dump.
+3) ## What Matters Most Now - max 3 priorities. Each must cite a specific signal, not a category label.
+4) ## What To Do Next - Now / Next test / When to revise. Add one predictive sentence if trend data supports it.
+${supplementSection}
+
+${SAFETY_FOOTER}
+
+${benchmarkSection}
+DATA START
+${JSON.stringify({
+  type: "full",
+  units: unitSystem,
+  reports: payload,
+  currentSupplements: supplementContext,
+  signals,
+  premiumInsights: fullPremiumInsightPack,
+  actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
+})}
+DATA END`;
+}
+
+function buildComparisonPrompt(params: ComparisonParams): string {
+  const {
+    today,
+    unitSystem,
+    relevantComparison,
+    latestComparison,
+    relevantPayload,
+    relevantSupplementContext,
+    comparisonSignals,
+    comparisonPremiumInsightPack,
+    comparisonActionability,
+    comparisonSupplementActionability,
+    relevantBenchmarkSection,
+    supplementActionsNeeded
+  } = params;
+
+  const supplementSection = supplementActionsNeeded ? SUPPLEMENT_SECTION_ACTIVE : SUPPLEMENT_SECTION_NONE;
+
+  return `You are a senior clinical analyst for TRT monitoring. Today: ${today}.
+Scope: latest report vs immediately previous report only. Ignore all earlier reports.
+Language: English. Target length: 220-320 words.
+
+${FORMAT_RULES(7, 4)}
+${ANALYSIS_RULES}
+${WELLBEING_RULES}
+${CAUSAL_RULES}
+
+Focus on what changed between these two reports and why it matters.
+For each change: state the most likely cause, not just the observation.
+Ignore stable markers unless they provide necessary context for an unstable one.
+
+Required sections in this order:
+1) ## The Story So Far - one short paragraph on what shifted since the last draw and why.
+2) ## Why This Likely Happened - 2-3 causal chains. Cause -> mechanism -> effect. No marker dump.
+3) ## What Matters Most Now - max 3 priorities. Each must name a specific signal.
+4) ## What To Do Next - Now / Next test / When to revise.
+${supplementSection}
+
+${SAFETY_FOOTER}
+
+${relevantBenchmarkSection}
+DATA START
+${JSON.stringify({
+  type: "latestComparison",
+  units: unitSystem,
+  latestComparison: relevantComparison ?? latestComparison,
+  reports: relevantPayload,
+  currentSupplements: relevantSupplementContext,
+  signals: comparisonSignals,
+  premiumInsights: comparisonPremiumInsightPack,
+  actionability: { clinical: comparisonActionability, supplement: comparisonSupplementActionability }
+})}
+DATA END`;
+}
 
 const toRounded = (value: number): number => {
   if (Math.abs(value) >= 100) {
@@ -1438,39 +1545,20 @@ export const analyzeLabDataWithClaude = async ({
   const supplementContext = buildSupplementContext(sanitizedPayload, supplementTimeline, today);
   const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
   const benchmarkSection = buildBenchmarkContext(trackedMarkerNames.slice(0, MAX_BENCHMARK_MARKERS_IN_PROMPT));
-  const preferredOutputLanguage = "English";
   const maxTokens = deepMode ? BASE_DEEP_ANALYSIS_MAX_TOKENS : BASE_ANALYSIS_MAX_TOKENS;
 
-  const fullPrompt = [
-    `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
-    "Goal: write a premium narrative that is easy to read and adds insight beyond the dashboard.",
-    ...FORMAT_RULES(preferredOutputLanguage),
-    ...ANALYSIS_RULES,
-    ...OUTPUT_STYLE_LIMITS.full,
-    ...NARRATIVE_SECTION_TEMPLATE,
-    ...(fullSupplementActionability.supplementActionsNeeded
-      ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE
-      : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
-    "The 'reports' array contains all selected reports for this run. Use these together with compact signals only.",
-    "Keep the tone calm, direct, and non-technical.",
-    SAFETY_NOTE,
-    KEY_LEGEND,
+  const fullPrompt = buildFullAnalysisPrompt({
+    today,
+    unitSystem,
+    payload,
+    supplementContext,
+    signals,
+    fullPremiumInsightPack,
+    fullActionability,
+    fullSupplementActionability,
     benchmarkSection,
-    "DATA START",
-    JSON.stringify({
-      type: "full",
-      units: unitSystem,
-      reports: payload,
-      currentSupplements: supplementContext,
-      signals,
-      premiumInsights: fullPremiumInsightPack,
-      actionability: {
-        clinical: fullActionability,
-        supplement: fullSupplementActionability
-      }
-    }),
-    "DATA END"
-  ].join("\n");
+    supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded
+  });
 
   const latestComparisonConfig = (() => {
     const relevantPayload = payload.slice(-2);
@@ -1512,37 +1600,20 @@ export const analyzeLabDataWithClaude = async ({
     });
 
     return {
-      prompt: [
-        `You are a senior clinical data analyst for TRT monitoring. Today: ${today}.`,
-        "Analyze only the latest report versus the immediately previous report.",
-        ...FORMAT_RULES(preferredOutputLanguage),
-        ...ANALYSIS_RULES,
-        ...OUTPUT_STYLE_LIMITS.latestComparison,
-        ...NARRATIVE_SECTION_TEMPLATE,
-        ...(comparisonSupplementActionability.supplementActionsNeeded
-          ? SUPPLEMENT_SECTION_REQUIRED_TEMPLATE
-          : SUPPLEMENT_SECTION_FORBIDDEN_TEMPLATE),
-        "Focus on what changed and why it matters clinically. Avoid raw marker recaps.",
-        "Keep the tone calm, direct, and non-technical.",
-        SAFETY_NOTE,
-        KEY_LEGEND,
+      prompt: buildComparisonPrompt({
+        today,
+        unitSystem,
+        relevantComparison,
+        latestComparison,
+        relevantPayload,
+        relevantSupplementContext,
+        comparisonSignals,
+        comparisonPremiumInsightPack,
+        comparisonActionability,
+        comparisonSupplementActionability,
         relevantBenchmarkSection,
-        "DATA START",
-        JSON.stringify({
-          type: "latestComparison",
-          units: unitSystem,
-          latestComparison: relevantComparison ?? latestComparison,
-          reports: relevantPayload,
-          currentSupplements: relevantSupplementContext,
-          signals: comparisonSignals,
-          premiumInsights: comparisonPremiumInsightPack,
-          actionability: {
-            clinical: comparisonActionability,
-            supplement: comparisonSupplementActionability
-          }
-        }),
-        "DATA END"
-      ].join("\n"),
+        supplementActionsNeeded: comparisonSupplementActionability.supplementActionsNeeded
+      }),
       actionability: comparisonActionability,
       supplementActionability: comparisonSupplementActionability
     };
