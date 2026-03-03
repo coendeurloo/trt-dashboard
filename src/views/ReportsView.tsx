@@ -856,6 +856,24 @@ const ReportsView = ({
                         }
                       />
                     </label>
+                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
+                      <select
+                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                        value={editingAnnotations.samplingTiming}
+                        onChange={(event) =>
+                          setEditingAnnotations((current) => ({
+                            ...current,
+                            samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
+                          }))
+                        }
+                      >
+                        <option value="unknown">{tr("Onbekend", "Unknown")}</option>
+                        <option value="trough">Trough</option>
+                        <option value="mid">{tr("Midden", "Mid")}</option>
+                        <option value="peak">Peak</option>
+                      </select>
+                    </label>
                     <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2">
                       <span className="mb-1 block text-slate-400">{tr("Notities", "Notes")}</span>
                       <textarea
@@ -1020,24 +1038,6 @@ const ReportsView = ({
                         </div>
                       ) : null}
                     </div>
-                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
-                      <select
-                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.samplingTiming}
-                        onChange={(event) =>
-                          setEditingAnnotations((current) => ({
-                            ...current,
-                            samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
-                          }))
-                        }
-                      >
-                        <option value="unknown">{tr("Onbekend", "Unknown")}</option>
-                        <option value="trough">Trough</option>
-                        <option value="mid">{tr("Midden", "Mid")}</option>
-                        <option value="peak">Peak</option>
-                      </select>
-                    </label>
                   </div>
                 ) : (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-8">
