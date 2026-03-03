@@ -134,7 +134,8 @@ describe("ProtocolImpactView", () => {
     render(<ProtocolImpactView {...baseProps} />);
     expect(screen.getByText("17 Jul 2024 · Protocol update")).toBeTruthy();
     expect(screen.getByText("Dose")).toBeTruthy();
-    expect(screen.getByText("120 mg/week → 115 mg/week")).toBeTruthy();
+    expect(screen.getByText("120 mg/week")).toBeTruthy();
+    expect(screen.getByText("115 mg/week")).toBeTruthy();
   });
 
   it("does not show reliability low/high badge text", () => {
@@ -164,7 +165,7 @@ describe("ProtocolImpactView", () => {
 
   it("shows top-4 effects by default in the grid", () => {
     const { container } = render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Biggest measured changes")).toBeTruthy();
+    expect(screen.getByText("Impact")).toBeTruthy();
     const cards = container.querySelectorAll(".protocol-impact-effects-grid li");
     expect(cards.length).toBe(4);
   });
