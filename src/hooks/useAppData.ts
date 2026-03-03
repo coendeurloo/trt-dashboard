@@ -219,28 +219,16 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
             : annotations.supplementOverrides.length > 0
               ? "anchor"
               : "none";
-      const normalizedAnnotations: ReportAnnotations = samplingControlsEnabled
-        ? {
-            ...annotations,
-            supplementAnchorState: normalizedAnchorState,
-            supplementOverrides:
-              normalizedAnchorState === "anchor"
-                ? annotations.supplementOverrides ?? []
-                : normalizedAnchorState === "none"
-                  ? []
-                  : null
-          }
-        : {
-            ...annotations,
-            supplementAnchorState: normalizedAnchorState,
-            supplementOverrides:
-              normalizedAnchorState === "anchor"
-                ? annotations.supplementOverrides ?? []
-                : normalizedAnchorState === "none"
-                  ? []
-                  : null,
-            samplingTiming: "trough"
-          };
+      const normalizedAnnotations: ReportAnnotations = {
+        ...annotations,
+        supplementAnchorState: normalizedAnchorState,
+        supplementOverrides:
+          normalizedAnchorState === "anchor"
+            ? annotations.supplementOverrides ?? []
+            : normalizedAnchorState === "none"
+              ? []
+              : null
+      };
 
       setAppData((prev) => ({
         ...prev,
@@ -254,7 +242,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         )
       }));
     },
-    [isShareMode, samplingControlsEnabled]
+    [isShareMode]
   );
 
   const addProtocol = useCallback(

@@ -1001,16 +1001,10 @@ const App = () => {
       testDate: draft.testDate,
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
-      annotations: samplingControlsEnabled
-        ? {
-            ...normalizedDraftAnnotations,
-            protocolId: selectedProtocolId
-          }
-        : {
-            ...normalizedDraftAnnotations,
-            protocolId: selectedProtocolId,
-            samplingTiming: "trough"
-          },
+      annotations: {
+        ...normalizedDraftAnnotations,
+        protocolId: selectedProtocolId
+      },
       extraction: draft.extraction
     };
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));

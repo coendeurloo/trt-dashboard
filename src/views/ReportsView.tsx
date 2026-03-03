@@ -46,7 +46,6 @@ const ReportsView = ({
   supplementTimeline,
   settings,
   language,
-  samplingControlsEnabled,
   isShareMode,
   resolvedSupplementContexts,
   onDeleteReport,
@@ -1021,29 +1020,27 @@ const ReportsView = ({
                         </div>
                       ) : null}
                     </div>
-                    {samplingControlsEnabled ? (
-                      <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
-                        <select
-                          className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                          value={editingAnnotations.samplingTiming}
-                          onChange={(event) =>
-                            setEditingAnnotations((current) => ({
-                              ...current,
-                              samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
-                            }))
-                          }
-                        >
-                          <option value="unknown">{tr("Onbekend", "Unknown")}</option>
-                          <option value="trough">Trough</option>
-                          <option value="mid">{tr("Midden", "Mid")}</option>
-                          <option value="peak">Peak</option>
-                        </select>
-                      </label>
-                    ) : null}
+                    <label className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="mb-1 block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
+                      <select
+                        className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
+                        value={editingAnnotations.samplingTiming}
+                        onChange={(event) =>
+                          setEditingAnnotations((current) => ({
+                            ...current,
+                            samplingTiming: event.target.value as ReportAnnotations["samplingTiming"]
+                          }))
+                        }
+                      >
+                        <option value="unknown">{tr("Onbekend", "Unknown")}</option>
+                        <option value="trough">Trough</option>
+                        <option value="mid">{tr("Midden", "Mid")}</option>
+                        <option value="peak">Peak</option>
+                      </select>
+                    </label>
                   </div>
                 ) : (
-                  <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${samplingControlsEnabled ? "xl:grid-cols-8" : "xl:grid-cols-7"}`}>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-8">
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Dosis", "Dose")}</span>
                       <strong className="text-sm text-slate-100">{dose === null ? "-" : `${dose} mg/week`}</strong>
@@ -1082,12 +1079,10 @@ const ReportsView = ({
                       <span className="block text-slate-400">{tr("Notities", "Notes")}</span>
                       <strong className="text-sm text-slate-100">{report.annotations.notes || "-"}</strong>
                     </div>
-                    {samplingControlsEnabled ? (
-                      <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
-                        <strong className="text-sm text-slate-100">{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
-                      </div>
-                    ) : null}
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                      <span className="block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
+                      <strong className="text-sm text-slate-100">{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
+                    </div>
                   </div>
                 )}
 
