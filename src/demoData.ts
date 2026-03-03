@@ -424,9 +424,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 31.2 },
-      { marker: "Free Testosterone", value: 0.5 },
-      { marker: "Estradiol", value: 134 },
+      { marker: "Testosterone", value: 29.2 },
+      { marker: "Free Testosterone", value: 0.45 },
+      { marker: "Estradiol", value: 122 },
       { marker: "SHBG", value: 38 },
       { marker: "Hematocrit", value: 0.46 },
       { marker: "PSA", value: 0.7 },
@@ -447,9 +447,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 29.8 },
-      { marker: "Free Testosterone", value: 0.47 },
-      { marker: "Estradiol", value: 126 },
+      { marker: "Testosterone", value: 24.0 },
+      { marker: "Free Testosterone", value: 0.4 },
+      { marker: "Estradiol", value: 112 },
       { marker: "SHBG", value: 37 },
       { marker: "Hematocrit", value: 0.47 },
       { marker: "PSA", value: 0.72 },
@@ -476,8 +476,8 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 18.9 },
-      { marker: "Free Testosterone", value: 0.37 },
+      { marker: "Testosterone", value: 19.6 },
+      { marker: "Free Testosterone", value: 0.39 },
       { marker: "Estradiol", value: 96 },
       { marker: "SHBG", value: 36.5 },
       { marker: "Hematocrit", value: 0.475 },
@@ -499,8 +499,8 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 17.1 },
-      { marker: "Free Testosterone", value: 0.33 },
+      { marker: "Testosterone", value: 19.2 },
+      { marker: "Free Testosterone", value: 0.37 },
       { marker: "Estradiol", value: 88 },
       { marker: "SHBG", value: 36 },
       { marker: "Hematocrit", value: 0.48 },
@@ -529,8 +529,8 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 15.3 },
-      { marker: "Free Testosterone", value: 0.3 },
+      { marker: "Testosterone", value: 18.4 },
+      { marker: "Free Testosterone", value: 0.35 },
       { marker: "Estradiol", value: 76 },
       { marker: "SHBG", value: 36 },
       { marker: "Hematocrit", value: 0.46 },
@@ -552,9 +552,9 @@ export const getDemoReports = (): LabReport[] => [
       samplingTiming: "trough"
     },
     markers: [
-      { marker: "Testosterone", value: 16.0 },
-      { marker: "Free Testosterone", value: 0.31 },
-      { marker: "Estradiol", value: 79 },
+      { marker: "Testosterone", value: 18.8 },
+      { marker: "Free Testosterone", value: 0.34 },
+      { marker: "Estradiol", value: 82 },
       { marker: "SHBG", value: 35.5 },
       { marker: "Hematocrit", value: 0.462 },
       { marker: "PSA", value: 0.75 },
