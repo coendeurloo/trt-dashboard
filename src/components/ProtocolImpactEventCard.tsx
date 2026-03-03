@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronUp, Info, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, Eye, Info, ListFilter, Minus, ShieldAlert, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -48,11 +48,20 @@ const classifyChange = (
   if (markerMatches(marker, LIPID_IMPROVEMENT_MARKERS) && percentChange < -5) {
     return "improvement";
   }
+  if (markerMatches(marker, ["eGFR"]) && percentChange > 5) {
+    return "improvement";
+  }
+  if (markerMatches(marker, ["Creatinine"]) && percentChange < -5) {
+    return "improvement";
+  }
   if (markerMatches(marker, ["Estradiol"]) && percentChange > 15) {
     return "monitor";
   }
   if (markerMatches(marker, ["Hematocrit"]) && percentChange > 3) {
     return "monitor";
+  }
+  if (markerMatches(marker, ["LDL Cholesterol", "LDL"]) && percentChange > 10) {
+    return "watch";
   }
   if (markerMatches(marker, ["PSA"]) && percentChange > 15) {
     return "watch";
@@ -147,32 +156,44 @@ const contextStyles: Record<
     border: string;
     badge: string;
     label: string;
+    chip: string;
+    icon: typeof Sparkles;
   }
 > = {
   expected: {
     border: "border-l-2 border-l-emerald-500/40",
-    badge: "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20",
-    label: "text-emerald-300"
+    badge: "bg-emerald-500/10 text-emerald-200 ring-emerald-500/20",
+    label: "text-emerald-200",
+    chip: "border-emerald-500/30 bg-emerald-500/8 text-emerald-200",
+    icon: Sparkles
   },
   improvement: {
     border: "border-l-2 border-l-cyan-500/40",
-    badge: "bg-cyan-500/10 text-cyan-300 ring-cyan-500/20",
-    label: "text-cyan-300"
+    badge: "bg-cyan-500/10 text-cyan-200 ring-cyan-500/20",
+    label: "text-cyan-200",
+    chip: "border-cyan-500/30 bg-cyan-500/8 text-cyan-200",
+    icon: TrendingDown
   },
   monitor: {
     border: "border-l-2 border-l-amber-500/40",
-    badge: "bg-amber-500/10 text-amber-300 ring-amber-500/20",
-    label: "text-amber-300"
+    badge: "bg-amber-500/10 text-amber-200 ring-amber-500/20",
+    label: "text-amber-200",
+    chip: "border-amber-500/30 bg-amber-500/8 text-amber-200",
+    icon: ShieldAlert
   },
   watch: {
     border: "border-l-2 border-l-rose-500/40",
-    badge: "bg-rose-500/10 text-rose-300 ring-rose-500/20",
-    label: "text-rose-300"
+    badge: "bg-rose-500/10 text-rose-200 ring-rose-500/20",
+    label: "text-rose-200",
+    chip: "border-rose-500/30 bg-rose-500/8 text-rose-200",
+    icon: Eye
   },
   neutral: {
     border: "border-l-2 border-l-slate-700/40",
     badge: "bg-slate-800 text-slate-300 ring-slate-700",
-    label: "text-slate-500"
+    label: "text-slate-400",
+    chip: "border-slate-600/70 bg-slate-800/70 text-slate-300",
+    icon: Minus
   }
 };
 
@@ -189,7 +210,7 @@ const contextLabelText = (context: ChangeContext, tr: (nl: string, en: string) =
   if (context === "watch") {
     return tr("bewaken", "watch");
   }
-  return "";
+  return tr("gemeten", "measured");
 };
 
 const ProtocolImpactEventCard = ({
@@ -316,20 +337,36 @@ const ProtocolImpactEventCard = ({
             </span>
           </span>
         </div>
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-900/40 px-2.5 py-1 text-[11px] text-slate-300">
+          <ListFilter className="h-3 w-3 text-slate-400" />
+          <span>
+            {tr(
+              "Top 4 op absolute gemeten verandering (%Δ) in dit eventvenster.",
+              "Top 4 by absolute measured change (%Δ) in this event window."
+            )}
+          </span>
+        </div>
 
         {displayTopRows.length === 0 ? (
           <p className="text-sm text-slate-400">{tr("Nog geen duidelijke effecten; meer metingen nodig.", "No clear effects yet; more measurements are needed.")}</p>
         ) : (
           <ul className="protocol-impact-effects-grid grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            {displayTopRows.map((row) => {
+            {displayTopRows.map((row, index) => {
               const context = classifyChange(row.marker, row.deltaPct, event);
               const styles = contextStyles[context];
               const badgeLabel = contextLabelText(context, tr);
               const deltaPct = row.deltaPct;
               const Icon =
                 deltaPct === null || Math.abs(deltaPct) < 0.01 ? Minus : deltaPct > 0 ? TrendingUp : TrendingDown;
+              const ContextIcon = styles.icon;
               const beforeLabel = row.beforeAvg === null ? "-" : formatAxisTick(row.beforeAvg);
               const afterLabel = row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg);
+              const rank = index + 1;
+              const absDeltaLabel = row.deltaPct === null ? "?" : `${Math.abs(row.deltaPct).toFixed(1)}%`;
+              const selectionReason = tr(
+                `Geselecteerd: #${rank} op |%Δ| (${absDeltaLabel}) · n ${row.nBefore}/${row.nAfter}`,
+                `Selected: #${rank} by |%Δ| (${absDeltaLabel}) · n ${row.nBefore}/${row.nAfter}`
+              );
 
               if (row.insufficientData || row.beforeAvg === null || row.afterAvg === null || row.deltaPct === null) {
                 return (
@@ -350,8 +387,15 @@ const ProtocolImpactEventCard = ({
                   key={`${event.id}-top-${row.marker}`}
                   className={`flex h-full flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/50 pl-4 pr-5 py-4 ${styles.border}`}
                 >
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-200">{getMarkerDisplayName(row.marker, settings.language)}</span>
+                  <div className="mb-4 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-200">{getMarkerDisplayName(row.marker, settings.language)}</p>
+                      <p className="mt-1 text-[10px] text-slate-500">{selectionReason}</p>
+                    </div>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${styles.chip}`}>
+                      <ContextIcon className="h-3 w-3" />
+                      {badgeLabel}
+                    </span>
                   </div>
 
                   <div className="mb-4 flex items-center gap-3">
@@ -376,11 +420,9 @@ const ProtocolImpactEventCard = ({
                       {row.deltaPct > 0 ? "+" : ""}
                       {row.deltaPct.toFixed(1)}%
                     </span>
-                    {badgeLabel ? (
-                      <span className={`text-[10px] font-semibold uppercase tracking-widest ${styles.label}`}>
-                        {badgeLabel}
-                      </span>
-                    ) : null}
+                    <span className={`text-[10px] font-semibold uppercase tracking-widest ${styles.label}`}>
+                      {tr("gemeten effect", "measured effect")}
+                    </span>
                   </div>
                 </li>
               );
