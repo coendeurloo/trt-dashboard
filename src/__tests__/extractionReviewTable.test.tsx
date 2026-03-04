@@ -253,6 +253,12 @@ describe("ExtractionReviewTable", () => {
     expect(reviewBadge.closest("span")?.getAttribute("title")).toMatch(/approximately/i);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit marker name" }));
-    expect(screen.getByDisplayValue("Leukocytes")).toBeTruthy();
+    const markerInput = screen.getByDisplayValue("Leukocytes");
+    expect(markerInput).toBeTruthy();
+
+    fireEvent.blur(markerInput);
+
+    expect(screen.getByText("Recognized as: Leukocytes")).toBeTruthy();
+    expect(screen.queryByText("Recognized as: unknown")).toBeNull();
   });
 });

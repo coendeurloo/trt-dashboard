@@ -553,7 +553,7 @@ const ExtractionReviewTable = ({
           referenceMin: sourceReferenceMin,
           referenceMax: sourceReferenceMax
         });
-        return {
+        return enrichMarkerForReview({
           ...next,
           rawValue: sourceValue,
           rawUnit: sourceUnit,
@@ -563,11 +563,8 @@ const ExtractionReviewTable = ({
           unit: normalized.unit,
           referenceMin: normalized.referenceMin,
           referenceMax: normalized.referenceMax,
-          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
-          category: undefined,
-          _confidence: undefined,
-          _matchResult: undefined
-        };
+          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+        });
       })
     });
   };
@@ -948,6 +945,7 @@ const ExtractionReviewTable = ({
                   <EditableCell
                     value={displayValue(row)}
                     align="right"
+                    clickToEdit
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
@@ -965,6 +963,7 @@ const ExtractionReviewTable = ({
                 <td className="px-3 py-2">
                   <EditableCell
                     value={displayUnit(row)}
+                    clickToEdit
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) => updateRow(row.id, (current) => ({ ...current, rawUnit: value }))}
                     placeholder={tr("Eenheid", "Unit")}
@@ -979,6 +978,7 @@ const ExtractionReviewTable = ({
                   <EditableCell
                     value={displayReferenceMin(row)}
                     align="right"
+                    clickToEdit
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
@@ -997,6 +997,7 @@ const ExtractionReviewTable = ({
                   <EditableCell
                     value={displayReferenceMax(row)}
                     align="right"
+                    clickToEdit
                     editLabel={tr("Waarde bewerken", "Edit value")}
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({

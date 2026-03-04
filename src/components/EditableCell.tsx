@@ -63,14 +63,32 @@ const EditableCell = ({
       <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
         <button
           type="button"
-          className={`inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+          className={`group inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
             align === "right" ? "ml-auto" : ""
           }`}
           onClick={startEditing}
           aria-label={editLabel}
         >
           <span>{renderedValue}</span>
-          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+          <Pencil className="h-3 w-3 text-slate-500/55 transition group-hover:text-slate-300" />
+        </button>
+      </div>
+    );
+  }
+
+  if (clickToEdit) {
+    return (
+      <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
+        <button
+          type="button"
+          className={`group inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+            align === "right" ? "ml-auto" : ""
+          }`}
+          onClick={startEditing}
+          aria-label={editLabel}
+        >
+          <span>{renderedValue}</span>
+          <Pencil className="h-3 w-3 text-slate-500/50 transition group-hover:text-slate-300" />
         </button>
       </div>
     );
@@ -78,18 +96,7 @@ const EditableCell = ({
 
   return (
     <div className={`group relative min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
-      {clickToEdit ? (
-        <button
-          type="button"
-          className="pr-6 text-sm text-slate-200 hover:text-cyan-200"
-          onClick={startEditing}
-          aria-label={editLabel}
-        >
-          {renderedValue}
-        </button>
-      ) : (
-        <span className="pr-6 text-sm text-slate-200">{renderedValue}</span>
-      )}
+      <span className="pr-6 text-sm text-slate-200">{renderedValue}</span>
       <button
         type="button"
         className="absolute right-0 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-cyan-300"
