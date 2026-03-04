@@ -77,4 +77,35 @@ describe("markerConfidence", () => {
     expect(confidence.autoFix?.unit).toBe("/nL");
     expect(confidence.issues.some((issue) => /Unit normalized from/i.test(issue))).toBe(false);
   });
+
+  it("treats /nL and /pL as valid count-unit equivalents for blood cell markers", () => {
+    const leukocyteMatch = matchMarker("Leukocytes");
+    const leukocyteConfidence = scoreMarkerConfidence(
+      {
+        name: "Leukocytes",
+        value: 6.7,
+        unit: "/nL",
+        referenceMin: 4.2,
+        referenceMax: 9.1
+      },
+      leukocyteMatch
+    );
+
+    const erythrocyteMatch = matchMarker("Erythrocytes");
+    const erythrocyteConfidence = scoreMarkerConfidence(
+      {
+        name: "Erythrocytes",
+        value: 5.8,
+        unit: "/pL",
+        referenceMin: 4.6,
+        referenceMax: 6.1
+      },
+      erythrocyteMatch
+    );
+
+    expect(leukocyteConfidence.unit).toBe("high");
+    expect(leukocyteConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
+    expect(erythrocyteConfidence.unit).toBe("high");
+    expect(erythrocyteConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
+  });
 });

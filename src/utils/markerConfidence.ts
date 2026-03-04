@@ -61,6 +61,26 @@ const unitCompareToken = (value: string): string =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
+const unitSemanticToken = (value: string): string => {
+  const token = unitCompareToken(value);
+
+  if (token === "/nl") {
+    return "count-per-liter-1e9";
+  }
+  if (token === "/pl") {
+    return "count-per-liter-1e12";
+  }
+
+  if (token === "x10^9/l" || token === "10^9/l" || token === "10e9/l" || token === "10x9/l") {
+    return "count-per-liter-1e9";
+  }
+  if (token === "x10^12/l" || token === "10^12/l" || token === "10e12/l" || token === "10x12/l") {
+    return "count-per-liter-1e12";
+  }
+
+  return token;
+};
+
 const KNOWN_NORMALIZED_UNITS = new Set(
   Object.values(UNIT_NORMALIZATION).map((value) => unitCompareToken(value))
 );
@@ -90,7 +110,7 @@ const normalizeParsedUnit = (unit: string | null | undefined): { normalized: str
   };
 };
 
-const areUnitsEquivalent = (left: string, right: string): boolean => unitCompareToken(left) === unitCompareToken(right);
+const areUnitsEquivalent = (left: string, right: string): boolean => unitSemanticToken(left) === unitSemanticToken(right);
 
 const hasDefaultRange = (matchResult: MarkerMatchResult): boolean => {
   const marker = matchResult.canonical;

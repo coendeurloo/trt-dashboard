@@ -1064,7 +1064,6 @@ const ExtractionReviewTable = ({
                   <div className="group relative inline-flex">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
-                      title={reviewTitle}
                       aria-describedby={reviewTitle ? reviewTooltipId : undefined}
                       tabIndex={reviewTitle ? 0 : -1}
                     >
