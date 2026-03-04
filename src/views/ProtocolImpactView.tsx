@@ -74,7 +74,9 @@ const ProtocolImpactView = ({
     <section className="space-y-3 fade-in">
       <div className="protocol-impact-premium-shell rounded-2xl border p-4">
         <div className="protocol-impact-header-minimal">
-          <h3 className="text-base font-semibold text-slate-100">{tr("Protocol Impact", "Protocol Impact")}</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            {tr("Wijzigingstijdlijn", "Change timeline")}
+          </p>
           <p className="mt-1 text-sm text-slate-300">
             {tr(
               "Per protocolwijziging zie je wat er echt veranderde in je metingen.",

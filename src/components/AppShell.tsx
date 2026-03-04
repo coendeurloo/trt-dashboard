@@ -26,6 +26,7 @@ export interface AppShellState {
   activeTab: TabKey;
   activeTabTitle: string;
   activeTabSubtitle: string | null;
+  isReviewMode: boolean;
   visibleTabKeys: Set<TabKey>;
   isMobileMenuOpen: boolean;
   quickUploadDisabled: boolean;
@@ -80,6 +81,7 @@ const AppShell = ({
     activeTab,
     activeTabTitle,
     activeTabSubtitle,
+    isReviewMode,
     visibleTabKeys,
     isMobileMenuOpen,
     quickUploadDisabled,
@@ -355,26 +357,32 @@ const AppShell = ({
               />
               <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
               <div className="flex-1" />
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
-                  quickUploadDisabled
-                    ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
-                    : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
-                }`}
-                onClick={onQuickUpload}
-                disabled={quickUploadDisabled}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {tr("Snelle upload", "Quick Upload")}
-              </button>
+              {!isReviewMode ? (
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                    quickUploadDisabled
+                      ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+                      : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+                  }`}
+                  onClick={onQuickUpload}
+                  disabled={quickUploadDisabled}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {tr("Snelle upload", "Quick Upload")}
+                </button>
+              ) : null}
             </div>
-            {activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
+            {!isReviewMode && activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="hidden lg:block">
-                <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
-                {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
-              </div>
+              {!isReviewMode ? (
+                <div className="hidden lg:block">
+                  <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+                  {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+                </div>
+              ) : (
+                <div className="hidden lg:block" />
+              )}
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
                   <span>{tr("Taal", "Language")}:</span>
@@ -429,7 +437,7 @@ const AppShell = ({
             </div>
           </header>
 
-          {activeTab === "dashboard"
+          {activeTab === "dashboard" && !isReviewMode
             ? renderUploadPanelCard("lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3")
             : null}
 

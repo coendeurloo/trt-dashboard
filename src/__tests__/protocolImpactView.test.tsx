@@ -126,7 +126,7 @@ describe("ProtocolImpactView", () => {
 
   it("renders minimal header copy", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Protocol Impact")).toBeTruthy();
+    expect(screen.getByText("Change timeline")).toBeTruthy();
     expect(screen.getByText(/For each protocol change, you see what factually changed in your measurements./i)).toBeTruthy();
   });
 

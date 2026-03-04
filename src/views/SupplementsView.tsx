@@ -185,7 +185,7 @@ const SupplementsView = ({
       <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-base font-semibold text-slate-100">{tr("Supplementen", "Supplements")}</h3>
+            <h3 className="text-base font-semibold text-slate-100">{tr("Actieve stack en tijdlijn", "Active stack and timeline")}</h3>
             <p className="text-sm text-slate-300">
               {tr(
                 "Volg je actieve stack en bekijk de volledige tijdlijn per supplement. Deze huidige stack wordt automatisch gebruikt voor nieuwe rapporten totdat je in een rapport expliciet aangeeft dat je stack is veranderd.",

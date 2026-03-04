@@ -1230,6 +1230,13 @@ const App = () => {
     if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
     return null;
   })();
+  const isReviewMode = Boolean(draft && !isShareMode);
+  const shellActiveTabTitle = isReviewMode
+    ? tr("Controleer geëxtraheerde data", "Review extracted data")
+    : activeTabTitle;
+  const shellActiveTabSubtitle = isReviewMode
+    ? null
+    : activeTabSubtitle;
   const tabLoadFallback = (
     <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
       <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -1369,8 +1376,9 @@ const App = () => {
       <AppShell
         shellState={{
           activeTab,
-          activeTabTitle,
-          activeTabSubtitle,
+          activeTabTitle: shellActiveTabTitle,
+          activeTabSubtitle: shellActiveTabSubtitle,
+          isReviewMode,
           visibleTabKeys,
           isMobileMenuOpen,
           quickUploadDisabled,
@@ -1408,10 +1416,10 @@ const App = () => {
         tr={tr}
       >
         <AnimatePresence mode="wait">
-            {draft && !isShareMode ? (
+            {isReviewMode ? (
               <ExtractionReviewTable
                 key="draft"
-                draft={draft}
+                draft={draft!}
                 annotations={draftAnnotations}
                 protocols={appData.protocols}
                 supplementTimeline={appData.supplementTimeline}
@@ -1430,7 +1438,7 @@ const App = () => {
                   lastUploadedFile &&
                   appData.settings.parserDebugMode === "text_ocr_ai" &&
                   Boolean(uncertaintyAssessment?.isUncertain) &&
-                  !draft.extraction.aiUsed
+                  !draft!.extraction.aiUsed
                     ? improveDraftWithAi
                     : undefined
                 }
@@ -1455,275 +1463,279 @@ const App = () => {
             ) : null}
         </AnimatePresence>
 
-        <AnimatePresence>
-            {!isShareMode && hasDemoData ? (
-              <motion.section
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                className={demoBannerClassName}
-              >
-                <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-                  <div className={demoBannerTextClassName}>
-                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>
-                      {isDemoMode
-                        ? tr(
-                            "Je verkent de app met demodata — kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
-                            "You're exploring with demo data — feel free to look around. When you're ready, start fresh with your own labs."
-                          )
-                        : tr(
-                            "Demodata is nog geladen. Wis het wanneer je klaar bent.",
-                            "Demo data is still loaded. Clear it when you're ready."
-                          )}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {isDemoMode ? (
-                      <>
-                        <button
-                          type="button"
-                          className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
-                          onClick={clearDemoAndUpload}
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? (
-                            <>
-                              <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
-                              {tr("PDF wordt verwerkt...", "Processing PDF...")}
-                            </>
-                          ) : (
-                            tr("Upload je eigen PDF", "Upload your own PDF")
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className={clearDemoButtonClassName}
-                          onClick={clearDemoData}
-                        >
-                          {tr("Begin opnieuw", "Start fresh")}
-                        </button>
-                      </>
-                    ) : (
-                      // Mixed state (demo + own data): offer to clear demo
-                      <button
-                        type="button"
-                        className={clearDemoButtonClassName}
-                        onClick={clearDemoData}
-                      >
-                        {tr("Demodata wissen", "Clear demo data")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </motion.section>
-            ) : null}
-        </AnimatePresence>
+        {!isReviewMode ? (
+          <>
+            <AnimatePresence>
+                {!isShareMode && hasDemoData ? (
+                  <motion.section
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className={demoBannerClassName}
+                  >
+                    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                      <div className={demoBannerTextClassName}>
+                        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>
+                          {isDemoMode
+                            ? tr(
+                                "Je verkent de app met demodata — kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
+                                "You're exploring with demo data — feel free to look around. When you're ready, start fresh with your own labs."
+                              )
+                            : tr(
+                                "Demodata is nog geladen. Wis het wanneer je klaar bent.",
+                                "Demo data is still loaded. Clear it when you're ready."
+                              )}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {isDemoMode ? (
+                          <>
+                            <button
+                              type="button"
+                              className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
+                              onClick={clearDemoAndUpload}
+                              disabled={isProcessing}
+                            >
+                              {isProcessing ? (
+                                <>
+                                  <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                                  {tr("PDF wordt verwerkt...", "Processing PDF...")}
+                                </>
+                              ) : (
+                                tr("Upload je eigen PDF", "Upload your own PDF")
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className={clearDemoButtonClassName}
+                              onClick={clearDemoData}
+                            >
+                              {tr("Begin opnieuw", "Start fresh")}
+                            </button>
+                          </>
+                        ) : (
+                          // Mixed state (demo + own data): offer to clear demo
+                          <button
+                            type="button"
+                            className={clearDemoButtonClassName}
+                            onClick={clearDemoData}
+                          >
+                            {tr("Demodata wissen", "Clear demo data")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.section>
+                ) : null}
+            </AnimatePresence>
 
-        {activeTab === "dashboard" ? (
-          <DashboardView
-            reports={reports}
-            visibleReports={visibleReports}
-            allMarkers={allMarkers}
-            primaryMarkers={primaryMarkers}
-            dosePhaseBlocks={dosePhaseBlocks}
-            trendByMarker={trendByMarker}
-            alertsByMarker={alertsByMarker}
-            trtStability={trtStability}
-            outOfRangeCount={outOfRangeCount}
-            settings={appData.settings}
-            language={appData.settings.language}
-            isShareMode={isShareMode}
-            samplingControlsEnabled={samplingControlsEnabled}
-            dashboardView={dashboardView}
-            dashboardMode={dashboardMode}
-            leftCompareMarker={leftCompareMarker}
-            rightCompareMarker={rightCompareMarker}
-            timeRangeOptions={timeRangeOptions}
-            samplingOptions={samplingOptions}
-            onUpdateSettings={updateSettings}
-            onDashboardViewChange={setDashboardView}
-            onDashboardModeChange={setDashboardMode}
-            onLeftCompareMarkerChange={setLeftCompareMarker}
-            onRightCompareMarkerChange={setRightCompareMarker}
-            onExpandMarker={setExpandedMarker}
-            onOpenMarkerAlerts={openAlertsForMarker}
-            chartPointsForMarker={chartPointsForMarker}
-            markerPercentChange={markerPercentChange}
-            markerBaselineDelta={markerBaselineDelta}
-            onLoadDemo={loadDemoData}
-            onUploadClick={startSecondUpload}
-            isProcessing={isProcessing}
-            checkIns={appData.checkIns}
-            onNavigateToCheckIns={() => setActiveTab("checkIns")}
-          />
-        ) : null}
-
-        {activeTab !== "dashboard" ? (
-          <Suspense fallback={tabLoadFallback}>
-            {activeTab === "protocol" ? (
-              <ProtocolView
-                protocols={appData.protocols}
+            {activeTab === "dashboard" ? (
+              <DashboardView
                 reports={reports}
-                language={appData.settings.language}
-                isShareMode={isShareMode}
-                onAddProtocol={addProtocol}
-                onUpdateProtocol={updateProtocol}
-                onDeleteProtocol={deleteProtocol}
-                getProtocolUsageCount={getProtocolUsageCount}
-              />
-            ) : null}
-
-            {activeTab === "supplements" ? (
-              <SupplementsView
-                language={appData.settings.language}
-                reports={reports}
-                timeline={appData.supplementTimeline}
-                resolvedSupplementContexts={resolvedSupplementContexts}
-                isShareMode={isShareMode}
-                onAddSupplementPeriod={addSupplementPeriod}
-                onUpdateSupplementPeriod={updateSupplementPeriod}
-                onStopSupplement={stopSupplement}
-                onDeleteSupplementPeriod={deleteSupplementPeriod}
-                onOpenReportForSupplementBackfill={openReportForSupplementBackfill}
-              />
-            ) : null}
-
-            {activeTab === "checkIns" ? (
-              <CheckInsView
-                checkIns={appData.checkIns}
-                language={appData.settings.language}
-                isShareMode={isShareMode}
-                onAdd={(data) => addCheckIn({ ...data, id: crypto.randomUUID() })}
-                onUpdate={updateCheckIn}
-                onDelete={deleteCheckIn}
-              />
-            ) : null}
-
-            {activeTab === "alerts" ? (
-              <AlertsView
-                alerts={alerts}
-                actionableAlerts={actionableAlerts}
-                positiveAlerts={positiveAlerts}
-                alertSeriesByMarker={alertSeriesByMarker}
-                settings={appData.settings}
-                language={appData.settings.language}
-                samplingControlsEnabled={samplingControlsEnabled}
-                focusedMarker={focusedAlertMarker}
-                onFocusedMarkerHandled={() => setFocusedAlertMarker(null)}
-              />
-            ) : null}
-
-            {activeTab === "protocolImpact" ? (
-              <ProtocolImpactView
-                protocolDoseOverview={protocolDoseOverview}
-                protocolDoseEvents={protocolDoseEvents}
-                protocolWindowSize={protocolWindowSize}
-                protocolMarkerSearch={protocolMarkerSearch}
-                protocolCategoryFilter={protocolCategoryFilter}
-                settings={appData.settings}
-                language={appData.settings.language}
-                onProtocolWindowSizeChange={setProtocolWindowSize}
-                onProtocolMarkerSearchChange={setProtocolMarkerSearch}
-                onProtocolCategoryFilterChange={setProtocolCategoryFilter}
-              />
-            ) : null}
-
-            {activeTab === "doseResponse" ? (
-              <DoseResponseView
-                dosePredictions={dosePredictions}
-                customDoseValue={customDoseValue}
-                hasCustomDose={hasCustomDose}
-                doseResponseInput={doseResponseInput}
                 visibleReports={visibleReports}
-                protocols={appData.protocols}
-                settings={appData.settings}
-                language={appData.settings.language}
-                currentProtocolDose={activeProtocolDose}
-                onDoseResponseInputChange={setDoseResponseInput}
-                onNavigateToProtocol={() => setActiveTab("protocol")}
-              />
-            ) : null}
-
-            {activeTab === "reports" ? (
-              <ReportsView
-                reports={reports}
-                protocols={appData.protocols}
-                supplementTimeline={appData.supplementTimeline}
-                settings={appData.settings}
-                language={appData.settings.language}
-                samplingControlsEnabled={samplingControlsEnabled}
-                isShareMode={isShareMode}
-                resolvedSupplementContexts={resolvedSupplementContexts}
-                onDeleteReport={deleteReportFromData}
-                onDeleteReports={deleteReportsFromData}
-                onUpdateReportAnnotations={updateReportAnnotations}
-                onSetBaseline={setBaseline}
-                onRenameMarker={openRenameDialog}
-                onOpenProtocolTab={() => requestTabChange("protocol")}
-                focusedReportId={focusedReportId}
-                onFocusedReportHandled={() => setFocusedReportId(null)}
-              />
-            ) : null}
-
-            {activeTab === "analysis" ? (
-              <AnalysisView
-                isAnalyzingLabs={isAnalyzingLabs}
-                analysisError={analysisError}
-                analysisResult={analysisResult}
-                analysisResultDisplay={analysisResultDisplay}
-                analysisGeneratedAt={analysisGeneratedAt}
-                analysisCopied={analysisCopied}
-                analysisModelInfo={analysisModelInfo}
-                analysisKind={analysisKind}
-                analyzingKind={analyzingKind}
-                analysisScopeNotice={analysisScopeNotice}
-                reportsInScope={visibleReports.length}
-                markersTracked={allMarkers.length}
-                analysisMarkerNames={analysisMarkerNames}
-                activeProtocolLabel={activeAnalysisProtocolLabel}
-                memory={isShareMode ? null : analystMemory}
-                betaUsage={betaUsage}
-                betaLimits={betaLimits}
-                settings={appData.settings}
-                language={appData.settings.language}
-                onRunAnalysis={runAiAnalysisWithConsent}
-                onCopyAnalysis={copyAnalysis}
-              />
-            ) : null}
-
-            {activeTab === "settings" ? (
-              <SettingsView
-                settings={appData.settings}
-                language={appData.settings.language}
-                reports={reports}
-                samplingControlsEnabled={samplingControlsEnabled}
                 allMarkers={allMarkers}
-                editableMarkers={editableMarkers}
-                markerUsage={markerUsage}
-                shareOptions={shareOptions}
-                shareLink={shareLink}
-                shareStatus={shareStatus}
-                shareMessage={shareMessage}
-                shareIncludedReports={shareIncludedReports}
-                shareExpiresAt={shareExpiresAt}
+                primaryMarkers={primaryMarkers}
+                dosePhaseBlocks={dosePhaseBlocks}
+                trendByMarker={trendByMarker}
+                alertsByMarker={alertsByMarker}
+                trtStability={trtStability}
+                outOfRangeCount={outOfRangeCount}
+                settings={appData.settings}
+                language={appData.settings.language}
+                isShareMode={isShareMode}
+                samplingControlsEnabled={samplingControlsEnabled}
+                dashboardView={dashboardView}
+                dashboardMode={dashboardMode}
+                leftCompareMarker={leftCompareMarker}
+                rightCompareMarker={rightCompareMarker}
+                timeRangeOptions={timeRangeOptions}
+                samplingOptions={samplingOptions}
                 onUpdateSettings={updateSettings}
-                onRemapMarker={remapMarkerAcrossReports}
-                onOpenRenameDialog={openRenameDialog}
-                onExportJson={exportJson}
-                onExportCsv={exportCsv}
-                onExportPdf={exportPdf}
-                onImportData={importData}
-                onClearAllData={() => {
-                  clearAllData();
-                  setAnalystMemory(null);
-                }}
-                onAddMarkerSuggestions={appendMarkerSuggestions}
-                onShareOptionsChange={setShareOptions}
-                onGenerateShareLink={generateShareLink}
+                onDashboardViewChange={setDashboardView}
+                onDashboardModeChange={setDashboardMode}
+                onLeftCompareMarkerChange={setLeftCompareMarker}
+                onRightCompareMarkerChange={setRightCompareMarker}
+                onExpandMarker={setExpandedMarker}
+                onOpenMarkerAlerts={openAlertsForMarker}
+                chartPointsForMarker={chartPointsForMarker}
+                markerPercentChange={markerPercentChange}
+                markerBaselineDelta={markerBaselineDelta}
+                onLoadDemo={loadDemoData}
+                onUploadClick={startSecondUpload}
+                isProcessing={isProcessing}
+                checkIns={appData.checkIns}
+                onNavigateToCheckIns={() => setActiveTab("checkIns")}
               />
             ) : null}
-          </Suspense>
+
+            {activeTab !== "dashboard" ? (
+              <Suspense fallback={tabLoadFallback}>
+                {activeTab === "protocol" ? (
+                  <ProtocolView
+                    protocols={appData.protocols}
+                    reports={reports}
+                    language={appData.settings.language}
+                    isShareMode={isShareMode}
+                    onAddProtocol={addProtocol}
+                    onUpdateProtocol={updateProtocol}
+                    onDeleteProtocol={deleteProtocol}
+                    getProtocolUsageCount={getProtocolUsageCount}
+                  />
+                ) : null}
+
+                {activeTab === "supplements" ? (
+                  <SupplementsView
+                    language={appData.settings.language}
+                    reports={reports}
+                    timeline={appData.supplementTimeline}
+                    resolvedSupplementContexts={resolvedSupplementContexts}
+                    isShareMode={isShareMode}
+                    onAddSupplementPeriod={addSupplementPeriod}
+                    onUpdateSupplementPeriod={updateSupplementPeriod}
+                    onStopSupplement={stopSupplement}
+                    onDeleteSupplementPeriod={deleteSupplementPeriod}
+                    onOpenReportForSupplementBackfill={openReportForSupplementBackfill}
+                  />
+                ) : null}
+
+                {activeTab === "checkIns" ? (
+                  <CheckInsView
+                    checkIns={appData.checkIns}
+                    language={appData.settings.language}
+                    isShareMode={isShareMode}
+                    onAdd={(data) => addCheckIn({ ...data, id: crypto.randomUUID() })}
+                    onUpdate={updateCheckIn}
+                    onDelete={deleteCheckIn}
+                  />
+                ) : null}
+
+                {activeTab === "alerts" ? (
+                  <AlertsView
+                    alerts={alerts}
+                    actionableAlerts={actionableAlerts}
+                    positiveAlerts={positiveAlerts}
+                    alertSeriesByMarker={alertSeriesByMarker}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    samplingControlsEnabled={samplingControlsEnabled}
+                    focusedMarker={focusedAlertMarker}
+                    onFocusedMarkerHandled={() => setFocusedAlertMarker(null)}
+                  />
+                ) : null}
+
+                {activeTab === "protocolImpact" ? (
+                  <ProtocolImpactView
+                    protocolDoseOverview={protocolDoseOverview}
+                    protocolDoseEvents={protocolDoseEvents}
+                    protocolWindowSize={protocolWindowSize}
+                    protocolMarkerSearch={protocolMarkerSearch}
+                    protocolCategoryFilter={protocolCategoryFilter}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    onProtocolWindowSizeChange={setProtocolWindowSize}
+                    onProtocolMarkerSearchChange={setProtocolMarkerSearch}
+                    onProtocolCategoryFilterChange={setProtocolCategoryFilter}
+                  />
+                ) : null}
+
+                {activeTab === "doseResponse" ? (
+                  <DoseResponseView
+                    dosePredictions={dosePredictions}
+                    customDoseValue={customDoseValue}
+                    hasCustomDose={hasCustomDose}
+                    doseResponseInput={doseResponseInput}
+                    visibleReports={visibleReports}
+                    protocols={appData.protocols}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    currentProtocolDose={activeProtocolDose}
+                    onDoseResponseInputChange={setDoseResponseInput}
+                    onNavigateToProtocol={() => setActiveTab("protocol")}
+                  />
+                ) : null}
+
+                {activeTab === "reports" ? (
+                  <ReportsView
+                    reports={reports}
+                    protocols={appData.protocols}
+                    supplementTimeline={appData.supplementTimeline}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    samplingControlsEnabled={samplingControlsEnabled}
+                    isShareMode={isShareMode}
+                    resolvedSupplementContexts={resolvedSupplementContexts}
+                    onDeleteReport={deleteReportFromData}
+                    onDeleteReports={deleteReportsFromData}
+                    onUpdateReportAnnotations={updateReportAnnotations}
+                    onSetBaseline={setBaseline}
+                    onRenameMarker={openRenameDialog}
+                    onOpenProtocolTab={() => requestTabChange("protocol")}
+                    focusedReportId={focusedReportId}
+                    onFocusedReportHandled={() => setFocusedReportId(null)}
+                  />
+                ) : null}
+
+                {activeTab === "analysis" ? (
+                  <AnalysisView
+                    isAnalyzingLabs={isAnalyzingLabs}
+                    analysisError={analysisError}
+                    analysisResult={analysisResult}
+                    analysisResultDisplay={analysisResultDisplay}
+                    analysisGeneratedAt={analysisGeneratedAt}
+                    analysisCopied={analysisCopied}
+                    analysisModelInfo={analysisModelInfo}
+                    analysisKind={analysisKind}
+                    analyzingKind={analyzingKind}
+                    analysisScopeNotice={analysisScopeNotice}
+                    reportsInScope={visibleReports.length}
+                    markersTracked={allMarkers.length}
+                    analysisMarkerNames={analysisMarkerNames}
+                    activeProtocolLabel={activeAnalysisProtocolLabel}
+                    memory={isShareMode ? null : analystMemory}
+                    betaUsage={betaUsage}
+                    betaLimits={betaLimits}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    onRunAnalysis={runAiAnalysisWithConsent}
+                    onCopyAnalysis={copyAnalysis}
+                  />
+                ) : null}
+
+                {activeTab === "settings" ? (
+                  <SettingsView
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    reports={reports}
+                    samplingControlsEnabled={samplingControlsEnabled}
+                    allMarkers={allMarkers}
+                    editableMarkers={editableMarkers}
+                    markerUsage={markerUsage}
+                    shareOptions={shareOptions}
+                    shareLink={shareLink}
+                    shareStatus={shareStatus}
+                    shareMessage={shareMessage}
+                    shareIncludedReports={shareIncludedReports}
+                    shareExpiresAt={shareExpiresAt}
+                    onUpdateSettings={updateSettings}
+                    onRemapMarker={remapMarkerAcrossReports}
+                    onOpenRenameDialog={openRenameDialog}
+                    onExportJson={exportJson}
+                    onExportCsv={exportCsv}
+                    onExportPdf={exportPdf}
+                    onImportData={importData}
+                    onClearAllData={() => {
+                      clearAllData();
+                      setAnalystMemory(null);
+                    }}
+                    onAddMarkerSuggestions={appendMarkerSuggestions}
+                    onShareOptionsChange={setShareOptions}
+                    onGenerateShareLink={generateShareLink}
+                  />
+                ) : null}
+              </Suspense>
+            ) : null}
+          </>
         ) : null}
       </AppShell>
 

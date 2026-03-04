@@ -142,7 +142,7 @@ const DoseResponseView = ({
           <div>
             <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-100">
               <Sparkles className="h-4 w-4 text-cyan-300" />
-              {tr("Dose Simulator", "Dose Simulator")}
+              {tr("Scenario builder", "Scenario builder")}
             </h3>
             <p className="mt-1 text-sm text-slate-300">
               {tr(
