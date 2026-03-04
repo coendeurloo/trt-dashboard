@@ -916,10 +916,11 @@ const ExtractionReviewTable = ({
               const optimalMax = row._matchResult?.canonical?.optimalRange?.max;
               const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
               const reviewTitle = reviewTooltip(row);
+              const reviewTooltipId = `review-tooltip-${row.id}`;
 
               return (
               <tr key={row.id} className="bg-slate-900/35">
-                <td className="px-3 py-2">
+                <td className="align-top px-3 py-2">
                   <EditableCell
                     value={row.marker}
                     clickToEdit
@@ -941,7 +942,7 @@ const ExtractionReviewTable = ({
                     {tr("Herkend als", "Recognized as")}: {row._matchResult?.canonical?.canonicalName ?? tr("onbekend", "unknown")}
                   </p>
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="align-top px-3 py-2 text-right">
                   <EditableCell
                     value={displayValue(row)}
                     align="right"
@@ -960,7 +961,7 @@ const ExtractionReviewTable = ({
                     </p>
                   ) : null}
                 </td>
-                <td className="px-3 py-2">
+                <td className="align-top px-3 py-2">
                   <EditableCell
                     value={displayUnit(row)}
                     clickToEdit
@@ -974,7 +975,7 @@ const ExtractionReviewTable = ({
                     </p>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="align-top px-3 py-2 text-right">
                   <EditableCell
                     value={displayReferenceMin(row)}
                     align="right"
@@ -993,7 +994,7 @@ const ExtractionReviewTable = ({
                     </p>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="align-top px-3 py-2 text-right">
                   <EditableCell
                     value={displayReferenceMax(row)}
                     align="right"
@@ -1012,7 +1013,7 @@ const ExtractionReviewTable = ({
                     </p>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="align-top px-3 py-2 text-right">
                   <span
                     className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                       row.abnormal === "high"
@@ -1025,7 +1026,7 @@ const ExtractionReviewTable = ({
                     {abnormalLabel(row.abnormal)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-center">
+                <td className="align-top px-3 py-2 text-center">
                   {hasVisualRange ? (
                     <VisualRangeBar
                       value={row.value}
@@ -1040,7 +1041,7 @@ const ExtractionReviewTable = ({
                     <span className="text-slate-500">-</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="align-top px-3 py-2 text-right">
                   {isActionableAutoFix(row) ? (
                     <button
                       type="button"
@@ -1059,14 +1060,27 @@ const ExtractionReviewTable = ({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </td>
-                <td className="px-3 py-2 text-right">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
-                    title={reviewTitle}
-                  >
-                    {statusIcon(row)}
-                    {statusLabel(row)}
-                  </span>
+                <td className="align-top px-3 py-2 text-right">
+                  <div className="group relative inline-flex">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
+                      title={reviewTitle}
+                      aria-describedby={reviewTitle ? reviewTooltipId : undefined}
+                      tabIndex={reviewTitle ? 0 : -1}
+                    >
+                      {statusIcon(row)}
+                      {statusLabel(row)}
+                    </span>
+                    {reviewTitle ? (
+                      <div
+                        id={reviewTooltipId}
+                        role="tooltip"
+                        className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[280px] rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                      >
+                        {reviewTitle}
+                      </div>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             );
