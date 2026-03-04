@@ -314,12 +314,12 @@ const ExtractionReviewTable = ({
     return tr("Onbekend", "Unknown");
   };
 
-  const displayValue = (row: MarkerValue): number => (typeof row.rawValue === "number" ? row.rawValue : row.value);
-  const displayUnit = (row: MarkerValue): string => row.rawUnit ?? row.unit;
-  const displayReferenceMin = (row: MarkerValue): number | null =>
-    row.rawReferenceMin !== undefined ? row.rawReferenceMin : row.referenceMin;
-  const displayReferenceMax = (row: MarkerValue): number | null =>
-    row.rawReferenceMax !== undefined ? row.rawReferenceMax : row.referenceMax;
+  const displayValue = (row: MarkerValue): number => row.value;
+  const displayUnit = (row: MarkerValue): string => row.unit;
+  const displayReferenceMin = (row: MarkerValue): number | null => row.referenceMin;
+  const displayReferenceMax = (row: MarkerValue): number | null => row.referenceMax;
+  const formatMaybeNumber = (value: number | null | undefined): string =>
+    value === null || value === undefined || !Number.isFinite(value) ? "-" : String(Number(value.toFixed(3)));
   const reviewMarkers = draft.markers as ReviewMarker[];
   const markersNeedingReview = reviewMarkers.filter((row) => (row._confidence?.overall ?? "ok") !== "ok");
   const autoFixableMarkers = reviewMarkers.filter((row) => row._confidence?.autoFixable);
@@ -545,6 +545,7 @@ const ExtractionReviewTable = ({
     const nextRow = enrichMarkerForReview({
       id: createId(),
       marker: "",
+      rawMarker: "",
       canonicalMarker: "Unknown Marker",
       value: 0,
       unit: "",
@@ -771,7 +772,7 @@ const ExtractionReviewTable = ({
         </div>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Protocol", "Protocol")}</label>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <select
               value={selectedProtocolId ?? ""}
               onChange={(event) => {
@@ -787,13 +788,6 @@ const ExtractionReviewTable = ({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
-              onClick={() => setShowCreateProtocol((current) => !current)}
-            >
-              <Plus className="h-4 w-4" /> {showCreateProtocol ? tr("Sluit", "Close") : tr("Nieuw", "New")}
-            </button>
             {selectedProtocol ? (
               <button
                 type="button"
@@ -803,6 +797,13 @@ const ExtractionReviewTable = ({
                 {tr("Ontkoppel", "Detach")}
               </button>
             ) : null}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
+              onClick={() => setShowCreateProtocol((current) => !current)}
+            >
+              <Plus className="h-4 w-4" /> {showCreateProtocol ? tr("Sluit", "Close") : tr("Nieuw", "New")}
+            </button>
           </div>
           {!selectedProtocol && protocols.length === 0 ? (
             <p className="mt-1 text-xs text-slate-400">
@@ -911,6 +912,11 @@ const ExtractionReviewTable = ({
                     placeholder={tr("Markernaam", "Marker name")}
                     editLabel={tr("Waarde bewerken", "Edit value")}
                   />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {tr("PDF", "PDF")}: {row.rawMarker ?? row.marker}
+                    {" · "}
+                    {tr("Canonical", "Canonical")}: {row._matchResult?.canonical?.canonicalName ?? tr("onbekend", "unknown")}
+                  </p>
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
@@ -924,6 +930,11 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
+                  {typeof row.rawValue === "number" && row.rawValue !== row.value ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawValue)}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2">
                   <EditableCell
@@ -932,6 +943,11 @@ const ExtractionReviewTable = ({
                     onCommit={(value) => updateRow(row.id, (current) => ({ ...current, rawUnit: value }))}
                     placeholder={tr("Eenheid", "Unit")}
                   />
+                  {row.rawUnit && row.rawUnit !== row.unit ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {tr("PDF", "PDF")}: {row.rawUnit}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
@@ -945,6 +961,11 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
+                  {row.rawReferenceMin !== undefined && row.rawReferenceMin !== row.referenceMin ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawReferenceMin)}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <EditableCell
@@ -958,6 +979,11 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
+                  {row.rawReferenceMax !== undefined && row.rawReferenceMax !== row.referenceMax ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawReferenceMax)}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <span

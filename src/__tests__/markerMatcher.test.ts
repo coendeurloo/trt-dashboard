@@ -14,6 +14,10 @@ describe("markerMatcher", () => {
     expect(aliasResult.confidence).toBe("alias");
     expect(aliasResult.canonical?.id).toBe("tsh");
 
+    const shbgResult = matchMarker("SHBG (sex.horm.bind. gl.)");
+    expect(["alias", "normalized", "token"]).toContain(shbgResult.confidence);
+    expect(shbgResult.canonical?.id).toBe("shbg");
+
     const tokenResult = matchMarker("absolute eosinophils count");
     expect(["token", "normalized", "alias"]).toContain(tokenResult.confidence);
     expect(tokenResult.canonical?.id).toBe("eosinophils-abs");

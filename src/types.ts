@@ -86,6 +86,7 @@ export interface DoseBlendDiagnostics {
 export interface MarkerValue {
   id: string;
   marker: string;
+  rawMarker?: string;
   canonicalMarker: string;
   value: number;
   unit: string;

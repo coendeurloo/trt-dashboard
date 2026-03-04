@@ -1222,6 +1222,11 @@ const ReportsView = ({
                                         </span>
                                       ) : null}
                                     </span>
+                                    {marker.rawMarker && marker.rawMarker.trim() && marker.rawMarker !== marker.marker ? (
+                                      <p className="mt-1 text-[11px] text-slate-500">
+                                        {tr("PDF", "PDF")}: {marker.rawMarker}
+                                      </p>
+                                    ) : null}
                                   </td>
                                   <td className="px-3 py-2 text-right">{converted.value.toFixed(2)}</td>
                                   <td className="px-3 py-2">{converted.unit}</td>

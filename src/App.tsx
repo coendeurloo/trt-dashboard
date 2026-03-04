@@ -503,6 +503,7 @@ const App = () => {
         {
           id: createId(),
           marker: "",
+          rawMarker: "",
           canonicalMarker: "Unknown Marker",
           value: 0,
           unit: "",

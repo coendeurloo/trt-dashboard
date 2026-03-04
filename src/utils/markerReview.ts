@@ -2,6 +2,7 @@ import { MarkerValue } from "../types";
 import { MatchConfidence, MarkerMatchResult, matchMarker } from "./markerMatcher";
 import { MarkerParseConfidence, ParsedMarker, scoreMarkerConfidence } from "./markerConfidence";
 import { MarkerCategory } from "../data/markerDatabase";
+import { canonicalizeMarker } from "../unitConversion";
 
 export type ReviewMarker = MarkerValue & {
   category?: MarkerCategory;
@@ -10,6 +11,64 @@ export type ReviewMarker = MarkerValue & {
 };
 
 const shouldUseCanonicalName = (confidence: MatchConfidence): boolean => confidence === "exact" || confidence === "alias";
+
+const confidenceRank: Record<MatchConfidence, number> = {
+  exact: 6,
+  alias: 5,
+  normalized: 4,
+  token: 3,
+  fuzzy: 2,
+  unmatched: 1
+};
+
+const withLegacyAliasConfidence = (result: MarkerMatchResult, matchedAlias: string): MarkerMatchResult => ({
+  ...result,
+  confidence: result.confidence === "exact" ? "alias" : result.confidence,
+  score: Math.max(result.score, 0.92),
+  matchedAlias
+});
+
+const resolveBestMatch = (marker: MarkerValue): MarkerMatchResult => {
+  const displayName = (marker.marker ?? "").trim();
+  const rawName = (marker.rawMarker ?? "").trim();
+  const currentCanonical = (marker.canonicalMarker ?? "").trim();
+
+  const base = matchMarker(displayName || currentCanonical || rawName);
+  let best = base;
+
+  const compareAndTake = (candidate: MarkerMatchResult): void => {
+    if (confidenceRank[candidate.confidence] > confidenceRank[best.confidence]) {
+      best = candidate;
+      return;
+    }
+    if (confidenceRank[candidate.confidence] === confidenceRank[best.confidence] && candidate.score > best.score) {
+      best = candidate;
+    }
+  };
+
+  if (rawName && rawName !== displayName) {
+    compareAndTake(matchMarker(rawName));
+  }
+
+  if (currentCanonical && currentCanonical.toLowerCase() !== "unknown marker") {
+    const canonicalHit = matchMarker(currentCanonical);
+    if (canonicalHit.confidence !== "unmatched") {
+      compareAndTake(withLegacyAliasConfidence(canonicalHit, currentCanonical));
+    }
+  }
+
+  if (best.confidence === "unmatched" || best.confidence === "fuzzy") {
+    const legacyCandidate = canonicalizeMarker(rawName || displayName || currentCanonical);
+    if (legacyCandidate && legacyCandidate !== "Unknown Marker") {
+      const legacyHit = matchMarker(legacyCandidate);
+      if (legacyHit.confidence !== "unmatched") {
+        compareAndTake(withLegacyAliasConfidence(legacyHit, legacyCandidate));
+      }
+    }
+  }
+
+  return best;
+};
 
 const toParsedMarker = (marker: MarkerValue): ParsedMarker => ({
   name: marker.marker,
@@ -20,7 +79,7 @@ const toParsedMarker = (marker: MarkerValue): ParsedMarker => ({
 });
 
 export const enrichMarkerForReview = (marker: MarkerValue): ReviewMarker => {
-  const matchResult = matchMarker(marker.marker || marker.canonicalMarker || "");
+  const matchResult = resolveBestMatch(marker);
   const confidence = scoreMarkerConfidence(toParsedMarker(marker), matchResult);
 
   const resolvedName =
@@ -32,9 +91,10 @@ export const enrichMarkerForReview = (marker: MarkerValue): ReviewMarker => {
 
   return {
     ...marker,
+    rawMarker: marker.rawMarker ?? marker.marker,
     marker: resolvedName,
     unit: resolvedUnit,
-    rawUnit: marker.rawUnit !== undefined && confidence.autoFix?.unit ? resolvedUnit : marker.rawUnit,
+    rawUnit: marker.rawUnit ?? marker.unit,
     category: matchResult.canonical?.category ?? "Other",
     _confidence: confidence,
     _matchResult: matchResult

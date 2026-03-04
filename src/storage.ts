@@ -315,6 +315,7 @@ const sanitizeMarker = (marker: Partial<MarkerValue>): MarkerValue | null => {
   return {
     id: String(marker.id ?? createId()),
     marker: markerLabel || canonicalMarker,
+    rawMarker: typeof marker.rawMarker === "string" ? marker.rawMarker : markerLabel || canonicalMarker,
     canonicalMarker,
     value: normalized.value,
     unit: normalized.unit,
