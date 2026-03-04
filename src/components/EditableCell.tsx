@@ -63,8 +63,8 @@ const EditableCell = ({
       <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
         <button
           type="button"
-          className={`group inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
-            align === "right" ? "ml-auto" : ""
+          className={`group inline-flex w-full items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+            align === "right" ? "justify-end text-right" : "justify-start text-left"
           }`}
           onClick={startEditing}
           aria-label={editLabel}
@@ -81,8 +81,8 @@ const EditableCell = ({
       <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
         <button
           type="button"
-          className={`group inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
-            align === "right" ? "ml-auto" : ""
+          className={`group inline-flex w-full items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+            align === "right" ? "justify-end text-right" : "justify-start text-left"
           }`}
           onClick={startEditing}
           aria-label={editLabel}

@@ -60,4 +60,21 @@ describe("markerConfidence", () => {
     expect(confidence.unit).toBe("high");
     expect(confidence.overall).toBe("ok");
   });
+
+  it("does not flag cosmetic unit casing normalization like /nl to /nL", () => {
+    const matchResult = matchMarker("Leukocytes");
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Leukocytes",
+        value: 6.7,
+        unit: "/nl",
+        referenceMin: 4.2,
+        referenceMax: 9.1
+      },
+      matchResult
+    );
+
+    expect(confidence.autoFix?.unit).toBe("/nL");
+    expect(confidence.issues.some((issue) => /Unit normalized from/i.test(issue))).toBe(false);
+  });
 });

@@ -198,7 +198,10 @@ export function scoreMarkerConfidence(parsed: ParsedMarker, matchResult: MarkerM
 
   if (rawUnit && normalizedUnit.changed) {
     autoFix.unit = normalizedUnit.normalized;
-    addIssue(`Unit normalized from '${rawUnit}' to '${normalizedUnit.normalized}'.`, true);
+    const onlyCosmeticNormalization = areUnitsEquivalent(rawUnit, normalizedUnit.normalized);
+    if (!onlyCosmeticNormalization) {
+      addIssue(`Unit normalized from '${rawUnit}' to '${normalizedUnit.normalized}'.`, true);
+    }
   }
 
   const numericValue = toNullableNumber(parsed.value);

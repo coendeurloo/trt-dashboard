@@ -890,7 +890,7 @@ const ExtractionReviewTable = ({
         </div>
       ) : null}
 
-      <div className="mt-3 overflow-x-auto rounded-xl border border-slate-700">
+      <div className="mt-3 overflow-x-auto overflow-y-visible rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">
             <tr>
@@ -1075,7 +1075,7 @@ const ExtractionReviewTable = ({
                       <div
                         id={reviewTooltipId}
                         role="tooltip"
-                        className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[280px] rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                        className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[320px] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
                       >
                         {reviewTitle}
                       </div>
