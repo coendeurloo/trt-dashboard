@@ -224,4 +224,35 @@ describe("ExtractionReviewTable", () => {
     expect(screen.queryByText(/PDF:/i)).toBeNull();
     expect(screen.queryByText(/Canonical:/i)).toBeNull();
   });
+
+  it("lets users click marker name to edit and shows review reason tooltip", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "Leukocytes",
+          rawMarker: "leucocyten",
+          _confidence: {
+            name: "medium",
+            unit: "high",
+            value: "high",
+            range: "high",
+            overall: "review",
+            issues: ["Marker name matched approximately. Please verify."],
+            autoFixable: true,
+            autoFix: { name: "Leukocytes" }
+          },
+          _matchResult: {
+            canonical: { canonicalName: "Leukocytes" }
+          }
+        } as any
+      ]
+    });
+
+    const reviewBadge = screen.getByText("Check");
+    expect(reviewBadge.closest("span")?.getAttribute("title")).toMatch(/approximately/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit marker name" }));
+    expect(screen.getByDisplayValue("Leukocytes")).toBeTruthy();
+  });
 });

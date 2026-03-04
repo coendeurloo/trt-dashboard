@@ -6,10 +6,20 @@ export interface EditableCellProps {
   align?: "left" | "right";
   placeholder?: string;
   editLabel?: string;
+  clickToEdit?: boolean;
+  inlineIcon?: boolean;
   onCommit: (value: string) => void;
 }
 
-const EditableCell = ({ value, align = "left", placeholder = "", editLabel = "Edit value", onCommit }: EditableCellProps) => {
+const EditableCell = ({
+  value,
+  align = "left",
+  placeholder = "",
+  editLabel = "Edit value",
+  clickToEdit = false,
+  inlineIcon = false,
+  onCommit
+}: EditableCellProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(value === null ? "" : String(value));
 
@@ -45,13 +55,45 @@ const EditableCell = ({ value, align = "left", placeholder = "", editLabel = "Ed
     );
   }
 
+  const renderedValue = value === null || value === "" ? "-" : String(value);
+  const startEditing = () => setIsEditing(true);
+
+  if (inlineIcon) {
+    return (
+      <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+            align === "right" ? "ml-auto" : ""
+          }`}
+          onClick={startEditing}
+          aria-label={editLabel}
+        >
+          <span>{renderedValue}</span>
+          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={`group relative min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
-      <span className="pr-6 text-sm text-slate-200">{value === null || value === "" ? "-" : String(value)}</span>
+      {clickToEdit ? (
+        <button
+          type="button"
+          className="pr-6 text-sm text-slate-200 hover:text-cyan-200"
+          onClick={startEditing}
+          aria-label={editLabel}
+        >
+          {renderedValue}
+        </button>
+      ) : (
+        <span className="pr-6 text-sm text-slate-200">{renderedValue}</span>
+      )}
       <button
         type="button"
         className="absolute right-0 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-cyan-300"
-        onClick={() => setIsEditing(true)}
+        onClick={startEditing}
         aria-label={editLabel}
       >
         <Pencil className="h-3.5 w-3.5" />

@@ -345,7 +345,7 @@ const ExtractionReviewTable = ({
       return tr("Fout", "Error");
     }
     if (overall === "review") {
-      return tr("Controleren", "Review");
+      return tr("Check", "Check");
     }
     return tr("OK", "OK");
   };
@@ -372,10 +372,26 @@ const ExtractionReviewTable = ({
     return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
   };
 
-  const issuesTitle = (row: ReviewMarker): string | undefined =>
-    row._confidence?.issues && row._confidence.issues.length > 0
-      ? row._confidence.issues.map((issue) => `• ${issue}`).join("\n")
-      : undefined;
+  const reviewTooltip = (row: ReviewMarker): string | undefined => {
+    const issues = row._confidence?.issues ?? [];
+    if (issues.length > 0) {
+      return issues.map((issue) => `• ${issue}`).join("\n");
+    }
+    const overall = row._confidence?.overall ?? "ok";
+    if (overall === "review") {
+      return tr(
+        "Controle aanbevolen: de parser heeft een onzeker punt gezien.",
+        "Check recommended: the parser detected an uncertain point."
+      );
+    }
+    if (overall === "error") {
+      return tr(
+        "Parserfout: controleer deze rij handmatig.",
+        "Parser error: review this row manually."
+      );
+    }
+    return undefined;
+  };
 
   const resolveRangeType = (row: ReviewMarker): RangeType => {
     const markerRangeType = row._matchResult?.canonical?.defaultRangeType;
@@ -881,7 +897,6 @@ const ExtractionReviewTable = ({
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">
             <tr>
-              <th className="px-3 py-2">{tr("Review", "Review")}</th>
               <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
               <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
               <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
@@ -890,6 +905,7 @@ const ExtractionReviewTable = ({
               <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
               <th className="px-3 py-2 text-center">{tr("Visual Range", "Visual Range")}</th>
               <th className="px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
+              <th className="px-3 py-2 text-right">{tr("Review", "Review")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
@@ -902,21 +918,15 @@ const ExtractionReviewTable = ({
               const optimalMin = row._matchResult?.canonical?.optimalRange?.min;
               const optimalMax = row._matchResult?.canonical?.optimalRange?.max;
               const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
+              const reviewTitle = reviewTooltip(row);
 
               return (
               <tr key={row.id} className="bg-slate-900/35">
                 <td className="px-3 py-2">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
-                    title={issuesTitle(row)}
-                  >
-                    {statusIcon(row)}
-                    {statusLabel(row)}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
                   <EditableCell
                     value={row.marker}
+                    clickToEdit
+                    inlineIcon
                     onCommit={(value) =>
                       updateRow(row.id, (current) => ({
                         ...current,
@@ -925,7 +935,7 @@ const ExtractionReviewTable = ({
                       }))
                     }
                     placeholder={tr("Markernaam", "Marker name")}
-                    editLabel={tr("Waarde bewerken", "Edit value")}
+                    editLabel={tr("Markernaam bewerken", "Edit marker name")}
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
                     {tr("In rapport", "In report")}: {row.rawMarker ?? row.marker}
@@ -1047,6 +1057,15 @@ const ExtractionReviewTable = ({
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
+                    title={reviewTitle}
+                  >
+                    {statusIcon(row)}
+                    {statusLabel(row)}
+                  </span>
                 </td>
               </tr>
             );
