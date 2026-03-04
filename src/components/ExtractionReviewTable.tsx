@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Plus, Save, Trash2, X, XCircle, Wrench } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
@@ -24,6 +24,9 @@ import {
 import { getActiveSupplementsAtDate, supplementPeriodsToText } from "../supplementUtils";
 import ProtocolEditor, { blankProtocolDraft } from "./ProtocolEditor";
 import EditableCell from "./EditableCell";
+import { RangeType } from "../data/markerDatabase";
+import VisualRangeBar from "./VisualRangeBar";
+import { ReviewMarker, applyMarkerAutoFix, enrichMarkerForReview } from "../utils/markerReview";
 
 export interface ExtractionReviewTableProps {
   draft: ExtractionDraft;
@@ -317,6 +320,83 @@ const ExtractionReviewTable = ({
     row.rawReferenceMin !== undefined ? row.rawReferenceMin : row.referenceMin;
   const displayReferenceMax = (row: MarkerValue): number | null =>
     row.rawReferenceMax !== undefined ? row.rawReferenceMax : row.referenceMax;
+  const reviewMarkers = draft.markers as ReviewMarker[];
+  const markersNeedingReview = reviewMarkers.filter((row) => (row._confidence?.overall ?? "ok") !== "ok");
+  const autoFixableMarkers = reviewMarkers.filter((row) => row._confidence?.autoFixable);
+
+  const statusLabel = (row: ReviewMarker): string => {
+    const overall = row._confidence?.overall ?? "ok";
+    if (overall === "error") {
+      return tr("Fout", "Error");
+    }
+    if (overall === "review") {
+      return tr("Controleren", "Review");
+    }
+    return tr("OK", "OK");
+  };
+
+  const statusIcon = (row: ReviewMarker) => {
+    const overall = row._confidence?.overall ?? "ok";
+    if (overall === "error") {
+      return <XCircle className="h-4 w-4 text-rose-300" />;
+    }
+    if (overall === "review") {
+      return <AlertTriangle className="h-4 w-4 text-amber-300" />;
+    }
+    return <CheckCircle2 className="h-4 w-4 text-emerald-300" />;
+  };
+
+  const statusClassName = (row: ReviewMarker): string => {
+    const overall = row._confidence?.overall ?? "ok";
+    if (overall === "error") {
+      return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+    }
+    if (overall === "review") {
+      return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+    }
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  };
+
+  const issuesTitle = (row: ReviewMarker): string | undefined =>
+    row._confidence?.issues && row._confidence.issues.length > 0
+      ? row._confidence.issues.map((issue) => `• ${issue}`).join("\n")
+      : undefined;
+
+  const resolveRangeType = (row: ReviewMarker): RangeType => {
+    const markerRangeType = row._matchResult?.canonical?.defaultRangeType;
+    if (markerRangeType) {
+      return markerRangeType;
+    }
+    const hasMin = displayReferenceMin(row) !== null;
+    const hasMax = displayReferenceMax(row) !== null;
+    if (hasMin && hasMax) {
+      return "min-max";
+    }
+    if (hasMax) {
+      return "max-only";
+    }
+    if (hasMin) {
+      return "min-only";
+    }
+    return "none";
+  };
+
+  const applyAutoFixToAll = () => {
+    if (autoFixableMarkers.length === 0) {
+      return;
+    }
+    onDraftChange({
+      ...draft,
+      markers: reviewMarkers.map((row) => (row._confidence?.autoFixable ? applyMarkerAutoFix(row) : row))
+    });
+  };
+
+  const applyAutoFixToRow = (rowId: string) => {
+    onDraftChange({
+      ...draft,
+      markers: reviewMarkers.map((row) => (row.id === rowId && row._confidence?.autoFixable ? applyMarkerAutoFix(row) : row))
+    });
+  };
 
   const cloneSupplementsAsDraftOverrides = (periods: SupplementPeriod[]): SupplementPeriod[] =>
     periods.map((period) => ({
@@ -426,7 +506,7 @@ const ExtractionReviewTable = ({
   const updateRow = (rowId: string, updater: (row: MarkerValue) => MarkerValue) => {
     onDraftChange({
       ...draft,
-      markers: draft.markers.map((row) => {
+      markers: reviewMarkers.map((row) => {
         if (row.id !== rowId) {
           return row;
         }
@@ -452,32 +532,37 @@ const ExtractionReviewTable = ({
           unit: normalized.unit,
           referenceMin: normalized.referenceMin,
           referenceMax: normalized.referenceMax,
-          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax),
+          category: undefined,
+          _confidence: undefined,
+          _matchResult: undefined
         };
       })
     });
   };
 
   const addRow = () => {
+    const nextRow = enrichMarkerForReview({
+      id: createId(),
+      marker: "",
+      canonicalMarker: "Unknown Marker",
+      value: 0,
+      unit: "",
+      referenceMin: null,
+      referenceMax: null,
+      rawValue: 0,
+      rawUnit: "",
+      rawReferenceMin: null,
+      rawReferenceMax: null,
+      abnormal: "unknown",
+      confidence: 0.4
+    });
+
     onDraftChange({
       ...draft,
       markers: [
         ...draft.markers,
-        {
-          id: createId(),
-          marker: "",
-          canonicalMarker: "Unknown Marker",
-          value: 0,
-          unit: "",
-          referenceMin: null,
-          referenceMax: null,
-          rawValue: 0,
-          rawUnit: "",
-          rawReferenceMin: null,
-          rawReferenceMax: null,
-          abnormal: "unknown",
-          confidence: 0.4
-        }
+        nextRow
       ]
     });
   };
@@ -745,22 +830,74 @@ const ExtractionReviewTable = ({
         </div>
       </div>
 
+      {markersNeedingReview.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/40 p-3 text-amber-100">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold">
+            <AlertTriangle className="h-4 w-4" />
+            {tr("{count} markers hebben controle nodig", "{count} markers need review").replace(
+              "{count}",
+              String(markersNeedingReview.length)
+            )}
+          </p>
+          <p className="mt-1 text-xs text-amber-100/90 sm:text-sm">
+            {tr(
+              "We konden sommige marker-namen, eenheden of referentiebereiken niet volledig herkennen.",
+              "We could not fully recognize some marker names, units, or reference ranges."
+            )}
+          </p>
+          {autoFixableMarkers.length > 0 ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-400/50 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/20 sm:text-sm"
+              onClick={applyAutoFixToAll}
+            >
+              <Wrench className="h-4 w-4" />
+              {tr("Auto-fix {count} markers", "Auto-fix {count} markers").replace(
+                "{count}",
+                String(autoFixableMarkers.length)
+              )}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="mt-3 overflow-x-auto rounded-xl border border-slate-700">
         <table className="min-w-full divide-y divide-slate-700 text-sm">
           <thead className="bg-slate-900/80 text-left text-slate-300">
             <tr>
+              <th className="px-3 py-2">{tr("Review", "Review")}</th>
               <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
               <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
               <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
               <th className="px-3 py-2 text-right">{tr("Ref min", "Ref min")}</th>
               <th className="px-3 py-2 text-right">{tr("Ref max", "Ref max")}</th>
               <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
-              <th className="px-3 py-2" />
+              <th className="px-3 py-2 text-center">{tr("Visual Range", "Visual Range")}</th>
+              <th className="px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {draft.markers.map((row) => (
+            {reviewMarkers.map((row) => {
+              const rangeType = resolveRangeType(row);
+              const rangeMin =
+                displayReferenceMin(row) !== null ? displayReferenceMin(row) : row._matchResult?.canonical?.defaultRange?.min;
+              const rangeMax =
+                displayReferenceMax(row) !== null ? displayReferenceMax(row) : row._matchResult?.canonical?.defaultRange?.max;
+              const optimalMin = row._matchResult?.canonical?.optimalRange?.min;
+              const optimalMax = row._matchResult?.canonical?.optimalRange?.max;
+              const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
+
+              return (
               <tr key={row.id} className="bg-slate-900/35">
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
+                    title={issuesTitle(row)}
+                  >
+                    {statusIcon(row)}
+                    {statusLabel(row)}
+                  </span>
+                </td>
                 <td className="px-3 py-2">
                   <EditableCell
                     value={row.marker}
@@ -835,7 +972,31 @@ const ExtractionReviewTable = ({
                     {abnormalLabel(row.abnormal)}
                   </span>
                 </td>
+                <td className="px-3 py-2 text-center">
+                  {hasVisualRange ? (
+                    <VisualRangeBar
+                      value={row.value}
+                      rangeType={rangeType}
+                      min={rangeMin === null ? undefined : rangeMin}
+                      max={rangeMax === null ? undefined : rangeMax}
+                      optimalMin={optimalMin}
+                      optimalMax={optimalMax}
+                      unit={row.unit}
+                    />
+                  ) : (
+                    <span className="text-slate-500">-</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right">
+                  {row._confidence?.autoFixable ? (
+                    <button
+                      type="button"
+                      className="mr-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
+                      onClick={() => applyAutoFixToRow(row.id)}
+                    >
+                      {tr("Auto-fix", "Auto-fix")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="rounded-md p-1 text-slate-400 hover:bg-slate-700 hover:text-rose-300"
@@ -846,7 +1007,8 @@ const ExtractionReviewTable = ({
                   </button>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

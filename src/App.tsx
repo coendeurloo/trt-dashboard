@@ -47,6 +47,7 @@ import {
 import { resolveUploadTriggerAction } from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
+import { enrichMarkersForReview } from "./utils/markerReview";
 import DashboardView from "./views/DashboardView";
 import {
   AIConsentAction,
@@ -518,9 +519,10 @@ const App = () => {
         needsReview: false
       }
     };
-    setDraft(manualDraft);
-    setLocalBaselineDraft(manualDraft);
-    captureOriginalDraftMarkerLabels(manualDraft);
+    const enrichedManualDraft = enrichDraftForReview(manualDraft);
+    setDraft(enrichedManualDraft);
+    setLocalBaselineDraft(enrichedManualDraft);
+    captureOriginalDraftMarkerLabels(enrichedManualDraft);
     setActiveTab("dashboard");
   };
 
@@ -626,6 +628,11 @@ const App = () => {
       ...(candidate.extraction.warningCode ? [candidate.extraction.warningCode] : [])
     ]).size;
 
+  const enrichDraftForReview = (input: ExtractionDraft): ExtractionDraft => ({
+    ...input,
+    markers: enrichMarkersForReview(input.markers)
+  });
+
   const getExtractionRouteSummary = (
     candidate: ExtractionDraft
   ): { label: string; usedAi: boolean; usedOcr: boolean } => {
@@ -688,28 +695,29 @@ const App = () => {
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const warningCount = countWarnings(extracted);
-      const assessment = assessParserUncertainty(extracted);
+      const enrichedDraft = enrichDraftForReview(extracted);
+      const warningCount = countWarnings(enrichedDraft);
+      const assessment = assessParserUncertainty(enrichedDraft);
       const shouldPromptAi = appData.settings.parserDebugMode === "text_ocr_ai" && assessment.isUncertain;
-      setDraft(extracted);
-      setLocalBaselineDraft(extracted);
+      setDraft(enrichedDraft);
+      setLocalBaselineDraft(enrichedDraft);
       setAiCandidateDraft(null);
       setPendingDiff(null);
       setShowComparisonModal(false);
       setUncertaintyAssessment(assessment);
       setShowUncertaintyModal(shouldPromptAi);
-      captureOriginalDraftMarkerLabels(extracted);
+      captureOriginalDraftMarkerLabels(enrichedDraft);
       setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
       scrollPageToTop();
       if (!shouldPromptAi) {
-        const routeSummary = getExtractionRouteSummary(extracted);
+        const routeSummary = getExtractionRouteSummary(enrichedDraft);
         setUploadSummary({
-          fileName: extracted.sourceFileName,
-          markerCount: extracted.markers.length,
-          confidence: extracted.extraction.confidence,
+          fileName: enrichedDraft.sourceFileName,
+          markerCount: enrichedDraft.markers.length,
+          confidence: enrichedDraft.extraction.confidence,
           warnings: warningCount,
           routeLabel: routeSummary.label,
           usedAi: routeSummary.usedAi,
@@ -767,8 +775,9 @@ const App = () => {
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const diff = buildExtractionDiffSummary(baselineDraft, improved);
-      setAiCandidateDraft(improved);
+      const improvedDraft = enrichDraftForReview(improved);
+      const diff = buildExtractionDiffSummary(baselineDraft, improvedDraft);
+      setAiCandidateDraft(improvedDraft);
       setPendingDiff(diff);
       setShowComparisonModal(true);
       setShowUncertaintyModal(false);
@@ -881,26 +890,27 @@ const App = () => {
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const warningCount = countWarnings(extracted);
-      const assessment = assessParserUncertainty(extracted);
+      const enrichedDraft = enrichDraftForReview(extracted);
+      const warningCount = countWarnings(enrichedDraft);
+      const assessment = assessParserUncertainty(enrichedDraft);
 
-      setDraft(extracted);
-      setLocalBaselineDraft(extracted);
+      setDraft(enrichedDraft);
+      setLocalBaselineDraft(enrichedDraft);
       setAiCandidateDraft(null);
       setPendingDiff(null);
       setShowComparisonModal(false);
       setUncertaintyAssessment(assessment);
       setShowUncertaintyModal(false);
-      captureOriginalDraftMarkerLabels(extracted);
+      captureOriginalDraftMarkerLabels(enrichedDraft);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
       scrollPageToTop();
-      const routeSummary = getExtractionRouteSummary(extracted);
+      const routeSummary = getExtractionRouteSummary(enrichedDraft);
       setUploadSummary({
-        fileName: extracted.sourceFileName,
-        markerCount: extracted.markers.length,
-        confidence: extracted.extraction.confidence,
+        fileName: enrichedDraft.sourceFileName,
+        markerCount: enrichedDraft.markers.length,
+        confidence: enrichedDraft.extraction.confidence,
         warnings: warningCount,
         routeLabel: routeSummary.label,
         usedAi: routeSummary.usedAi,
@@ -923,6 +933,11 @@ const App = () => {
     const learnedAliasOverrides: Record<string, string> = {};
     const sanitizedMarkers = draft.markers
       .map((marker) => {
+        const { _confidence, _matchResult, category, ...persistable } = marker as MarkerValue & {
+          _confidence?: unknown;
+          _matchResult?: unknown;
+          category?: unknown;
+        };
         const canonicalMarker = canonicalizeMarker(marker.marker || marker.canonicalMarker);
         const value = Number(marker.value);
         if (!Number.isFinite(value)) {
@@ -937,7 +952,7 @@ const App = () => {
         });
 
         return {
-          ...marker,
+          ...persistable,
           id: createId(),
           marker: marker.marker.trim() || canonicalMarker,
           canonicalMarker,

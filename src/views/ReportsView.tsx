@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, CalendarDays, CheckSquare, ChevronDown, ClipboardList, FlaskConical, Lock, Pencil, Save, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
@@ -17,6 +17,7 @@ import { ResolvedReportSupplementContext, getActiveSupplementsAtDate, resolveRep
 import { convertBySystem } from "../unitConversion";
 import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 import { findBaselineOverlapMarkers } from "../baselineUtils";
+import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
 
 // Markers to show as preview chips in the collapsed card header
 const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
@@ -89,6 +90,41 @@ const ReportsView = ({
   const isMarkerOutOfRange = (marker: MarkerValue): boolean => {
     const abnormal = markerAbnormalStatus(marker);
     return abnormal === "high" || abnormal === "low";
+  };
+
+  const markerReviewOverall = (marker: ReviewMarker): "ok" | "review" | "error" => marker._confidence?.overall ?? "ok";
+
+  const markerReviewLabel = (marker: ReviewMarker): string => {
+    const overall = markerReviewOverall(marker);
+    if (overall === "error") {
+      return tr("Fout", "Error");
+    }
+    if (overall === "review") {
+      return tr("Controleren", "Review");
+    }
+    return tr("OK", "OK");
+  };
+
+  const markerReviewClassName = (marker: ReviewMarker): string => {
+    const overall = markerReviewOverall(marker);
+    if (overall === "error") {
+      return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+    }
+    if (overall === "review") {
+      return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+    }
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  };
+
+  const markerReviewIcon = (marker: ReviewMarker) => {
+    const overall = markerReviewOverall(marker);
+    if (overall === "error") {
+      return <XCircle className="h-3.5 w-3.5" />;
+    }
+    if (overall === "review") {
+      return <AlertTriangle className="h-3.5 w-3.5" />;
+    }
+    return <CheckCircle2 className="h-3.5 w-3.5" />;
   };
 
   const normalizeAnchorState = (annotations: ReportAnnotations): ReportAnnotations["supplementAnchorState"] => {
@@ -547,6 +583,33 @@ const ReportsView = ({
           baselineOverlapMarkers.length > 3
             ? `${baselineOverlapMarkers.slice(0, 3).join(", ")} +${baselineOverlapMarkers.length - 3}`
             : baselineOverlapMarkers.join(", ");
+        const reviewedMarkers = report.markers.map((marker) => enrichMarkerForReview(marker));
+        const groupedMarkers = Array.from(
+          reviewedMarkers.reduce((map, marker) => {
+            const key = marker.category ?? "Other";
+            const list = map.get(key) ?? [];
+            list.push(marker);
+            map.set(key, list);
+            return map;
+          }, new Map<string, ReviewMarker[]>())
+        )
+          .map(([category, markers]) => {
+            const sortedMarkers = [...markers].sort((left, right) =>
+              getMarkerDisplayName(left.canonicalMarker, language).localeCompare(getMarkerDisplayName(right.canonicalMarker, language))
+            );
+            const rank = sortedMarkers.some((marker) => markerReviewOverall(marker) === "error")
+              ? 0
+              : sortedMarkers.some((marker) => markerReviewOverall(marker) === "review")
+                ? 1
+                : 2;
+            return { category, markers: sortedMarkers, rank };
+          })
+          .sort((left, right) => {
+            if (left.rank !== right.rank) {
+              return left.rank - right.rank;
+            }
+            return left.category.localeCompare(right.category);
+          });
 
         return (
           <article
@@ -1086,79 +1149,115 @@ const ReportsView = ({
                   </div>
                 )}
 
-                <div className="mt-3 overflow-visible rounded-lg border border-slate-700">
-                  <div className="overflow-x-auto overflow-y-visible">
-                    <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
-                      <thead className="bg-slate-900/70 text-slate-300">
-                        <tr>
-                          <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
-                          <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
-                          <th className="px-3 py-2 text-left">{tr("Eenheid", "Unit")}</th>
-                          <th className="px-3 py-2 text-right">{tr("Bereik", "Range")}</th>
-                          <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800">
-                        {report.markers.map((marker) => {
-                          const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
-                          const markerAbnormal = markerAbnormalStatus(marker);
-                          const min =
-                            marker.referenceMin === null
-                              ? null
-                              : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, settings.unitSystem).value;
-                          const max =
-                            marker.referenceMax === null
-                              ? null
-                              : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, settings.unitSystem).value;
-
-                          return (
-                            <tr key={marker.id} className="bg-slate-900/35 text-slate-200">
-                              <td className="px-3 py-2">
-                                <span className="inline-flex items-center gap-1">
-                                  {getMarkerDisplayName(marker.canonicalMarker, language)}
-                                  <MarkerInfoBadge marker={marker.canonicalMarker} language={language} />
-                                  {!marker.isCalculated ? (
-                                    <button
-                                      type="button"
-                                      className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
-                                      onClick={() => onRenameMarker(marker.canonicalMarker)}
-                                      aria-label={tr("Marker hernoemen", "Rename marker")}
-                                      title={tr("Marker hernoemen", "Rename marker")}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </button>
-                                  ) : null}
-                                  {marker.isCalculated ? (
-                                    <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">
-                                      fx
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2 text-right">{converted.value.toFixed(2)}</td>
-                              <td className="px-3 py-2">{converted.unit}</td>
-                              <td className="px-3 py-2 text-right">
-                                {min === null || max === null ? "-" : `${Number(min.toFixed(2))} - ${Number(max.toFixed(2))}`}
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs ${
-                                    markerAbnormal === "high"
-                                      ? "bg-rose-500/20 text-rose-300"
-                                      : markerAbnormal === "low"
-                                        ? "bg-amber-500/20 text-amber-300"
-                                        : "bg-emerald-500/20 text-emerald-300"
-                                  }`}
-                                >
-                                  {abnormalStatusLabel(markerAbnormal, language)}
-                                </span>
-                              </td>
+                <div className="mt-3 space-y-2">
+                  {groupedMarkers.map((group) => (
+                    <details key={`${report.id}-${group.category}`} open className="overflow-hidden rounded-lg border border-slate-700">
+                      <summary className="flex cursor-pointer items-center justify-between bg-slate-900/65 px-3 py-2 text-sm text-slate-200">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="font-medium">{group.category}</span>
+                          <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+                            {group.markers.length}
+                          </span>
+                          {group.rank === 0 ? (
+                            <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-200">
+                              {tr("Fout", "Error")}
+                            </span>
+                          ) : group.rank === 1 ? (
+                            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                              {tr("Controleren", "Review")}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-xs text-slate-400">{tr("klik om in/uit te klappen", "click to collapse/expand")}</span>
+                      </summary>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
+                          <thead className="bg-slate-900/70 text-slate-300">
+                            <tr>
+                              <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
+                              <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
+                              <th className="px-3 py-2 text-left">{tr("Eenheid", "Unit")}</th>
+                              <th className="px-3 py-2 text-right">{tr("Bereik", "Range")}</th>
+                              <th className="px-3 py-2 text-right">{tr("Review", "Review")}</th>
+                              <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {group.markers.map((marker) => {
+                              const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
+                              const markerAbnormal = markerAbnormalStatus(marker);
+                              const min =
+                                marker.referenceMin === null
+                                  ? null
+                                  : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, settings.unitSystem).value;
+                              const max =
+                                marker.referenceMax === null
+                                  ? null
+                                  : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, settings.unitSystem).value;
+                              const issuesTitle =
+                                marker._confidence?.issues && marker._confidence.issues.length > 0
+                                  ? marker._confidence.issues.map((issue) => `• ${issue}`).join("\n")
+                                  : undefined;
+
+                              return (
+                                <tr key={marker.id} className="bg-slate-900/35 text-slate-200">
+                                  <td className="px-3 py-2">
+                                    <span className="inline-flex items-center gap-1">
+                                      {getMarkerDisplayName(marker.canonicalMarker, language)}
+                                      <MarkerInfoBadge marker={marker.canonicalMarker} language={language} />
+                                      {!marker.isCalculated ? (
+                                        <button
+                                          type="button"
+                                          className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
+                                          onClick={() => onRenameMarker(marker.canonicalMarker)}
+                                          aria-label={tr("Marker hernoemen", "Rename marker")}
+                                          title={tr("Marker hernoemen", "Rename marker")}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                      ) : null}
+                                      {marker.isCalculated ? (
+                                        <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">
+                                          fx
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">{converted.value.toFixed(2)}</td>
+                                  <td className="px-3 py-2">{converted.unit}</td>
+                                  <td className="px-3 py-2 text-right">
+                                    {min === null || max === null ? "-" : `${Number(min.toFixed(2))} - ${Number(max.toFixed(2))}`}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${markerReviewClassName(marker)}`}
+                                      title={issuesTitle}
+                                    >
+                                      {markerReviewIcon(marker)}
+                                      {markerReviewLabel(marker)}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 text-xs ${
+                                        markerAbnormal === "high"
+                                          ? "bg-rose-500/20 text-rose-300"
+                                          : markerAbnormal === "low"
+                                            ? "bg-amber-500/20 text-amber-300"
+                                            : "bg-emerald-500/20 text-emerald-300"
+                                      }`}
+                                    >
+                                      {abnormalStatusLabel(markerAbnormal, language)}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  ))}
                 </div>
                   </div>
                 </motion.div>
