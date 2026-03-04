@@ -270,6 +270,19 @@ const ExtractionReviewTable = ({
       : supplementAnchorState === "none" || supplementAnchorState === "unknown"
         ? []
         : inheritedSupplements;
+  const inheritedSupplementsText = supplementPeriodsToText(inheritedSupplements);
+  const activeSupplementsText = supplementPeriodsToText(activeSupplements);
+  const supplementStatusText =
+    supplementAnchorState === "unknown"
+      ? tr("Onbekend op deze testdatum.", "Unknown on this test date.")
+      : supplementAnchorState === "none"
+        ? tr("Geen supplementen op deze testdatum.", "No supplements on this test date.")
+        : supplementAnchorState === "inherit"
+          ? tr(
+              "Dit rapport gebruikt de overgenomen stack hierboven.",
+              "This report uses the inherited stack shown above."
+            )
+          : activeSupplementsText || tr("Geen supplementen actief op deze datum.", "No supplements active on this date.");
   const supplementSuggestions = useMemo(() => {
     const query = supplementNameInput.trim().toLowerCase();
     if (query.length < 2) {
@@ -1129,7 +1142,7 @@ const ExtractionReviewTable = ({
               </p>
               <p className="mt-1 text-slate-400">
                 {tr("Huidige overname", "Current inherited stack")}:{" "}
-                {supplementPeriodsToText(inheritedSupplements) || tr("Geen actieve stack", "No active stack")}
+                {inheritedSupplementsText || tr("Geen actieve stack", "No active stack")}
                 {inheritedSupplementsSourceLabel ? ` · ${inheritedSupplementsSourceLabel}` : ""}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -1181,11 +1194,9 @@ const ExtractionReviewTable = ({
             </div>
 
             <p className="mt-2 text-sm text-slate-300">
-              {supplementAnchorState === "unknown"
-                ? tr("Onbekend op deze testdatum.", "Unknown on this test date.")
-                : supplementAnchorState === "none"
-                  ? tr("Geen supplementen op deze testdatum.", "No supplements on this test date.")
-                  : supplementPeriodsToText(activeSupplements) || tr("Geen supplementen actief op deze datum.", "No supplements active on this date.")}
+              {supplementAnchorState === "anchor" && activeSupplementsText
+                ? `${tr("Aangepaste stack", "Custom stack")}: ${activeSupplementsText}`
+                : supplementStatusText}
             </p>
 
             <div className="mt-2 flex flex-wrap gap-2">
@@ -1201,8 +1212,10 @@ const ExtractionReviewTable = ({
                 }}
               >
                 {supplementAnchorState === "anchor" && showSupplementOverrideEditor
-                  ? tr("Verberg aanpassen", "Hide customization")
-                  : tr("Ja, aangepast - aanpassen", "Yes, changed - edit stack")}
+                  ? tr("Verberg editor", "Hide editor")
+                  : supplementAnchorState === "anchor"
+                    ? tr("Bewerk aangepaste stack", "Edit custom stack")
+                    : tr("Aangepaste stack invoeren", "Enter custom stack")}
               </button>
               {supplementAnchorState !== "inherit" ? (
                 <button
