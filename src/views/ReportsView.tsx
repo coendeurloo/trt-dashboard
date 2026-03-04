@@ -1191,7 +1191,7 @@ const ReportsView = ({
                         </span>
                         <span className="text-xs text-slate-400">{tr("klik om in/uit te klappen", "click to collapse/expand")}</span>
                       </summary>
-                      <div className="overflow-x-auto overflow-y-visible">
+                      <div className="overflow-visible">
                         <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
                           <thead className="bg-slate-900/70 text-slate-300">
                             <tr>
