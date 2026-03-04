@@ -73,7 +73,13 @@ interface MarkerMeasurement {
   referenceMax: number | null;
 }
 
-const normalizeUnitToken = (unit: string): string => unit.toLowerCase().replace(/\s+/g, "");
+const normalizeUnitToken = (unit: string): string =>
+  unit
+    .normalize("NFKC")
+    .replace(/[μµ]/g, "u")
+    .replace(/[⁄∕]/g, "/")
+    .toLowerCase()
+    .replace(/\s+/g, "");
 const isOneOf = (value: string, candidates: string[]): boolean => candidates.includes(value);
 const scaleNullable = (value: number | null, factor: number): number | null => (value === null ? null : value * factor);
 const roundToStoragePrecision = (value: number): number => {

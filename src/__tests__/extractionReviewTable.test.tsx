@@ -39,31 +39,36 @@ const annotations: ReportAnnotations = {
   samplingTiming: "unknown"
 };
 
+const markerBase = draft.markers[0];
+
+const renderTable = (overrideDraft?: Partial<ExtractionDraft>) =>
+  render(
+    <ExtractionReviewTable
+      draft={{ ...draft, ...overrideDraft }}
+      annotations={annotations}
+      protocols={[]}
+      supplementTimeline={[]}
+      inheritedSupplementsPreview={[]}
+      inheritedSupplementsSourceLabel="current active stack"
+      selectedProtocolId={null}
+      language="en"
+      onDraftChange={vi.fn()}
+      onAnnotationsChange={vi.fn()}
+      onSelectedProtocolIdChange={vi.fn()}
+      onProtocolCreate={vi.fn()}
+      onAddSupplementPeriod={vi.fn()}
+      onSave={vi.fn()}
+      onCancel={vi.fn()}
+    />
+  );
+
 describe("ExtractionReviewTable", () => {
   afterEach(() => {
     cleanup();
   });
 
   it("does not expose parser provider text and keeps confidence subtitle", () => {
-    render(
-      <ExtractionReviewTable
-        draft={draft}
-        annotations={annotations}
-        protocols={[]}
-        supplementTimeline={[]}
-        inheritedSupplementsPreview={[]}
-        inheritedSupplementsSourceLabel="current active stack"
-        selectedProtocolId={null}
-        language="en"
-        onDraftChange={vi.fn()}
-        onAnnotationsChange={vi.fn()}
-        onSelectedProtocolIdChange={vi.fn()}
-        onProtocolCreate={vi.fn()}
-        onAddSupplementPeriod={vi.fn()}
-        onSave={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    renderTable();
 
     expect(screen.getByText(/confidence/i)).toBeTruthy();
     expect(screen.getByText(/90%/)).toBeTruthy();
@@ -71,25 +76,7 @@ describe("ExtractionReviewTable", () => {
   });
 
   it("shows supplements, symptoms and notes without an expand toggle", () => {
-    render(
-      <ExtractionReviewTable
-        draft={draft}
-        annotations={annotations}
-        protocols={[]}
-        supplementTimeline={[]}
-        inheritedSupplementsPreview={[]}
-        inheritedSupplementsSourceLabel="current active stack"
-        selectedProtocolId={null}
-        language="en"
-        onDraftChange={vi.fn()}
-        onAnnotationsChange={vi.fn()}
-        onSelectedProtocolIdChange={vi.fn()}
-        onProtocolCreate={vi.fn()}
-        onAddSupplementPeriod={vi.fn()}
-        onSave={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    renderTable();
 
     expect(screen.getByText("Supplements at time of test")).toBeTruthy();
     expect(screen.getByText("Symptoms")).toBeTruthy();
@@ -99,56 +86,19 @@ describe("ExtractionReviewTable", () => {
   });
 
   it("renders a second save button at the bottom", () => {
-    render(
-      <ExtractionReviewTable
-        draft={draft}
-        annotations={annotations}
-        protocols={[]}
-        supplementTimeline={[]}
-        inheritedSupplementsPreview={[]}
-        inheritedSupplementsSourceLabel="current active stack"
-        selectedProtocolId={null}
-        language="en"
-        onDraftChange={vi.fn()}
-        onAnnotationsChange={vi.fn()}
-        onSelectedProtocolIdChange={vi.fn()}
-        onProtocolCreate={vi.fn()}
-        onAddSupplementPeriod={vi.fn()}
-        onSave={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    renderTable();
 
     expect(screen.getAllByRole("button", { name: /save report/i }).length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders specific message for AI text-only insufficient warning", () => {
-    render(
-      <ExtractionReviewTable
-        draft={{
-          ...draft,
-          extraction: {
-            ...draft.extraction,
-            warningCode: "PDF_AI_TEXT_ONLY_INSUFFICIENT",
-            warnings: ["PDF_AI_TEXT_ONLY_INSUFFICIENT"]
-          }
-        }}
-        annotations={annotations}
-        protocols={[]}
-        supplementTimeline={[]}
-        inheritedSupplementsPreview={[]}
-        inheritedSupplementsSourceLabel="current active stack"
-        selectedProtocolId={null}
-        language="en"
-        onDraftChange={vi.fn()}
-        onAnnotationsChange={vi.fn()}
-        onSelectedProtocolIdChange={vi.fn()}
-        onProtocolCreate={vi.fn()}
-        onAddSupplementPeriod={vi.fn()}
-        onSave={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    renderTable({
+      extraction: {
+        ...draft.extraction,
+        warningCode: "PDF_AI_TEXT_ONLY_INSUFFICIENT",
+        warnings: ["PDF_AI_TEXT_ONLY_INSUFFICIENT"]
+      }
+    });
 
     const checklistButton = screen.getByRole("button", { name: /show checklist/i });
     fireEvent.click(checklistButton);
@@ -213,5 +163,65 @@ describe("ExtractionReviewTable", () => {
 
     expect(screen.getByText(/You are viewing: AI result/i)).toBeTruthy();
     expect(screen.getByText(/used: text \+ AI/i)).toBeTruthy();
+  });
+
+  it("hides auto-fix for ok markers that only have deterministic standardization", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "Leukocytes",
+          rawMarker: "leucocyten",
+          _confidence: {
+            name: "high",
+            unit: "high",
+            value: "high",
+            range: "high",
+            overall: "ok",
+            issues: ["Unit normalized from '/nl' to '/nL'."],
+            autoFixable: true,
+            autoFix: { unit: "/nL" }
+          },
+          _matchResult: {
+            canonical: { canonicalName: "Leukocytes" }
+          }
+        } as any
+      ]
+    });
+
+    expect(screen.queryByRole("button", { name: "Auto-fix" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Auto-fix 1 markers" })).toBeNull();
+  });
+
+  it("shows auto-fix for review markers and uses human-friendly source labels", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "Leukocytes",
+          rawMarker: "leucocyten",
+          _confidence: {
+            name: "medium",
+            unit: "high",
+            value: "high",
+            range: "high",
+            overall: "review",
+            issues: ["Marker name matched approximately. Please verify."],
+            autoFixable: true,
+            autoFix: { name: "Leukocytes" }
+          },
+          _matchResult: {
+            canonical: { canonicalName: "Leukocytes" }
+          }
+        } as any
+      ]
+    });
+
+    expect(screen.getByRole("button", { name: "Auto-fix 1 markers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Auto-fix" })).toBeTruthy();
+    expect(screen.getByText("In report: leucocyten")).toBeTruthy();
+    expect(screen.getByText("Recognized as: Leukocytes")).toBeTruthy();
+    expect(screen.queryByText(/PDF:/i)).toBeNull();
+    expect(screen.queryByText(/Canonical:/i)).toBeNull();
   });
 });

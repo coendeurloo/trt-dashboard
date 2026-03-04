@@ -42,4 +42,22 @@ describe("markerConfidence", () => {
     expect(confidence.overall).toBe("error");
     expect(confidence.autoFixable).toBe(false);
   });
+
+  it("treats m2 and m² unit variants as equivalent for eGFR", () => {
+    const matchResult = matchMarker("eGFR");
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "eGFR",
+        value: 78.4,
+        unit: "mL/min/1.73m²",
+        referenceMin: 60,
+        referenceMax: null
+      },
+      matchResult
+    );
+
+    expect(confidence.name).toBe("high");
+    expect(confidence.unit).toBe("high");
+    expect(confidence.overall).toBe("ok");
+  });
 });

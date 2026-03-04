@@ -334,8 +334,10 @@ const ExtractionReviewTable = ({
   const formatMaybeNumber = (value: number | null | undefined): string =>
     value === null || value === undefined || !Number.isFinite(value) ? "-" : String(Number(value.toFixed(3)));
   const reviewMarkers = draft.markers as ReviewMarker[];
+  const isActionableAutoFix = (row: ReviewMarker): boolean =>
+    row._confidence?.autoFixable === true && (row._confidence?.overall ?? "ok") !== "ok";
   const markersNeedingReview = reviewMarkers.filter((row) => (row._confidence?.overall ?? "ok") !== "ok");
-  const autoFixableMarkers = reviewMarkers.filter((row) => row._confidence?.autoFixable);
+  const autoFixableMarkers = reviewMarkers.filter(isActionableAutoFix);
 
   const statusLabel = (row: ReviewMarker): string => {
     const overall = row._confidence?.overall ?? "ok";
@@ -400,14 +402,14 @@ const ExtractionReviewTable = ({
     }
     onDraftChange({
       ...draft,
-      markers: reviewMarkers.map((row) => (row._confidence?.autoFixable ? applyMarkerAutoFix(row) : row))
+      markers: reviewMarkers.map((row) => (isActionableAutoFix(row) ? applyMarkerAutoFix(row) : row))
     });
   };
 
   const applyAutoFixToRow = (rowId: string) => {
     onDraftChange({
       ...draft,
-      markers: reviewMarkers.map((row) => (row.id === rowId && row._confidence?.autoFixable ? applyMarkerAutoFix(row) : row))
+      markers: reviewMarkers.map((row) => (row.id === rowId && isActionableAutoFix(row) ? applyMarkerAutoFix(row) : row))
     });
   };
 
@@ -773,7 +775,7 @@ const ExtractionReviewTable = ({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid gap-3 md:grid-cols-[minmax(170px,0.8fr)_minmax(0,1.2fr)] xl:grid-cols-[minmax(160px,0.7fr)_minmax(0,1.6fr)_minmax(220px,1fr)]">
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Afnamedatum", "Test date")}</label>
           <input
@@ -785,14 +787,14 @@ const ExtractionReviewTable = ({
         </div>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Protocol", "Protocol")}</label>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <select
               value={selectedProtocolId ?? ""}
               onChange={(event) => {
                 const nextValue = event.target.value.trim();
                 onSelectedProtocolIdChange(nextValue ? nextValue : null);
               }}
-              className="review-context-input min-w-[220px] flex-1 rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              className="review-context-input min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             >
               <option value="">{tr("Geen protocol", "No protocol")}</option>
               {protocols.map((protocol) => (
@@ -804,7 +806,7 @@ const ExtractionReviewTable = ({
             {selectedProtocol ? (
               <button
                 type="button"
-                className="rounded-md border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-sm font-medium text-rose-100"
+                className="shrink-0 whitespace-nowrap rounded-md border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-sm font-medium text-rose-100"
                 onClick={() => onSelectedProtocolIdChange(null)}
               >
                 {tr("Ontkoppel", "Detach")}
@@ -812,7 +814,7 @@ const ExtractionReviewTable = ({
             ) : null}
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
               onClick={() => setShowCreateProtocol((current) => !current)}
             >
               <Plus className="h-4 w-4" /> {showCreateProtocol ? tr("Sluit", "Close") : tr("Nieuw", "New")}
@@ -824,7 +826,7 @@ const ExtractionReviewTable = ({
             </p>
           ) : null}
         </div>
-        <div>
+        <div className="md:col-span-2 xl:col-span-1">
           <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Meetmoment", "Sampling timing")}</label>
           <select
             value={annotations.samplingTiming}
@@ -926,9 +928,10 @@ const ExtractionReviewTable = ({
                     editLabel={tr("Waarde bewerken", "Edit value")}
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    {tr("PDF", "PDF")}: {row.rawMarker ?? row.marker}
-                    {" · "}
-                    {tr("Canonical", "Canonical")}: {row._matchResult?.canonical?.canonicalName ?? tr("onbekend", "unknown")}
+                    {tr("In rapport", "In report")}: {row.rawMarker ?? row.marker}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {tr("Herkend als", "Recognized as")}: {row._matchResult?.canonical?.canonicalName ?? tr("onbekend", "unknown")}
                   </p>
                 </td>
                 <td className="px-3 py-2 text-right">
@@ -945,7 +948,7 @@ const ExtractionReviewTable = ({
                   />
                   {typeof row.rawValue === "number" && row.rawValue !== row.value ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawValue)}
+                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawValue)}
                     </p>
                   ) : null}
                 </td>
@@ -958,7 +961,7 @@ const ExtractionReviewTable = ({
                   />
                   {row.rawUnit && row.rawUnit !== row.unit ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("PDF", "PDF")}: {row.rawUnit}
+                      {tr("In rapport", "In report")}: {row.rawUnit}
                     </p>
                   ) : null}
                 </td>
@@ -976,7 +979,7 @@ const ExtractionReviewTable = ({
                   />
                   {row.rawReferenceMin !== undefined && row.rawReferenceMin !== row.referenceMin ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawReferenceMin)}
+                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawReferenceMin)}
                     </p>
                   ) : null}
                 </td>
@@ -994,7 +997,7 @@ const ExtractionReviewTable = ({
                   />
                   {row.rawReferenceMax !== undefined && row.rawReferenceMax !== row.referenceMax ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("PDF", "PDF")}: {formatMaybeNumber(row.rawReferenceMax)}
+                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawReferenceMax)}
                     </p>
                   ) : null}
                 </td>
@@ -1027,7 +1030,7 @@ const ExtractionReviewTable = ({
                   )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {row._confidence?.autoFixable ? (
+                  {isActionableAutoFix(row) ? (
                     <button
                       type="button"
                       className="mr-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"

@@ -1224,7 +1224,7 @@ const ReportsView = ({
                                     </span>
                                     {marker.rawMarker && marker.rawMarker.trim() && marker.rawMarker !== marker.marker ? (
                                       <p className="mt-1 text-[11px] text-slate-500">
-                                        {tr("PDF", "PDF")}: {marker.rawMarker}
+                                        {tr("In rapport", "In report")}: {marker.rawMarker}
                                       </p>
                                     ) : null}
                                   </td>

@@ -49,12 +49,17 @@ export const UNIT_NORMALIZATION: Record<string, string> = {
   fmol: "fmol"
 };
 
-const unitCompareToken = (value: string): string =>
+const normalizeUnitUnicode = (value: string): string =>
   value
+    .normalize("NFKC")
+    .replace(/[μµ]/g, "u")
+    .replace(/[⁄∕]/g, "/");
+
+const unitCompareToken = (value: string): string =>
+  normalizeUnitUnicode(value)
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/μ/g, "µ");
+    .replace(/\s+/g, "");
 
 const KNOWN_NORMALIZED_UNITS = new Set(
   Object.values(UNIT_NORMALIZATION).map((value) => unitCompareToken(value))
