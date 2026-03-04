@@ -108,4 +108,35 @@ describe("markerConfidence", () => {
     expect(erythrocyteConfidence.unit).toBe("high");
     expect(erythrocyteConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
   });
+
+  it("recognizes common unit variants like μg/dL and eGFR shorthand denominator", () => {
+    const dheaMatch = matchMarker("DHEA-S");
+    const dheaConfidence = scoreMarkerConfidence(
+      {
+        name: "DHEA-S",
+        value: 340.1,
+        unit: "μg/dL",
+        referenceMin: 34.5,
+        referenceMax: 568.9
+      },
+      dheaMatch
+    );
+
+    const egfrMatch = matchMarker("eGFR");
+    const egfrConfidence = scoreMarkerConfidence(
+      {
+        name: "eGFR",
+        value: 83,
+        unit: "ml/min/1.73",
+        referenceMin: 60,
+        referenceMax: null
+      },
+      egfrMatch
+    );
+
+    expect(dheaConfidence.unit).toBe("medium");
+    expect(dheaConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+    expect(egfrConfidence.unit).toBe("high");
+    expect(egfrConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
 });

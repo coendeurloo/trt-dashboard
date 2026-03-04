@@ -127,6 +127,27 @@ const ReportsView = ({
     return <CheckCircle2 className="h-3.5 w-3.5" />;
   };
 
+  const markerReviewTooltip = (marker: ReviewMarker): string | undefined => {
+    const issues = marker._confidence?.issues ?? [];
+    if (issues.length > 0) {
+      return issues.map((issue) => `• ${issue}`).join("\n");
+    }
+    const overall = markerReviewOverall(marker);
+    if (overall === "review") {
+      return tr(
+        "Controle aanbevolen: de parser heeft een onzeker punt gezien.",
+        "Review recommended: the parser detected an uncertain point."
+      );
+    }
+    if (overall === "error") {
+      return tr(
+        "Parserfout: controleer deze marker handmatig.",
+        "Parser error: review this marker manually."
+      );
+    }
+    return undefined;
+  };
+
   const normalizeAnchorState = (annotations: ReportAnnotations): ReportAnnotations["supplementAnchorState"] => {
     if (
       annotations.supplementAnchorState === "inherit" ||
@@ -1170,7 +1191,7 @@ const ReportsView = ({
                         </span>
                         <span className="text-xs text-slate-400">{tr("klik om in/uit te klappen", "click to collapse/expand")}</span>
                       </summary>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto overflow-y-visible">
                         <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
                           <thead className="bg-slate-900/70 text-slate-300">
                             <tr>
@@ -1194,10 +1215,8 @@ const ReportsView = ({
                                 marker.referenceMax === null
                                   ? null
                                   : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, settings.unitSystem).value;
-                              const issuesTitle =
-                                marker._confidence?.issues && marker._confidence.issues.length > 0
-                                  ? marker._confidence.issues.map((issue) => `• ${issue}`).join("\n")
-                                  : undefined;
+                              const issuesTitle = markerReviewTooltip(marker);
+                              const issuesTooltipId = `report-marker-review-tooltip-${report.id}-${group.category}-${marker.id}`;
 
                               return (
                                 <tr key={marker.id} className="bg-slate-900/35 text-slate-200">
@@ -1234,13 +1253,25 @@ const ReportsView = ({
                                     {min === null || max === null ? "-" : `${Number(min.toFixed(2))} - ${Number(max.toFixed(2))}`}
                                   </td>
                                   <td className="px-3 py-2 text-right">
-                                    <span
-                                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${markerReviewClassName(marker)}`}
-                                      title={issuesTitle}
-                                    >
-                                      {markerReviewIcon(marker)}
-                                      {markerReviewLabel(marker)}
-                                    </span>
+                                    <div className="group relative inline-flex">
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${markerReviewClassName(marker)}`}
+                                        aria-describedby={issuesTitle ? issuesTooltipId : undefined}
+                                        tabIndex={issuesTitle ? 0 : -1}
+                                      >
+                                        {markerReviewIcon(marker)}
+                                        {markerReviewLabel(marker)}
+                                      </span>
+                                      {issuesTitle ? (
+                                        <div
+                                          id={issuesTooltipId}
+                                          role="tooltip"
+                                          className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[320px] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                                        >
+                                          {issuesTitle}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2 text-right">
                                     <span

@@ -143,6 +143,16 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     defaultRange: { min: 150, max: 400 }
   }),
   marker({
+    id: "plateletcrit",
+    canonicalName: "Plateletcrit",
+    category: "Complete Blood Count",
+    aliases: ["pct", "plateletcrit", "platelet crit", "platelet-crit", "thrombocrit", "pct-plateletcrit", "pct plateletcrit"],
+    preferredUnit: "%",
+    alternateUnits: [],
+    defaultRangeType: "min-max",
+    defaultRange: { min: 0.12, max: 0.39 }
+  }),
+  marker({
     id: "neutrophils",
     canonicalName: "Neutrophils",
     category: "Complete Blood Count",
@@ -374,7 +384,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "asat",
     canonicalName: "ASAT",
     category: "Liver Function",
-    aliases: ["ast", "asat (got)", "aspartate aminotransferase", "got", "sgot"],
+    aliases: ["ast", "asat", "asat (got)", "aspartate aminotransferase", "got", "sgot", "sgot (ast)", "sgot ast", "ast (sgot)"],
     preferredUnit: "U/L",
     alternateUnits: ["IU/L"],
     defaultRangeType: "max-only",
@@ -384,7 +394,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "alat",
     canonicalName: "ALAT",
     category: "Liver Function",
-    aliases: ["alt", "alat (gpt)", "alanine aminotransferase", "gpt", "sgpt"],
+    aliases: ["alt", "alat", "alat (gpt)", "alanine aminotransferase", "gpt", "sgpt", "sgpt (alt)", "sgpt alt", "alt (sgpt)"],
     preferredUnit: "U/L",
     alternateUnits: ["IU/L"],
     defaultRangeType: "max-only",
@@ -507,7 +517,16 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "egfr",
     canonicalName: "eGFR",
     category: "Kidney Function",
-    aliases: ["egfr", "geschatte glomerulaire filtratiesnelheid", "estimated gfr", "ckd-epi"],
+    aliases: [
+      "egfr",
+      "gfr",
+      "geschatte glomerulaire filtratiesnelheid",
+      "estimated gfr",
+      "glomerular filtration",
+      "glomerular filtration rate",
+      "estimated glomerular filtration",
+      "ckd-epi"
+    ],
     preferredUnit: "mL/min/1.73m2",
     alternateUnits: [],
     defaultRangeType: "min-only",
@@ -797,6 +816,15 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     defaultRangeType: "min-max",
     defaultRange: { min: 24, max: 104 }
   }),
+  marker({
+    id: "testosterone-estradiol-ratio",
+    canonicalName: "T/E2 Ratio",
+    category: "Hormones - Sex",
+    aliases: ["t/e2 ratio", "t e2 ratio", "te2 ratio", "testosterone/estradiol ratio", "testosterone estradiol ratio"],
+    preferredUnit: "ratio",
+    alternateUnits: [],
+    defaultRangeType: "none"
+  }),
 
   // Hormones - Adrenal
   marker({
@@ -813,7 +841,19 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "dhea-s",
     canonicalName: "DHEA-S",
     category: "Hormones - Adrenal",
-    aliases: ["dheas", "dehydroepiandrosterone sulfate", "dhea sulfaat", "dhea sulphate"],
+    aliases: [
+      "dhea-s",
+      "dheas",
+      "dhea s",
+      "dhea so4",
+      "dhea-so4",
+      "dhea - so4",
+      "dehydroepiandrosterone sulfate",
+      "dehydroepiandrosterone-sulfate",
+      "dhea sulfaat",
+      "dhea sulphaat",
+      "dhea sulphate"
+    ],
     preferredUnit: "umol/L",
     alternateUnits: ["ug/dL"],
     defaultRangeType: "min-max",
@@ -934,7 +974,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "magnesium",
     canonicalName: "Magnesium",
     category: "Vitamins & Minerals",
-    aliases: ["magnesium", "mg"],
+    aliases: ["magnesium", "mg", "magnesium serum", "serum magnesium", "magnesium (serum)"],
     preferredUnit: "mmol/L",
     alternateUnits: ["mg/dL"],
     defaultRangeType: "min-max",
@@ -1363,7 +1403,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "psa-total",
     canonicalName: "PSA (Total)",
     category: "Other",
-    aliases: ["prostaat specifiek antigeen", "prostate specific antigen", "psa totaal", "total psa"],
+    aliases: ["psa", "psa (total)", "prostaat specifiek antigeen", "prostate specific antigen", "prostate specific antigen total", "psa totaal", "total psa"],
     preferredUnit: "ug/L",
     alternateUnits: ["ng/mL"],
     defaultRangeType: "max-only",

@@ -23,6 +23,40 @@ describe("markerMatcher", () => {
     expect(tokenResult.canonical?.id).toBe("eosinophils-abs");
   });
 
+  it("matches common lab-report variants that previously caused false errors", () => {
+    const dheas = matchMarker("Dhea - So4");
+    expect(["alias", "normalized", "token"]).toContain(dheas.confidence);
+    expect(dheas.canonical?.id).toBe("dhea-s");
+
+    const egfr = matchMarker("Glomerular Filtration");
+    expect(["alias", "normalized", "token"]).toContain(egfr.confidence);
+    expect(egfr.canonical?.id).toBe("egfr");
+
+    const magnesium = matchMarker("Magnesium (serum)");
+    expect(["alias", "normalized", "token"]).toContain(magnesium.confidence);
+    expect(magnesium.canonical?.id).toBe("magnesium");
+
+    const plateletcrit = matchMarker("Pct-plateletcrit");
+    expect(["alias", "normalized", "token"]).toContain(plateletcrit.confidence);
+    expect(plateletcrit.canonical?.id).toBe("plateletcrit");
+
+    const psa = matchMarker("PSA");
+    expect(["alias", "normalized", "token"]).toContain(psa.confidence);
+    expect(psa.canonical?.id).toBe("psa-total");
+
+    const sgot = matchMarker("Sgot (ast)");
+    expect(["alias", "normalized", "token"]).toContain(sgot.confidence);
+    expect(sgot.canonical?.id).toBe("asat");
+
+    const sgpt = matchMarker("Sgpt (alt)");
+    expect(["alias", "normalized", "token"]).toContain(sgpt.confidence);
+    expect(sgpt.canonical?.id).toBe("alat");
+
+    const te2 = matchMarker("T/E2 ratio");
+    expect(["exact", "alias", "normalized", "token"]).toContain(te2.confidence);
+    expect(te2.canonical?.id).toBe("testosterone-estradiol-ratio");
+  });
+
   it("falls back to fuzzy when typo is close enough", () => {
     const result = matchMarker("ferritne");
     expect(["fuzzy", "alias", "normalized"]).toContain(result.confidence);
