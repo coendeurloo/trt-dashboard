@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
@@ -58,7 +58,6 @@ const ReportsView = ({
   focusedReportId,
   onFocusedReportHandled
 }: ReportsViewProps) => {
-  const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -84,13 +83,16 @@ const ReportsView = ({
     return SUPPLEMENT_OPTIONS.filter((option) => option.toLowerCase().includes(query)).slice(0, 8);
   }, [supplementNameInput]);
 
-  const markerAbnormalStatus = (marker: MarkerValue): MarkerValue["abnormal"] =>
-    deriveAbnormalFlag(marker.value, marker.referenceMin, marker.referenceMax);
+  const markerAbnormalStatus = useCallback(
+    (marker: MarkerValue): MarkerValue["abnormal"] =>
+      deriveAbnormalFlag(marker.value, marker.referenceMin, marker.referenceMax),
+    []
+  );
 
-  const isMarkerOutOfRange = (marker: MarkerValue): boolean => {
+  const isMarkerOutOfRange = useCallback((marker: MarkerValue): boolean => {
     const abnormal = markerAbnormalStatus(marker);
     return abnormal === "high" || abnormal === "low";
-  };
+  }, [markerAbnormalStatus]);
 
   const markerReviewOverall = (marker: ReviewMarker): "ok" | "review" | "error" => marker._confidence?.overall ?? "ok";
 
@@ -267,7 +269,7 @@ const ReportsView = ({
       uniqueMarkers: allMarkers.size,
       reportsWithAbnormal
     };
-  }, [reports]);
+  }, [reports, isMarkerOutOfRange]);
 
   const startEditingReport = (report: LabReport) => {
     if (isShareMode) {

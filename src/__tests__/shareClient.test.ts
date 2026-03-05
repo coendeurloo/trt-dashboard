@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createShortShareLink, resolveShortShareCode, ShareClientError } from "../shareClient";
+import { createShortShareLink, resolveShortShareCode } from "../shareClient";
 
 describe("shareClient", () => {
   afterEach(() => {

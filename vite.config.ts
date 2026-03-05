@@ -13,22 +13,53 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("react-markdown") || id.includes("remark-breaks") || id.includes("/unified/") || id.includes("/remark-") || id.includes("/rehype-") || id.includes("/micromark")) {
+          const moduleId = id.replace(/\\/g, "/");
+
+          if (
+            moduleId.includes("/src/locales/") ||
+            moduleId.includes("/src/i18n")
+          ) {
+            return "app-i18n";
+          }
+
+          if (
+            moduleId.includes("/src/analytics") ||
+            moduleId.includes("/src/hooks/useDerivedData") ||
+            moduleId.includes("/src/views/DashboardView")
+          ) {
+            return "app-analytics";
+          }
+
+          if (
+            moduleId.includes("/src/hooks/useAnalysis") ||
+            moduleId.includes("/src/aiAnalysis")
+          ) {
+            return "app-ai";
+          }
+
+          if (
+            moduleId.includes("react-markdown") ||
+            moduleId.includes("remark-breaks") ||
+            moduleId.includes("/unified/") ||
+            moduleId.includes("/remark-") ||
+            moduleId.includes("/rehype-") ||
+            moduleId.includes("/micromark")
+          ) {
             return "markdown";
           }
-          if (id.includes("pdfjs-dist") || id.includes("tesseract.js") || id.includes("/src/pdfParsing")) {
+          if (moduleId.includes("pdfjs-dist") || moduleId.includes("tesseract.js") || moduleId.includes("/src/pdfParsing")) {
             return "pdf-local";
           }
-          if (id.includes("recharts") || id.includes("/d3-") || id.includes("/victory-vendor/")) {
+          if (moduleId.includes("recharts") || moduleId.includes("/d3-") || moduleId.includes("/victory-vendor/")) {
             return "charts";
           }
-          if (id.includes("framer-motion") || id.includes("lucide-react")) {
+          if (moduleId.includes("framer-motion") || moduleId.includes("lucide-react")) {
             return "ui-motion";
           }
           if (
-            id.includes("/node_modules/react/") ||
-            id.includes("/node_modules/react-dom/") ||
-            id.includes("/node_modules/scheduler/")
+            moduleId.includes("/node_modules/react/") ||
+            moduleId.includes("/node_modules/react-dom/") ||
+            moduleId.includes("/node_modules/scheduler/")
           ) {
             return "react-core";
           }

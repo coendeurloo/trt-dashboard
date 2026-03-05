@@ -46,7 +46,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
     },
     {
       icon: FileText,
-      label: tr("Werkt met elk lab-formaat", "Works with any lab format")
+      label: tr("Werkt met veel lab-formaten", "Works with many lab formats")
     }
   ];
 

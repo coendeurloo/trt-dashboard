@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Plus, Save, Trash2, X, XCircle, Wrench } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
@@ -22,7 +22,8 @@ import {
   supplementFrequencyLabel
 } from "../protocolStandards";
 import { getActiveSupplementsAtDate, supplementPeriodsToText } from "../supplementUtils";
-import ProtocolEditor, { blankProtocolDraft } from "./ProtocolEditor";
+import ProtocolEditor from "./ProtocolEditor";
+import { blankProtocolDraft } from "./protocolEditorModel";
 import EditableCell from "./EditableCell";
 import { RangeType } from "../data/markerDatabase";
 import VisualRangeBar from "./VisualRangeBar";
@@ -75,7 +76,6 @@ const ExtractionReviewTable = ({
   onSave,
   onCancel
 }: ExtractionReviewTableProps) => {
-  const isNl = language === "nl";
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const showParserDebugInfo =
     import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
@@ -215,6 +215,12 @@ const ExtractionReviewTable = ({
           "AI refinement is temporarily unavailable because the limits service is unreachable."
         );
       }
+      if (code === "PDF_AI_PLAN_REQUIRED") {
+        return tr(
+          "AI-verbetering is geblokkeerd: je huidige plan bevat deze AI-functie niet.",
+          "AI refinement is blocked: your current plan does not include this AI feature."
+        );
+      }
       if (code === "PDF_AI_DISABLED_BY_PARSER_MODE") {
         return tr(
           "AI-verbetering is uitgeschakeld door de gekozen parser-debugmodus.",
@@ -231,6 +237,11 @@ const ExtractionReviewTable = ({
     })
     .filter((value): value is string => Boolean(value));
   const unknownLayoutDetected = warningCodes.includes("PDF_UNKNOWN_LAYOUT");
+  const referenceCoverage =
+    draft.markers.length > 0
+      ? draft.markers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / draft.markers.length
+      : 0;
+  const referenceCoveragePercent = Math.round(referenceCoverage * 100);
 
   const selectedProtocol = useMemo(
     () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
@@ -293,16 +304,21 @@ const ExtractionReviewTable = ({
     return SUPPLEMENT_OPTIONS.filter((option) => option.toLowerCase().includes(query)).slice(0, 8);
   }, [supplementNameInput]);
 
-  const parsingFeedbackMailto = (() => {
-    const subject = `PDF Parsing Feedback - ${draft.sourceFileName}`;
+  const parsingFeedbackMailto = useMemo(() => {
+    const warningSummary = warningCodes.length > 0 ? warningCodes.join(", ") : "none";
+    const subject = "PDF Parsing Feedback (anonymized)";
     const body = [
       "Hi,",
       "",
       "I uploaded a lab PDF and the extraction didn't work correctly.",
       "",
-      `File: ${draft.sourceFileName}`,
+      "No personal identifiers included in this prefilled message.",
+      "",
+      `Route used: ${extractionRoute}`,
       `Confidence: ${draft.extraction.confidence}`,
       `Markers extracted: ${draft.markers.length}`,
+      `Reference coverage: ${referenceCoveragePercent}%`,
+      `Warning codes: ${warningSummary}`,
       "",
       "Lab / country: [user fills in]",
       "What went wrong: [user fills in]",
@@ -314,7 +330,13 @@ const ExtractionReviewTable = ({
       "You can redact sensitive personal details (name/address) first if you prefer."
     ].join("\n");
     return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  })();
+  }, [
+    draft.extraction.confidence,
+    draft.markers.length,
+    extractionRoute,
+    referenceCoveragePercent,
+    warningCodes
+  ]);
 
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
     if (value === "high") {
@@ -377,7 +399,7 @@ const ExtractionReviewTable = ({
   const reviewTooltip = (row: ReviewMarker): string | undefined => {
     const issues = row._confidence?.issues ?? [];
     if (issues.length > 0) {
-      return issues.map((issue) => `• ${issue}`).join("\n");
+      return issues.map((issue) => `â€¢ ${issue}`).join("\n");
     }
     const overall = row._confidence?.overall ?? "ok";
     if (overall === "review") {
@@ -643,7 +665,7 @@ const ExtractionReviewTable = ({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">
-            {isManualEntry ? tr("Handmatig waarden invoeren", "Enter values manually") : tr("Controleer geëxtraheerde data", "Review extracted data")}
+            {isManualEntry ? tr("Handmatig waarden invoeren", "Enter values manually") : tr("Controleer geÃ«xtraheerde data", "Review extracted data")}
           </h2>
           {!isManualEntry ? (
             <>
@@ -712,35 +734,45 @@ const ExtractionReviewTable = ({
               onClick={() => setShowWarningDetails((current) => !current)}
             >
               {showWarningDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {showWarningDetails ? tr("Minder tonen", "Show less") : tr("Checklist tonen", "Show checklist")}
+              {showWarningDetails ? tr("Minder tonen", "Show less") : tr("Details tonen", "Show details")}
             </button>
           </div>
           <p className="mt-1 text-xs text-amber-100/95 sm:text-sm">
             {tr(
-              "Controleer markernaam, waarde en referentiebereik voordat je opslaat.",
-              "Review marker name, value, and reference range before saving."
+              "Controleer testdatum, markerwaarden en referenties voordat je opslaat.",
+              "Check test date, marker values, and references before saving."
             )}
           </p>
+          <ul className="mt-2 space-y-1 text-xs sm:text-sm">
+            {warningMessages.slice(0, 2).map((message) => (
+              <li key={message}>- {message}</li>
+            ))}
+            {!showWarningDetails && warningMessages.length > 2 ? (
+              <li className="text-amber-100/80">
+                {tr(`+ ${warningMessages.length - 2} extra waarschuwingen`, `+ ${warningMessages.length - 2} more warnings`)}
+              </li>
+            ) : null}
+          </ul>
           {showWarningDetails ? (
             <>
               <ul className="mt-2 space-y-1 text-xs sm:text-sm">
-                {warningMessages.map((message) => (
-                  <li key={message}>• {message}</li>
+                {warningMessages.slice(2).map((message) => (
+                  <li key={message}>- {message}</li>
                 ))}
               </ul>
               <div className="mt-2 rounded-md border border-amber-500/20 bg-slate-950/30 p-2 text-xs text-amber-100/95">
-                <p className="font-medium">{tr("Checklist vóór opslaan", "Checklist before saving")}</p>
-                <p>• {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
-                <p>• {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
-                <p>• {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
+                <p className="font-medium">{tr("Checklist voor opslaan", "Checklist before saving")}</p>
+                <p>- {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
+                <p>- {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
+                <p>- {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
               </div>
               {showParserDebugInfo && debugInfo ? (
                 <p className="mt-2 text-[11px] text-amber-100/80">
-                  {tr("Debug", "Debug")}: text items {debugInfo.textItems} · OCR {debugInfo.ocrUsed ? "on" : "off"} · kept rows {debugInfo.keptRows} · rejected rows{" "}
+                  {tr("Debug", "Debug")}: text items {debugInfo.textItems} | OCR {debugInfo.ocrUsed ? "on" : "off"} | kept rows {debugInfo.keptRows} | rejected rows{" "}
                   {debugInfo.rejectedRows}
-                  {debugInfo.aiAttemptedModes?.length ? ` · AI modes ${debugInfo.aiAttemptedModes.join("→")}` : ""}
-                  {debugInfo.aiRescueTriggered ? " · rescue on" : ""}
-                  {debugInfo.aiRescueReason ? ` · rescue reason ${debugInfo.aiRescueReason}` : ""}
+                  {debugInfo.aiAttemptedModes?.length ? ` | AI modes ${debugInfo.aiAttemptedModes.join("->")}` : ""}
+                  {debugInfo.aiRescueTriggered ? " | rescue on" : ""}
+                  {debugInfo.aiRescueReason ? ` | rescue reason ${debugInfo.aiRescueReason}` : ""}
                 </p>
               ) : null}
             </>
@@ -750,25 +782,14 @@ const ExtractionReviewTable = ({
 
       {unknownLayoutDetected ? (
         <div className="mt-3 rounded-xl border border-rose-500/35 bg-rose-500/10 p-3 text-sm text-rose-100">
-          <p className="font-medium">
-            {tr("Volgende stap bij onbekend format", "Next step for unknown format")}
-          </p>
+          <p className="font-medium">{tr("Volgende stap bij onbekend format", "Next step for unknown format")}</p>
           <p className="mt-1 text-xs text-rose-100/90 sm:text-sm">
             {tr(
-              "Kies één van deze opties om verder te gaan.",
-              "Choose one of these options to continue."
+              "Parser kon nog geen bruikbare markers vinden. Kies een vervolgstap hieronder.",
+              "Parser could not find usable markers yet. Pick a follow-up action below."
             )}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {onStartManualEntry ? (
-              <button
-                type="button"
-                className="rounded-md border border-rose-400/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-100 hover:bg-rose-500/20 sm:text-sm"
-                onClick={onStartManualEntry}
-              >
-                {tr("Handmatig invullen", "Enter manually")}
-              </button>
-            ) : null}
             {onRetryWithOcr ? (
               <button
                 type="button"
@@ -776,6 +797,23 @@ const ExtractionReviewTable = ({
                 onClick={onRetryWithOcr}
               >
                 {tr("OCR opnieuw proberen", "Retry OCR")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="rounded-md border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
+                disabled
+              >
+                {tr("OCR opnieuw proberen (upload opnieuw)", "Retry OCR (re-upload first)")}
+              </button>
+            )}
+            {onStartManualEntry ? (
+              <button
+                type="button"
+                className="rounded-md border border-rose-400/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-100 hover:bg-rose-500/20 sm:text-sm"
+                onClick={onStartManualEntry}
+              >
+                {tr("Handmatig invullen", "Enter manually")}
               </button>
             ) : null}
             <a
@@ -837,7 +875,7 @@ const ExtractionReviewTable = ({
           </div>
           {!selectedProtocol && protocols.length === 0 ? (
             <p className="mt-1 text-xs text-slate-400">
-              {tr("Nog geen protocol opgeslagen. Klik op Nieuw om er één aan te maken.", "No saved protocol yet. Click New to create one.")}
+              {tr("Nog geen protocol opgeslagen. Klik op Nieuw om er Ã©Ã©n aan te maken.", "No saved protocol yet. Click New to create one.")}
             </p>
           ) : null}
         </div>
@@ -1130,6 +1168,14 @@ const ExtractionReviewTable = ({
           {tr("Meld een probleem", "Report an issue")}
         </a>
       </div>
+      {onEnableAiRescue || onImproveWithAi ? (
+        <p className="mt-2 rounded-md border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
+          {tr(
+            "AI is optioneel. Zonder expliciete toestemming blijft de verwerking lokaal en wordt er niets extern verstuurd.",
+            "AI is optional. Without explicit consent, processing stays local and nothing is sent externally."
+          )}
+        </p>
+      ) : null}
 
       <div className="review-context-card mt-3 space-y-3 rounded-xl border border-slate-700 bg-slate-900/45 p-3">
           {showCreateProtocol ? (
@@ -1193,7 +1239,7 @@ const ExtractionReviewTable = ({
               <p className="mt-1 text-slate-400">
                 {tr("Huidige overname", "Current inherited stack")}:{" "}
                 {inheritedSupplementsText || tr("Geen actieve stack", "No active stack")}
-                {inheritedSupplementsSourceLabel ? ` · ${inheritedSupplementsSourceLabel}` : ""}
+                {inheritedSupplementsSourceLabel ? ` Â· ${inheritedSupplementsSourceLabel}` : ""}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -1347,8 +1393,8 @@ const ExtractionReviewTable = ({
                   <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
                     <p className="text-sm text-slate-200">
                       <span className="font-medium">{supplement.name}</span>
-                      {supplement.dose ? ` · ${supplement.dose}` : ""}
-                      {` · ${supplementFrequencyLabel(supplement.frequency, language)}`}
+                      {supplement.dose ? ` Â· ${supplement.dose}` : ""}
+                      {` Â· ${supplementFrequencyLabel(supplement.frequency, language)}`}
                     </p>
                     <button
                       type="button"

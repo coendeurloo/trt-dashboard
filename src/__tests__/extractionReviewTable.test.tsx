@@ -70,7 +70,7 @@ describe("ExtractionReviewTable", () => {
   it("does not expose parser provider text and keeps confidence subtitle", () => {
     renderTable();
 
-    expect(screen.getByText(/confidence/i)).toBeTruthy();
+    expect(screen.getByText(/Sep blood work clean\.pdf \| confidence/i)).toBeTruthy();
     expect(screen.getByText(/90%/)).toBeTruthy();
     expect(screen.queryByText(/GEMINI|FALLBACK|CLAUDE/i)).toBeNull();
   });
@@ -100,7 +100,7 @@ describe("ExtractionReviewTable", () => {
       }
     });
 
-    const checklistButton = screen.getByRole("button", { name: /show checklist/i });
+    const checklistButton = screen.getByRole("button", { name: /show details/i });
     fireEvent.click(checklistButton);
     expect(screen.getByText(/AI text-only extraction found too few marker rows/i)).toBeTruthy();
   });
@@ -288,5 +288,53 @@ describe("ExtractionReviewTable", () => {
 
     const rescueButton = screen.getByRole("button", { name: /AI rescue in progress/i }) as HTMLButtonElement;
     expect(rescueButton.disabled).toBe(true);
+  });
+
+  it("shows unknown-layout recovery actions and anonymized feedback link", () => {
+    const onRetryWithOcr = vi.fn();
+    const onStartManualEntry = vi.fn();
+
+    render(
+      <ExtractionReviewTable
+        draft={{
+          ...draft,
+          extraction: {
+            ...draft.extraction,
+            warnings: ["PDF_UNKNOWN_LAYOUT"],
+            warningCode: "PDF_UNKNOWN_LAYOUT",
+            confidence: 0.58
+          }
+        }}
+        annotations={annotations}
+        protocols={[]}
+        supplementTimeline={[]}
+        inheritedSupplementsPreview={[]}
+        inheritedSupplementsSourceLabel="current active stack"
+        selectedProtocolId={null}
+        language="en"
+        onDraftChange={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onSelectedProtocolIdChange={vi.fn()}
+        onProtocolCreate={vi.fn()}
+        onAddSupplementPeriod={vi.fn()}
+        onRetryWithOcr={onRetryWithOcr}
+        onStartManualEntry={onStartManualEntry}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/Next step for unknown format/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Retry OCR/i }));
+    expect(onRetryWithOcr).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Enter manually/i }));
+    expect(onStartManualEntry).toHaveBeenCalledTimes(1);
+
+    const feedbackLink = screen.getByRole("link", { name: /Send anonymized feedback/i }) as HTMLAnchorElement;
+    const href = feedbackLink.getAttribute("href") ?? "";
+    expect(href).toContain("anonymized");
+    expect(href).not.toContain("Sep blood work clean.pdf");
   });
 });

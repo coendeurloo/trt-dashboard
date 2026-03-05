@@ -17,8 +17,10 @@ Live app: [labtracker.app](https://labtracker.app)
 ## Privacy behavior (important)
 
 - Default: parsing stays local in the browser (text extraction + OCR when needed).
-- External AI is **off by default** and only used after explicit opt-in in `Settings > Privacy & AI`.
-- If opt-in is off, parser fallback AI and AI analysis are both blocked.
+- External AI is **off by default**.
+- Before any external AI run, the app shows a consent check where the user can choose what to share.
+- If consent is not granted, parser fallback AI and AI analysis are both blocked.
+- Parser rescue can use redacted text and, only when explicitly allowed, the full PDF.
 - AI limits/budget are stored in Upstash Redis. If Redis is unavailable, external AI calls fail closed (`503 AI_LIMITS_UNAVAILABLE`).
 
 ## Features implemented
@@ -75,6 +77,8 @@ Client/build flags:
 - `VITE_DISABLE_BETA_LIMITS` (optional debug switch; `true` disables client beta usage caps)
 - `VITE_SHARE_PUBLIC_ORIGIN` (optional, defaults to `https://labtracker.app`)
 
+Important: never expose server keys (`CLAUDE_API_KEY`, `GEMINI_API_KEY`, `UPSTASH_*`, `SHARE_LINK_SECRET_BASE64`) in client-side `VITE_*` variables.
+
 ## Tech stack
 
 - React 18
@@ -96,6 +100,21 @@ For local desktop usage, launcher scripts are kept in the repo root:
 - `Stop LabTracker.bat`
 
 These are local-dev convenience scripts and are not required for the hosted Vercel app.
+
+## Quality checks
+
+Before merging, run:
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test:coverage`
+- `npm run build`
+
+One-shot local gate:
+- `npm run ci:check`
+
+See:
+- `CONTRIBUTING.md`
+- `SECURITY.md`
 
 ## Parser QA workflow (batch protocol)
 

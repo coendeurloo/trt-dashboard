@@ -5,7 +5,6 @@ import { inferDashboardChartPresetFromSettings } from "../chartHelpers";
 import {
   AppSettings,
   LabReport,
-  MarkerValue,
   Protocol,
   ReportAnnotations,
   StoredAppData,
@@ -19,7 +18,7 @@ import {
 } from "../markerNormalization";
 import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
-import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
+import { deriveAbnormalFlag, sortReportsChronological } from "../utils";
 import { findBaselineOverlapMarkers, normalizeBaselineFlagsByMarkerOverlap } from "../baselineUtils";
 
 export interface MarkerMergeSuggestion {

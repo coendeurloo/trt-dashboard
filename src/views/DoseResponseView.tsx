@@ -54,10 +54,7 @@ const DoseResponseView = ({
     predictions: premiumPredictions,
     loading,
     offlinePriorFallback,
-    limitReason,
-    remainingAssisted,
-    assistedLimits,
-    apiAssistedCount
+    limitReason
   } = useDoseResponsePremium({
     basePredictions: dosePredictions,
     unitSystem: settings.unitSystem

@@ -1,9 +1,8 @@
-﻿import * as pdfjsLib from "pdfjs-dist";
+import * as pdfjsLib from "pdfjs-dist";
 import * as Tesseract from "tesseract.js";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import tesseractWorker from "tesseract.js/dist/worker.min.js?url";
 import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
-import { PRIMARY_MARKERS } from "./constants";
 import {
   AIConsentDecision,
   AICostMode,
@@ -45,11 +44,6 @@ interface RawMarker {
   referenceMin?: number | string | null;
   referenceMax?: number | string | null;
   confidence?: number;
-}
-
-interface ClaudeExtraction {
-  testDate?: string;
-  markers?: RawMarker[];
 }
 
 interface GeminiExtractionResponse {
@@ -138,15 +132,15 @@ interface ParserProfile {
   lineNoisePattern?: RegExp;
 }
 
-const NOISE_SYMBOL_PATTERN = /[Ã±Ã²â†‘â†“]/g;
+const NOISE_SYMBOL_PATTERN = /[ñò↑↓]/g;
 const SECTION_PREFIX_PATTERN =
   /^(?:nuchter|hematology|clinical chemistry|general chemistry|hormones|vitamins|tumor markers|tumour markers|cardial markers|lipids|muscle enzymes|random urine chemistry|urine \(micro\)albumin|adrenal function|reproductive and gonadal|serum proteins|hemoglobin a1c|haemoglobin a1c|differential|hematologie|klinische chemie|proteine-diagnostiek|endocrinologie|schildklier-diagnostiek|bloedbeeld klein|hematologie bloedbeeld klein)\s+/i;
 const INDEXED_ROW_PREFIX_PATTERN = /^\d{1,3}\/\d{2,3}\s+A?\s+/i;
 const METHOD_SUFFIX_PATTERN = /\b(?:ECLIA|PHOT|ENZ|NEPH|ISSAM)\b$/i;
-const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|Ã—)?(?:9|12)\/l|[A-Za-z%ÂµÎ¼/][A-Za-z0-9%ÂµÎ¼/.*^\-Â²]*)$/i;
-const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>â‰¤â‰¥]?\s*[+-]?\d+(?:[.,]\d+)?$/;
+const UNIT_TOKEN_PATTERN = /^(?:10(?:\^|\*|x|×)?(?:9|12)\/l|[A-Za-z%µμ/][A-Za-z0-9%µμ/.*^\-²]*)$/i;
+const STRICT_NUMERIC_TOKEN_PATTERN = /^[<>≤≥]?\s*[+-]?\d+(?:[.,]\d+)?$/;
 const LEADING_UNIT_FRAGMENT_PATTERN =
-  /^(?:mmol|nmol|pmol|pg|ng|g|mg|Âµmol|umol|u|mu|miu|fl|fmol|l)\s*\/\s*[a-z0-9ÂµÎ¼%]+\s*/i;
+  /^(?:mmol|nmol|pmol|pg|ng|g|mg|µmol|umol|u|mu|miu|fl|fmol|l)\s*\/\s*[a-z0-9µμ%]+\s*/i;
 const IMPORTANT_MARKERS = new Set([
   "Testosterone",
   "Free Testosterone",
@@ -160,7 +154,7 @@ const RECEIPT_CONTEXT_HINT_PATTERN = /\b(?:arrival|received|ontvangst|materiaal\
 const REPORT_CONTEXT_HINT_PATTERN =
   /\b(?:report\s*date|print\s*date|datum\s*afdruk|issued|validated|result\s*date)\b/i;
 const STATUS_TOKEN_PATTERN = /^(?:H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?)$/i;
-const DASH_TOKEN_PATTERN = /^[-â€“]$/;
+const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const MARKER_ANCHOR_PATTERN =
@@ -249,7 +243,7 @@ const HISTORY_CANONICAL_COLLAPSE_UNITS: Record<string, string[]> = {
   "Free Testosterone": ["pmol/L", "pg/mL", "ng/dL", "nmol/L"],
   "Bioavailable Testosterone": ["nmol/L", "ng/dL", "pg/mL", "%"],
   SHBG: ["nmol/L"],
-  "Dihydrotestosteron (DHT)": ["ng/dL", "nmol/L", "pg/mL", "pmol/L", "Âµg/dL"],
+  "Dihydrotestosteron (DHT)": ["ng/dL", "nmol/L", "pg/mL", "pmol/L", "µg/dL"],
   FSH: ["mIU/mL", "IU/L", "U/L", "mU/L"],
   LH: ["mIU/mL", "IU/L", "U/L", "mU/L"]
 };
@@ -287,8 +281,8 @@ const OCR_REMOTE_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
 const OCR_REMOTE_LANG_PATH_ALT = "https://cdn.jsdelivr.net/npm/@tesseract.js-data";
 const OCR_MAX_INIT_ATTEMPTS = 2;
 const OCR_INIT_BACKOFF_MS = 250;
-const OCR_PAGE_TIMEOUT_MS = 15_000;
-const OCR_TOTAL_TIMEOUT_MS = 75_000;
+const OCR_PAGE_TIMEOUT_MS = 9_000;
+const OCR_TOTAL_TIMEOUT_MS = 45_000;
 const OCR_LANG_FALLBACK = "eng";
 const LOCAL_AI_EXTRACTION_CACHE_KEY = "labtracker_ai_extraction_cache_v1";
 const LOCAL_AI_EXTRACTION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -596,8 +590,8 @@ const normalizeOcrText = (value: string): string =>
     .map((line) =>
       line
         .replace(KEYWORD_INSERT_SPACE_PATTERN, "$1 ")
-        .replace(/([ÂµÎ¼])\s+g\s*\/\s*l/gi, "Âµg/L")
-        .replace(/([ÂµÎ¼])\s+mol\s*\/\s*l/gi, "Âµmol/L")
+        .replace(/([µμ])\s+g\s*\/\s*l/gi, "µg/L")
+        .replace(/([µμ])\s+mol\s*\/\s*l/gi, "µmol/L")
         .replace(/u?mol\s*\/\s*l/gi, (entry) => (/^umol/i.test(entry.replace(/\s+/g, "")) ? "umol/L" : entry))
         .replace(/ug\s*\/\s*l/gi, "ug/L")
         .replace(/ug\s*\/\s*dl/gi, "ug/dL")
@@ -608,8 +602,8 @@ const normalizeOcrText = (value: string): string =>
         .replace(/ng\s*\/\s*mg/gi, "ng/mg")
         .replace(/pg\s*\/\s*ml/gi, "pg/mL")
         .replace(/pg\s*\/\s*mg/gi, "pg/mg")
-        .replace(/10\s*[xÃ—*]\s*9\s*\/\s*l/gi, "10^9/L")
-        .replace(/10\s*[xÃ—*]\s*12\s*\/\s*l/gi, "10^12/L")
+        .replace(/10\s*[x×*]\s*9\s*\/\s*l/gi, "10^9/L")
+        .replace(/10\s*[x×*]\s*12\s*\/\s*l/gi, "10^12/L")
     )
     .filter(Boolean)
     .join("\n");
@@ -620,10 +614,10 @@ const isLikelyLabDataLine = (line: string): boolean => {
     return false;
   }
   const hasNumeric = /\b\d+(?:[.,]\d+)?\b/.test(normalized);
-  const hasUnitHint = /(mmol\/L|nmol\/L|pmol\/L|pg\/mL|ng\/dL|g\/L|mg\/L|Âµg\/L|umol\/L|U\/L|mU\/L|IU\/L|%|10\*9\/L|10\*12\/L)/i.test(
+  const hasUnitHint = /(mmol\/L|nmol\/L|pmol\/L|pg\/mL|ng\/dL|g\/L|mg\/L|µg\/L|umol\/L|U\/L|mU\/L|IU\/L|%|10\*9\/L|10\*12\/L)/i.test(
     normalized
   );
-  const hasRange = /(?:<|>|<=|>=|\d+\s*[-â€“]\s*\d+)/.test(normalized);
+  const hasRange = /(?:<|>|<=|>=|\d+\s*[-–]\s*\d+)/.test(normalized);
   const looksNarrative = /(guideline|interpretation|individuals|sensitive to|for further information|target reduction|http|www\.)/i.test(normalized);
   return (hasNumeric && (hasUnitHint || hasRange)) && !looksNarrative;
 };
@@ -1248,11 +1242,11 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
 const cleanWhitespace = (value: string): string => {
   const compact = value.replace(/\u00a0/g, " ").replace(NOISE_SYMBOL_PATTERN, " ").replace(/\s+/g, " ").trim();
 
-  // Some lab reports split micro-units as "Î¼ g/l", which breaks row parsing.
+  // Some lab reports split micro-units as "μ g/l", which breaks row parsing.
   return compact
     .replace(KEYWORD_INSERT_SPACE_PATTERN, "$1 ")
-    .replace(/([ÂµÎ¼])\s+g\s*\/\s*l/gi, "Âµg/L")
-    .replace(/([ÂµÎ¼])\s+mol\s*\/\s*l/gi, "Âµmol/L")
+    .replace(/([µμ])\s+g\s*\/\s*l/gi, "µg/L")
+    .replace(/([µμ])\s+mol\s*\/\s*l/gi, "µmol/L")
     .replace(/u?mol\s*\/\s*l/gi, (value) => (/^umol/i.test(value.replace(/\s+/g, "")) ? "umol/L" : value))
     .replace(/ug\s*\/\s*l/gi, "ug/L")
     .replace(/ug\s*\/\s*dl/gi, "ug/dL")
@@ -1266,12 +1260,12 @@ const cleanWhitespace = (value: string): string => {
     .replace(/ng\s*\/\s*mg/gi, "ng/mg")
     .replace(/pg\s*\/\s*ml/gi, "pg/mL")
     .replace(/pg\s*\/\s*mg/gi, "pg/mg")
-    .replace(/10\s*[xÃ—*]\s*9\s*\/\s*l/gi, "10^9/L")
-    .replace(/10\s*[xÃ—*]\s*12\s*\/\s*l/gi, "10^12/L");
+    .replace(/10\s*[x×*]\s*9\s*\/\s*l/gi, "10^9/L")
+    .replace(/10\s*[x×*]\s*12\s*\/\s*l/gi, "10^12/L");
 };
 
 const normalizeUnit = (unit: string): string => {
-  const compact = unit.replace(/\s+/g, "").replace(/Î¼/g, "Âµ");
+  const compact = unit.replace(/\s+/g, "").replace(/μ/g, "µ");
   if (/^mmol\/l$/i.test(compact)) {
     return "mmol/L";
   }
@@ -1302,20 +1296,20 @@ const normalizeUnit = (unit: string): string => {
   if (/^mcg\/ml$/i.test(compact)) {
     return "mcg/mL";
   }
-  if (/^Âµmol\/l$/i.test(compact)) {
-    return "Âµmol/L";
+  if (/^µmol\/l$/i.test(compact)) {
+    return "µmol/L";
   }
   if (/^umol\/l$/i.test(compact)) {
-    return "Âµmol/L";
+    return "µmol/L";
   }
-  if (/^Âµg\/l$/i.test(compact)) {
-    return "Âµg/L";
+  if (/^µg\/l$/i.test(compact)) {
+    return "µg/L";
   }
   if (/^ug\/l$/i.test(compact)) {
-    return "Âµg/L";
+    return "µg/L";
   }
   if (/^ug\/dl$/i.test(compact)) {
-    return "Âµg/dL";
+    return "µg/dL";
   }
   if (/^g\/l$/i.test(compact)) {
     return "g/L";
@@ -1332,10 +1326,10 @@ const normalizeUnit = (unit: string): string => {
   if (/^u\/ml$/i.test(compact)) {
     return "U/mL";
   }
-  if (/^10(?:\^|\*|x|Ã—)?9\/l$/i.test(compact)) {
+  if (/^10(?:\^|\*|x|×)?9\/l$/i.test(compact)) {
     return "10^9/L";
   }
-  if (/^10(?:\^|\*|x|Ã—)?12\/l$/i.test(compact)) {
+  if (/^10(?:\^|\*|x|×)?12\/l$/i.test(compact)) {
     return "10^12/L";
   }
   if (/^u\/l$/i.test(compact)) {
@@ -1363,8 +1357,8 @@ const normalizeUnit = (unit: string): string => {
 };
 
 const isLikelyUnit = (token: string): boolean => {
-  const compact = token.replace(/\s+/g, "").replace(/Î¼/g, "Âµ");
-  if (/^10(?:\^|\*|x|Ã—)?(?:9|12)\/l$/i.test(compact)) {
+  const compact = token.replace(/\s+/g, "").replace(/μ/g, "µ");
+  if (/^10(?:\^|\*|x|×)?(?:9|12)\/l$/i.test(compact)) {
     return true;
   }
 
@@ -1376,7 +1370,7 @@ const isLikelyUnit = (token: string): boolean => {
     return true;
   }
 
-  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|IU|mg|g|Âµg|ug|Âµmol|umol|fL|fl|fmol|ratio|l\/l|mm\/hr)$/i.test(
+  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|IU|mg|g|µg|ug|µmol|umol|fL|fl|fmol|ratio|l\/l|mm\/hr)$/i.test(
     token
   );
 };
@@ -1775,7 +1769,7 @@ const cleanMarkerName = (rawMarker: string): string => {
 
   let marker = cleanWhitespace(rawMarker)
     .replace(/[|`~]+/g, " ")
-    .replace(/[â€¢Â·]+/g, " ")
+    .replace(/[•·]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/^[^A-Za-zÀ-ž]+/, "")
     .replace(/^(?:A|H|L)\s+(?=[A-Za-zÀ-ž0-9])/i, "")
@@ -1786,10 +1780,10 @@ const cleanMarkerName = (rawMarker: string): string => {
   // Remove flattened row prefixes like "15.5 % 8/58 A " or "Nmol/l 53/58 A ".
   marker = marker
     .replace(/^\d+(?:[.,]\d+)?\s*%?\s+\d{1,3}\/\d{2,3}\s+A?\s+/i, "")
-    .replace(/^[A-Za-zÂµÎ¼%]+\/[A-Za-z0-9ÂµÎ¼%]+\s+\d{1,3}\/\d{2,3}\s+A?\s+/i, "")
+    .replace(/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s+\d{1,3}\/\d{2,3}\s+A?\s+/i, "")
     .replace(/^\d{1,3}\/\d{2,3}\s+A?\s+/i, "")
-    .replace(/^[A-Za-zÂµÎ¼%]+\/[A-Za-z0-9ÂµÎ¼%]+\s*[-â€“]\s*-?\d+(?:[.,]\d+)?\s+-?\d+(?:[.,]\d+)?\s+/i, "")
-    .replace(/^[A-Za-zÂµÎ¼%]+\/[A-Za-z0-9ÂµÎ¼%]+\s*(?:<|>|â‰¤|â‰¥)\s*-?\d+(?:[.,]\d+)?\s+/i, "")
+    .replace(/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*[-–]\s*-?\d+(?:[.,]\d+)?\s+-?\d+(?:[.,]\d+)?\s+/i, "")
+    .replace(/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*(?:<|>|≤|≥)\s*-?\d+(?:[.,]\d+)?\s+/i, "")
     .replace(/^uw metingen\s+/i, "")
     .replace(/^interval\s+/i, "")
     .replace(/^zie\s*opm\.?\s*/i, "")
@@ -1889,11 +1883,11 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
   if (/[=<>]/.test(marker)) {
     return true;
   }
-  if (/\b\d+(?:[.,]\d+)?\s*[-â€“]\s*\d+(?:[.,]\d+)?\b/.test(marker)) {
+  if (/\b\d+(?:[.,]\d+)?\s*[-–]\s*\d+(?:[.,]\d+)?\b/.test(marker)) {
     return true;
   }
 
-  if (isLikelyUnit(marker) || (/^[A-Za-z%ÂµÎ¼/().-]+$/.test(marker) && marker.includes("/"))) {
+  if (isLikelyUnit(marker) || (/^[A-Za-z%µμ/().-]+$/.test(marker) && marker.includes("/"))) {
     return true;
   }
 
@@ -1932,11 +1926,11 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
-  if (/^(?:[A-Za-zÂµÎ¼%]+\/[A-Za-z0-9ÂµÎ¼%]+\s+){2,}/.test(marker)) {
+  if (/^(?:[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s+){2,}/.test(marker)) {
     return true;
   }
 
-  if (/^[A-Za-zÂµÎ¼%]+\/[A-Za-z0-9ÂµÎ¼%]+\s*[<>]?$/.test(marker)) {
+  if (/^[A-Za-zµμ%]+\/[A-Za-z0-9µμ%]+\s*[<>]?$/.test(marker)) {
     return true;
   }
 
@@ -1979,7 +1973,7 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   let referenceMax: number | null = null;
   let unit = "";
 
-  const rangeMatches = Array.from(cleaned.matchAll(/(?:<|>|â‰¤|â‰¥)?\s*(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/g));
+  const rangeMatches = Array.from(cleaned.matchAll(/(?:<|>|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/g));
   if (rangeMatches.length > 0) {
     const last = rangeMatches[rangeMatches.length - 1];
     referenceMin = safeNumber(last[1]);
@@ -1987,14 +1981,14 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const upperMatch = cleaned.match(/(?:^|\s)(?:<|â‰¤)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const upperMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (upperMatch) {
       referenceMax = safeNumber(upperMatch[1]);
     }
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const lowerMatch = cleaned.match(/(?:^|\s)(?:>|â‰¥)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const lowerMatch = cleaned.match(/(?:^|\s)(?:>|≥)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (lowerMatch) {
       referenceMin = safeNumber(lowerMatch[1]);
     }
@@ -2121,7 +2115,7 @@ const parseSingleRow = (
     return null;
   }
 
-  const baseMatch = cleanedRow.match(/^(.+?)\s+([<>â‰¤â‰¥]?\s*[+-]?\d+(?:[.,]\d+)?)(?:\s+|$)(.*)$/);
+  const baseMatch = cleanedRow.match(/^(.+?)\s+([<>≤≥]?\s*[+-]?\d+(?:[.,]\d+)?)(?:\s+|$)(.*)$/);
   if (!baseMatch) {
     return null;
   }
@@ -2276,7 +2270,7 @@ const parseLifeLabsTableRows = (text: string, profile: ParserProfile): ParsedFal
     }
 
     const strictMatch = line.match(
-      /^([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{1,90}?)\s+(?:(?:A|H|L)\s+)?([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+((?:[<>â‰¤â‰¥]\s*-?\d+(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?\s*[-â€“]\s*-?\d+(?:[.,]\d+)?))\s+([A-Za-z%ÂµÎ¼0-9*^/.\-]+)$/i
+      /^([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{1,90}?)\s+(?:(?:A|H|L)\s+)?([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+((?:[<>≤≥]\s*-?\d+(?:[.,]\d+)?|-?\d+(?:[.,]\d+)?\s*[-–]\s*-?\d+(?:[.,]\d+)?))\s+([A-Za-z%µμ0-9*^/.\-]+)$/i
     );
 
     if (strictMatch) {
@@ -2312,14 +2306,14 @@ const parseLifeLabsTableRows = (text: string, profile: ParserProfile): ParsedFal
 
 const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile): ParsedFallbackRow | null => {
   const lineWithoutIndex = cleanWhitespace(line).replace(INDEXED_ROW_PREFIX_PATTERN, "").trim();
-  const markerAndValue = lineWithoutIndex.match(/^(.+?)\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)$/);
+  const markerAndValue = lineWithoutIndex.match(/^(.+?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)$/);
   if (markerAndValue) {
     const leftTokens = cleanWhitespace(markerAndValue[1]).split(" ").filter(Boolean);
     const leftNumericCount = leftTokens.filter((token) => isNumericToken(token)).length;
     const probablyRangeTail =
       leftNumericCount >= 2 ||
       (leftTokens.length >= 2 && DASH_TOKEN_PATTERN.test(leftTokens[leftTokens.length - 1])) ||
-      /(?:\d+\s*[-â€“]\s*$)/.test(markerAndValue[1]);
+      /(?:\d+\s*[-–]\s*$)/.test(markerAndValue[1]);
 
     if (!probablyRangeTail) {
       const markerName = applyProfileMarkerFixes(cleanMarkerName(markerAndValue[1]));
@@ -2362,7 +2356,7 @@ const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile)
   }
 
   const nextMatch = dequalifiedNext.match(
-    /^([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?))?\s*(.*)$/i
+    /^([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(H|L|HIGH|LOW|Within(?:\s+range)?|Above(?:\s+range)?|Below(?:\s+range)?))?\s*(.*)$/i
   );
   if (!nextMatch) {
     return null;
@@ -2551,7 +2545,7 @@ const looksLikeMarkerLabelSegment = (rawText: string): boolean => {
   if (!/[A-Za-zÀ-ž]/.test(text)) {
     return false;
   }
-  if (/^(?:=|<|>|â‰¤|â‰¥)?\s*-?\d+(?:[.,]\d+)?(?:\s+[A-Za-z%ÂµÎ¼/][A-Za-z0-9%ÂµÎ¼/.\-Â²]*)?$/i.test(text)) {
+  if (/^(?:=|<|>|≤|≥)?\s*-?\d+(?:[.,]\d+)?(?:\s+[A-Za-z%µμ/][A-Za-z0-9%µμ/.\-²]*)?$/i.test(text)) {
     return false;
   }
   if (text.split(" ").length > 9) {
@@ -2664,15 +2658,15 @@ const isPlausibleNonSpatialMeasurement = (canonicalMarker: string, unit: string,
   }
 
   if (canonical === "prolactin") {
-    return ["ng/mL", "mIU/L", "Âµg/L"].includes(normalizedUnit) && value <= 4000;
+    return ["ng/mL", "mIU/L", "µg/L"].includes(normalizedUnit) && value <= 4000;
   }
 
   if (canonical === "dhea sulfate" || canonical === "dhea-sulfate") {
-    return ["mcg/dL", "Âµg/dL", "ng/mL", "Âµmol/L"].includes(normalizedUnit) && value <= 5000;
+    return ["mcg/dL", "µg/dL", "ng/mL", "µmol/L"].includes(normalizedUnit) && value <= 5000;
   }
 
   if (canonical === "psa") {
-    return ["ng/mL", "Âµg/L", "%"].includes(normalizedUnit) && value <= 100;
+    return ["ng/mL", "µg/L", "%"].includes(normalizedUnit) && value <= 100;
   }
 
   if (canonical === "bioavailable testosterone") {
@@ -2680,7 +2674,7 @@ const isPlausibleNonSpatialMeasurement = (canonicalMarker: string, unit: string,
   }
 
   if (canonical.includes("dihydrotestoster") || canonical === "dht") {
-    if (["ng/dL", "pg/mL", "nmol/L", "pmol/L", "Âµg/dL"].includes(normalizedUnit)) {
+    if (["ng/dL", "pg/mL", "nmol/L", "pmol/L", "µg/dL"].includes(normalizedUnit)) {
       if (normalizedUnit === "ng/dL") {
         return value <= 800;
       }
@@ -2979,7 +2973,7 @@ const parseHistoryCurrentColumnRows = (rows: PdfSpatialRow[], text: string, prof
         }
 
         const pairMatches = Array.from(
-          textValue.matchAll(/([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*(nmol\/L|pmol\/L|ng\/dL|pg\/mL|ng\/mL|mIU\/mL|IU\/L|%|L\/L)/gi)
+          textValue.matchAll(/([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(nmol\/L|pmol\/L|ng\/dL|pg\/mL|ng\/mL|mIU\/mL|IU\/L|%|L\/L)/gi)
         );
         for (const match of pairMatches) {
           const value = safeNumber(match[1].replace(/\s+/g, ""));
@@ -3042,7 +3036,7 @@ const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow
   const rows: ParsedFallbackRow[] = [];
 
   const rowPattern =
-    /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,120}?)\s+(?:[A-Z]{2,8}\s+)?(?:[Ã±Ã²â†‘â†“]\s+)?([<>]?\d+(?:[.,]\d+)?)\s+([A-Za-z%ÂµÎ¼/][A-Za-z%ÂµÎ¼/0-9.\-Â²]*)\s+(?:-\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)|([<>â‰¤â‰¥])\s*(\d+(?:[.,]\d+)?))/g;
+    /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,120}?)\s+(?:[A-Z]{2,8}\s+)?(?:[ñò↑↓]\s+)?([<>]?\d+(?:[.,]\d+)?)\s+([A-Za-z%µμ/][A-Za-z%µμ/0-9.\-²]*)\s+(?:-\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)|([<>≤≥])\s*(\d+(?:[.,]\d+)?))/g;
 
   for (const match of normalized.matchAll(rowPattern)) {
     const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]));
@@ -3068,7 +3062,7 @@ const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow
     if (match[6] && match[7]) {
       const bound = safeNumber(match[7]);
       if (bound !== null) {
-        if (match[6] === "<" || match[6] === "â‰¤") {
+        if (match[6] === "<" || match[6] === "≤") {
           referenceMax = bound;
         } else {
           referenceMin = bound;
@@ -3086,6 +3080,75 @@ const parseLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow
     };
 
     if (!shouldKeepParsedRow(row, profile)) {
+      continue;
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
+};
+
+const ULTRA_LOOSE_MARKER_PREFIX_PATTERN =
+  /^(?:result(?:s)?|value|your value|din vaerdi|din værdi|uw waarde|su valor|votre valeur|ihr wert|twoja wartosc|twoja wartość)\s*[:\-]?\s*/i;
+
+const parseUltraLooseRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  const rows: ParsedFallbackRow[] = [];
+  const lines = text
+    .split("\n")
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean)
+    .slice(0, 1200);
+
+  for (const line of lines) {
+    if (line.length < 6 || line.length > 180) {
+      continue;
+    }
+    if (!/\d/.test(line)) {
+      continue;
+    }
+    if (looksLikeNonResultLine(line)) {
+      continue;
+    }
+
+    const valueMatch = line.match(/[<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?/);
+    if (!valueMatch || typeof valueMatch.index !== "number" || valueMatch.index < 2) {
+      continue;
+    }
+
+    const markerSegment = line.slice(0, valueMatch.index).replace(ULTRA_LOOSE_MARKER_PREFIX_PATTERN, "");
+    const markerName = sanitizeMarkerName(markerSegment);
+    if (!markerName || looksLikeNoiseMarker(markerName)) {
+      continue;
+    }
+
+    const value = safeNumber(valueMatch[0]);
+    if (value === null) {
+      continue;
+    }
+
+    const rest = line.slice(valueMatch.index + valueMatch[0].length);
+    const parsedReference = extractReferenceAndUnit(rest);
+    const unit = normalizeUnit(parsedReference.unit);
+    const canonical = canonicalizeMarker(markerName, { unit, mode: "balanced" });
+    const knownCanonical = canonical !== "Unknown Marker";
+    const hasStructuredSignal = Boolean(unit) || parsedReference.referenceMin !== null || parsedReference.referenceMax !== null;
+
+    if (!knownCanonical && !hasStructuredSignal) {
+      continue;
+    }
+
+    const row: ParsedFallbackRow = {
+      markerName,
+      value,
+      unit,
+      referenceMin: parsedReference.referenceMin,
+      referenceMax: parsedReference.referenceMax,
+      confidence: knownCanonical ? 0.56 : 0.48
+    };
+
+    const keepByStrictRules = shouldKeepParsedRow(row, profile);
+    if (!keepByStrictRules && !knownCanonical) {
       continue;
     }
 
@@ -3128,42 +3191,42 @@ const parseGenovaHormoneRows = (text: string, profile: ParserProfile): ParsedFal
   }
   const rows: ParsedFallbackRow[] = [];
 
-  const dheaMatch = text.match(/([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+DHEA\s*Sulfate\s*\(serum\)/i);
+  const dheaMatch = text.match(/([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+DHEA\s*Sulfate\s*\(serum\)/i);
   if (dheaMatch) {
     pushTemplateRow(rows, profile, "DHEA Sulfate", dheaMatch[1], "mcg/dL", 85, 690, 0.83);
   }
 
-  const shbgMatch = text.match(/([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+Sex Hormone Binding Globulin,?\s*SHBG/i);
+  const shbgMatch = text.match(/([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+Sex Hormone Binding Globulin,?\s*SHBG/i);
   if (shbgMatch) {
     pushTemplateRow(rows, profile, "SHBG", shbgMatch[1], "nmol/L", 13.3, 89.5, 0.83);
   }
 
-  const estradiolMatch = text.match(/Estradiol\s*\(serum\)\s*([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)/i);
+  const estradiolMatch = text.match(/Estradiol\s*\(serum\)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)/i);
   if (estradiolMatch) {
     pushTemplateRow(rows, profile, "Estradiol", estradiolMatch[1], "pg/mL", 15, 32, 0.82);
   }
 
-  const freeTMatch = text.match(/Free Testosterone\s*\(serum\)\s*([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)/i);
+  const freeTMatch = text.match(/Free Testosterone\s*\(serum\)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)/i);
   if (freeTMatch) {
     pushTemplateRow(rows, profile, "Free Testosterone", freeTMatch[1], "pg/mL", 5, 253, 0.82);
   }
 
-  const psaMatch = text.match(/([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+Prostate Specific Antigen,?\s*PSA\s*\(serum\)/i);
+  const psaMatch = text.match(/([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+Prostate Specific Antigen,?\s*PSA\s*\(serum\)/i);
   if (psaMatch) {
     pushTemplateRow(rows, profile, "PSA", psaMatch[1], "ng/mL", null, 4, 0.82);
   }
 
-  const fshMatch = text.match(/Follicular Stimulating Hormone,?\s*FSH\s*\(serum\)\s*([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)/i);
+  const fshMatch = text.match(/Follicular Stimulating Hormone,?\s*FSH\s*\(serum\)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)/i);
   if (fshMatch) {
     pushTemplateRow(rows, profile, "FSH", fshMatch[1], "mIU/mL", 1.5, 12.4, 0.8);
   }
 
-  const lhMatch = text.match(/Luteinizing Hormone\s*\(serum\)\s*([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)/i);
+  const lhMatch = text.match(/Luteinizing Hormone\s*\(serum\)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)/i);
   if (lhMatch) {
     pushTemplateRow(rows, profile, "LH", lhMatch[1], "mIU/mL", 1.7, 8.6, 0.8);
   }
 
-  const prolactinMatch = text.match(/Prolactin\s*\(serum\)\s*([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)/i);
+  const prolactinMatch = text.match(/Prolactin\s*\(serum\)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)/i);
   if (prolactinMatch) {
     pushTemplateRow(rows, profile, "Prolactin", prolactinMatch[1], "ng/mL", 2.64, 13.13, 0.8);
   }
@@ -3178,7 +3241,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   const rows: ParsedFallbackRow[] = [];
 
   const cortisolPattern =
-    /Cortisol\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/mL\s*\((morning|noon|evening|night)\)/gi;
+    /Cortisol\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/mL\s*\((morning|noon|evening|night)\)/gi;
   for (const match of text.matchAll(cortisolPattern)) {
     pushTemplateRow(
       rows,
@@ -3193,7 +3256,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const estradiolPattern =
-    /Estradiol\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*pg\/mL/i;
+    /Estradiol\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*pg\/mL/i;
   const estradiolMatch = text.match(estradiolPattern);
   if (estradiolMatch) {
     pushTemplateRow(
@@ -3209,7 +3272,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const testosteronePattern =
-    /Testosterone\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/dL/i;
+    /Testosterone\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/dL/i;
   const testosteroneMatch = text.match(testosteronePattern);
   if (testosteroneMatch) {
     pushTemplateRow(
@@ -3225,7 +3288,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const shbgPattern =
-    /SHBG\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*nmol\/L/i;
+    /SHBG\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*nmol\/L/i;
   const shbgMatch = text.match(shbgPattern);
   if (shbgMatch) {
     pushTemplateRow(
@@ -3241,7 +3304,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const dheasPattern =
-    /DHEAS\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*[Î¼Âµu]g\/dL/i;
+    /DHEAS\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*[μµu]g\/dL/i;
   const dheasMatch = text.match(dheasPattern);
   if (dheasMatch) {
     pushTemplateRow(
@@ -3256,14 +3319,14 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
     );
   }
 
-  const psaPattern = /PSA\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*[<â‰¤]?\s*(-?\d+(?:[.,]\d+)?)?\s*[-â€“]?\s*(-?\d+(?:[.,]\d+)?)?\s*ng\/mL/i;
+  const psaPattern = /PSA\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[<≤]?\s*(-?\d+(?:[.,]\d+)?)?\s*[-–]?\s*(-?\d+(?:[.,]\d+)?)?\s*ng\/mL/i;
   const psaMatch = text.match(psaPattern);
   if (psaMatch) {
     pushTemplateRow(rows, profile, "PSA", psaMatch[1], "ng/mL", safeNumber(psaMatch[2]), safeNumber(psaMatch[3]), 0.8);
   }
 
   const freeT4Pattern =
-    /Free\s*T4\*?\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/dL/i;
+    /Free\s*T4\*?\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*ng\/dL/i;
   const freeT4Match = text.match(freeT4Pattern);
   if (freeT4Match) {
     pushTemplateRow(
@@ -3279,7 +3342,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const freeT3Pattern =
-    /Free\s*T3\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*pg\/mL/i;
+    /Free\s*T3\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*pg\/mL/i;
   const freeT3Match = text.match(freeT3Pattern);
   if (freeT3Match) {
     pushTemplateRow(
@@ -3295,7 +3358,7 @@ const parseZrtCompactRows = (text: string, profile: ParserProfile): ParsedFallba
   }
 
   const tshPattern =
-    /TSH\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*(?:Î¼U\/mL|uIU\/mL|mIU\/mL|mU\/L)/i;
+    /TSH\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(?:H|L))?\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*(?:μU\/mL|uIU\/mL|mIU\/mL|mU\/L)/i;
   const tshMatch = text.match(tshPattern);
   if (tshMatch) {
     pushTemplateRow(
@@ -3320,7 +3383,7 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   const rows: ParsedFallbackRow[] = [];
 
   const totalMatch = text.match(
-    /Testosterone,\s*Total(?:,\s*LC\/MS\/MS)?[^\d]{0,40}([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?))?\s*ng\/dL/i
+    /Testosterone,\s*Total(?:,\s*LC\/MS\/MS)?[^\d]{0,40}([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?))?\s*ng\/dL/i
   );
   if (totalMatch) {
     pushTemplateRow(
@@ -3336,7 +3399,7 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   }
 
   const freeMatch = text.match(
-    /Testosterone,\s*Free[^\d]{0,40}([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?))?\s*pg\/mL/i
+    /Testosterone,\s*Free[^\d]{0,40}([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?))?\s*pg\/mL/i
   );
   if (freeMatch) {
     pushTemplateRow(
@@ -3352,7 +3415,7 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   }
 
   const bioMatch = text.match(
-    /Testosterone,\s*Bioavail[a-z]*[^\d]{0,40}([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?))?\s*ng\/dL/i
+    /Testosterone,\s*Bioavail[a-z]*[^\d]{0,40}([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)(?:\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?))?\s*ng\/dL/i
   );
   if (bioMatch) {
     pushTemplateRow(
@@ -3368,7 +3431,7 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   }
 
   const shbgMatch = text.match(
-    /Sex Hormone Binding Globulin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*nmol\/L/i
+    /Sex Hormone Binding Globulin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*nmol\/L/i
   );
   if (shbgMatch) {
     pushTemplateRow(
@@ -3384,7 +3447,7 @@ const parseWardeTesbRows = (text: string, profile: ParserProfile): ParsedFallbac
   }
 
   const albuminMatch = text.match(
-    /Albumin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*g\/dL/i
+    /Albumin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*g\/dL/i
   );
   if (albuminMatch) {
     pushTemplateRow(
@@ -3410,7 +3473,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
   const rows: ParsedFallbackRow[] = [];
   const normalized = cleanWhitespace(text);
   const rowPattern =
-    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z0-9][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[Ã±Ã²â‡§â‡©â†‘â†“]\s+)?((?:[<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%ÂµÎ¼][A-Za-z%ÂµÎ¼0-9*^/.\-]*))?(?=(?:\s+\(D3\s*\+\s*D2\))?\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
+    /(?:^|\s)\d{1,3}\/\d{2,3}\s+A?\s+([A-Za-z0-9][A-Za-z0-9(),.%+\-/ ]{2,80}?)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?((?:[<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*[-–]\s*(?:-?\d+(?:[.,]\d+)?))(?:\s+([A-Za-z%µμ][A-Za-z%µμ0-9*^/.\-]*))?(?=(?:\s+\(D3\s*\+\s*D2\))?\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/gi;
 
   for (const match of normalized.matchAll(rowPattern)) {
     let markerName = applyProfileMarkerFixes(cleanMarkerName(match[1] ?? ""));
@@ -3444,7 +3507,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
 
   // Vitamin D rows can include a section header between the value line and the next indexed row.
   const vitaminDPattern =
-    /\b\d{1,3}\/\d{2,3}\s+A?\s+25-?OH-?\s*Vitamin D\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[Ã±Ã²â‡§â‡©â†‘â†“]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*(ng\/mL|nmol\/L)\b(?:\s*\(D3\s*\+\s*D2\))?/i;
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+25-?OH-?\s*Vitamin D\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*(ng\/mL|nmol\/L)\b(?:\s*\(D3\s*\+\s*D2\))?/i;
   const vitaminDMatch = normalized.match(vitaminDPattern);
   if (vitaminDMatch) {
     const value = safeNumber(vitaminDMatch[1]);
@@ -3476,7 +3539,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
 
   // Some Latvia rows (notably Free Androgen Index) may omit the unit column.
   const freeAndrogenPattern =
-    /\b\d{1,3}\/\d{2,3}\s+A?\s+Free Androgen Index\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[Ã±Ã²â‡§â‡©â†‘â†“]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/i;
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+Free Androgen Index\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)(?=\s+\d{1,3}\/\d{2,3}\s+A?\s+|$)/i;
   const freeAndrogenMatch = normalized.match(freeAndrogenPattern);
   if (freeAndrogenMatch) {
     const value = safeNumber(freeAndrogenMatch[1]);
@@ -3507,7 +3570,7 @@ const parseLatvianIndexedRows = (text: string, profile: ParserProfile): ParsedFa
   }
 
   const pctPattern =
-    /\b\d{1,3}\/\d{2,3}\s+A?\s+PCT-plateletcrit\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[Ã±Ã²â‡§â‡©â†‘â†“]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)\s*%/i;
+    /\b\d{1,3}\/\d{2,3}\s+A?\s+PCT-plateletcrit\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+(?:[ñò⇧⇩↑↓]\s+)?(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*%/i;
   const pctMatch = normalized.match(pctPattern);
   if (pctMatch) {
     const value = safeNumber(pctMatch[1]);
@@ -3596,69 +3659,69 @@ const parseLondonDoctorSummaryRows = (text: string, profile: ParserProfile): Par
     pushTemplateRow(rows, profile, markerName, match[1], unit, safeNumber(match[2]), null, confidence);
   };
 
-  pushRange("Hemoglobin", /Haemoglobin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
-  pushRange("Red Blood Cells", /Red Cell Count\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?12\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^12/L");
-  pushRange("Hematocrit", /Haematocrit\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*L\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "L/L");
-  pushRange("MCV", /Mean Corpuscular Volume\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
-  pushRange("MCH", /Mean Cell Haemoglobin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*pg\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "pg");
-  pushRange("MCHC", /Mean Cell Haemoglobin Concentration\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
-  pushRange("RDW-CV", /Red Cell Distribution Width\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
-  pushRange("Platelets", /Platelet Count\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Leukocyten", /White Cell Count\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Neutrophils Abs.", /Neutrophils\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Lymphocytes Abs.", /Lymphocytes\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Monocytes Abs.", /Monocytes\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*(?:X10\^?9\/L|g\/L)\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Eosinophils Abs.", /Eosinophils\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
-  pushRange("Basophils Abs.", /Basophils\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Hemoglobin", /Haemoglobin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
+  pushRange("Red Blood Cells", /Red Cell Count\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?12\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^12/L");
+  pushRange("Hematocrit", /Haematocrit\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*L\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "L/L");
+  pushRange("MCV", /Mean Corpuscular Volume\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
+  pushRange("MCH", /Mean Cell Haemoglobin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*pg\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "pg");
+  pushRange("MCHC", /Mean Cell Haemoglobin Concentration\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
+  pushRange("RDW-CV", /Red Cell Distribution Width\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
+  pushRange("Platelets", /Platelet Count\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Leukocyten", /White Cell Count\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Neutrophils Abs.", /Neutrophils\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Lymphocytes Abs.", /Lymphocytes\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Monocytes Abs.", /Monocytes\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(?:X10\^?9\/L|g\/L)\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Eosinophils Abs.", /Eosinophils\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
+  pushRange("Basophils Abs.", /Basophils\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
 
-  pushRange("Albumine", /Albumin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
-  pushRange("Ferritine", /Ferritin\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*ng\/mL\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "ng/mL");
-  pushRange("Transferrine Saturatie", /Transferrin Saturation\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
-  pushRange("Ureum", /Urea\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
-  pushRange("Creatinine", /Creatinine\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*umol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "umol/L");
+  pushRange("Albumine", /Albumin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
+  pushRange("Ferritine", /Ferritin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*ng\/mL\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "ng/mL");
+  pushRange("Transferrine Saturatie", /Transferrin Saturation\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
+  pushRange("Ureum", /Urea\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
+  pushRange("Creatinine", /Creatinine\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*umol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "umol/L");
   pushLowerBound(
     "eGFR",
-    /estimated Glomerular Filtration Rate\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mL\/min\/\s*1\.73m2\s*[>â‰¥]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /estimated Glomerular Filtration Rate\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mL\/min\/\s*1\.73m2\s*[>≥]\s*(-?\d+(?:[.,]\d+)?)/i,
     "mL/min/1.73m2"
   );
 
-  pushRange("Free T4", /Free T4 \(thyroxine\)\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*pmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "pmol/L");
+  pushRange("Free T4", /Free T4 \(thyroxine\)\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*pmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "pmol/L");
   pushRange(
     "TSH",
-    /Thyroid Stimulating Hormone\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*uIU\/ML\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /Thyroid Stimulating Hormone\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*uIU\/ML\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i,
     "uIU/mL"
   );
 
-  pushUpperBound("LDL Cholesterol", /Low Density Lipoprotein\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<â‰¤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
-  pushUpperBound("Triglyceriden", /Triglyceride\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<â‰¤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
-  pushUpperBound("Cholesterol", /Total Cholesterol\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<â‰¤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
+  pushUpperBound("LDL Cholesterol", /Low Density Lipoprotein\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
+  pushUpperBound("Triglyceriden", /Triglyceride\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
+  pushUpperBound("Cholesterol", /Total Cholesterol\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i, "mmol/L");
   pushRange(
     "Non-HDL Cholesterol",
-    /Non-HDL-Cholesterol\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /Non-HDL-Cholesterol\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i,
     "mmol/L"
   );
   pushUpperBound(
     "Cholesterol/HDL Ratio",
-    /Total Cholesterol:\s*HDL Ratio\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<â‰¤]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /Total Cholesterol:\s*HDL Ratio\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i,
     "ratio"
   );
   pushRange(
     "HDL Cholesterol",
-    /High Density Lipoprotein\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /High Density Lipoprotein\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i,
     "mmol/L"
   );
 
-  pushRange("Foliumzuur", /Folate\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "nmol/L");
+  pushRange("Foliumzuur", /Folate\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "nmol/L");
   pushRange(
     "Vitamin D (D3+D2) OH",
-    /Vitamin D\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /Vitamin D\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i,
     "nmol/L"
   );
-  pushRange("Vitamine B12", /Vitamin B12\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*pmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "pmol/L");
-  pushRange("Testosterone", /Hormones\s+Testosterone\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-â€“]\s*(-?\d+(?:[.,]\d+)?)/i, "nmol/L");
+  pushRange("Vitamine B12", /Vitamin B12\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*pmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "pmol/L");
+  pushRange("Testosterone", /Hormones\s+Testosterone\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*nmol\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "nmol/L");
   pushUpperBound(
     "CRP",
-    /High Sensitivity C-Reactive Protein\s+([<>â‰¤â‰¥]?\s*-?\d+(?:[.,]\d+)?)\s*mg\/L\s*[<â‰¤]\s*(-?\d+(?:[.,]\d+)?)/i,
+    /High Sensitivity C-Reactive Protein\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*mg\/L\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i,
     "mg/L"
   );
 
@@ -3751,8 +3814,6 @@ const dedupeRowsDetailed = (rows: ParsedFallbackRow[]): { markers: MarkerValue[]
     }
   };
 };
-
-const dedupeRows = (rows: ParsedFallbackRow[]): MarkerValue[] => dedupeRowsDetailed(rows).markers;
 
 const filterMarkerValuesForQuality = (rows: MarkerValue[]): MarkerValue[] =>
   rows.filter((row) => {
@@ -4099,6 +4160,10 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
   const indexedRowsRaw = parseIndexedRows(text, profile);
   const indexedRows = latvianRows.length > 0 ? [] : indexedRowsRaw;
   const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
+  const ultraLooseRows =
+    lineRows.length + columnRows.length + indexedRows.length + looseRows.length < 6
+      ? parseUltraLooseRows(text, profile)
+      : [];
   const keywordRangeLocale = profile.keywordRangeLocaleId
     ? getKeywordRangeLocaleById(profile.keywordRangeLocaleId)
     : null;
@@ -4117,6 +4182,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...lineRows,
           ...indexedRows,
           ...looseRows,
+          ...ultraLooseRows,
           ...keywordRangeRows
         ]
       : [
@@ -4129,6 +4195,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...columnRows,
           ...lineRows,
           ...looseRows,
+          ...ultraLooseRows,
           ...keywordRangeRows
         ];
   const nonSpatialDedupe = dedupeRowsDetailed(nonSpatialRows);
@@ -4293,6 +4360,12 @@ const callGeminiExtraction = async (
     }
     if (response.status === 503 && body?.error?.code === "AI_LIMITS_UNAVAILABLE") {
       return { body: null, warningCode: "PDF_AI_LIMITS_UNAVAILABLE" };
+    }
+    if (
+      response.status === 403 &&
+      (body?.error?.code === "AI_ENTITLEMENT_REQUIRED" || body?.error?.code === "AI_PLAN_LIMIT")
+    ) {
+      return { body: null, warningCode: "PDF_AI_PLAN_REQUIRED" };
     }
     if (response.status === 429) {
       return { body: null, warningCode: "PDF_AI_SKIPPED_RATE_LIMIT" };
@@ -4490,11 +4563,13 @@ const buildLocalExtractionWarnings = (
   const historyLikeLayout = looksLikeHistorySheetLayout(textResult.text);
   const historySparseSignal =
     historyLikeLayout && markerCount >= 8 && referenceCoverage < 0.3 && draft.extraction.confidence < 0.7;
+  const sparseLowConfidenceSignal = markerCount <= 5 && referenceCoverage < 0.35 && draft.extraction.confidence < 0.62;
 
   const likelyUnknownLayout =
     (textResult.textItemCount > 0 || ocrResult.used) &&
     (
       (markerCount <= 3 && draft.extraction.confidence < 0.55) ||
+      sparseLowConfidenceSignal ||
       ((duplicateHeavy && sparseReferences) && (draft.extraction.confidence < 0.8 || historyLikeLayout)) ||
       historySparseSignal
     );
@@ -4529,6 +4604,7 @@ const EXTRACTION_WARNING_CODE_SET: ReadonlySet<ExtractionWarningCode> = new Set<
   "PDF_AI_SKIPPED_BUDGET",
   "PDF_AI_SKIPPED_RATE_LIMIT",
   "PDF_AI_LIMITS_UNAVAILABLE",
+  "PDF_AI_PLAN_REQUIRED",
   "PDF_AI_CONSENT_REQUIRED",
   "PDF_AI_DISABLED_BY_PARSER_MODE"
 ]);
@@ -4916,14 +4992,12 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       ocrResult.initFailed;
     const shouldUseAi = allowAi && (forceAi || shouldAutoUseAi || mustUseAiRescue);
 
-    if (!allowAi && (forceAiRequested || !localQualityGood)) {
+    if (!allowAi && (forceAiRequested || (allowAiByMode && !localQualityGood))) {
       if (consentBlocksAi) {
         aiWarnings.push("PDF_AI_CONSENT_REQUIRED");
         aiReason = "disabled_by_consent";
-      } else {
-        aiWarnings.push("PDF_AI_DISABLED_BY_PARSER_MODE");
       }
-    } else if (!shouldUseAi && !localQualityGood) {
+    } else if (allowAi && !shouldUseAi && !localQualityGood) {
       aiWarnings.push("PDF_AI_SKIPPED_COST_MODE");
     }
 
@@ -5021,6 +5095,8 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
             : aiResult.aiReason ?? (parsingDraft.extraction.provider === "gemini" ? "auto_low_quality" : "local_high_quality");
       } else if (aiResult.warningCode === "PDF_AI_SKIPPED_BUDGET") {
         aiReason = "disabled_by_budget";
+      } else if (aiResult.warningCode === "PDF_AI_PLAN_REQUIRED") {
+        aiReason = "disabled_by_entitlement";
       } else if (costMode === "ultra_low_cost" && !forceAi) {
         aiReason = "disabled_by_cost_mode";
       } else if (localQualityGood) {

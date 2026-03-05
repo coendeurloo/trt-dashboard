@@ -15,9 +15,7 @@ class ResizeObserverMock {
 
 if (typeof window !== "undefined" && !("ResizeObserver" in window)) {
   // Recharts requires ResizeObserver in jsdom tests.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).ResizeObserver = ResizeObserverMock;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).ResizeObserver = ResizeObserverMock;
 }
 

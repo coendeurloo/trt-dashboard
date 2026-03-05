@@ -1,0 +1,7 @@
+coverage
+dist
+node_modules
+.vite
+.vercel
+*.tsbuildinfo
+docs/parser-batch-report-*.json

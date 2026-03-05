@@ -113,6 +113,23 @@ describe("pdfParsing fallback layers", () => {
     expect(markerNames).not.toContain("Platelet Count");
   });
 
+  it("rescues scan-like rows without units when marker anchors are clear", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Result Testosterone Total 17.2",
+        "Result SHBG 31.4",
+        "Result Estradiol 98.0",
+        "Collected: 03/11/2025"
+      ].join("\n"),
+      "scan-like-no-units.pdf"
+    );
+
+    const canonicalMarkers = draft.markers.map((row) => row.canonicalMarker);
+    expect(canonicalMarkers).toContain("Testosterone");
+    expect(canonicalMarkers).toContain("SHBG");
+    expect(canonicalMarkers).toContain("Estradiol");
+  });
+
   it("flags sparse text-layer PDFs for OCR fallback", () => {
     const draft = __pdfParsingInternals.fallbackExtract("Testosterone 12 ng/mL", "sparse.pdf");
     const shouldUseOcr = __pdfParsingInternals.shouldUseOcrFallback(
@@ -1112,6 +1129,87 @@ describe("pdfParsing fallback layers", () => {
           provider: "fallback",
           model: "fallback-layered:adaptive",
           confidence: 0.63,
+          needsReview: true
+        }
+      }
+    );
+
+    expect(warningMeta.warnings).toContain("PDF_UNKNOWN_LAYOUT");
+  });
+
+  it("flags unknown layout for sparse low-confidence local extraction", () => {
+    const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
+      {
+        text: "Basic hormone panel\nTestosterone 18.2\nEstradiol 32\nSHBG 28\nAlbumin 45",
+        pageCount: 1,
+        textItemCount: 70,
+        lineCount: 12,
+        nonWhitespaceChars: 62,
+        spatialRows: []
+      },
+      false,
+      {
+        text: "",
+        used: false,
+        pagesAttempted: 0,
+        pagesSucceeded: 0,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      },
+      {
+        sourceFileName: "sparse-low-confidence.pdf",
+        testDate: "2025-01-01",
+        markers: [
+          {
+            id: "m1",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 18.2,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.58
+          },
+          {
+            id: "m2",
+            marker: "Estradiol",
+            canonicalMarker: "Estradiol",
+            value: 32,
+            unit: "pmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.58
+          },
+          {
+            id: "m3",
+            marker: "SHBG",
+            canonicalMarker: "SHBG",
+            value: 28,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.58
+          },
+          {
+            id: "m4",
+            marker: "Albumin",
+            canonicalMarker: "Albumin",
+            value: 45,
+            unit: "g/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.58
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback-layered:adaptive",
+          confidence: 0.58,
           needsReview: true
         }
       }

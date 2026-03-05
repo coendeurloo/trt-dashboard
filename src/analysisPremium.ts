@@ -74,20 +74,6 @@ interface BuildSupplementActionabilityDecisionOptions {
 }
 
 const CORE_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "LDL Cholesterol", "Apolipoprotein B"] as const;
-const KNOWN_SUPPLEMENT_LEVER_MARKERS = new Set([
-  "Apolipoprotein B",
-  "LDL Cholesterol",
-  "Non-HDL Cholesterol",
-  "Cholesterol",
-  "Triglyceriden",
-  "HDL Cholesterol",
-  "Hematocrit",
-  "Ferritin",
-  "Vitamin D (D3+D2) OH",
-  "Homocysteine",
-  "CRP",
-  "Glucose Nuchter"
-]);
 
 const confidenceRank = (value: string): number => {
   const normalized = value.toLowerCase();

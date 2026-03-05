@@ -1,6 +1,7 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { checkRateLimit } from "../claude/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
+import { requireAiEntitlement } from "../_lib/entitlements.js";
 
 interface GeminiAnalysisPayload {
   model: string;
@@ -117,6 +118,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
     if (!apiKey) {
       sendJson(res, 401, { error: { message: "Missing GEMINI_API_KEY on server" } });
+      return;
+    }
+
+    const entitlement = requireAiEntitlement(req, "analysis");
+    if (!entitlement.allowed && entitlement.error) {
+      sendJson(res, entitlement.error.statusCode, {
+        error: {
+          code: entitlement.error.code,
+          message: entitlement.error.message
+        }
+      });
       return;
     }
 

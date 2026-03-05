@@ -170,6 +170,7 @@ export type ExtractionWarningCode =
   | "PDF_AI_SKIPPED_BUDGET"
   | "PDF_AI_SKIPPED_RATE_LIMIT"
   | "PDF_AI_LIMITS_UNAVAILABLE"
+  | "PDF_AI_PLAN_REQUIRED"
   | "PDF_AI_CONSENT_REQUIRED"
   | "PDF_AI_DISABLED_BY_PARSER_MODE";
 
@@ -236,7 +237,8 @@ export type ExtractionAIReason =
   | "cache_hit"
   | "local_high_quality"
   | "disabled_by_cost_mode"
-  | "disabled_by_consent";
+  | "disabled_by_consent"
+  | "disabled_by_entitlement";
 
 export type ExtractionRoute =
   | "local-text"

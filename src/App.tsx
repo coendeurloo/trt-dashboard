@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -14,10 +14,6 @@ import {
 } from "./analytics";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
-import ExtractionReviewTable from "./components/ExtractionReviewTable";
-import MarkerTrendChart from "./components/MarkerTrendChart";
-import AIConsentModal from "./components/AIConsentModal";
-import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
@@ -70,7 +66,7 @@ import {
   TimeRangeKey
 } from "./types";
 import { AnalystMemory } from "./types/analystMemory";
-import { createId, deriveAbnormalFlag, formatDate, withinRange } from "./utils";
+import { createId, deriveAbnormalFlag, formatDate } from "./utils";
 import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -82,6 +78,10 @@ const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
+const ExtractionReviewTable = lazy(() => import("./components/ExtractionReviewTable"));
+const MarkerTrendChart = lazy(() => import("./components/MarkerTrendChart"));
+const AIConsentModal = lazy(() => import("./components/AIConsentModal"));
+const ExtractionComparisonModal = lazy(() => import("./components/ExtractionComparisonModal"));
 
 type UploadSummary =
   | {
@@ -143,7 +143,7 @@ const App = () => {
     sharedData: sharedSnapshot ? sharedSnapshot.data : null,
     isShareMode
   });
-  const tr = (nl: string, en: string): string => trLocale(appData.settings.language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const {
     shareOptions,
     setShareOptions,
@@ -177,6 +177,7 @@ const App = () => {
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
   const [localBaselineDraft, setLocalBaselineDraft] = useState<ExtractionDraft | null>(null);
   const [aiCandidateDraft, setAiCandidateDraft] = useState<ExtractionDraft | null>(null);
+  const [aiAttemptedForCurrentUpload, setAiAttemptedForCurrentUpload] = useState(false);
   const [uncertaintyAssessment, setUncertaintyAssessment] = useState<ParserUncertaintyAssessment | null>(null);
   const [pendingDiff, setPendingDiff] = useState<ExtractionDiffSummary | null>(null);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
@@ -455,7 +456,7 @@ const App = () => {
     if (!samplingControlsEnabled && (appData.settings.samplingFilter !== "all" || appData.settings.compareToBaseline)) {
       updateSettings({ samplingFilter: "all", compareToBaseline: false });
     }
-  }, [samplingControlsEnabled, appData.settings.samplingFilter, appData.settings.compareToBaseline]);
+  }, [samplingControlsEnabled, appData.settings.samplingFilter, appData.settings.compareToBaseline, updateSettings]);
 
   const appendMarkerSuggestions = (incoming: MarkerMergeSuggestion[]) => {
     if (incoming.length === 0) {
@@ -509,6 +510,7 @@ const App = () => {
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
+    setAiAttemptedForCurrentUpload(false);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
     setLastUploadedFile(null);
@@ -650,10 +652,26 @@ const App = () => {
       ...(candidate.extraction.warningCode ? [candidate.extraction.warningCode] : [])
     ]).size;
 
+  const hasParserAiAttempt = (candidate: ExtractionDraft | null): boolean => {
+    if (!candidate) {
+      return false;
+    }
+    const debug = candidate.extraction.debug;
+    const attemptedModes = Array.isArray(debug?.aiAttemptedModes) && debug.aiAttemptedModes.length > 0;
+    const inputTokens = Number(debug?.aiInputTokens ?? 0);
+    const outputTokens = Number(debug?.aiOutputTokens ?? 0);
+    const tokenUsage =
+      (Number.isFinite(inputTokens) && inputTokens > 0) || (Number.isFinite(outputTokens) && outputTokens > 0);
+    return Boolean(candidate.extraction.aiUsed) || attemptedModes || tokenUsage;
+  };
+
   const enrichDraftForReview = (input: ExtractionDraft): ExtractionDraft => ({
     ...input,
     markers: enrichMarkersForReview(input.markers)
   });
+
+  const hasParserAiAlreadyRunForCurrentUpload =
+    aiAttemptedForCurrentUpload || hasParserAiAttempt(draft) || hasParserAiAttempt(aiCandidateDraft);
 
   const getExtractionRouteSummary = (
     candidate: ExtractionDraft
@@ -730,7 +748,7 @@ const App = () => {
     file: File,
     localDraft: ExtractionDraft,
     consent: AIConsentDecision
-  ): Promise<{ finalDraft: ExtractionDraft; aiApplied: boolean }> => {
+  ): Promise<{ finalDraft: ExtractionDraft; aiApplied: boolean; aiAttempted: boolean }> => {
     const { extractLabData } = await ensurePdfParsingModule();
     const improved = await extractLabData(file, {
       costMode: "balanced",
@@ -749,7 +767,8 @@ const App = () => {
 
     return {
       finalDraft: autoApplyDecision.shouldApplyAi ? improvedDraft : localDraft,
-      aiApplied: autoApplyDecision.shouldApplyAi
+      aiApplied: autoApplyDecision.shouldApplyAi,
+      aiAttempted: hasParserAiAttempt(improvedDraft)
     };
   };
 
@@ -759,6 +778,7 @@ const App = () => {
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
+    setAiAttemptedForCurrentUpload(false);
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
@@ -877,6 +897,9 @@ const App = () => {
       const nextDraft = rescueResult.finalDraft;
       const warningCount = countWarnings(nextDraft);
       const routeSummary = getExtractionRouteSummary(nextDraft);
+      if (rescueResult.aiAttempted) {
+        setAiAttemptedForCurrentUpload(true);
+      }
 
       setDraft(nextDraft);
       setLocalBaselineDraft(nextDraft);
@@ -956,6 +979,9 @@ const App = () => {
         onStageChange: setUploadStage
       });
       const improvedDraft = enrichDraftForReview(improved);
+      if (hasParserAiAttempt(improvedDraft)) {
+        setAiAttemptedForCurrentUpload(true);
+      }
       const diff = buildExtractionDiffSummary(baselineDraft, improvedDraft);
       setAiCandidateDraft(improvedDraft);
       setPendingDiff(diff);
@@ -1038,6 +1064,7 @@ const App = () => {
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
+    setAiAttemptedForCurrentUpload(false);
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
@@ -1199,6 +1226,7 @@ const App = () => {
     setDraft(null);
     setLocalBaselineDraft(null);
     setAiCandidateDraft(null);
+    setAiAttemptedForCurrentUpload(false);
     setPendingDiff(null);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
@@ -1231,8 +1259,11 @@ const App = () => {
     await exportElementToPdf(root, `labtracker-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  const chartPointsForMarker = (markerName: string): MarkerSeriesPoint[] =>
-    buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline);
+  const chartPointsForMarker = useCallback(
+    (markerName: string): MarkerSeriesPoint[] =>
+      buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline),
+    [visibleReports, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline]
+  );
 
   const markerPercentChange = (marker: string): number | null => {
     const points = chartPointsForMarker(marker);
@@ -1269,7 +1300,7 @@ const App = () => {
 
   const expandedMarkerPoints = useMemo(
     () => (expandedMarker ? chartPointsForMarker(expandedMarker) : []),
-    [expandedMarker, visibleReports, appData.settings.unitSystem]
+    [expandedMarker, chartPointsForMarker]
   );
 
   const expandedMarkerColorIndex = useMemo(() => {
@@ -1484,6 +1515,7 @@ const App = () => {
     setDraft(null);
     setLocalBaselineDraft(null);
     setAiCandidateDraft(null);
+    setAiAttemptedForCurrentUpload(false);
     setPendingDiff(null);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
@@ -1608,52 +1640,55 @@ const App = () => {
       >
         <AnimatePresence mode="wait">
             {isReviewMode ? (
-              <ExtractionReviewTable
-                key="draft"
-                draft={draft!}
-                annotations={draftAnnotations}
-                protocols={appData.protocols}
-                supplementTimeline={appData.supplementTimeline}
-                inheritedSupplementsPreview={draftInheritedSupplements}
-                inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
-                selectedProtocolId={selectedProtocolId}
-                parserDebugMode={appData.settings.parserDebugMode}
-                language={appData.settings.language}
-                onDraftChange={setDraft}
-                onAnnotationsChange={setDraftAnnotations}
-                onSelectedProtocolIdChange={setSelectedProtocolId}
-                onProtocolCreate={addProtocol}
-                onAddSupplementPeriod={addSupplementPeriod}
-                isImprovingWithAi={isImprovingExtraction}
-                onImproveWithAi={
-                  showAdvancedParserActions && lastUploadedFile && !draft!.extraction.aiUsed
-                    ? improveDraftWithAi
-                    : undefined
-                }
-                onEnableAiRescue={
-                  lastUploadedFile &&
-                  !draft!.extraction.aiUsed &&
-                  Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
-                    ? enableAiRescueFromReview
-                    : undefined
-                }
-                onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
-                onStartManualEntry={startManualEntry}
-                onSave={saveDraftAsReport}
-                onCancel={() => {
-                  setUploadSummary(null);
-                  setDraft(null);
-                  setLocalBaselineDraft(null);
-                  setAiCandidateDraft(null);
-                  setPendingDiff(null);
-                  setShowComparisonModal(false);
-                  setUncertaintyAssessment(null);
-                  setDraftOriginalMarkerLabels({});
-                  setLastUploadedFile(null);
-                  setSelectedProtocolId(null);
-                  setIsImprovingExtraction(false);
-                }}
-              />
+              <Suspense fallback={tabLoadFallback}>
+                <ExtractionReviewTable
+                  key="draft"
+                  draft={draft!}
+                  annotations={draftAnnotations}
+                  protocols={appData.protocols}
+                  supplementTimeline={appData.supplementTimeline}
+                  inheritedSupplementsPreview={draftInheritedSupplements}
+                  inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
+                  selectedProtocolId={selectedProtocolId}
+                  parserDebugMode={appData.settings.parserDebugMode}
+                  language={appData.settings.language}
+                  onDraftChange={setDraft}
+                  onAnnotationsChange={setDraftAnnotations}
+                  onSelectedProtocolIdChange={setSelectedProtocolId}
+                  onProtocolCreate={addProtocol}
+                  onAddSupplementPeriod={addSupplementPeriod}
+                  isImprovingWithAi={isImprovingExtraction}
+                  onImproveWithAi={
+                    showAdvancedParserActions && lastUploadedFile && !hasParserAiAlreadyRunForCurrentUpload
+                      ? improveDraftWithAi
+                      : undefined
+                  }
+                  onEnableAiRescue={
+                    lastUploadedFile &&
+                    !hasParserAiAlreadyRunForCurrentUpload &&
+                    Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
+                      ? enableAiRescueFromReview
+                      : undefined
+                  }
+                  onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
+                  onStartManualEntry={startManualEntry}
+                  onSave={saveDraftAsReport}
+                  onCancel={() => {
+                    setUploadSummary(null);
+                    setDraft(null);
+                    setLocalBaselineDraft(null);
+                    setAiCandidateDraft(null);
+                    setAiAttemptedForCurrentUpload(false);
+                    setPendingDiff(null);
+                    setShowComparisonModal(false);
+                    setUncertaintyAssessment(null);
+                    setDraftOriginalMarkerLabels({});
+                    setLastUploadedFile(null);
+                    setSelectedProtocolId(null);
+                    setIsImprovingExtraction(false);
+                  }}
+                />
+              </Suspense>
             ) : null}
         </AnimatePresence>
 
@@ -1933,21 +1968,25 @@ const App = () => {
         ) : null}
       </AppShell>
 
-      <ExtractionComparisonModal
-        open={showComparisonModal}
-        language={appData.settings.language}
-        summary={pendingDiff}
-        onKeepLocal={keepLocalDraftVersion}
-        onApplyAi={applyAiCandidateDraft}
-      />
+      <Suspense fallback={null}>
+        <ExtractionComparisonModal
+          open={showComparisonModal}
+          language={appData.settings.language}
+          summary={pendingDiff}
+          onKeepLocal={keepLocalDraftVersion}
+          onApplyAi={applyAiCandidateDraft}
+        />
+      </Suspense>
 
-      <AIConsentModal
-        open={consentAction !== null}
-        action={consentAction ?? "analysis"}
-        language={appData.settings.language}
-        onClose={() => resolveConsentRequest(null)}
-        onDecide={(decision) => resolveConsentRequest(decision)}
-      />
+      <Suspense fallback={null}>
+        <AIConsentModal
+          open={consentAction !== null}
+          action={consentAction ?? "analysis"}
+          language={appData.settings.language}
+          onClose={() => resolveConsentRequest(null)}
+          onDecide={(decision) => resolveConsentRequest(decision)}
+        />
+      </Suspense>
 
       <AnimatePresence>
         {isProcessing || isImprovingExtraction ? (
@@ -2186,16 +2225,18 @@ const App = () => {
               </div>
 
               <div className="p-3 sm:p-5">
-                <MarkerTrendChart
-                  marker={expandedMarker}
-                  points={expandedMarkerPoints}
-                  colorIndex={expandedMarkerColorIndex}
-                  settings={appData.settings}
-                  language={appData.settings.language}
-                  phaseBlocks={dosePhaseBlocks}
-                  height={460}
-                  showYearHints
-                />
+                <Suspense fallback={tabLoadFallback}>
+                  <MarkerTrendChart
+                    marker={expandedMarker}
+                    points={expandedMarkerPoints}
+                    colorIndex={expandedMarkerColorIndex}
+                    settings={appData.settings}
+                    language={appData.settings.language}
+                    phaseBlocks={dosePhaseBlocks}
+                    height={460}
+                    showYearHints
+                  />
+                </Suspense>
               </div>
             </motion.div>
           </motion.div>

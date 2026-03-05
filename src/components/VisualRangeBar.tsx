@@ -214,5 +214,3 @@ const VisualRangeBar = ({ value, rangeType, min, max, optimalMin, optimalMax, un
 };
 
 export default VisualRangeBar;
-
-export { getDisplayBounds };

@@ -114,6 +114,47 @@ const AppShell = ({
     onUploadIntent,
     onStartManualEntry
   } = actions;
+  const hasSavedReports = reportsCount > 0;
+  const flowSteps = (() => {
+    type FlowState = "pending" | "active" | "done" | "error";
+    const step = (key: string, label: string, state: FlowState) => ({ key, label, state });
+    const uploadStateValue: FlowState = isProcessing ? "active" : hasSavedReports || isReviewMode ? "done" : "pending";
+    const extractStateValue: FlowState =
+      uploadStage === "failed"
+        ? "error"
+        : isProcessing
+          ? "active"
+          : hasSavedReports || isReviewMode
+            ? "done"
+            : "pending";
+    const reviewStateValue: FlowState = isReviewMode ? "active" : hasSavedReports ? "done" : "pending";
+    const trendsStateValue: FlowState =
+      !isReviewMode && activeTab === "dashboard" && hasSavedReports ? "active" : hasSavedReports ? "done" : "pending";
+    return [
+      step("upload", tr("Upload", "Upload"), uploadStateValue),
+      step("extract", tr("Extractie", "Extraction"), extractStateValue),
+      step("review", tr("Review", "Review"), reviewStateValue),
+      step("trends", tr("Trends", "Trends"), trendsStateValue)
+    ];
+  })();
+  const flowSummary = (() => {
+    if (uploadStage === "failed") {
+      return tr("Upload of extractie heeft aandacht nodig.", "Upload or extraction needs attention.");
+    }
+    if (isReviewMode) {
+      return tr("Review stap actief: controleer markers en sla op.", "Review step active: validate markers and save.");
+    }
+    if (isProcessing) {
+      return tr("Extractie stap actief: PDF wordt verwerkt.", "Extraction step active: PDF is being processed.");
+    }
+    if (hasSavedReports && activeTab === "dashboard") {
+      return tr("Trends stap actief: dashboard toont je huidige status.", "Trends step active: dashboard shows your current status.");
+    }
+    if (hasSavedReports) {
+      return tr("Flow voltooid: upload nieuwe PDF voor een volgende cyclus.", "Flow complete: upload a new PDF for the next cycle.");
+    }
+    return tr("Start bij upload om de flow te beginnen.", "Start at upload to begin the flow.");
+  })();
 
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
     if (!visibleTabKeys.has(key)) {
@@ -245,12 +286,12 @@ const AppShell = ({
           <Plus className="h-4 w-4" /> {t(language, "addManualValue")}
         </button>
         {uploadError ? (
-          <div className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
             {uploadError}
           </div>
         ) : null}
         {uploadNotice ? (
-          <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
             {uploadNotice}
           </div>
         ) : null}
@@ -265,6 +306,7 @@ const AppShell = ({
     includeUploadPanel: boolean;
     onAfterNavigate?: () => void;
   }) => {
+    const sidebarUploadPanel = !isShareMode && includeUploadPanel ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3") : null;
     return (
       <>
         <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
@@ -298,9 +340,26 @@ const AppShell = ({
         {renderNavigationSections(onAfterNavigate)}
 
         {isShareMode ? renderShareSnapshotCard() : null}
-        {!isShareMode && includeUploadPanel
-          ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3")
-          : null}
+        {sidebarUploadPanel ? (
+          sidebarUploadPanel
+        ) : !isShareMode && includeUploadPanel ? (
+          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(language, "uploadPdf")}</p>
+            <button
+              type="button"
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                quickUploadDisabled
+                  ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+                  : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+              }`}
+              onClick={onQuickUpload}
+              disabled={quickUploadDisabled}
+            >
+              <Plus className="h-4 w-4" />
+              {tr("Upload een PDF", "Upload a PDF")}
+            </button>
+          </div>
+        ) : null}
       </>
     );
   };
@@ -435,6 +494,36 @@ const AppShell = ({
                 </button>
               </div>
             </div>
+            {!isShareMode ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-xl border border-slate-700/70 bg-slate-900/55 px-3 py-2"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {tr("Flow status", "Flow status")}
+                </p>
+                <ol className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {flowSteps.map((step) => (
+                    <li
+                      key={step.key}
+                      className={`rounded border px-2 py-1 text-xs ${
+                        step.state === "done"
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                          : step.state === "active"
+                            ? "border-cyan-500/45 bg-cyan-500/12 text-cyan-100"
+                            : step.state === "error"
+                              ? "border-rose-500/45 bg-rose-500/12 text-rose-100"
+                              : "border-slate-700 bg-slate-900/40 text-slate-400"
+                      }`}
+                    >
+                      {step.label}
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-2 text-xs text-slate-300">{flowSummary}</p>
+              </div>
+            ) : null}
           </header>
 
           {activeTab === "dashboard" && !isReviewMode

@@ -1858,7 +1858,7 @@ export const analyzeLabDataWithClaude = async ({
   supplementTimeline = [],
   unitSystem,
   memory = null,
-  language = "nl",
+  language: _language = "nl",
   analysisType = "full",
   deepMode = false,
   externalAiAllowed = false,
@@ -2134,6 +2134,12 @@ export const analyzeLabDataWithClaude = async ({
         }
         if (result.status === 503 && errorCode === "AI_LIMITS_UNAVAILABLE") {
           throw new Error("AI_LIMITS_UNAVAILABLE");
+        }
+        if (
+          (result.status === 403 || result.status === 500) &&
+          (errorCode === "AI_ENTITLEMENT_REQUIRED" || errorCode === "AI_PLAN_LIMIT" || errorCode === "AI_ENTITLEMENT_MISCONFIGURED")
+        ) {
+          throw new Error(errorCode);
         }
 
         const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));

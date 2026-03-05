@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronUp, Eye, Info, ListFilter, Minus, ShieldAlert, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
@@ -219,7 +219,7 @@ const ProtocolImpactEventCard = ({
   settings,
   language
 }: ProtocolImpactEventCardProps) => {
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
   const [showAllMarkers, setShowAllMarkers] = useState(false);
 
   const sameCompoundSet = (left: string[], right: string[]) => {

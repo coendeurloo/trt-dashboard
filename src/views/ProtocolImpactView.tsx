@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { DoseCorrelationInsight, ProtocolImpactDoseEvent } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import ProtocolImpactEventCard from "../components/ProtocolImpactEventCard";
@@ -38,7 +38,7 @@ const ProtocolImpactView = ({
   void onProtocolWindowSizeChange;
   void onProtocolMarkerSearchChange;
   void onProtocolCategoryFilterChange;
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const eventAnchors = useMemo(() => {
     const formatDose = (value: number | null): string => (value === null ? "?" : `${formatAxisTick(value)} mg/wk`);

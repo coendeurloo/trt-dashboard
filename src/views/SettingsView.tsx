@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
@@ -76,7 +76,7 @@ const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) 
 const SettingsView = ({
   settings,
   language,
-  reports,
+  reports: _reports,
   samplingControlsEnabled,
   allMarkers,
   editableMarkers,
@@ -100,7 +100,7 @@ const SettingsView = ({
   onGenerateShareLink
 }: SettingsViewProps) => {
   const isNl = language === "nl";
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const [mergeFromMarker, setMergeFromMarker] = useState("");
   const [mergeIntoMarker, setMergeIntoMarker] = useState("");

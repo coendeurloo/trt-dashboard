@@ -1,6 +1,7 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { checkRateLimit } from "./rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
+import { requireAiEntitlement } from "../_lib/entitlements.js";
 
 interface ClaudeMessagePayload {
   model: string;
@@ -176,6 +177,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const requestType = inferRequestType(body);
+    const entitlement = requireAiEntitlement(req, requestType);
+    if (!entitlement.allowed && entitlement.error) {
+      sendJson(res, entitlement.error.statusCode, {
+        error: {
+          code: entitlement.error.code,
+          message: entitlement.error.message
+        }
+      });
+      return;
+    }
+
     if (!aiLimitsDisabled()) {
       const ip = getClientIp(req);
       let limit: Awaited<ReturnType<typeof checkRateLimit>>;

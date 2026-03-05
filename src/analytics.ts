@@ -301,8 +301,6 @@ const parseDateSafe = (value: string): number => {
 
 const dateToIso = (timestamp: number): string => new Date(timestamp).toISOString().slice(0, 10);
 
-const shiftDateByDays = (date: string, days: number): string => dateToIso(parseDateSafe(date) + days * DAY_MS);
-
 const normalizeSetValue = (value: string): string => normalizeProtocolText(value);
 
 const setsEqual = (left: string[], right: string[]): boolean => {
@@ -552,19 +550,6 @@ const protocolImpactReadinessStatus = (
     return "waiting_pre";
   }
   return "waiting_post";
-};
-
-const protocolImpactBaselinePenalty = (baselineAgeDays: number | null): number => {
-  if (baselineAgeDays === null) {
-    return 0;
-  }
-  if (baselineAgeDays > 240) {
-    return 20;
-  }
-  if (baselineAgeDays > 120) {
-    return 10;
-  }
-  return 0;
 };
 
 const protocolImpactMarkerSignalStatus = (

@@ -7,7 +7,6 @@ import {
   Protocol,
   ReportAnnotations,
   StoredAppData,
-  SupplementEntry,
   SupplementPeriod,
   SymptomCheckIn
 } from "./types";
@@ -69,22 +68,6 @@ const normalizeSupplementAnchorState = (
     return "inherit";
   }
   return normalizedOverrides.length > 0 ? "anchor" : "none";
-};
-
-const normalizeSupplementEntry = (value: unknown): SupplementEntry | null => {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  const row = value as Partial<SupplementEntry>;
-  const name = String(row.name ?? "").trim();
-  if (!name) {
-    return null;
-  }
-  return {
-    name,
-    dose: String(row.dose ?? "").trim(),
-    frequency: normalizeSupplementFrequency(String(row.frequency ?? "unknown"))
-  };
 };
 
 const normalizeIsoDate = (value: unknown): string | null => {
@@ -394,6 +377,7 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         report.extraction?.warningCode === "PDF_AI_SKIPPED_COST_MODE" ||
         report.extraction?.warningCode === "PDF_AI_SKIPPED_BUDGET" ||
         report.extraction?.warningCode === "PDF_AI_SKIPPED_RATE_LIMIT" ||
+        report.extraction?.warningCode === "PDF_AI_PLAN_REQUIRED" ||
         report.extraction?.warningCode === "PDF_AI_CONSENT_REQUIRED" ||
         report.extraction?.warningCode === "PDF_AI_DISABLED_BY_PARSER_MODE"
           ? report.extraction.warningCode
@@ -509,7 +493,8 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         report.extraction?.aiReason === "cache_hit" ||
         report.extraction?.aiReason === "local_high_quality" ||
         report.extraction?.aiReason === "disabled_by_cost_mode" ||
-        report.extraction?.aiReason === "disabled_by_consent"
+        report.extraction?.aiReason === "disabled_by_consent" ||
+        report.extraction?.aiReason === "disabled_by_entitlement"
           ? report.extraction.aiReason
           : undefined
     }

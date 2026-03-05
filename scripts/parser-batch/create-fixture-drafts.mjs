@@ -167,7 +167,7 @@ for (let i = rowStart; i < lines.length; i += 1) {
     continue;
   }
 
-  const [fileId, label, batchId, sourceType, vendor, status, fixturePath, notes] = cells;
+  const [fileId, label, batchId, sourceType, vendor, status, _fixturePath, notes] = cells;
   if (batchId !== batch || !selectedSet.has(label)) {
     continue;
   }

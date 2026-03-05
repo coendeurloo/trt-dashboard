@@ -107,6 +107,9 @@ const AnalysisView = ({
   const actionBodyClass = isDarkTheme ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-600";
   const actionButtonClass =
     "mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed";
+  const aiPrivacyHintClass = isDarkTheme
+    ? "mt-2 rounded-md border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-xs text-slate-300"
+    : "mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700";
   const outputShellClass = isDarkTheme
     ? "rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/80 to-slate-950/70 p-4 shadow-xl shadow-slate-950/20"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60";
@@ -232,6 +235,12 @@ const AnalysisView = ({
             {isAnalyzingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Start volledige analyse", "Start full analysis")}
           </button>
+          <p className={aiPrivacyHintClass}>
+            {tr(
+              "Lokaal is standaard. Externe AI start pas na een toestemmingscheck waarin je kiest wat gedeeld wordt.",
+              "Local is the default. External AI starts only after a consent check where you choose what is shared."
+            )}
+          </p>
         </div>
 
         <div className={actionCardBaseClass}>
@@ -251,6 +260,12 @@ const AnalysisView = ({
             {isAnalyzingLatest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {isAnalyzingLatest ? tr("Analyseren...", "Analyzing...") : tr("Vergelijk laatste rapport", "Compare latest report")}
           </button>
+          <p className={aiPrivacyHintClass}>
+            {tr(
+              "Zonder toestemming blijft alles lokaal en wordt er niets extern verstuurd.",
+              "Without consent, everything stays local and nothing is sent externally."
+            )}
+          </p>
           {reportsInScope < 2 ? (
             <p className={isDarkTheme ? "mt-2 text-xs text-slate-500" : "mt-2 text-xs text-slate-500"}>
               {tr(

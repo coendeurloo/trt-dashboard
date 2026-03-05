@@ -9,6 +9,7 @@ import {
 } from "../protocolStandards";
 import { PROTOCOL_ROUTE_OPTIONS } from "../protocolUtils";
 import { AppLanguage, CompoundEntry } from "../types";
+import { ProtocolDraft } from "./protocolEditorModel";
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_MAX_OPTIONS = 8;
@@ -50,18 +51,6 @@ const buildSuggestions = (value: string, options: string[]): string[] => {
   );
   return [...startsWith, ...includes].slice(0, AUTOCOMPLETE_MAX_OPTIONS);
 };
-
-export interface ProtocolDraft {
-  name: string;
-  compounds: CompoundEntry[];
-  notes: string;
-}
-
-export const blankProtocolDraft = (): ProtocolDraft => ({
-  name: "",
-  compounds: [],
-  notes: ""
-});
 
 interface ProtocolEditorProps {
   value: ProtocolDraft;
