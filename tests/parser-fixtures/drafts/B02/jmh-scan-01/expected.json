@@ -1,5 +1,5 @@
 {
-  "minimumConfidence": 0.6,
+  "minimumConfidence": 0.4,
   "expectedStrategy": "heuristic",
   "maxMissingFields": 2,
   "forbiddenMarkers": [

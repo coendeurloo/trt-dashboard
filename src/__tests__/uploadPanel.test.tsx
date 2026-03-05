@@ -20,7 +20,7 @@ describe("UploadPanel", () => {
       />
     );
 
-    expect(screen.getByText("Processing steps")).toBeTruthy();
+    expect(screen.queryByText("Processing steps")).toBeNull();
     expect(screen.getByText("Mobile also works: tap to choose a PDF.")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Upload area for lab PDF/i })).toBeTruthy();
   });

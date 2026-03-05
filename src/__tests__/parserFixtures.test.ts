@@ -101,7 +101,7 @@ describe("parser fixtures", () => {
       const expected = JSON.parse(readFileSync(path.join(fixtureDir, "expected.json"), "utf8")) as FixtureExpectation;
       const isDraftFixture = fixtureName.includes("tests/parser-fixtures/drafts/");
       const strictFixture = !isDraftFixture || STRICT_DRAFT_FIXTURES;
-      const skipFixture = strictFixture && expected.skipFixture === true;
+      const skipFixture = expected.skipFixture === true;
 
       expect(input.trim().length).toBeGreaterThan(30);
       if (skipFixture) {
