@@ -162,3 +162,26 @@ describe("storage.coerceStoredAppData", () => {
     expect(coerced.reports.find((report) => report.id === "b")?.isBaseline).toBe(false);
   });
 });
+it("normalizes parser rescue consent settings with safe defaults", () => {
+  const coerced = coerceStoredAppData({
+    settings: {
+      aiExternalConsent: true
+    }
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.settings.parserRescueConsentState).toBe("unset");
+  expect(coerced.settings.parserRescueAllowPdfAttachment).toBe(false);
+});
+
+it("preserves parser rescue consent settings when valid", () => {
+  const coerced = coerceStoredAppData({
+    settings: {
+      parserRescueConsentState: "allowed",
+      parserRescueAllowPdfAttachment: true
+    }
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.settings.parserRescueConsentState).toBe("allowed");
+  expect(coerced.settings.parserRescueAllowPdfAttachment).toBe(true);
+});
+

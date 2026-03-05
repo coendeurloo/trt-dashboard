@@ -16,7 +16,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
   const [parserRescueEnabled, setParserRescueEnabled] = useState(true);
   const [includeSymptoms, setIncludeSymptoms] = useState(false);
   const [includeNotes, setIncludeNotes] = useState(false);
-  const [allowPdfAttachment, setAllowPdfAttachment] = useState(false);
+  const [allowPdfAttachment, setAllowPdfAttachment] = useState(action === "parser_rescue");
 
   useEffect(() => {
     if (!open) {
@@ -25,7 +25,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
     setParserRescueEnabled(true);
     setIncludeSymptoms(false);
     setIncludeNotes(false);
-    setAllowPdfAttachment(false);
+    setAllowPdfAttachment(action === "parser_rescue");
   }, [open, action]);
 
   if (!open) {
@@ -85,7 +85,7 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
                 />
               </label>
               <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
-                <span>{tr("Volledig PDF-bestand meesturen (alleen deze run)", "Send full PDF too (this run only)")}</span>
+                <span>{tr("Volledig PDF-bestand meesturen voor parser-rescue", "Send full PDF for parser rescue")}</span>
                 <input
                   type="checkbox"
                   checked={allowPdfAttachment}
@@ -96,8 +96,8 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
               </label>
               <p className="text-xs text-slate-400">
                 {tr(
-                  "Standaard sturen we alleen geanonimiseerde tekst. Het volledige PDF-bestand meesturen is optioneel en geldt alleen voor deze ene poging.",
-                  "By default we send only redacted text. Sending the full PDF is optional and applies only to this one attempt."
+                  "Voor parser-rescue staat het meesturen van het volledige PDF-bestand standaard aan. Dit kan helpen bij lastige scans, maar verbetering is niet gegarandeerd. Je kunt dit uitzetten als je dat liever niet wilt.",
+                  "For parser rescue, sending the full PDF is enabled by default. This can help on difficult scans, but improvement is not guaranteed. You can turn this off if you prefer."
                 )}
               </p>
             </>
@@ -174,15 +174,16 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
           >
             {tr("Alleen deze keer", "Only this time")}
           </button>
-          {action !== "parser_rescue" ? (
-            <button
-              type="button"
-              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
-              onClick={() => onDecide(commonDecision("always"))}
-            >
-              {tr("Altijd toestaan", "Always allow")}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
+            onClick={() => onDecide(commonDecision("always"))}
+            disabled={action === "parser_rescue" && !parserRescueEnabled}
+          >
+            {action === "parser_rescue"
+              ? tr("Altijd toestaan voor parser-rescue", "Always allow parser rescue")
+              : tr("Altijd toestaan", "Always allow")}
+          </button>
         </div>
       </div>
     </div>

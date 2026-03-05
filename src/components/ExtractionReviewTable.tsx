@@ -45,6 +45,7 @@ export interface ExtractionReviewTableProps {
   onAddSupplementPeriod: (period: SupplementPeriod) => void;
   isImprovingWithAi?: boolean;
   onImproveWithAi?: () => void;
+  onEnableAiRescue?: () => void;
   onRetryWithOcr?: () => void;
   onStartManualEntry?: () => void;
   onSave: () => void;
@@ -68,6 +69,7 @@ const ExtractionReviewTable = ({
   onAddSupplementPeriod,
   isImprovingWithAi = false,
   onImproveWithAi,
+  onEnableAiRescue,
   onRetryWithOcr,
   onStartManualEntry,
   onSave,
@@ -1096,6 +1098,18 @@ const ExtractionReviewTable = ({
         >
           <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
         </button>
+        {onEnableAiRescue ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onEnableAiRescue}
+            disabled={isImprovingWithAi}
+          >
+            {isImprovingWithAi
+              ? tr("AI-rescue bezig...", "AI rescue in progress...")
+              : tr("Probeer AI-rescue (optioneel)", "Try AI rescue (optional)")}
+          </button>
+        ) : null}
         {onImproveWithAi ? (
           <button
             type="button"

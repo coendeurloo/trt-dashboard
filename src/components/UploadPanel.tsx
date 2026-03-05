@@ -16,16 +16,16 @@ const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onU
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const stageText = (() => {
     if (processingStage === "reading_text_layer") {
-      return tr("Tekstlaag lezen...", "Reading text layer...");
+      return tr("Tekstlaag lokaal lezen (nog geen externe AI)...", "Reading text layer locally (no external AI yet)...");
     }
     if (processingStage === "running_ocr") {
-      return tr("OCR uitvoeren op scans...", "Running OCR on scans...");
+      return tr("Lokale OCR uitvoeren op scans (nog geen externe AI)...", "Running local OCR on scans (no external AI yet)...");
     }
     if (processingStage === "running_ai_text") {
-      return tr("AI parser op geanonimiseerde tekst...", "Running AI parser on redacted text...");
+      return tr("Geanonimiseerde tekst naar AI sturen...", "Sending redacted text to AI...");
     }
     if (processingStage === "running_ai_pdf_rescue") {
-      return tr("AI PDF-rescue uitvoeren...", "Running AI PDF rescue...");
+      return tr("PDF naar AI sturen voor parser-rescue...", "Sending PDF to AI for parser rescue...");
     }
     if (processingStage === "failed") {
       return tr("Extractie mislukt.", "Extraction failed.");

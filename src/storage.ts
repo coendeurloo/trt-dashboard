@@ -486,6 +486,7 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
               extractionRoute:
                 report.extraction.debug.extractionRoute === "local-text" ||
                 report.extraction.debug.extractionRoute === "local-ocr" ||
+                report.extraction.debug.extractionRoute === "local-text-ocr-merged" ||
                 report.extraction.debug.extractionRoute === "gemini-with-text" ||
                 report.extraction.debug.extractionRoute === "gemini-with-ocr" ||
                 report.extraction.debug.extractionRoute === "gemini-vision-only" ||
@@ -552,6 +553,14 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     ...DEFAULT_SETTINGS,
     ...rest,
     aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
+    parserRescueConsentState:
+      rest.parserRescueConsentState === "unset" || rest.parserRescueConsentState === "allowed" || rest.parserRescueConsentState === "denied"
+        ? rest.parserRescueConsentState
+        : DEFAULT_SETTINGS.parserRescueConsentState,
+    parserRescueAllowPdfAttachment:
+      typeof rest.parserRescueAllowPdfAttachment === "boolean"
+        ? rest.parserRescueAllowPdfAttachment
+        : DEFAULT_SETTINGS.parserRescueAllowPdfAttachment,
     aiAnalysisProvider,
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
@@ -705,3 +714,5 @@ export const clearAnalystMemory = (): void => {
     console.error("Failed to clear analyst memory:", error);
   }
 };
+
+

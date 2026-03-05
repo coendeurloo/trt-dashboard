@@ -3832,14 +3832,16 @@ const normalizeMarkerOrderLookupTextLoose = (value: string): string =>
     .trim();
 
 const buildMarkerOrderCandidates = (marker: MarkerValue): string[] => {
+  const rawMarker = cleanWhitespace(marker.rawMarker ?? "");
   const raw = cleanWhitespace(marker.marker);
   const cleaned = cleanMarkerName(raw);
   const profileFixed = applyProfileMarkerFixes(cleaned);
   const canonical = cleanWhitespace(marker.canonicalMarker);
+  const normalizedRawMarker = cleanMarkerName(rawMarker);
   const withoutParentheses = profileFixed.replace(/\([^)]*\)/g, " ");
   const uppercaseToken = profileFixed.toUpperCase();
 
-  const candidates = [raw, cleaned, profileFixed, canonical, withoutParentheses]
+  const candidates = [rawMarker, normalizedRawMarker, raw, cleaned, profileFixed, canonical, withoutParentheses]
     .flatMap((candidate) => [normalizeMarkerOrderLookupText(candidate), normalizeMarkerOrderLookupTextLoose(candidate)])
     .filter((candidate) => {
       if (!candidate || looksLikeNoiseMarker(candidate)) {
@@ -3852,6 +3854,38 @@ const buildMarkerOrderCandidates = (marker: MarkerValue): string[] => {
     });
 
   return Array.from(new Set(candidates));
+};
+
+const buildMarkerValueOrderCandidates = (marker: MarkerValue): string[] => {
+  const numericValue = typeof marker.rawValue === "number" && Number.isFinite(marker.rawValue) ? marker.rawValue : marker.value;
+  if (!Number.isFinite(numericValue)) {
+    return [];
+  }
+
+  const values = new Set<string>();
+  const addValueToken = (candidate: string) => {
+    const normalized = candidate
+      .trim()
+      .replace(/^([<>]=?|[<>])\s*/, "")
+      .replace(/\s+/g, "");
+    if (!normalized) {
+      return;
+    }
+    values.add(normalized);
+    values.add(normalized.replace(".", ","));
+  };
+
+  const abs = Math.abs(numericValue);
+  const maxDecimals = abs >= 100 ? 1 : abs >= 10 ? 2 : 3;
+  addValueToken(String(numericValue));
+  for (let decimals = 0; decimals <= maxDecimals + 1; decimals += 1) {
+    const fixed = numericValue.toFixed(decimals);
+    const compact = fixed.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+    addValueToken(fixed);
+    addValueToken(compact);
+  }
+
+  return Array.from(values).sort((left, right) => right.length - left.length);
 };
 
 const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): MarkerValue[] => {
@@ -3885,19 +3919,91 @@ const orderMarkersBySourceText = (markers: MarkerValue[], sourceText: string): M
     indexLooseCache.set(candidate, index);
     return index;
   };
+  const findIndexWithNearbyValue = (stack: string, candidate: string, valueCandidates: string[]): number => {
+    if (!candidate || valueCandidates.length === 0) {
+      return -1;
+    }
+    const MAX_VALUE_DISTANCE = 56;
+    const BEFORE_MARKER_WINDOW = 12;
+    let bestMatch: { markerIndex: number; distance: number } | null = null;
+    let fromIndex = 0;
+    while (fromIndex < stack.length) {
+      const markerIndex = stack.indexOf(candidate, fromIndex);
+      if (markerIndex < 0) {
+        break;
+      }
+      const windowStart = Math.max(0, markerIndex - BEFORE_MARKER_WINDOW);
+      const windowEnd = Math.min(stack.length, markerIndex + candidate.length + MAX_VALUE_DISTANCE);
+      const windowText = stack.slice(windowStart, windowEnd);
+      const markerOffset = markerIndex - windowStart;
+
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const valueCandidate of valueCandidates) {
+        let searchFrom = 0;
+        while (searchFrom < windowText.length) {
+          const valueIndex = windowText.indexOf(valueCandidate, searchFrom);
+          if (valueIndex < 0) {
+            break;
+          }
+          const distance = Math.abs(valueIndex - markerOffset);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+          }
+          searchFrom = valueIndex + valueCandidate.length;
+        }
+      }
+
+      if (Number.isFinite(nearestDistance) && nearestDistance <= MAX_VALUE_DISTANCE) {
+        if (
+          !bestMatch ||
+          nearestDistance < bestMatch.distance ||
+          (nearestDistance === bestMatch.distance && markerIndex < bestMatch.markerIndex)
+        ) {
+          bestMatch = {
+            markerIndex,
+            distance: nearestDistance
+          };
+        }
+      }
+      fromIndex = markerIndex + candidate.length;
+    }
+    return bestMatch?.markerIndex ?? -1;
+  };
+  const findFirstMarkerIndex = (candidate: string): number => {
+    const strictIndex = findFirstIndex(candidate);
+    if (strictIndex >= 0) {
+      return strictIndex;
+    }
+    return findFirstIndexLoose(candidate);
+  };
 
   return markers
     .map((marker, originalIndex) => {
-      const firstSeenIndex = buildMarkerOrderCandidates(marker)
+      const markerCandidates = buildMarkerOrderCandidates(marker);
+      const valueCandidates = buildMarkerValueOrderCandidates(marker).flatMap((valueCandidate) => [
+        normalizeMarkerOrderLookupText(valueCandidate),
+        normalizeMarkerOrderLookupTextLoose(valueCandidate)
+      ]);
+
+      const firstSeenIndexWithValue = markerCandidates
         .map((candidate) => {
-          const strictIndex = findFirstIndex(candidate);
+          const strictIndex = findIndexWithNearbyValue(haystack, candidate, valueCandidates);
           if (strictIndex >= 0) {
             return strictIndex;
           }
-          return findFirstIndexLoose(candidate);
+          return findIndexWithNearbyValue(haystackLoose, candidate, valueCandidates);
         })
         .filter((index) => index >= 0)
         .reduce((smallest, index) => Math.min(smallest, index), Number.POSITIVE_INFINITY);
+
+      const fallbackFirstSeenIndex = markerCandidates
+        .map((candidate) => {
+          return findFirstMarkerIndex(candidate);
+        })
+        .filter((index) => index >= 0)
+        .reduce((smallest, index) => Math.min(smallest, index), Number.POSITIVE_INFINITY);
+
+      const firstSeenIndex = Number.isFinite(firstSeenIndexWithValue) ? firstSeenIndexWithValue : fallbackFirstSeenIndex;
 
       return {
         marker,

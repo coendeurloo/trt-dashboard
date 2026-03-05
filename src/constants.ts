@@ -48,6 +48,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customRangeStart: "",
   customRangeEnd: "",
   aiExternalConsent: false,
+  parserRescueConsentState: "unset",
+  parserRescueAllowPdfAttachment: false,
   aiAnalysisProvider: "auto",
   aiCostMode: "balanced",
   aiAutoImproveEnabled: false,
@@ -261,3 +263,5 @@ export const TAB_ITEMS = [
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
 ] as const;
+
+

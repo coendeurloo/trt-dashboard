@@ -3,6 +3,7 @@ export type UnitSystem = "eu" | "us";
 export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type AICostMode = "balanced" | "ultra_low_cost" | "max_accuracy";
 export type ParserDebugMode = "text_only" | "text_ocr" | "text_ocr_ai";
+export type ParserRescueConsentState = "unset" | "allowed" | "denied";
 export type AIConsentAction = "analysis" | "parser_rescue";
 export type AIConsentScope = "once" | "always";
 export type ParserStage =
@@ -299,6 +300,8 @@ export interface AppSettings {
   customRangeStart: string;
   customRangeEnd: string;
   aiExternalConsent: boolean;
+  parserRescueConsentState: ParserRescueConsentState;
+  parserRescueAllowPdfAttachment: boolean;
   aiAnalysisProvider: AIAnalysisProvider;
   aiCostMode: AICostMode;
   aiAutoImproveEnabled: boolean;
@@ -332,3 +335,5 @@ export interface ExtractionDraft {
     aiReason?: ExtractionAIReason;
   };
 }
+
+

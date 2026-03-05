@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import AIConsentModal from "../components/AIConsentModal";
 
 describe("AIConsentModal", () => {
-  it("hides always-allow option for parser rescue", () => {
+  it("shows always-allow option for parser rescue", () => {
     render(
       <AIConsentModal
         open
@@ -16,9 +16,10 @@ describe("AIConsentModal", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: /Always allow/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Always allow parser rescue/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Only this time/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Do not allow/i })).toBeTruthy();
+    expect((screen.getByRole("checkbox", { name: /Send full PDF for parser rescue/i }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("keeps always-allow option for analysis", () => {
@@ -32,6 +33,6 @@ describe("AIConsentModal", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /Always allow/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Always allow$/i })).toBeTruthy();
   });
 });

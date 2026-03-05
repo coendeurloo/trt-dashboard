@@ -17,7 +17,6 @@ import AppShell from "./components/AppShell";
 import ExtractionReviewTable from "./components/ExtractionReviewTable";
 import MarkerTrendChart from "./components/MarkerTrendChart";
 import AIConsentModal from "./components/AIConsentModal";
-import ParserUncertaintyModal from "./components/ParserUncertaintyModal";
 import ExtractionComparisonModal from "./components/ExtractionComparisonModal";
 import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
@@ -44,7 +43,12 @@ import {
   useDashboardDerivedData,
   useProtocolDerivedData
 } from "./hooks/useDerivedData";
-import { resolveUploadTriggerAction } from "./uploadFlow";
+import {
+  buildRememberedParserRescueConsent,
+  isSevereParserExtraction,
+  resolveUploadTriggerAction,
+  shouldAutoApplyAiRescueResult
+} from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
@@ -78,6 +82,31 @@ const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
+
+type UploadSummary =
+  | {
+      kind: "upload";
+      fileName: string;
+      markerCount: number;
+      confidence: number;
+      warnings: number;
+      routeLabel: string;
+      usedAi: boolean;
+      usedOcr: boolean;
+    }
+  | {
+      kind: "ai_rescue";
+      fileName: string;
+      baselineMarkerCount: number;
+      baselineConfidence: number;
+      baselineRouteLabel: string;
+      finalMarkerCount: number;
+      finalConfidence: number;
+      finalRouteLabel: string;
+      warnings: number;
+      aiAttempted: true;
+      aiApplied: boolean;
+    };
 
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
@@ -132,6 +161,8 @@ const App = () => {
       language: appData.settings.language,
       tr
     });
+  const showAdvancedParserActions =
+    import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
@@ -142,20 +173,11 @@ const App = () => {
   const [uploadStage, setUploadStage] = useState<ParserStage | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [uploadNotice, setUploadNotice] = useState("");
-  const [uploadSummary, setUploadSummary] = useState<{
-    fileName: string;
-    markerCount: number;
-    confidence: number;
-    warnings: number;
-    routeLabel: string;
-    usedAi: boolean;
-    usedOcr: boolean;
-  } | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
   const [localBaselineDraft, setLocalBaselineDraft] = useState<ExtractionDraft | null>(null);
   const [aiCandidateDraft, setAiCandidateDraft] = useState<ExtractionDraft | null>(null);
   const [uncertaintyAssessment, setUncertaintyAssessment] = useState<ParserUncertaintyAssessment | null>(null);
-  const [showUncertaintyModal, setShowUncertaintyModal] = useState(false);
   const [pendingDiff, setPendingDiff] = useState<ExtractionDiffSummary | null>(null);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [draftOriginalMarkerLabels, setDraftOriginalMarkerLabels] = useState<Record<string, string>>({});
@@ -491,7 +513,6 @@ const App = () => {
     setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
     setLastUploadedFile(null);
     setIsImprovingExtraction(false);
-    setShowUncertaintyModal(false);
     setShowComparisonModal(false);
     setPendingDiff(null);
     setAiCandidateDraft(null);
@@ -661,6 +682,77 @@ const App = () => {
     return { label: tr("Geen parserdata", "No parser data"), usedAi: false, usedOcr: false };
   };
 
+  const getLocalOnlyParserConsent = (): AIConsentDecision => ({
+    action: "parser_rescue",
+    scope: "once",
+    allowExternalAi: false,
+    parserRescueEnabled: false,
+    includeSymptoms: false,
+    includeNotes: false,
+    allowPdfAttachment: false
+  });
+
+  const getRememberedParserRescueConsent = (): AIConsentDecision =>
+    buildRememberedParserRescueConsent(appData.settings.parserRescueAllowPdfAttachment);
+
+  const requestParserRescueConsent = async (forcePrompt: boolean): Promise<AIConsentDecision | null> => {
+    if (!forcePrompt) {
+      if (appData.settings.parserRescueConsentState === "allowed") {
+        return getRememberedParserRescueConsent();
+      }
+      if (appData.settings.parserRescueConsentState === "denied") {
+        return null;
+      }
+    }
+
+    const decision = await requestAiConsent("parser_rescue");
+    if (!decision || !decision.allowExternalAi || !decision.parserRescueEnabled) {
+      updateSettings({
+        parserRescueConsentState: "denied",
+        parserRescueAllowPdfAttachment: false
+      });
+      return null;
+    }
+
+    if (decision.scope === "always") {
+      updateSettings({
+        parserRescueConsentState: "allowed",
+        parserRescueAllowPdfAttachment: decision.allowPdfAttachment
+      });
+    } else if (forcePrompt && appData.settings.parserRescueConsentState === "denied") {
+      updateSettings({ parserRescueConsentState: "unset" });
+    }
+
+    return decision;
+  };
+
+  const runAutomaticParserRescue = async (
+    file: File,
+    localDraft: ExtractionDraft,
+    consent: AIConsentDecision
+  ): Promise<{ finalDraft: ExtractionDraft; aiApplied: boolean }> => {
+    const { extractLabData } = await ensurePdfParsingModule();
+    const improved = await extractLabData(file, {
+      costMode: "balanced",
+      aiAutoImproveEnabled: true,
+      forceAi: true,
+      preferAiResultWhenForced: true,
+      externalAiAllowed: true,
+      aiConsent: consent,
+      parserDebugMode: "text_ocr_ai",
+      markerAliasOverrides: appData.markerAliasOverrides,
+      onStageChange: setUploadStage
+    });
+
+    const improvedDraft = enrichDraftForReview(improved);
+    const autoApplyDecision = shouldAutoApplyAiRescueResult(localDraft, improvedDraft);
+
+    return {
+      finalDraft: autoApplyDecision.shouldApplyAi ? improvedDraft : localDraft,
+      aiApplied: autoApplyDecision.shouldApplyAi
+    };
+  };
+
   const handleUpload = async (file: File) => {
     setIsProcessing(true);
     setUploadStage("reading_text_layer");
@@ -670,66 +762,153 @@ const App = () => {
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
-    setShowUncertaintyModal(false);
     setShowComparisonModal(false);
     setPendingDiff(null);
     setAiCandidateDraft(null);
 
     try {
       const { extractLabData, assessParserUncertainty } = await ensurePdfParsingModule();
-      const initialParserMode =
-        appData.settings.parserDebugMode === "text_ocr_ai" ? "text_ocr" : appData.settings.parserDebugMode;
+      const localParserMode = showAdvancedParserActions
+        ? appData.settings.parserDebugMode === "text_ocr_ai"
+          ? "text_ocr"
+          : appData.settings.parserDebugMode
+        : "text_ocr";
+
       const extracted = await extractLabData(file, {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: false,
         externalAiAllowed: false,
-        aiConsent: {
-          action: "parser_rescue",
-          scope: "once",
-          allowExternalAi: false,
-          parserRescueEnabled: false,
-          includeSymptoms: false,
-          includeNotes: false,
-          allowPdfAttachment: false
-        },
-        parserDebugMode: initialParserMode,
+        aiConsent: getLocalOnlyParserConsent(),
+        parserDebugMode: localParserMode,
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
-      const enrichedDraft = enrichDraftForReview(extracted);
-      const warningCount = countWarnings(enrichedDraft);
-      const assessment = assessParserUncertainty(enrichedDraft);
-      const shouldPromptAi = appData.settings.parserDebugMode === "text_ocr_ai" && assessment.isUncertain;
-      setDraft(enrichedDraft);
-      setLocalBaselineDraft(enrichedDraft);
+
+      const localDraft = enrichDraftForReview(extracted);
+      const localAssessment = assessParserUncertainty(localDraft);
+      const severeLocalExtraction = isSevereParserExtraction(localAssessment);
+
+      const finalDraft = localDraft;
+      const finalAssessment = localAssessment;
+      const autoNotice = severeLocalExtraction
+        ? tr(
+            "Extractiekwaliteit is laag. Je kunt optioneel AI-rescue proberen; dat kan verbeteren, maar is niet gegarandeerd.",
+            "Extraction quality is low. You can optionally try AI rescue; it may improve results, but this is not guaranteed."
+          )
+        : "";
+
+      const warningCount = countWarnings(finalDraft);
+      const routeSummary = getExtractionRouteSummary(finalDraft);
+
+      setDraft(finalDraft);
+      setLocalBaselineDraft(finalDraft);
       setAiCandidateDraft(null);
       setPendingDiff(null);
       setShowComparisonModal(false);
-      setUncertaintyAssessment(assessment);
-      setShowUncertaintyModal(shouldPromptAi);
-      captureOriginalDraftMarkerLabels(enrichedDraft);
+      setUncertaintyAssessment(finalAssessment);
+      captureOriginalDraftMarkerLabels(finalDraft);
       setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
       setActiveTab("dashboard");
       scrollPageToTop();
-      if (!shouldPromptAi) {
-        const routeSummary = getExtractionRouteSummary(enrichedDraft);
-        setUploadSummary({
-          fileName: enrichedDraft.sourceFileName,
-          markerCount: enrichedDraft.markers.length,
-          confidence: enrichedDraft.extraction.confidence,
-          warnings: warningCount,
-          routeLabel: routeSummary.label,
-          usedAi: routeSummary.usedAi,
-          usedOcr: routeSummary.usedOcr
-        });
+      setUploadSummary({
+        kind: "upload",
+        fileName: finalDraft.sourceFileName,
+        markerCount: finalDraft.markers.length,
+        confidence: finalDraft.extraction.confidence,
+        warnings: warningCount,
+        routeLabel: routeSummary.label,
+        usedAi: routeSummary.usedAi,
+        usedOcr: routeSummary.usedOcr
+      });
+
+      if (autoNotice) {
+        setUploadNotice(autoNotice);
       }
     } catch (error) {
       setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
       setIsProcessing(false);
+      setUploadStage(null);
+    }
+  };
+  const enableAiRescueFromReview = async () => {
+    if (!lastUploadedFile) {
+      setUploadError(tr("Upload dit PDF-bestand opnieuw om AI-rescue uit te voeren.", "Re-upload this PDF to run AI rescue."));
+      return;
+    }
+    const baselineDraft = localBaselineDraft ?? draft;
+    if (!baselineDraft) {
+      setUploadError(
+        tr(
+          "Er is geen lokaal basisresultaat beschikbaar voor AI-rescue.",
+          "No local baseline result is available for AI rescue."
+        )
+      );
+      return;
+    }
+
+    const consent = await requestParserRescueConsent(appData.settings.parserRescueConsentState === "denied");
+    if (!consent) {
+      setUploadNotice(
+        tr(
+          "AI-rescue blijft uitgeschakeld. Je kunt doorgaan met lokale extractie.",
+          "AI rescue remains disabled. You can continue with local extraction."
+        )
+      );
+      return;
+    }
+
+    const baselineRouteSummary = getExtractionRouteSummary(baselineDraft);
+    const baselineMarkerCount = baselineDraft.markers.length;
+    const baselineConfidence = baselineDraft.extraction.confidence;
+
+    setIsImprovingExtraction(true);
+    setUploadStage("running_ai_text");
+    setUploadError("");
+    setUploadNotice("");
+    setUploadSummary(null);
+
+    try {
+      const { assessParserUncertainty } = await ensurePdfParsingModule();
+      const rescueResult = await runAutomaticParserRescue(lastUploadedFile, baselineDraft, consent);
+      const nextDraft = rescueResult.finalDraft;
+      const warningCount = countWarnings(nextDraft);
+      const routeSummary = getExtractionRouteSummary(nextDraft);
+
+      setDraft(nextDraft);
+      setLocalBaselineDraft(nextDraft);
+      setUncertaintyAssessment(assessParserUncertainty(nextDraft));
+      captureOriginalDraftMarkerLabels(nextDraft);
+      setUploadSummary({
+        kind: "ai_rescue",
+        fileName: nextDraft.sourceFileName,
+        baselineMarkerCount,
+        baselineConfidence,
+        baselineRouteLabel: baselineRouteSummary.label,
+        finalMarkerCount: nextDraft.markers.length,
+        finalConfidence: nextDraft.extraction.confidence,
+        finalRouteLabel: routeSummary.label,
+        warnings: warningCount,
+        aiAttempted: true,
+        aiApplied: rescueResult.aiApplied
+      });
+
+      setUploadNotice(
+        rescueResult.aiApplied
+          ? tr(
+              "AI-rescue uitgevoerd en automatisch toegepast omdat de kwaliteit beter was.",
+              "AI rescue ran and was auto-applied because quality improved."
+            )
+          : tr("AI-rescue uitgevoerd, lokaal resultaat behouden.", "AI rescue ran; local result was kept.")
+      );
+    } catch (error) {
+      setUploadError(mapErrorToMessage(error, "pdf"));
+      setUploadStage("failed");
+    } finally {
+      setIsImprovingExtraction(false);
       setUploadStage(null);
     }
   };
@@ -749,7 +928,7 @@ const App = () => {
       );
       return;
     }
-    const consent = await requestAiConsent("parser_rescue");
+    const consent = await requestParserRescueConsent(true);
     if (!consent || !consent.allowExternalAi || !consent.parserRescueEnabled) {
       setUploadError(
         tr(
@@ -772,7 +951,7 @@ const App = () => {
         preferAiResultWhenForced: true,
         externalAiAllowed: true,
         aiConsent: consent,
-        parserDebugMode: appData.settings.parserDebugMode,
+        parserDebugMode: "text_ocr_ai",
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
       });
@@ -781,7 +960,6 @@ const App = () => {
       setAiCandidateDraft(improvedDraft);
       setPendingDiff(diff);
       setShowComparisonModal(true);
-      setShowUncertaintyModal(false);
       setUploadSummary(null);
       scrollPageToTop();
       if (!diff.hasChanges) {
@@ -799,11 +977,6 @@ const App = () => {
       setIsImprovingExtraction(false);
       setUploadStage(null);
     }
-  };
-
-  const promptAiFromUncertainty = () => {
-    setShowUncertaintyModal(false);
-    void improveDraftWithAi();
   };
 
   const keepLocalDraftVersion = () => {
@@ -829,6 +1002,7 @@ const App = () => {
     captureOriginalDraftMarkerLabels(aiCandidateDraft);
     const routeSummary = getExtractionRouteSummary(aiCandidateDraft);
     setUploadSummary({
+      kind: "upload",
       fileName: aiCandidateDraft.sourceFileName,
       markerCount: aiCandidateDraft.markers.length,
       confidence: aiCandidateDraft.extraction.confidence,
@@ -867,7 +1041,6 @@ const App = () => {
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
-    setShowUncertaintyModal(false);
     setShowComparisonModal(false);
     setPendingDiff(null);
     setAiCandidateDraft(null);
@@ -878,15 +1051,7 @@ const App = () => {
         costMode: appData.settings.aiCostMode,
         aiAutoImproveEnabled: false,
         externalAiAllowed: false,
-        aiConsent: {
-          action: "parser_rescue",
-          scope: "once",
-          allowExternalAi: false,
-          parserRescueEnabled: false,
-          includeSymptoms: false,
-          includeNotes: false,
-          allowPdfAttachment: false
-        },
+        aiConsent: getLocalOnlyParserConsent(),
         parserDebugMode: "text_ocr",
         markerAliasOverrides: appData.markerAliasOverrides,
         onStageChange: setUploadStage
@@ -901,7 +1066,6 @@ const App = () => {
       setPendingDiff(null);
       setShowComparisonModal(false);
       setUncertaintyAssessment(assessment);
-      setShowUncertaintyModal(false);
       captureOriginalDraftMarkerLabels(enrichedDraft);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
@@ -909,6 +1073,7 @@ const App = () => {
       scrollPageToTop();
       const routeSummary = getExtractionRouteSummary(enrichedDraft);
       setUploadSummary({
+        kind: "upload",
         fileName: enrichedDraft.sourceFileName,
         markerCount: enrichedDraft.markers.length,
         confidence: enrichedDraft.extraction.confidence,
@@ -1035,7 +1200,6 @@ const App = () => {
     setLocalBaselineDraft(null);
     setAiCandidateDraft(null);
     setPendingDiff(null);
-    setShowUncertaintyModal(false);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
     setDraftOriginalMarkerLabels({});
@@ -1174,26 +1338,54 @@ const App = () => {
   }, [visibleReports]);
 
   const uploadStageText = useMemo(() => {
+    if (isImprovingExtraction) {
+      if (!uploadStage || uploadStage === "reading_text_layer" || uploadStage === "running_ocr") {
+        return tr("AI-rescue voorbereiden (lokale checks/OCR)...", "Preparing AI rescue (local checks/OCR)...");
+      }
+      if (uploadStage === "running_ai_text") {
+        return tr("Geanonimiseerde tekst naar AI sturen...", "Sending redacted text to AI...");
+      }
+      if (uploadStage === "running_ai_pdf_rescue") {
+        return tr("PDF naar AI sturen voor parser-rescue...", "Sending PDF to AI for parser rescue...");
+      }
+      if (uploadStage === "done") {
+        return tr("AI-rescue afgerond.", "AI rescue completed.");
+      }
+      return tr("AI-rescue mislukt.", "AI rescue failed.");
+    }
+
     if (!uploadStage) {
       return tr("PDF wordt verwerkt...", "Processing PDF...");
     }
     if (uploadStage === "reading_text_layer") {
-      return tr("Tekstlaag lezen...", "Reading text layer...");
+      return tr("Tekstlaag lokaal lezen (nog geen externe AI)...", "Reading text layer locally (no external AI yet)...");
     }
     if (uploadStage === "running_ocr") {
-      return tr("OCR uitvoeren op scan...", "Running OCR on scanned pages...");
+      return tr("Lokale OCR uitvoeren op scans (nog geen externe AI)...", "Running local OCR on scanned pages (no external AI yet)...");
     }
     if (uploadStage === "running_ai_text") {
-      return tr("AI parser op geanonimiseerde tekst...", "Running AI parser on redacted text...");
+      return tr("Geanonimiseerde tekst naar AI sturen...", "Sending redacted text to AI...");
     }
     if (uploadStage === "running_ai_pdf_rescue") {
-      return tr("AI PDF-rescue uitvoeren...", "Running AI PDF rescue...");
+      return tr("PDF naar AI sturen voor parser-rescue...", "Sending PDF to AI for parser rescue...");
     }
     if (uploadStage === "done") {
       return tr("Extractie afgerond.", "Extraction completed.");
     }
     return tr("Extractie mislukt.", "Extraction failed.");
-  }, [uploadStage, tr]);
+  }, [uploadStage, isImprovingExtraction, tr]);
+  const processingTitle = isImprovingExtraction
+    ? tr("AI-rescue wordt uitgevoerd", "AI rescue is running")
+    : tr("Je PDF wordt verwerkt", "Your PDF is being processed");
+  const processingHint = isImprovingExtraction
+    ? tr(
+        "AI-rescue is actief. We kunnen eerst lokaal voorbereiden (tekst/OCR) en daarna - met toestemming - geanonimiseerde tekst of PDF naar AI sturen.",
+        "AI rescue is active. We may first run local preparation (text/OCR) and then - with consent - send redacted text or the PDF to AI."
+      )
+    : tr(
+        "Markerwaarden, eenheden en referentiebereiken worden lokaal uitgelezen (zonder externe AI). Bij lage kwaliteit kun je daarna optioneel AI-rescue starten (na toestemming).",
+        "Markers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
+      );
 
   const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
     const decision = await requestAiConsent("analysis");
@@ -1293,7 +1485,6 @@ const App = () => {
     setLocalBaselineDraft(null);
     setAiCandidateDraft(null);
     setPendingDiff(null);
-    setShowUncertaintyModal(false);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
     setDraftOriginalMarkerLabels({});
@@ -1435,11 +1626,15 @@ const App = () => {
                 onAddSupplementPeriod={addSupplementPeriod}
                 isImprovingWithAi={isImprovingExtraction}
                 onImproveWithAi={
-                  lastUploadedFile &&
-                  appData.settings.parserDebugMode === "text_ocr_ai" &&
-                  Boolean(uncertaintyAssessment?.isUncertain) &&
-                  !draft!.extraction.aiUsed
+                  showAdvancedParserActions && lastUploadedFile && !draft!.extraction.aiUsed
                     ? improveDraftWithAi
+                    : undefined
+                }
+                onEnableAiRescue={
+                  lastUploadedFile &&
+                  !draft!.extraction.aiUsed &&
+                  Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
+                    ? enableAiRescueFromReview
                     : undefined
                 }
                 onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
@@ -1451,7 +1646,6 @@ const App = () => {
                   setLocalBaselineDraft(null);
                   setAiCandidateDraft(null);
                   setPendingDiff(null);
-                  setShowUncertaintyModal(false);
                   setShowComparisonModal(false);
                   setUncertaintyAssessment(null);
                   setDraftOriginalMarkerLabels({});
@@ -1739,14 +1933,6 @@ const App = () => {
         ) : null}
       </AppShell>
 
-      <ParserUncertaintyModal
-        open={showUncertaintyModal}
-        language={appData.settings.language}
-        assessment={uncertaintyAssessment}
-        onSkip={() => setShowUncertaintyModal(false)}
-        onUseAi={promptAiFromUncertainty}
-      />
-
       <ExtractionComparisonModal
         open={showComparisonModal}
         language={appData.settings.language}
@@ -1764,7 +1950,7 @@ const App = () => {
       />
 
       <AnimatePresence>
-        {isProcessing ? (
+        {isProcessing || isImprovingExtraction ? (
           <motion.div
             className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"
             initial={{ opacity: 0 }}
@@ -1783,16 +1969,13 @@ const App = () => {
                 </div>
                 <div>
                   <p className="text-base font-semibold text-slate-100">
-                    {tr("Je PDF wordt verwerkt", "Your PDF is being processed")}
+                    {processingTitle}
                   </p>
                   <p className="mt-1 text-sm text-slate-300">
                     {uploadStageText}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {tr(
-                      "Markerwaarden, eenheden en referentiebereiken worden nu uitgelezen.",
-                      "Markers, units, and reference ranges are being extracted."
-                    )}
+                    {processingHint}
                   </p>
                 </div>
               </div>
@@ -1822,9 +2005,11 @@ const App = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-slate-100">
-                      {uploadSummary.markerCount > 0
-                        ? tr("PDF succesvol verwerkt", "PDF processed successfully")
-                        : tr("PDF geüpload, maar geen markers gevonden", "PDF uploaded, but no markers were found")}
+                      {uploadSummary.kind === "ai_rescue"
+                        ? tr("AI-rescue voltooid", "AI rescue completed")
+                        : uploadSummary.markerCount > 0
+                          ? tr("PDF succesvol verwerkt", "PDF processed successfully")
+                          : tr("PDF geüpload, maar geen markers gevonden", "PDF uploaded, but no markers were found")}
                     </h3>
                     <p className="mt-1 text-sm text-slate-300">{uploadSummary.fileName}</p>
                   </div>
@@ -1838,35 +2023,78 @@ const App = () => {
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Markers gevonden", "Markers found")}</p>
-                  <p className="mt-0.5 text-lg font-semibold text-cyan-300">{uploadSummary.markerCount}</p>
+              {uploadSummary.kind === "ai_rescue" ? (
+                <>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Markers", "Markers")}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-cyan-100">
+                        {`${uploadSummary.baselineMarkerCount} -> ${uploadSummary.finalMarkerCount} (${uploadSummary.finalMarkerCount - uploadSummary.baselineMarkerCount >= 0 ? "+" : ""}${uploadSummary.finalMarkerCount - uploadSummary.baselineMarkerCount})`}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-100">
+                        {`${Math.round(uploadSummary.baselineConfidence * 100)}% -> ${Math.round(uploadSummary.finalConfidence * 100)}% (${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100) >= 0 ? "+" : ""}${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100)} pp)`}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("AI geprobeerd", "AI attempted")}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-100">{tr("Ja", "Yes")}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("AI toegepast", "AI applied")}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-cyan-100">{uploadSummary.aiApplied ? tr("Ja", "Yes") : tr("Nee", "No")}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Route", "Route")}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-100">
+                      {`${uploadSummary.baselineRouteLabel} -> ${uploadSummary.finalRouteLabel}`}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Markers gevonden", "Markers found")}</p>
+                    <p className="mt-0.5 text-lg font-semibold text-cyan-300">{uploadSummary.markerCount}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-100">{Math.round(uploadSummary.confidence * 100)}%</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Waarschuwingen", "Warnings")}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-100">{uploadSummary.warnings}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Gebruikte route", "Used route")}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-cyan-100">{uploadSummary.routeLabel}</p>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-100">{Math.round(uploadSummary.confidence * 100)}%</p>
-                </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Waarschuwingen", "Warnings")}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-100">{uploadSummary.warnings}</p>
-                </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Gebruikte route", "Used route")}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-cyan-100">{uploadSummary.routeLabel}</p>
-                </div>
-              </div>
+              )}
 
-              <div className="mt-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                {uploadSummary.usedAi || uploadSummary.usedOcr
-                  ? tr(
-                      "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. OCR/AI kan kleine fouten maken.",
-                      "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
-                    )
-                  : tr(
-                      "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. Ook tekst-only parsing kan fouten maken.",
-                      "Always verify marker name, value, and reference range before saving. Text-only parsing can still make mistakes."
-                    )}
+              <div className="mt-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"> 
+                {uploadSummary.kind === "ai_rescue"
+                  ? uploadSummary.aiApplied
+                    ? tr(
+                        "AI-rescue is toegepast omdat de kwaliteit duidelijk verbeterde. Controleer markernaam, waarde en referentiebereik voor je opslaat.",
+                        "AI rescue was applied because quality clearly improved. Verify marker name, value, and reference range before saving."
+                      )
+                    : tr(
+                        "AI-check uitgevoerd, lokaal resultaat behouden. Controleer markernaam, waarde en referentiebereik voor je opslaat.",
+                        "AI check was completed and local result was kept. Verify marker name, value, and reference range before saving."
+                      )
+                  : uploadSummary.usedAi || uploadSummary.usedOcr
+                    ? tr(
+                        "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. OCR/AI kan kleine fouten maken.",
+                        "Always verify marker name, value, and reference range before saving. OCR/AI can make minor mistakes."
+                      )
+                    : tr(
+                        "Controleer altijd markernaam, waarde en referentiebereik voordat je opslaat. Ook tekst-only parsing kan fouten maken.",
+                        "Always verify marker name, value, and reference range before saving. Text-only parsing can still make mistakes."
+                      )}
                 {uploadSummary.warnings > 0 ? ` ${tr("Er zijn parserwaarschuwingen gevonden.", "Parser warnings were detected.")}` : ""}
               </div>
               <div className="mt-4 flex justify-end">

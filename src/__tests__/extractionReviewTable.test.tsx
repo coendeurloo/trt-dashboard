@@ -262,4 +262,31 @@ describe("ExtractionReviewTable", () => {
     expect(screen.getByText("Recognized as: Leukocytes")).toBeTruthy();
     expect(screen.queryByText("Recognized as: unknown")).toBeNull();
   });
+
+  it("shows rescue button progress state while AI rescue is running", () => {
+    render(
+      <ExtractionReviewTable
+        draft={draft}
+        annotations={annotations}
+        protocols={[]}
+        supplementTimeline={[]}
+        inheritedSupplementsPreview={[]}
+        inheritedSupplementsSourceLabel="current active stack"
+        selectedProtocolId={null}
+        language="en"
+        onDraftChange={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onSelectedProtocolIdChange={vi.fn()}
+        onProtocolCreate={vi.fn()}
+        onAddSupplementPeriod={vi.fn()}
+        isImprovingWithAi
+        onEnableAiRescue={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    const rescueButton = screen.getByRole("button", { name: /AI rescue in progress/i }) as HTMLButtonElement;
+    expect(rescueButton.disabled).toBe(true);
+  });
 });

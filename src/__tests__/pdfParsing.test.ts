@@ -849,6 +849,25 @@ describe("pdfParsing fallback layers", () => {
     expect(markers.some((name) => /CRP method is sensitive to/i.test(name))).toBe(false);
   });
 
+  it("orders markers by their actual row position when summary headings mention markers earlier", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Hormone summary: Testosterone and SHBG pending final verification",
+        "Collected: 03/11/2025",
+        "SHBG 44.1 nmol/L 10.0 - 70.0",
+        "Testosterone 22.5 nmol/L 8.4 - 28.8"
+      ].join("\n"),
+      "summary-order.pdf"
+    );
+
+    const shbgIndex = draft.markers.findIndex((marker) => marker.canonicalMarker === "SHBG");
+    const testosteroneIndex = draft.markers.findIndex((marker) => marker.canonicalMarker === "Testosterone");
+
+    expect(shbgIndex).toBeGreaterThanOrEqual(0);
+    expect(testosteroneIndex).toBeGreaterThanOrEqual(0);
+    expect(shbgIndex).toBeLessThan(testosteroneIndex);
+  });
+
   it("produces fallback diagnostics with rejection reasons", () => {
     const outcome = __pdfParsingInternals.fallbackExtractDetailed(
       [
