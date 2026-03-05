@@ -21,6 +21,17 @@ describe("pdfParsing fallback layers", () => {
     expect(keywordRangeProfile.enableKeywordRangeParser).toBe(true);
   });
 
+  it("detects keyword-range style in Danish reports", () => {
+    const danishKeywordRangeProfile = __pdfParsingInternals.detectParserProfile(
+      "Din værdi: 5.1 Normalområde: Højere end 3.5",
+      "x.pdf"
+    );
+
+    expect(danishKeywordRangeProfile.id).toBe("adaptive");
+    expect(danishKeywordRangeProfile.requireUnit).toBe(false);
+    expect(danishKeywordRangeProfile.enableKeywordRangeParser).toBe(true);
+  });
+
   it("parses right-anchored rows where range is before unit", () => {
     const row = __pdfParsingInternals.parseSingleRow(
       "Testosterone, Total, LC/MS/MS 300 250 - 1100 ng/dL",
