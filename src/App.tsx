@@ -1392,7 +1392,10 @@ const App = () => {
       return tr("Tekstlaag lokaal lezen (nog geen externe AI)...", "Reading text layer locally (no external AI yet)...");
     }
     if (uploadStage === "running_ocr") {
-      return tr("Lokale OCR uitvoeren op scans (nog geen externe AI)...", "Running local OCR on scanned pages (no external AI yet)...");
+      return tr(
+        "Lokale OCR uitvoeren op scans (kan tot ongeveer 2 minuten duren, nog geen externe AI)...",
+        "Running local OCR on scanned pages (can take up to about 2 minutes, no external AI yet)..."
+      );
     }
     if (uploadStage === "running_ai_text") {
       return tr("Geanonimiseerde tekst naar AI sturen...", "Sending redacted text to AI...");

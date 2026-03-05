@@ -1274,6 +1274,98 @@ describe("pdfParsing fallback layers", () => {
     expect(decision.reason).toBe("cost_mode_ultra_low");
   });
 
+  const makeRescueDraft = (markerCount: number, confidence: number, importantMarkers: string[] = []): ExtractionDraft => ({
+    sourceFileName: "ocr-rescue.pdf",
+    testDate: "2025-01-01",
+    markers: [
+      ...importantMarkers.map((markerName, index) => ({
+        id: `imp-${index}`,
+        marker: markerName,
+        canonicalMarker: markerName,
+        value: 12.4,
+        unit: "nmol/L",
+        referenceMin: 5,
+        referenceMax: 30,
+        abnormal: "normal" as const,
+        confidence
+      })),
+      ...Array.from({ length: Math.max(0, markerCount - importantMarkers.length) }, (_, index) => ({
+        id: `m-${index}`,
+        marker: `Marker ${index}`,
+        canonicalMarker: `Marker ${index}`,
+        value: 10 + index,
+        unit: "mmol/L",
+        referenceMin: 3,
+        referenceMax: 20,
+        abnormal: "normal" as const,
+        confidence
+      }))
+    ],
+    extraction: {
+      provider: "fallback",
+      model: "fallback-layered:adaptive",
+      confidence,
+      needsReview: false
+    }
+  });
+
+  it("runs OCR rescue pass when primary OCR timed out", () => {
+    const draft = makeRescueDraft(26, 0.79, ["Testosterone", "Estradiol"]);
+    const shouldRescue = __pdfParsingInternals.shouldRunOcrRescuePass({
+      primaryResult: {
+        text: "x".repeat(1800),
+        used: true,
+        pagesAttempted: 3,
+        pagesSucceeded: 2,
+        pagesFailed: 1,
+        initFailed: false,
+        timedOut: true
+      },
+      primaryDraft: draft,
+      bestLocalDraft: draft
+    });
+
+    expect(shouldRescue).toBe(true);
+  });
+
+  it("runs OCR rescue pass for strong OCR text but weak marker yield", () => {
+    const weakDraft = makeRescueDraft(20, 0.69, ["Testosterone"]);
+    const shouldRescue = __pdfParsingInternals.shouldRunOcrRescuePass({
+      primaryResult: {
+        text: "Long OCR dump ".repeat(260),
+        used: true,
+        pagesAttempted: 2,
+        pagesSucceeded: 2,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      },
+      primaryDraft: weakDraft,
+      bestLocalDraft: weakDraft
+    });
+
+    expect(shouldRescue).toBe(true);
+  });
+
+  it("skips OCR rescue pass for complete high-quality OCR result", () => {
+    const strongDraft = makeRescueDraft(38, 0.86, ["Testosterone", "Estradiol", "SHBG", "Hematocrit"]);
+    const shouldRescue = __pdfParsingInternals.shouldRunOcrRescuePass({
+      primaryResult: {
+        text: "High quality OCR text ".repeat(180),
+        used: true,
+        pagesAttempted: 2,
+        pagesSucceeded: 2,
+        pagesFailed: 0,
+        initFailed: false,
+        timedOut: false
+      },
+      primaryDraft: strongDraft,
+      bestLocalDraft: strongDraft
+    });
+
+    expect(shouldRescue).toBe(false);
+  });
+
   it("includes AI text-only insufficient warning code when passed by parser", () => {
     const warningMeta = __pdfParsingInternals.buildLocalExtractionWarnings(
       {
