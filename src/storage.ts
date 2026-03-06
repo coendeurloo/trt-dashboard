@@ -476,6 +476,91 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
                 report.extraction.debug.extractionRoute === "gemini-vision-only" ||
                 report.extraction.debug.extractionRoute === "empty"
                   ? report.extraction.debug.extractionRoute
+                  : undefined,
+              routing:
+                report.extraction.debug.routing &&
+                typeof report.extraction.debug.routing === "object" &&
+                !Array.isArray(report.extraction.debug.routing)
+                  ? {
+                      primaryLanguage:
+                        typeof report.extraction.debug.routing.primaryLanguage === "string"
+                          ? report.extraction.debug.routing.primaryLanguage.slice(0, 32)
+                          : undefined,
+                      languageCandidates:
+                        Array.isArray(report.extraction.debug.routing.languageCandidates)
+                          ? report.extraction.debug.routing.languageCandidates
+                              .map((entry) => {
+                                if (!entry || typeof entry !== "object") {
+                                  return null;
+                                }
+                                const language =
+                                  typeof entry.language === "string" ? entry.language.slice(0, 32) : "";
+                                const score = Number(entry.score);
+                                if (!language || !Number.isFinite(score)) {
+                                  return null;
+                                }
+                                return {
+                                  language,
+                                  score: Math.max(0, Math.min(1, score))
+                                };
+                              })
+                              .filter((entry): entry is { language: string; score: number } => Boolean(entry))
+                              .slice(0, 4)
+                          : undefined,
+                      templateCandidates:
+                        Array.isArray(report.extraction.debug.routing.templateCandidates)
+                          ? report.extraction.debug.routing.templateCandidates
+                              .map((entry) => {
+                                if (!entry || typeof entry !== "object") {
+                                  return null;
+                                }
+                                const template =
+                                  typeof entry.template === "string" ? entry.template.slice(0, 64) : "";
+                                const score = Number(entry.score);
+                                if (!template || !Number.isFinite(score)) {
+                                  return null;
+                                }
+                                return {
+                                  template,
+                                  score: Math.max(0, Math.min(100, score))
+                                };
+                              })
+                              .filter((entry): entry is { template: string; score: number } => Boolean(entry))
+                              .slice(0, 4)
+                          : undefined,
+                      selectedParsers:
+                        Array.isArray(report.extraction.debug.routing.selectedParsers)
+                          ? report.extraction.debug.routing.selectedParsers
+                              .map((value) => String(value).slice(0, 64))
+                              .filter(Boolean)
+                              .slice(0, 3)
+                          : undefined,
+                      selectedOcrLangs:
+                        Array.isArray(report.extraction.debug.routing.selectedOcrLangs)
+                          ? report.extraction.debug.routing.selectedOcrLangs
+                              .map((value) => String(value).slice(0, 32))
+                              .filter(Boolean)
+                              .slice(0, 3)
+                          : undefined,
+                      ocrFallbackLang:
+                        typeof report.extraction.debug.routing.ocrFallbackLang === "string"
+                          ? report.extraction.debug.routing.ocrFallbackLang.slice(0, 32)
+                          : report.extraction.debug.routing.ocrFallbackLang === null
+                            ? null
+                            : undefined,
+                      ocrPassCount:
+                        Number.isFinite(Number(report.extraction.debug.routing.ocrPassCount))
+                          ? Math.max(0, Math.min(5, Math.round(Number(report.extraction.debug.routing.ocrPassCount))))
+                          : undefined,
+                      previewOcrUsed:
+                        typeof report.extraction.debug.routing.previewOcrUsed === "boolean"
+                          ? report.extraction.debug.routing.previewOcrUsed
+                          : undefined,
+                      reason:
+                        typeof report.extraction.debug.routing.reason === "string"
+                          ? report.extraction.debug.routing.reason.slice(0, 200)
+                          : undefined
+                    }
                   : undefined
             }
           : undefined,

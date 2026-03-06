@@ -278,6 +278,17 @@ export interface ExtractionDebugInfo {
   aiRescueTriggered?: boolean;
   aiRescueReason?: string;
   extractionRoute?: ExtractionRoute;
+  routing?: {
+    primaryLanguage?: string;
+    languageCandidates?: Array<{ language: string; score: number }>;
+    templateCandidates?: Array<{ template: string; score: number }>;
+    selectedParsers?: string[];
+    selectedOcrLangs?: string[];
+    ocrFallbackLang?: string | null;
+    ocrPassCount?: number;
+    previewOcrUsed?: boolean;
+    reason?: string;
+  };
 }
 
 export interface AppSettings {

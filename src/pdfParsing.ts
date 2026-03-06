@@ -33,6 +33,11 @@ import {
   resolveParserOcrLangs
 } from "./pdfParsing/locales";
 import { ParserKeywordRangeLocale } from "./pdfParsing/locales/types";
+import {
+  buildRoutingDecision,
+  ParserTemplateId,
+  RoutingDecision
+} from "./pdfRouting";
 
 (pdfjsLib as unknown as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc =
   pdfWorker;
@@ -271,6 +276,7 @@ const LIFELABS_TABLE_END_PATTERN =
 const LIFELABS_CONTINUATION_PATTERN =
   /^(?:for|if|this|that|see|indicates|therapeutic|units for|kidney function|assumption|clinical state|accuracy|adults?:|children:|persistently|target reduction|new method|changes in serial|interpretation:|no reference range|a1c\s*[<>]=?)\b/i;
 type MarkerCandidateSource = "fallback" | "claude";
+const OCR_DEFAULT_LANG = "eng";
 const OCR_MAX_PAGES = 12;
 const OCR_RENDER_SCALE = 2;
 const OCR_RETRY_RENDER_SCALE = 1.4;
@@ -283,6 +289,9 @@ const OCR_MAX_INIT_ATTEMPTS = 2;
 const OCR_INIT_BACKOFF_MS = 250;
 const OCR_PAGE_TIMEOUT_MS = 12_000;
 const OCR_TOTAL_TIMEOUT_MS = 60_000;
+const OCR_PREVIEW_TOTAL_TIMEOUT_MS = 12_000;
+const OCR_PREVIEW_PAGE_TIMEOUT_MS = 7_000;
+const OCR_PREVIEW_RENDER_SCALE = 1.25;
 const OCR_RESCUE_PAGE_TIMEOUT_MS = 18_000;
 const OCR_RESCUE_TOTAL_TIMEOUT_MS = 120_000;
 const OCR_MAX_TOTAL_DURATION_MS = 120_000;
@@ -312,8 +321,11 @@ interface OcrResult {
   timedOut: boolean;
 }
 
-interface OcrRunOptions {
+interface OcrExecutionOptions {
   pageTimeoutMs?: number;
+  languageAttempts?: string[];
+  maxPages?: number;
+  fastMode?: boolean;
 }
 
 interface DedupeDiagnostics {
@@ -951,11 +963,7 @@ const isAcceptableMarkerCandidate = (
   return score >= threshold;
 };
 
-const extractPdfTextViaOcr = async (
-  arrayBuffer: ArrayBuffer,
-  ocrLangs: string,
-  options: OcrRunOptions = {}
-): Promise<OcrResult> => {
+const extractPdfTextViaOcr = async (arrayBuffer: ArrayBuffer, options: OcrExecutionOptions = {}): Promise<OcrResult> => {
   if (!isBrowserRuntime()) {
     return {
       text: "",
@@ -1084,7 +1092,7 @@ const extractPdfTextViaOcr = async (
     };
   }
 
-  const pageLimit = Math.min((doc as { numPages: number }).numPages, OCR_MAX_PAGES);
+  const pageLimit = Math.min((doc as { numPages: number }).numPages, options.maxPages ?? OCR_MAX_PAGES);
   if (pageLimit === 0) {
     return {
       text: "",
@@ -1139,7 +1147,18 @@ const extractPdfTextViaOcr = async (
       workerBlobURL: true
     }
   ];
-  const languageAttempts = ocrLangs.includes("+") ? [ocrLangs, OCR_LANG_FALLBACK] : [ocrLangs];
+  const requestedAttempts = Array.isArray(options.languageAttempts) ? options.languageAttempts : [];
+  const languageAttempts = Array.from(
+    new Set(
+      requestedAttempts
+        .map((value) => cleanWhitespace(String(value ?? "")))
+        .filter(Boolean)
+        .slice(0, 2)
+    )
+  );
+  if (languageAttempts.length === 0) {
+    languageAttempts.push(OCR_DEFAULT_LANG);
+  }
 
   if (createWorker) {
     for (const lang of languageAttempts) {
@@ -1172,7 +1191,11 @@ const extractPdfTextViaOcr = async (
   let pagesSucceeded = 0;
   let pagesFailed = 0;
   let timedOut = false;
-  const pageTimeoutMs = Math.max(4_000, Math.floor(options.pageTimeoutMs ?? OCR_PAGE_TIMEOUT_MS));
+  const pageTimeoutMs = options.fastMode
+    ? OCR_PREVIEW_PAGE_TIMEOUT_MS
+    : Math.max(4_000, Math.floor(options.pageTimeoutMs ?? OCR_PAGE_TIMEOUT_MS));
+  const primaryRenderScale = options.fastMode ? OCR_PREVIEW_RENDER_SCALE : OCR_RENDER_SCALE;
+  const retryRenderScale = options.fastMode ? 0 : OCR_RETRY_RENDER_SCALE;
 
   const getPageCanvas = async (pageNumber: number, scale: number): Promise<HTMLCanvasElement | null> => {
     const page = await (doc as { getPage: (page: number) => Promise<unknown> }).getPage(pageNumber);
@@ -1255,7 +1278,7 @@ const extractPdfTextViaOcr = async (
     for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
       let ocrText = "";
       try {
-        ocrText = await withTimeout(runPageOcr(pageNum, OCR_RENDER_SCALE), pageTimeoutMs, `OCR timeout on page ${pageNum}`);
+        ocrText = await withTimeout(runPageOcr(pageNum, primaryRenderScale), pageTimeoutMs, `OCR timeout on page ${pageNum}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         if (/timeout/i.test(message)) {
@@ -1263,10 +1286,10 @@ const extractPdfTextViaOcr = async (
         }
       }
 
-      if (!ocrText) {
+      if (!ocrText && retryRenderScale > 0) {
         try {
           ocrText = await withTimeout(
-            runPageOcr(pageNum, OCR_RETRY_RENDER_SCALE),
+            runPageOcr(pageNum, retryRenderScale),
             pageTimeoutMs,
             `OCR retry timeout on page ${pageNum}`
           );
@@ -4270,14 +4293,32 @@ const collapseHistorySheetMarkers = (markers: MarkerValue[]): MarkerValue[] => {
   return collapsed;
 };
 
-const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): FallbackExtractOutcome => {
+const fallbackExtractDetailed = (
+  text: string,
+  fileName: string,
+  spatialRows: PdfSpatialRow[] = [],
+  routingDecision: RoutingDecision | null = null
+): FallbackExtractOutcome => {
   const profile = detectParserProfile(text, fileName);
-  const genovaRows = parseGenovaHormoneRows(text, profile);
-  const zrtRows = parseZrtCompactRows(text, profile);
-  const wardeRows = parseWardeTesbRows(text, profile);
-  const latvianRows = parseLatvianIndexedRows(text, profile);
-  const londonRows = parseLondonDoctorSummaryRows(text, profile);
-  const lifeLabsRows = parseLifeLabsTableRows(text, profile);
+  const routing =
+    routingDecision ??
+    buildRoutingDecision({
+      fileName,
+      text,
+      textItems: 0,
+      pageCount: 1,
+      nonWhitespaceChars: text.replace(/\s+/g, "").length,
+      lineCount: Math.max(1, text.split("\n").length)
+    });
+  const selectedTemplateSet = new Set<ParserTemplateId>(routing.selectedParsers);
+  const shouldRunTemplate = (templateId: ParserTemplateId): boolean => selectedTemplateSet.has(templateId);
+
+  const genovaRows = shouldRunTemplate("genova") ? parseGenovaHormoneRows(text, profile) : [];
+  const zrtRows = shouldRunTemplate("zrt") ? parseZrtCompactRows(text, profile) : [];
+  const wardeRows = shouldRunTemplate("warde") ? parseWardeTesbRows(text, profile) : [];
+  const latvianRows = shouldRunTemplate("latvia_indexed") ? parseLatvianIndexedRows(text, profile) : [];
+  const londonRows = shouldRunTemplate("london") ? parseLondonDoctorSummaryRows(text, profile) : [];
+  const lifeLabsRows = shouldRunTemplate("lifelabs") ? parseLifeLabsTableRows(text, profile) : [];
   const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
   const columnRows = parseColumnRows(text, profile);
   const lineRows = parseLineRows(text, profile);
@@ -4292,6 +4333,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
     ? getKeywordRangeLocaleById(profile.keywordRangeLocaleId)
     : null;
   const keywordRangeRows = profile.enableKeywordRangeParser ? parseKeywordRangeRows(text, keywordRangeLocale) : [];
+  const huisartsRows = shouldRunTemplate("mijngezondheid") && profile.enableKeywordRangeParser ? parseMijnGezondheidRows(text) : [];
 
   const nonSpatialRows =
     indexedRows.length > 0
@@ -4307,7 +4349,8 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...indexedRows,
           ...looseRows,
           ...ultraLooseRows,
-          ...keywordRangeRows
+          ...keywordRangeRows,
+          ...huisartsRows
         ]
       : [
           ...genovaRows,
@@ -4320,7 +4363,8 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
           ...lineRows,
           ...looseRows,
           ...ultraLooseRows,
-          ...keywordRangeRows
+          ...keywordRangeRows,
+          ...huisartsRows
         ];
   const nonSpatialDedupe = dedupeRowsDetailed(nonSpatialRows);
   const nonSpatialMarkers = nonSpatialDedupe.markers;
@@ -4358,6 +4402,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
       ? Math.max(0.1, Math.min(0.9, confidenceBase - duplicatePenalty - sparseReferencePenalty - historyLayoutPenalty))
       : 0.1;
 
+  const routingLabel = routing.selectedParsers.length > 0 ? routing.selectedParsers.join("+") : "generic";
   return {
     draft: {
       sourceFileName: fileName,
@@ -4365,7 +4410,7 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
       markers,
       extraction: {
         provider: "fallback",
-        model: `fallback-layered:${profile.id}`,
+        model: `fallback-layered:${profile.id}:${routingLabel}`,
         confidence,
         needsReview:
           confidence < 0.7 ||
@@ -4387,8 +4432,12 @@ const fallbackExtractDetailed = (text: string, fileName: string, spatialRows: Pd
   };
 };
 
-const fallbackExtract = (text: string, fileName: string, spatialRows: PdfSpatialRow[] = []): ExtractionDraft =>
-  fallbackExtractDetailed(text, fileName, spatialRows).draft;
+const fallbackExtract = (
+  text: string,
+  fileName: string,
+  spatialRows: PdfSpatialRow[] = [],
+  routingDecision: RoutingDecision | null = null
+): ExtractionDraft => fallbackExtractDetailed(text, fileName, spatialRows, routingDecision).draft;
 
 interface GeminiExtractionAttemptResult {
   draft: ExtractionDraft | null;
@@ -4820,6 +4869,30 @@ const buildNormalizationSummary = (
   );
 };
 
+const buildRoutingDebugInfo = (
+  decision: RoutingDecision,
+  selectedOcrLangs: string[],
+  ocrFallbackLang: string | null,
+  ocrPassCount: number,
+  previewOcrUsed: boolean
+): NonNullable<ExtractionDebugInfo["routing"]> => ({
+  primaryLanguage: decision.primaryLanguage,
+  languageCandidates: decision.languageCandidates.slice(0, 3).map((candidate) => ({
+    language: candidate.language,
+    score: candidate.score
+  })),
+  templateCandidates: decision.templateCandidates.slice(0, 3).map((candidate) => ({
+    template: candidate.template,
+    score: candidate.score
+  })),
+  selectedParsers: decision.selectedParsers,
+  selectedOcrLangs: selectedOcrLangs.slice(0, 2),
+  ocrFallbackLang,
+  ocrPassCount,
+  previewOcrUsed,
+  reason: decision.reason
+});
+
 export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
   try {
     const onStageChange = options.onStageChange ?? (() => {});
@@ -4888,6 +4961,18 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
 
     let textFallback: FallbackExtractOutcome | null = null;
     let ocrFallback: FallbackExtractOutcome | null = null;
+    let currentRouting = buildRoutingDecision({
+      fileName: file.name,
+      text: textResult.text,
+      textItems: textResult.textItemCount,
+      pageCount: Math.max(1, textResult.pageCount),
+      nonWhitespaceChars: textResult.nonWhitespaceChars,
+      lineCount: Math.max(1, textResult.lineCount)
+    });
+    let selectedOcrLangs = currentRouting.ocrPlan.languageAttempts.slice(0, 2);
+    let ocrFallbackLang = currentRouting.ocrPlan.fallbackLang;
+    let ocrPassCount = 0;
+    let previewOcrUsed = false;
 
     let ocrResult: OcrResult = {
       text: "",
@@ -4900,7 +4985,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     };
 
     if (textResult.textItemCount > 0 && textResult.text.trim().length > 0) {
-      textFallback = fallbackExtractDetailed(textResult.text, file.name, textResult.spatialRows);
+      textFallback = fallbackExtractDetailed(textResult.text, file.name, textResult.spatialRows, currentRouting);
       console.info(
         `[extractLabData] Local text parse: ${textFallback.draft.markers.length} markers, confidence ${textFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(textFallback.draft.markers)}`
       );
@@ -4927,7 +5012,8 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
             keptRows: textFallback.diagnostics.keptRows,
             rejectedRows: textFallback.diagnostics.rejectedRows,
             topRejectReasons: textFallback.diagnostics.topRejectReasons,
-            extractionRoute: "local-text"
+            extractionRoute: "local-text",
+            routing: buildRoutingDebugInfo(currentRouting, selectedOcrLangs, ocrFallbackLang, ocrPassCount, previewOcrUsed)
           }
         );
       }
@@ -5000,31 +5086,74 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     if (canRunOcr) {
       emitStage("running_ocr");
       console.info("[extractLabData] Attempting OCR fallback...");
-      const ocrPageLimit = textResult.pageCount > 0 ? Math.min(textResult.pageCount, OCR_MAX_PAGES) : 0;
+      const pageCap = textResult.pageCount > 0 ? Math.min(textResult.pageCount, OCR_MAX_PAGES) : 0;
       const makeOcrFailureResult = (timedOut: boolean): OcrResult => ({
         text: "",
         used: true,
-        pagesAttempted: ocrPageLimit,
+        pagesAttempted: pageCap,
         pagesSucceeded: 0,
-        pagesFailed: ocrPageLimit,
+        pagesFailed: pageCap,
         initFailed: false,
         timedOut
       });
       const ocrStartedAt = Date.now();
-      const primaryOcrLangs = resolveParserOcrLangs(textResult.text, file.name);
+      const shouldRunPreviewOcr =
+        pageCap > 0 &&
+        (textResult.textItemCount === 0 || textResult.nonWhitespaceChars < Math.max(240, pageCap * 100));
+
+      if (shouldRunPreviewOcr) {
+        const previewOcr = await withTimeout(
+          extractPdfTextViaOcr(cloneArrayBuffer(), {
+            languageAttempts: [OCR_DEFAULT_LANG],
+            maxPages: 1,
+            fastMode: true
+          }),
+          OCR_PREVIEW_TOTAL_TIMEOUT_MS,
+          "OCR preview timeout"
+        ).catch((error) => {
+          console.warn("[extractLabData] OCR preview failed", error);
+          return null;
+        });
+
+        if (previewOcr?.text?.trim()) {
+          previewOcrUsed = true;
+          currentRouting = buildRoutingDecision({
+            fileName: file.name,
+            text: textResult.text,
+            textItems: textResult.textItemCount,
+            pageCount: Math.max(1, textResult.pageCount),
+            nonWhitespaceChars: textResult.nonWhitespaceChars,
+            lineCount: Math.max(1, textResult.lineCount),
+            previewOcrText: previewOcr.text
+          });
+        }
+      }
+      const routingLanguageAttempts = Array.isArray(currentRouting.ocrPlan.languageAttempts)
+        ? currentRouting.ocrPlan.languageAttempts
+            .map((value) => cleanWhitespace(String(value ?? "")))
+            .filter(Boolean)
+            .slice(0, 2)
+        : [];
+      const localePrimaryOcrLang = resolveParserOcrLangs(textResult.text, file.name);
+      const primaryOcrLangs = routingLanguageAttempts[0] ?? localePrimaryOcrLang;
+      let fallbackOcrLang = routingLanguageAttempts[1] ?? currentRouting.ocrPlan.fallbackLang;
+      selectedOcrLangs = [primaryOcrLangs];
+      ocrFallbackLang = fallbackOcrLang;
       const primaryOcrTotalTimeoutMs = Math.min(OCR_TOTAL_TIMEOUT_MS, OCR_MAX_TOTAL_DURATION_MS);
 
       ocrResult = {
         text: "",
         used: true,
-        pagesAttempted: ocrPageLimit,
+        pagesAttempted: pageCap,
         pagesSucceeded: 0,
         pagesFailed: 0,
         initFailed: false,
         timedOut: false
       };
       ocrResult = await withTimeout(
-        extractPdfTextViaOcr(cloneArrayBuffer(), primaryOcrLangs, {
+        extractPdfTextViaOcr(cloneArrayBuffer(), {
+          languageAttempts: [primaryOcrLangs],
+          maxPages: OCR_MAX_PAGES,
           pageTimeoutMs: OCR_PAGE_TIMEOUT_MS
         }),
         primaryOcrTotalTimeoutMs,
@@ -5034,12 +5163,68 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         return makeOcrFailureResult(true);
       });
 
+      ocrPassCount = 1;
+      const ocrCoverage = ocrResult.pagesAttempted > 0 ? ocrResult.pagesSucceeded / ocrResult.pagesAttempted : 0;
+      const weakPrimaryOcr =
+        ocrResult.initFailed ||
+        ocrResult.timedOut ||
+        ocrCoverage < 0.45 ||
+        ocrResult.text.trim().length < Math.max(160, Math.max(1, pageCap) * 40);
+      const canRetryWithFallback =
+        Boolean(fallbackOcrLang) &&
+        fallbackOcrLang !== primaryOcrLangs &&
+        currentRouting.ocrPlan.maxPasses > 1 &&
+        weakPrimaryOcr;
+
+      if (canRetryWithFallback && fallbackOcrLang) {
+        const fallbackResult = await withTimeout(
+          extractPdfTextViaOcr(cloneArrayBuffer(), {
+            languageAttempts: [fallbackOcrLang],
+            maxPages: OCR_MAX_PAGES,
+            pageTimeoutMs: OCR_PAGE_TIMEOUT_MS
+          }),
+          primaryOcrTotalTimeoutMs,
+          "OCR fallback total timeout"
+        ).catch((error) => {
+          console.warn("[extractLabData] OCR fallback timeout or crash", error);
+          return makeOcrFailureResult(true);
+        });
+        ocrPassCount = 2;
+        selectedOcrLangs = [primaryOcrLangs, fallbackOcrLang];
+        ocrFallbackLang = fallbackOcrLang;
+        const primaryScore = ocrResult.pagesSucceeded * 100 + ocrResult.text.length;
+        const fallbackScore = fallbackResult.pagesSucceeded * 100 + fallbackResult.text.length;
+
+        if (fallbackScore > primaryScore * 1.05 || !ocrResult.text.trim()) {
+          ocrResult = fallbackResult;
+        } else if (fallbackResult.text.trim()) {
+          ocrResult = {
+            text: [ocrResult.text, fallbackResult.text].filter(Boolean).join("\n"),
+            used: true,
+            pagesAttempted: Math.max(ocrResult.pagesAttempted, fallbackResult.pagesAttempted),
+            pagesSucceeded: Math.max(ocrResult.pagesSucceeded, fallbackResult.pagesSucceeded),
+            pagesFailed: Math.min(ocrResult.pagesFailed, fallbackResult.pagesFailed),
+            initFailed: ocrResult.initFailed && fallbackResult.initFailed,
+            timedOut: ocrResult.timedOut || fallbackResult.timedOut
+          };
+        }
+      }
+
       console.info(
-        `[extractLabData] OCR primary result (${primaryOcrLangs}): ${ocrResult.pagesSucceeded}/${ocrResult.pagesAttempted} pages, ${ocrResult.text.length} chars, initFailed=${ocrResult.initFailed}, timedOut=${ocrResult.timedOut}`
+        `[extractLabData] OCR primary result (${selectedOcrLangs.join(",")}): ${ocrResult.pagesSucceeded}/${ocrResult.pagesAttempted} pages, ${ocrResult.text.length} chars, initFailed=${ocrResult.initFailed}, timedOut=${ocrResult.timedOut}`
       );
 
       if (ocrResult.text.trim().length > 0) {
-        ocrFallback = fallbackExtractDetailed(ocrResult.text, file.name);
+        const ocrRouting = buildRoutingDecision({
+          fileName: file.name,
+          text: ocrResult.text,
+          textItems: 0,
+          pageCount: Math.max(1, ocrResult.pagesAttempted),
+          nonWhitespaceChars: ocrResult.text.replace(/\s+/g, "").length,
+          lineCount: Math.max(1, ocrResult.text.split("\n").length)
+        });
+        currentRouting = ocrRouting;
+        ocrFallback = fallbackExtractDetailed(ocrResult.text, file.name, [], ocrRouting);
         console.info(
           `[extractLabData] Local OCR parse (primary): ${ocrFallback.draft.markers.length} markers, confidence ${ocrFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(ocrFallback.draft.markers)}`
         );
@@ -5064,7 +5249,9 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           `[extractLabData] Running OCR rescue pass (${rescueOcrLangs}), budget=${Math.round(rescueTimeoutMs / 1000)}s, reason=${languageSignalImproved ? "language_signal_improved" : "low_yield_or_partial"}`
         );
         const rescueOcrResult = await withTimeout(
-          extractPdfTextViaOcr(cloneArrayBuffer(), rescueOcrLangs, {
+          extractPdfTextViaOcr(cloneArrayBuffer(), {
+            languageAttempts: [rescueOcrLangs],
+            maxPages: OCR_MAX_PAGES,
             pageTimeoutMs: OCR_RESCUE_PAGE_TIMEOUT_MS
           }),
           rescueTimeoutMs,
@@ -5073,9 +5260,20 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           console.warn("[extractLabData] OCR rescue timeout or crash", error);
           return makeOcrFailureResult(true);
         });
+        ocrPassCount += 1;
+        selectedOcrLangs = Array.from(new Set([...selectedOcrLangs, rescueOcrLangs])).slice(0, 2);
         let rescueOcrFallback: FallbackExtractOutcome | null = null;
+        let rescueRouting: RoutingDecision | null = null;
         if (rescueOcrResult.text.trim().length > 0) {
-          rescueOcrFallback = fallbackExtractDetailed(rescueOcrResult.text, file.name);
+          rescueRouting = buildRoutingDecision({
+            fileName: file.name,
+            text: rescueOcrResult.text,
+            textItems: 0,
+            pageCount: Math.max(1, rescueOcrResult.pagesAttempted),
+            nonWhitespaceChars: rescueOcrResult.text.replace(/\s+/g, "").length,
+            lineCount: Math.max(1, rescueOcrResult.text.split("\n").length)
+          });
+          rescueOcrFallback = fallbackExtractDetailed(rescueOcrResult.text, file.name, [], rescueRouting);
           console.info(
             `[extractLabData] Local OCR parse (rescue): ${rescueOcrFallback.draft.markers.length} markers, confidence ${rescueOcrFallback.draft.extraction.confidence.toFixed(2)}, important ${countImportantCoverage(rescueOcrFallback.draft.markers)}`
           );
@@ -5090,6 +5288,9 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         if (rescueIsBetter) {
           ocrResult = rescueOcrResult;
           ocrFallback = rescueOcrFallback;
+          if (rescueRouting) {
+            currentRouting = rescueRouting;
+          }
           console.info("[extractLabData] OCR rescue pass selected as best candidate.");
         } else {
           console.info("[extractLabData] OCR primary pass kept as best candidate.");
@@ -5126,13 +5327,14 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
           {
             textItems: textResult.textItemCount,
             ocrUsed: true,
-            ocrPages: ocrResult.pagesSucceeded,
-            keptRows: bestDiagnostics.keptRows,
-            rejectedRows: bestDiagnostics.rejectedRows,
-            topRejectReasons: bestDiagnostics.topRejectReasons,
-            extractionRoute: bestRoute
-          }
-        );
+              ocrPages: ocrResult.pagesSucceeded,
+              keptRows: bestDiagnostics.keptRows,
+              rejectedRows: bestDiagnostics.rejectedRows,
+              topRejectReasons: bestDiagnostics.topRejectReasons,
+              extractionRoute: bestRoute,
+              routing: buildRoutingDebugInfo(currentRouting, selectedOcrLangs, ocrFallbackLang, ocrPassCount, previewOcrUsed)
+            }
+          );
       }
     }
 
@@ -5318,7 +5520,8 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       aiAttemptedModes: aiAttemptedModes.length > 0 ? aiAttemptedModes : undefined,
       aiRescueTriggered: aiRescueTriggered || undefined,
       aiRescueReason: aiRescueReason || undefined,
-      extractionRoute
+      extractionRoute,
+      routing: buildRoutingDebugInfo(currentRouting, selectedOcrLangs, ocrFallbackLang, ocrPassCount, previewOcrUsed)
     };
 
     emitStage("done");
@@ -5400,6 +5603,3 @@ export const __pdfParsingInternals = {
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
-
-
-
