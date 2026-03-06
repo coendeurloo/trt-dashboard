@@ -296,7 +296,6 @@ const OCR_RESCUE_PAGE_TIMEOUT_MS = 18_000;
 const OCR_RESCUE_TOTAL_TIMEOUT_MS = 120_000;
 const OCR_MAX_TOTAL_DURATION_MS = 120_000;
 const OCR_MIN_RESCUE_BUDGET_MS = 20_000;
-const OCR_LANG_FALLBACK = "eng";
 const OCR_LOW_YIELD_MARKER_CAP = 30;
 const OCR_LOW_YIELD_CONFIDENCE_CAP = 0.72;
 const LOCAL_AI_EXTRACTION_CACHE_KEY = "labtracker_ai_extraction_cache_v1";
@@ -5213,7 +5212,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
         : [];
       const localePrimaryOcrLang = resolveParserOcrLangs(textResult.text, file.name);
       const primaryOcrLangs = routingLanguageAttempts[0] ?? localePrimaryOcrLang;
-      let fallbackOcrLang = routingLanguageAttempts[1] ?? currentRouting.ocrPlan.fallbackLang;
+      const fallbackOcrLang = routingLanguageAttempts[1] ?? currentRouting.ocrPlan.fallbackLang;
       selectedOcrLangs = [primaryOcrLangs];
       ocrFallbackLang = fallbackOcrLang;
       const primaryOcrTotalTimeoutMs = Math.min(OCR_TOTAL_TIMEOUT_MS, OCR_MAX_TOTAL_DURATION_MS);
