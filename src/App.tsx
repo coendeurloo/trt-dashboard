@@ -108,6 +108,11 @@ type UploadSummary =
       aiApplied: boolean;
     };
 
+const GOOD_UPLOAD_CONFIDENCE_THRESHOLD = 0.75;
+// During beta we still show raw confidence percentages in upload results.
+// Set to false before public launch to only show Good / Needs review labels.
+const showUploadConfidencePercent = true;
+
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
   const [analystMemory, setAnalystMemory] = useState<AnalystMemory | null>(() => loadAnalystMemory());
@@ -672,6 +677,17 @@ const App = () => {
 
   const hasParserAiAlreadyRunForCurrentUpload =
     aiAttemptedForCurrentUpload || hasParserAiAttempt(draft) || hasParserAiAttempt(aiCandidateDraft);
+
+  const uploadSummaryConfidence =
+    uploadSummary?.kind === "ai_rescue" ? uploadSummary.finalConfidence : uploadSummary?.confidence ?? 0;
+  const uploadSummaryConfidenceIsGood = uploadSummaryConfidence > GOOD_UPLOAD_CONFIDENCE_THRESHOLD;
+  const uploadSummaryConfidenceLabel = uploadSummaryConfidenceIsGood
+    ? showUploadConfidencePercent
+      ? tr("Goed (>75%)", "Good (>75%)")
+      : tr("Goed", "Good")
+    : showUploadConfidencePercent
+      ? tr("Controle nodig (<=75%)", "Needs review (<=75%)")
+      : tr("Controle nodig", "Needs review");
 
   const getExtractionRouteSummary = (
     candidate: ExtractionDraft
@@ -2076,9 +2092,20 @@ const App = () => {
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
                       <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-100">
-                        {`${Math.round(uploadSummary.baselineConfidence * 100)}% -> ${Math.round(uploadSummary.finalConfidence * 100)}% (${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100) >= 0 ? "+" : ""}${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100)} pp)`}
-                      </p>
+                      {showUploadConfidencePercent ? (
+                        <>
+                          <p className="mt-0.5 text-sm font-semibold text-slate-100">
+                            {`${Math.round(uploadSummary.baselineConfidence * 100)}% -> ${Math.round(uploadSummary.finalConfidence * 100)}% (${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100) >= 0 ? "+" : ""}${Math.round((uploadSummary.finalConfidence - uploadSummary.baselineConfidence) * 100)} pp)`}
+                          </p>
+                          <p className={`mt-0.5 text-[11px] font-medium ${uploadSummaryConfidenceIsGood ? "text-emerald-200" : "text-amber-200"}`}>
+                            {uploadSummaryConfidenceLabel}
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`mt-0.5 text-sm font-semibold ${uploadSummaryConfidenceIsGood ? "text-emerald-100" : "text-amber-100"}`}>
+                          {uploadSummaryConfidenceLabel}
+                        </p>
+                      )}
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
                       <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("AI geprobeerd", "AI attempted")}</p>
@@ -2104,7 +2131,24 @@ const App = () => {
                   </div>
                   <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
                     <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
-                    <p className="mt-0.5 text-sm font-semibold text-slate-100">{Math.round(uploadSummary.confidence * 100)}%</p>
+                    {showUploadConfidencePercent ? (
+                      <>
+                        <p
+                          className={`mt-0.5 text-sm font-semibold ${
+                            uploadSummaryConfidenceIsGood ? "text-emerald-100" : "text-slate-100"
+                          }`}
+                        >
+                          {Math.round(uploadSummary.confidence * 100)}%
+                        </p>
+                        <p className={`mt-0.5 text-[11px] font-medium ${uploadSummaryConfidenceIsGood ? "text-emerald-200" : "text-amber-200"}`}>
+                          {uploadSummaryConfidenceLabel}
+                        </p>
+                      </>
+                    ) : (
+                      <p className={`mt-0.5 text-sm font-semibold ${uploadSummaryConfidenceIsGood ? "text-emerald-100" : "text-amber-100"}`}>
+                        {uploadSummaryConfidenceLabel}
+                      </p>
+                    )}
                   </div>
                   <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
                     <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Waarschuwingen", "Warnings")}</p>
