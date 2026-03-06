@@ -33,7 +33,7 @@ import {
   shareBootstrapText
 } from "./hooks/useShareBootstrap";
 import { buildExtractionDiffSummary } from "./extractionDiff";
-import { getActiveSupplementsAtDate, resolveReportSupplementContexts } from "./supplementUtils";
+import { getCurrentActiveSupplementStack, resolveReportSupplementContexts } from "./supplementUtils";
 import {
   useCoreDerivedData,
   useDashboardDerivedData,
@@ -66,7 +66,7 @@ import {
   TimeRangeKey
 } from "./types";
 import { AnalystMemory } from "./types/analystMemory";
-import { createId, deriveAbnormalFlag, formatDate } from "./utils";
+import { createId, deriveAbnormalFlag } from "./utils";
 import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -283,14 +283,13 @@ const App = () => {
     () => resolveReportSupplementContexts(reports, appData.supplementTimeline),
     [reports, appData.supplementTimeline]
   );
-  const draftDateForSupplements = draft?.testDate ?? new Date().toISOString().slice(0, 10);
   const draftInheritedSupplements = useMemo(
-    () => getActiveSupplementsAtDate(appData.supplementTimeline, draftDateForSupplements),
-    [appData.supplementTimeline, draftDateForSupplements]
+    () => getCurrentActiveSupplementStack(appData.supplementTimeline),
+    [appData.supplementTimeline]
   );
   const draftInheritedSupplementsLabel = useMemo(() => {
-    return `${tr("op basis van schema op", "based on schedule on")} ${formatDate(draftDateForSupplements)}`;
-  }, [draftDateForSupplements, tr]);
+    return tr("huidige actieve stack", "current active stack");
+  }, [tr]);
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
   const isDarkTheme = appData.settings.theme === "dark";

@@ -290,10 +290,10 @@ const ExtractionReviewTable = ({
       ? tr("Onbekend op deze testdatum.", "Unknown on this test date.")
       : supplementAnchorState === "none"
         ? tr("Geen supplementen op deze testdatum.", "No supplements on this test date.")
-        : supplementAnchorState === "inherit"
+      : supplementAnchorState === "inherit"
           ? tr(
-              "Dit rapport gebruikt de overgenomen stack hierboven.",
-              "This report uses the inherited stack shown above."
+              "Dit rapport gebruikt je huidige actieve stack hierboven.",
+              "This report uses your current active stack shown above."
             )
           : activeSupplementsText || tr("Geen supplementen actief op deze datum.", "No supplements active on this date.");
   const supplementSuggestions = useMemo(() => {
@@ -501,24 +501,6 @@ const ExtractionReviewTable = ({
       ...annotations,
       supplementAnchorState: "inherit",
       supplementOverrides: null
-    });
-    setShowSupplementOverrideEditor(false);
-  };
-
-  const markSupplementsUnknown = () => {
-    onAnnotationsChange({
-      ...annotations,
-      supplementAnchorState: "unknown",
-      supplementOverrides: null
-    });
-    setShowSupplementOverrideEditor(false);
-  };
-
-  const markNoSupplements = () => {
-    onAnnotationsChange({
-      ...annotations,
-      supplementAnchorState: "none",
-      supplementOverrides: []
     });
     setShowSupplementOverrideEditor(false);
   };
@@ -1210,21 +1192,13 @@ const ExtractionReviewTable = ({
               <label className="block text-xs uppercase tracking-wide text-slate-400">
                 {tr("Supplementen op moment van test", "Supplements at time of test")}
               </label>
-              {supplementAnchorState === "anchor" ? (
-                <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
-                  {tr("Aangepast op dit rapport", "Anchored on this report")}
-                </span>
-              ) : supplementAnchorState === "none" ? (
-                <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
-                  {tr("Geen supplementen", "No supplements")}
-                </span>
-              ) : supplementAnchorState === "unknown" ? (
+              {supplementAnchorState === "inherit" ? (
                 <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                  {tr("Onbekend", "Unknown")}
+                  {tr("Zelfde als huidige stack", "Keep active stack")}
                 </span>
               ) : (
-                <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                  {tr("Zelfde als vorige", "Inherited from previous")}
+                <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+                  {tr("Aangepast op dit rapport", "Changed on this report")}
                 </span>
               )}
             </div>
@@ -1232,14 +1206,14 @@ const ExtractionReviewTable = ({
             <div className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
               <p className="font-medium text-slate-200">
                 {tr(
-                  "Is je supplementen stack veranderd sinds het vorige rapport?",
-                  "Has your supplement stack changed since the previous report?"
+                  "Gebruik je huidige actieve stack voor dit rapport?",
+                  "Use your current active stack for this report?"
                 )}
               </p>
               <p className="mt-1 text-slate-400">
-                {tr("Huidige overname", "Current inherited stack")}:{" "}
+                {tr("Huidige actieve stack", "Current active stack")}:{" "}
                 {inheritedSupplementsText || tr("Geen actieve stack", "No active stack")}
-                {inheritedSupplementsSourceLabel ? ` Â· ${inheritedSupplementsSourceLabel}` : ""}
+                {inheritedSupplementsSourceLabel ? ` - ${inheritedSupplementsSourceLabel}` : ""}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -1251,40 +1225,18 @@ const ExtractionReviewTable = ({
                   }`}
                   onClick={markSupplementsUnchanged}
                 >
-                  {tr("Nee, zelfde", "No, same")}
+                  {tr("Behoud actieve stack", "Keep active stack")}
                 </button>
                 <button
                   type="button"
                   className={`rounded-md border px-2.5 py-1 text-xs ${
-                    supplementAnchorState === "anchor"
+                    supplementAnchorState !== "inherit"
                       ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
                       : "border-slate-600 text-slate-200 hover:border-cyan-500/50"
                   }`}
                   onClick={startCustomSupplements}
                 >
-                  {tr("Ja, aangepast", "Yes, changed")}
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md border px-2.5 py-1 text-xs ${
-                    supplementAnchorState === "unknown"
-                      ? "border-slate-500/70 bg-slate-800 text-slate-100"
-                      : "border-slate-600 text-slate-200 hover:border-slate-500"
-                  }`}
-                  onClick={markSupplementsUnknown}
-                >
-                  {tr("Onbekend", "Unknown")}
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md border px-2.5 py-1 text-xs ${
-                    supplementAnchorState === "none"
-                      ? "border-amber-500/60 bg-amber-500/15 text-amber-200"
-                      : "border-slate-600 text-slate-200 hover:border-amber-500/50"
-                  }`}
-                  onClick={markNoSupplements}
-                >
-                  {tr("Geen supplementen", "No supplements")}
+                  {tr("Pas actieve stack aan", "Change active stack")}
                 </button>
               </div>
             </div>
