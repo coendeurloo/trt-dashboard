@@ -1877,6 +1877,83 @@ const parseKeywordRangeRows = (text: string, preferredLocale: ParserKeywordRange
   return Array.from(deduped.values());
 };
 
+const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
+  const normalized = cleanWhitespace(text);
+  if (!/\bUw metingen\b/i.test(normalized)) {
+    return [];
+  }
+
+  const sectionStart = normalized.search(/\bUw metingen\b/i);
+  let section = normalized.slice(sectionStart);
+  const sectionEnd = section.search(/\b(?:Uitslagen uit het verleden|Toelichting|Print|Disclaimer)\b/i);
+  if (sectionEnd > 0) {
+    section = section.slice(0, sectionEnd);
+  }
+
+  section = section.replace(/([0-9])(?=(?:Uw waarde:|Normale waarde:|Datum:))/g, "$1 ");
+  const rows: ParsedFallbackRow[] = [];
+
+  const pattern =
+    /([A-Za-zÀ-ž][A-Za-zÀ-ž0-9(),.%+\-/ ]{2,140}?)\s+Uw waarde:\s*([<>]?\d+(?:[.,]\d+)?)\s+Normale waarde:\s*((?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?(?:\s*-\s*(?:Hoger dan|Lager dan)\s*-?\d+(?:[.,]\d+)?)?)/gi;
+
+  for (const match of section.matchAll(pattern)) {
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(match[1]));
+    if (looksLikeNoiseMarker(markerName)) {
+      continue;
+    }
+
+    const value = safeNumber(match[2]);
+    if (value === null) {
+      continue;
+    }
+
+    const referenceText = cleanWhitespace(match[3] ?? "").trim();
+    let referenceMin: number | null = null;
+    let referenceMax: number | null = null;
+
+    const betweenRange = referenceText.match(
+      /hoger dan\s*(-?\d+(?:[.,]\d+)?)\s*-\s*lager dan\s*(-?\d+(?:[.,]\d+)?)/i
+    );
+    if (betweenRange) {
+      referenceMin = safeNumber(betweenRange[1]);
+      referenceMax = safeNumber(betweenRange[2]);
+    } else {
+      const reverseRange = referenceText.match(
+        /lager dan\s*(-?\d+(?:[.,]\d+)?)\s*-\s*hoger dan\s*(-?\d+(?:[.,]\d+)?)/i
+      );
+      if (reverseRange) {
+        referenceMax = safeNumber(reverseRange[1]);
+        referenceMin = safeNumber(reverseRange[2]);
+      }
+    }
+
+    if (referenceMin === null) {
+      const lowerOnly = referenceText.match(/hoger dan\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (lowerOnly) {
+        referenceMin = safeNumber(lowerOnly[1]);
+      }
+    }
+
+    if (referenceMax === null) {
+      const upperOnly = referenceText.match(/lager dan\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (upperOnly) {
+        referenceMax = safeNumber(upperOnly[1]);
+      }
+    }
+
+    rows.push({
+      markerName,
+      value,
+      unit: "",
+      referenceMin,
+      referenceMax,
+      confidence: 0.62
+    });
+  }
+
+  return rows;
+};
+
 const cleanMarkerName = (rawMarker: string): string => {
   const normalizeEdgeToken = (token: string): string => token.replace(/^[^A-Za-z0-9/%+.-]+|[^A-Za-z0-9/%+.-]+$/g, "");
   const shouldTrimEdgeToken = (token: string): boolean => {
