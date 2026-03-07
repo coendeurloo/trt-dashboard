@@ -42,6 +42,7 @@ import {
 import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
+  resolveUploadTriggerAction,
   shouldAutoApplyAiRescueResult
 } from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
@@ -111,7 +112,6 @@ const GOOD_UPLOAD_CONFIDENCE_THRESHOLD = 0.75;
 // During beta we still show raw confidence percentages in upload results.
 // Set to false before public launch to only show Good / Needs review labels.
 const showUploadConfidencePercent = true;
-const showDemoDataBanner = false;
 
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
@@ -608,6 +608,28 @@ const App = () => {
     input.click();
   };
 
+  const scrollToUploadPanel = () => {
+    void ensurePdfParsingModule();
+    if (activeTab !== "dashboard") {
+      setActiveTab("dashboard");
+    }
+    requestAnimationFrame(() => {
+      const action = resolveUploadTriggerAction({
+        isShareMode,
+        hasUploadPanel: Boolean(uploadPanelRef.current),
+        isProcessing
+      });
+      if (action === "scroll-to-panel" && uploadPanelRef.current) {
+        uploadPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (action !== "open-hidden-picker") {
+        return;
+      }
+      openHiddenUploadPicker();
+    });
+  };
+
   const startSecondUpload = () => {
     if (isShareMode || isProcessing) {
       return;
@@ -618,6 +640,13 @@ const App = () => {
     }
     requestAnimationFrame(() => {
       openHiddenUploadPicker();
+    });
+  };
+
+  const clearDemoAndUpload = () => {
+    clearDemoData();
+    requestAnimationFrame(() => {
+      scrollToUploadPanel();
     });
   };
 
@@ -1684,7 +1713,7 @@ const App = () => {
         {!isReviewMode ? (
           <>
             <AnimatePresence>
-                {!isShareMode && hasDemoData && showDemoDataBanner ? (
+                {!isShareMode && hasDemoData ? (
                   <motion.section
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1697,8 +1726,8 @@ const App = () => {
                         <p>
                           {isDemoMode
                             ? tr(
-                                "Je verkent de app met demodata — je kunt ook direct een extra PDF uploaden zonder opnieuw te beginnen.",
-                                "You're exploring with demo data — you can also upload an extra PDF directly without starting fresh."
+                                "Je verkent de app met demodata — kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
+                                "You're exploring with demo data — feel free to look around. When you're ready, start fresh with your own labs."
                               )
                             : tr(
                                 "Demodata is nog geladen. Wis het wanneer je klaar bent.",
@@ -1712,7 +1741,7 @@ const App = () => {
                             <button
                               type="button"
                               className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
-                              onClick={startSecondUpload}
+                              onClick={clearDemoAndUpload}
                               disabled={isProcessing}
                             >
                               {isProcessing ? (
