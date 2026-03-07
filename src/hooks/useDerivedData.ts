@@ -179,13 +179,17 @@ export const useCoreDerivedData = ({
   }, [reports]);
 
   const primaryMarkers = useMemo(() => {
+    const selectedFromSettings = appData.settings.primaryMarkersSelection.filter((marker) => allMarkers.includes(marker));
+    if (selectedFromSettings.length > 0) {
+      return selectedFromSettings;
+    }
     const base: string[] = [...PRIMARY_MARKERS];
     const selectedCardioMarker = CARDIO_PRIORITY_MARKERS.find((marker) => allMarkers.includes(marker)) ?? "LDL Cholesterol";
     if (!base.includes(selectedCardioMarker)) {
       base.push(selectedCardioMarker);
     }
     return Array.from(new Set(base));
-  }, [allMarkers]);
+  }, [allMarkers, appData.settings.primaryMarkersSelection]);
 
   const baselineReports = useMemo(() => reports.filter((report) => report.isBaseline), [reports]);
   const baselineReportByMarker = useMemo(() => buildBaselineReportByMarker(baselineReports), [baselineReports]);

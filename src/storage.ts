@@ -619,6 +619,16 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.aiAnalysisProvider === "auto" || rest.aiAnalysisProvider === "claude" || rest.aiAnalysisProvider === "gemini"
       ? rest.aiAnalysisProvider
       : DEFAULT_SETTINGS.aiAnalysisProvider;
+  const primaryMarkersSelection = Array.isArray(rest.primaryMarkersSelection)
+    ? Array.from(
+        new Set(
+          rest.primaryMarkersSelection
+            .filter((entry): entry is string => typeof entry === "string")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+        )
+      )
+    : DEFAULT_SETTINGS.primaryMarkersSelection;
   const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
@@ -634,7 +644,8 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     aiAnalysisProvider,
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
-    parserDebugMode
+    parserDebugMode,
+    primaryMarkersSelection
   };
 
   const inferredPreset = inferDashboardChartPresetFromSettings({

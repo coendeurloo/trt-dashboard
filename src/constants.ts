@@ -53,7 +53,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiAnalysisProvider: "auto",
   aiCostMode: "balanced",
   aiAutoImproveEnabled: false,
-  parserDebugMode: "text_ocr_ai"
+  parserDebugMode: "text_ocr_ai",
+  primaryMarkersSelection: []
 };
 
 const RAW_ALIASES: Record<string, string[]> = {

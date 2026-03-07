@@ -147,6 +147,7 @@ const DashboardView = ({
   const firstReportVisible = hasSingleReport && visibleReports.length > 0;
   const firstReportFilteredOut = hasSingleReport && visibleReports.length === 0;
   const [showChartSettings, setShowChartSettings] = useState(false);
+  const [showPrimaryMarkerPicker, setShowPrimaryMarkerPicker] = useState(false);
   const chartSettingsRef = useRef<HTMLDivElement | null>(null);
 
   const referenceRangesTooltip = tr(
@@ -192,6 +193,25 @@ const DashboardView = ({
   const hasPhaseBlocks = dosePhaseBlocks.length > 0;
   const isCompareMode = dashboardMode === "compare2";
   const currentPreset = settings.dashboardChartPreset;
+  const selectedPrimaryMarkers = settings.primaryMarkersSelection.length > 0
+    ? settings.primaryMarkersSelection.filter((marker) => allMarkers.includes(marker))
+    : primaryMarkers.filter((marker) => allMarkers.includes(marker));
+
+  const togglePrimaryMarkerSelection = (marker: string) => {
+    const currentSelection = selectedPrimaryMarkers;
+    if (currentSelection.includes(marker)) {
+      if (currentSelection.length <= 1) {
+        return;
+      }
+      onUpdateSettings({
+        primaryMarkersSelection: currentSelection.filter((entry) => entry !== marker)
+      });
+      return;
+    }
+    onUpdateSettings({
+      primaryMarkersSelection: [...currentSelection, marker]
+    });
+  };
 
   const updateChartVisualSettings = (
     patch: Partial<
@@ -388,6 +408,53 @@ const DashboardView = ({
                     {tr("Vergelijk 2 markers", "Compare 2 markers")}
                   </button>
                 </div>
+                {!isCompareMode ? (
+                  <div className="mt-2 border-t border-slate-700/60 pt-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Primaire markers", "Primary markers")}</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowPrimaryMarkerPicker((current) => !current)}
+                        className={`rounded-md px-2 py-1 text-xs ${
+                          showPrimaryMarkerPicker ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                        }`}
+                      >
+                        {showPrimaryMarkerPicker ? tr("Verbergen", "Hide") : tr("Bewerken", "Edit")}
+                      </button>
+                    </div>
+                    {showPrimaryMarkerPicker ? (
+                      <div className="mt-2 space-y-2 rounded-lg border border-slate-700/70 bg-slate-900/60 p-2.5">
+                        <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+                          {allMarkers.map((marker) => {
+                            const isChecked = selectedPrimaryMarkers.includes(marker);
+                            return (
+                              <label key={marker} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-200 hover:bg-slate-800/70">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => togglePrimaryMarkerSelection(marker)}
+                                />
+                                <span>{getMarkerDisplayName(marker, language)}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t border-slate-700/60 pt-2">
+                          <p className="text-[11px] text-slate-400">
+                            {tr("Minimaal 1 marker geselecteerd", "At least 1 marker must remain selected")}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateSettings({ primaryMarkersSelection: [] })}
+                            className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                          >
+                            {tr("Reset standaard", "Reset defaults")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Preset", "Preset")}</p>

@@ -319,6 +319,7 @@ export interface AppSettings {
   aiCostMode: AICostMode;
   aiAutoImproveEnabled: boolean;
   parserDebugMode: ParserDebugMode;
+  primaryMarkersSelection: string[];
 }
 
 export interface StoredAppData {

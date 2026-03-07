@@ -249,6 +249,28 @@ describe("DashboardView chart controls", () => {
     expect(onOpenMarkerAlerts).toHaveBeenCalledWith("Apolipoprotein B");
   });
 
+  it("allows editing primary markers from chart settings", () => {
+    const { props, onUpdateSettings } = buildProps();
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          visibleReports: [report],
+          allMarkers: ["Testosterone", "Estradiol", "Ferritine"],
+          primaryMarkers: ["Testosterone", "Estradiol"]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByLabelText(/ferrit/i));
+
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      primaryMarkersSelection: ["Testosterone", "Estradiol", "Ferritine"]
+    });
+  });
+
   it("scrolls to the stability index section from the top summary button", () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone"], primaryMarkers: ["Testosterone"] }} />);
