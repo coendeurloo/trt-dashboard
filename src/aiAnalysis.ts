@@ -1866,7 +1866,6 @@ export const analyzeLabDataWithClaude = async ({
   providerPreference = "auto",
   context
 }: AnalyzeLabDataOptions): Promise<AnalyzeLabDataResult> => {
-  void providerPreference;
   if (reports.length === 0) {
     throw new Error("Er zijn nog geen rapporten om te analyseren.");
   }
@@ -2044,7 +2043,12 @@ export const analyzeLabDataWithClaude = async ({
   let lastStatus = 0;
   let lastErrorMessage = "";
 
-  const providerPlan: AnalysisProvider[] = ["claude", "gemini"];
+  const providerPlan: AnalysisProvider[] =
+    providerPreference === "claude"
+      ? ["claude", "gemini"]
+      : providerPreference === "gemini"
+        ? ["gemini", "claude"]
+        : ["claude", "gemini"];
 
   const primaryProvider = providerPlan[0] ?? "claude";
   providerLoop: for (const provider of providerPlan) {
@@ -2140,6 +2144,11 @@ export const analyzeLabDataWithClaude = async ({
           (errorCode === "AI_ENTITLEMENT_REQUIRED" || errorCode === "AI_PLAN_LIMIT" || errorCode === "AI_ENTITLEMENT_MISCONFIGURED")
         ) {
           throw new Error(errorCode);
+        }
+
+        const missingServerApiKey = result.status === 401 && /Missing\s+\w+_API_KEY\s+on\s+server/i.test(errorMessage);
+        if (missingServerApiKey) {
+          continue providerLoop;
         }
 
         const missingModel = result.status === 404 || (result.status === 400 && /model/i.test(errorMessage));
