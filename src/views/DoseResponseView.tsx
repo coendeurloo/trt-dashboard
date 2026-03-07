@@ -122,15 +122,14 @@ const DoseResponseView = ({
     return `${delta > 0 ? "+" : ""}${Math.round(delta * 100)}%`;
   };
 
-  const scenarioDeltaMg = Number((scenarioDose - baselineDose).toFixed(1));
   const scenarioDeltaPct =
     Math.abs(baselineDose) <= 0.000001
       ? null
       : Number((((scenarioDose - baselineDose) / baselineDose) * 100).toFixed(1));
-  const scenarioDeltaLabel =
+  const scenarioStatusLabel =
     scenarioDeltaPct === null
-      ? `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg`
-      : `${scenarioDeltaMg > 0 ? "+" : ""}${formatAxisTick(scenarioDeltaMg)} mg · ${scenarioDeltaPct > 0 ? "+" : ""}${Math.round(scenarioDeltaPct)}%`;
+      ? `${formatAxisTick(scenarioDose)} mg/week`
+      : `${formatAxisTick(scenarioDose)} mg/week (${scenarioDeltaPct > 0 ? "+" : ""}${Math.round(scenarioDeltaPct)}%)`;
 
   return (
     <section className="space-y-3 fade-in">
@@ -147,7 +146,7 @@ const DoseResponseView = ({
                 "Model how your markers are likely to respond when your dose changes."
               )}
             </p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-sm text-slate-400">
               {tr("{focus} van {total} markers", "{focus} of {total} markers")
                 .replace("{focus}", String(Math.min(8, premiumPredictions.length)))
                 .replace("{total}", String(premiumPredictions.length))}
@@ -156,26 +155,16 @@ const DoseResponseView = ({
         </div>
 
         <div className="dose-control-panel mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
-          <div className="dose-control-chip-row flex flex-wrap gap-1.5">
-            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-200">
-              {tr("Huidig protocol", "Current protocol")}: {formatAxisTick(baselineDose)} mg/week
-            </span>
+          <div className="min-h-[1rem]">
             {!isSameDoseScenario ? (
-              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-cyan-100">
-                {tr("Scenario", "Scenario")}: {formatAxisTick(scenarioDose)} mg/week
-              </span>
-            ) : null}
-            {!isSameDoseScenario ? (
-              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-emerald-200">
-                {tr("Delta vs huidig", "Delta vs current")}: {scenarioDeltaLabel}
-              </span>
-            ) : null}
-            {hasDifferentModelBaseline ? (
-              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-300">
-                {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week
-              </span>
+              <p className="text-xs text-cyan-200">{tr("Scenario", "Scenario")}: {scenarioStatusLabel}</p>
             ) : null}
           </div>
+          {hasDifferentModelBaseline ? (
+            <p className="mt-1 text-xs text-slate-400">
+              {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week
+            </p>
+          ) : null}
 
           <div className="dose-control-grid mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div>

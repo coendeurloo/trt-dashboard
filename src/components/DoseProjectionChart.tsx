@@ -18,6 +18,8 @@ export interface DoseProjectionChartProps {
   targetHigh?: number | null;
   isSameDoseScenario?: boolean;
   sameDoseDeltaPct?: number | null;
+  showLegend?: boolean;
+  showSameDoseNote?: boolean;
 }
 
 const DoseProjectionChart = ({
@@ -30,7 +32,9 @@ const DoseProjectionChart = ({
   targetLow,
   targetHigh,
   isSameDoseScenario = false,
-  sameDoseDeltaPct = null
+  sameDoseDeltaPct = null,
+  showLegend = true,
+  showSameDoseNote = true
 }: DoseProjectionChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const markerLabel = getMarkerDisplayName(prediction.marker, language);
@@ -155,9 +159,11 @@ const DoseProjectionChart = ({
 
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-slate-950/40 p-2">
-      <p className="mb-1 text-[11px] text-slate-300">
-        {tr("Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario.", "Solid line = measured. Dotted line = model estimate for this dose scenario.")}
-      </p>
+      {showLegend ? (
+        <p className="mb-1 text-[11px] text-slate-300">
+          {tr("Volle lijn = gemeten. Stippellijn = modelinschatting bij dit dosis-scenario.", "Solid line = measured. Dotted line = model estimate for this dose scenario.")}
+        </p>
+      ) : null}
       <ResponsiveContainer width="100%" height={140}>
         <LineChart data={chartData} margin={{ left: 8, right: 110, top: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -300,13 +306,13 @@ const DoseProjectionChart = ({
           />
         </LineChart>
       </ResponsiveContainer>
-      {isSameDoseScenario && (
+      {showSameDoseNote && isSameDoseScenario ? (
         <p className="dose-projection-context-note mt-1.5 rounded-md border border-slate-700/60 bg-slate-900/35 px-2.5 py-2 text-[11px] text-slate-300">
           {modelVsMeasuredRoundedEqual
             ? modelNowAndCloseNote
             : modelNowWithGapNote}
         </p>
-      )}
+      ) : null}
     </div>
   );
 };
