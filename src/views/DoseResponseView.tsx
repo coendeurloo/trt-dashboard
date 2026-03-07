@@ -133,7 +133,7 @@ const DoseResponseView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="dose-premium-shell rounded-2xl border p-4">
+      <div className="dose-premium-shell app-teal-glow-surface rounded-2xl border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-100">

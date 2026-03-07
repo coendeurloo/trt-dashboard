@@ -6,6 +6,7 @@ import {
   Cog,
   Gauge,
   Heart,
+  Lock,
   Menu,
   Pill,
   Plus,
@@ -27,6 +28,7 @@ export interface AppShellState {
   activeTabTitle: string;
   activeTabSubtitle: string | null;
   isReviewMode: boolean;
+  isOnboardingLocked: boolean;
   visibleTabKeys: Set<TabKey>;
   isMobileMenuOpen: boolean;
   quickUploadDisabled: boolean;
@@ -36,6 +38,8 @@ export interface AppShellState {
   isNl: boolean;
   sharedSnapshotGeneratedAt: string | null;
   hasReports: boolean;
+  markersTrackedCount: number;
+  stabilityScore: number | null;
   activeProtocolCompound: CompoundEntry | null;
   outOfRangeCount: number;
   reportsCount: number;
@@ -82,6 +86,7 @@ const AppShell = ({
     activeTabTitle,
     activeTabSubtitle,
     isReviewMode,
+    isOnboardingLocked,
     visibleTabKeys,
     isMobileMenuOpen,
     quickUploadDisabled,
@@ -91,8 +96,11 @@ const AppShell = ({
     isNl,
     sharedSnapshotGeneratedAt,
     hasReports,
+    markersTrackedCount,
+    stabilityScore,
     activeProtocolCompound,
-    outOfRangeCount
+    outOfRangeCount,
+    reportsCount
   } = shellState;
   const {
     uploadPanelRef,
@@ -114,11 +122,15 @@ const AppShell = ({
     onStartManualEntry
   } = actions;
 
+  const tabIsLockedDuringOnboarding = (key: TabKey) =>
+    isOnboardingLocked && key !== "dashboard" && key !== "settings";
+
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
     if (!visibleTabKeys.has(key)) {
       return null;
     }
 
+    const isLocked = tabIsLockedDuringOnboarding(key);
     const icon =
       key === "dashboard" ? (
         <BarChart3 className="h-4 w-4" />
@@ -143,21 +155,36 @@ const AppShell = ({
       );
 
     return (
-      <button
+        <button
         key={key}
         type="button"
         onClick={() => {
+          if (isLocked) {
+            return;
+          }
           onRequestTabChange(key);
           onAfterNavigate?.();
         }}
+        disabled={isLocked}
+        aria-disabled={isLocked}
+        title={isLocked ? tr("Upload je eerste PDF om deze sectie te ontgrendelen", "Upload your first PDF to unlock this section") : undefined}
         className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-          activeTab === key ? "bg-cyan-500/15 text-cyan-200" : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
+          isLocked
+            ? "cursor-not-allowed border border-slate-800/80 text-slate-500 opacity-75"
+            : activeTab === key
+              ? "bg-cyan-500/15 text-cyan-200"
+              : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
         }`}
       >
         {icon}
         <span>{getTabLabel(key, language)}</span>
+        {isLocked ? (
+          <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700/80 bg-slate-900/70 text-slate-500">
+            <Lock className="h-3 w-3" />
+          </span>
+        ) : null}
         {key === "analysis" ? (
-          <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300 ring-1 ring-cyan-500/40">
+          <span className={`${isLocked ? "" : "ml-auto"} rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300 ring-1 ring-cyan-500/40`}>
             Pro
           </span>
         ) : null}
@@ -169,7 +196,7 @@ const AppShell = ({
     <nav className="space-y-0.5">
       {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") || visibleTabKeys.has("checkIns") ? (
         <>
-          <p className="mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Core</p>
+          <p className={`mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Core</p>
           {renderTabButton("dashboard", onAfterNavigate)}
           {renderTabButton("checkIns", onAfterNavigate)}
           {renderTabButton("reports", onAfterNavigate)}
@@ -182,7 +209,7 @@ const AppShell = ({
       visibleTabKeys.has("protocolImpact") ||
       visibleTabKeys.has("doseResponse") ? (
         <>
-          <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Protocol</p>
+          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Protocol</p>
           {renderTabButton("protocol", onAfterNavigate)}
           {renderTabButton("supplements", onAfterNavigate)}
           {renderTabButton("protocolImpact", onAfterNavigate)}
@@ -192,7 +219,7 @@ const AppShell = ({
 
       {visibleTabKeys.has("analysis") ? (
         <>
-          <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">Pro</p>
+          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Pro</p>
           {renderTabButton("analysis", onAfterNavigate)}
         </>
       ) : null}
@@ -320,6 +347,20 @@ const AppShell = ({
     );
   };
 
+  const hideDashboardDesktopHeader = isOnboardingLocked && activeTab === "dashboard" && !isReviewMode;
+  const hideDashboardMobileTitle = hideDashboardDesktopHeader;
+  const showDashboardHeaderStats = activeTab === "dashboard" && hasReports && !isReviewMode;
+  const scrollToStabilityIndex = () => {
+    const section = document.getElementById("dashboard-stability-index");
+    if (!section) {
+      return;
+    }
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (section instanceof HTMLElement) {
+      section.focus({ preventScroll: true });
+    }
+  };
+
   return (
     <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
       <input
@@ -352,7 +393,7 @@ const AppShell = ({
         </aside>
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
-          <header className="space-y-3 px-1 py-0.5">
+          <header className={`space-y-3 px-1 py-0.5 ${hideDashboardDesktopHeader ? "lg:hidden" : ""}`}>
             <div className="flex items-center gap-2 lg:hidden">
               <button
                 type="button"
@@ -370,7 +411,7 @@ const AppShell = ({
                 alt="LabTracker"
                 className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
               />
-              <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p>
+              {!hideDashboardMobileTitle ? <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p> : null}
               <div className="flex-1" />
               {!isReviewMode ? (
                 <button
@@ -389,67 +430,92 @@ const AppShell = ({
               ) : null}
             </div>
             {!isReviewMode && activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              {!isReviewMode ? (
-                <div className="hidden lg:block">
-                  <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
-                  {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
-                </div>
-              ) : (
-                <div className="hidden lg:block" />
-              )}
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
-                  <span>{tr("Taal", "Language")}:</span>
-                  <select
-                    value={language}
-                    onChange={(event) => onLanguageChange(event.target.value as AppSettings["language"])}
-                    className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 outline-none"
-                  >
-                    {APP_LANGUAGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={onToggleTheme}
-                  className="theme-toggle"
-                  aria-label={tr("Schakel thema", "Toggle theme")}
-                  title={tr("Thema wisselen", "Toggle theme")}
-                >
-                  <span className="toggle-thumb">
-                    <svg
-                      className="theme-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+            {!hideDashboardDesktopHeader ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                {!isReviewMode ? (
+                  <div className="hidden lg:block">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+                      {showDashboardHeaderStats ? (
+                        <div className="flex flex-wrap items-center gap-2.5 text-sm text-slate-400">
+                          <span><strong className="text-slate-100">{reportsCount}</strong> {t(language, "reports")}</span>
+                          <span className="text-slate-600">·</span>
+                          <span><strong className="text-slate-100">{markersTrackedCount}</strong> {t(language, "markersTracked")}</span>
+                          <span className="text-slate-600">·</span>
+                          <span>
+                            <strong className={outOfRangeCount === 0 ? "text-emerald-300" : "text-amber-300"}>{outOfRangeCount}</strong> {t(language, "outOfRange")}
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <button
+                            type="button"
+                            onClick={scrollToStabilityIndex}
+                            aria-label={tr("Open Stabiliteitsindex", "Open Stability Index")}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-600/75 bg-slate-800/70 px-3 py-1 text-slate-200 transition hover:border-slate-500/80 hover:bg-slate-800/90"
+                          >
+                            <span className="text-xs font-medium sm:text-sm">{t(language, "trtStabilityShort")}</span>
+                            <strong className="text-base font-semibold leading-none text-amber-400 sm:text-lg">{stabilityScore ?? "—"}</strong>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+                  </div>
+                ) : (
+                  <div className="hidden lg:block" />
+                )}
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
+                    <span>{tr("Taal", "Language")}:</span>
+                    <select
+                      value={language}
+                      onChange={(event) => onLanguageChange(event.target.value as AppSettings["language"])}
+                      className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 outline-none"
                     >
-                      <mask id="moon-mask">
-                        <rect x="0" y="0" width="100%" height="100%" fill="white" />
-                        <circle className="moon-cutout" cx="24" cy="0" r="8" fill="black" />
-                      </mask>
-                      <circle className="sun-core" cx="12" cy="12" r="5" mask="url(#moon-mask)" fill="currentColor" />
-                      <g className="sun-beams" stroke="currentColor">
-                        <line x1="12" y1="1" x2="12" y2="4" />
-                        <line x1="12" y1="20" x2="12" y2="23" />
-                        <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
-                        <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
-                        <line x1="1" y1="12" x2="4" y2="12" />
-                        <line x1="20" y1="12" x2="23" y2="12" />
-                        <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
-                        <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
-                      </g>
-                    </svg>
-                  </span>
-                </button>
+                      {APP_LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={onToggleTheme}
+                    className="theme-toggle"
+                    aria-label={tr("Schakel thema", "Toggle theme")}
+                    title={tr("Thema wisselen", "Toggle theme")}
+                  >
+                    <span className="toggle-thumb">
+                      <svg
+                        className="theme-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <mask id="moon-mask">
+                          <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                          <circle className="moon-cutout" cx="24" cy="0" r="8" fill="black" />
+                        </mask>
+                        <circle className="sun-core" cx="12" cy="12" r="5" mask="url(#moon-mask)" fill="currentColor" />
+                        <g className="sun-beams" stroke="currentColor">
+                          <line x1="12" y1="1" x2="12" y2="4" />
+                          <line x1="12" y1="20" x2="12" y2="23" />
+                          <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+                          <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+                          <line x1="1" y1="12" x2="4" y2="12" />
+                          <line x1="20" y1="12" x2="23" y2="12" />
+                          <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+                          <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+                        </g>
+                      </svg>
+                    </span>
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
           </header>
 
           {activeTab === "dashboard" && !isReviewMode

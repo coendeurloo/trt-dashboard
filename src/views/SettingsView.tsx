@@ -226,7 +226,7 @@ const SettingsView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
@@ -337,7 +337,7 @@ const SettingsView = ({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Data", "Data")}</h2>
 
         <div className="mt-4">
@@ -484,7 +484,7 @@ const SettingsView = ({
         </div>
       </div>
 
-      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
@@ -587,7 +587,7 @@ const SettingsView = ({
         </div>
       </div>
 
-      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
 
         <div className="settings-danger-card mt-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
@@ -615,7 +615,7 @@ const SettingsView = ({
         </p>
       </div>
 
-      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Feedback", "Feedback")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(
@@ -634,7 +634,7 @@ const SettingsView = ({
         </a>
       </div>
 
-      <div className="settings-card rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Export", "Export")}</h2>
         <p className="mt-1 text-sm text-slate-400">
           {tr(

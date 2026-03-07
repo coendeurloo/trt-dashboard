@@ -1334,6 +1334,7 @@ const App = () => {
     return latestReport.markers.filter((m) => m.abnormal === "high" || m.abnormal === "low").length;
   }, [visibleReports]);
   const hasReports = reports.length > 0;
+  const isOnboardingLocked = !isShareMode && !hasReports;
   const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
   const activeProtocol = useMemo(
     () => appData.protocols.find((protocol) => protocol.id === activeProtocolId) ?? null,
@@ -1516,6 +1517,16 @@ const App = () => {
     scrollPageToTop();
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!isOnboardingLocked) {
+      return;
+    }
+    if (activeTab === "dashboard" || activeTab === "settings") {
+      return;
+    }
+    setActiveTab("dashboard");
+  }, [isOnboardingLocked, activeTab]);
+
   const cancelPendingTabChange = () => {
     setPendingTabChange(null);
     setFocusedReportId(null);
@@ -1616,6 +1627,7 @@ const App = () => {
           activeTabTitle: shellActiveTabTitle,
           activeTabSubtitle: shellActiveTabSubtitle,
           isReviewMode,
+          isOnboardingLocked,
           visibleTabKeys,
           isMobileMenuOpen,
           quickUploadDisabled,
@@ -1625,6 +1637,8 @@ const App = () => {
           isNl,
           sharedSnapshotGeneratedAt: sharedSnapshot?.generatedAt ?? null,
           hasReports,
+          markersTrackedCount: allMarkers.length,
+          stabilityScore: trtStability.score,
           activeProtocolCompound,
           outOfRangeCount,
           reportsCount: reports.length

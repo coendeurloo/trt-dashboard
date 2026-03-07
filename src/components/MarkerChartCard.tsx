@@ -148,6 +148,7 @@ const MarkerChartCard = ({
           language={language}
           phaseBlocks={phaseBlocks}
           height={230}
+          showSeriesGradientFill
           checkIns={checkIns}
         />
       </button>

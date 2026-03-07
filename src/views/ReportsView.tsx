@@ -442,7 +442,7 @@ const ReportsView = ({
   return (
     <section className="space-y-3 fade-in">
       {/* ── Stats + toolbar row ── */}
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         {/* Top line: aggregate stats */}
         {reportStats && (
           <div className="mb-3 flex flex-wrap items-center gap-4 border-b border-slate-700/50 pb-3">
@@ -530,7 +530,7 @@ const ReportsView = ({
       </div>
 
       {reportComparisonOpen && compareReports.length >= 2 ? (
-        <div className="overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+        <div className="app-teal-glow-surface overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
           <h4 className="mb-2 text-sm font-semibold text-slate-100">
             {tr("Vergelijking van geselecteerde rapporten", "Selected report comparison")}
           </h4>
@@ -638,7 +638,7 @@ const ReportsView = ({
           <article
             key={report.id}
             data-report-id={report.id}
-            className={`rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
+            className={`app-teal-glow-surface rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
           >
             {/* ── Collapsed header ── */}
             <button

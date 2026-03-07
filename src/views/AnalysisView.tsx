@@ -87,7 +87,7 @@ const AnalysisView = ({
   const canRunLatest = !isAnalyzingLabs && reportsInScope >= 2 && !blockedByLimits;
 
   const scopeCardClassName = isDarkTheme
-    ? "rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
   const scopeMutedClassName = isDarkTheme ? "text-sm text-slate-400" : "text-sm text-slate-600";
   const scopeValueClassName = isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900";
@@ -101,7 +101,7 @@ const AnalysisView = ({
         : "rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs text-cyan-900";
 
   const actionCardBaseClass = isDarkTheme
-    ? "rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 transition hover:border-cyan-500/40"
+    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 transition hover:border-cyan-500/40"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-cyan-300";
   const actionTitleClass = isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900";
   const actionBodyClass = isDarkTheme ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-600";
@@ -111,11 +111,11 @@ const AnalysisView = ({
     ? "mt-2 rounded-md border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-xs text-slate-300"
     : "mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700";
   const outputShellClass = isDarkTheme
-    ? "rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/80 to-slate-950/70 p-4 shadow-xl shadow-slate-950/20"
+    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/80 to-slate-950/70 p-4 shadow-xl shadow-slate-950/20"
     : "rounded-2xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60";
   const outputBodyClass = isDarkTheme ? "prose-premium-dark mt-3 overflow-x-auto" : "prose-premium-light mt-3 overflow-x-auto";
   const scopeNoticeClassName = isDarkTheme
-    ? "rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
+    ? "app-teal-glow-surface rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
     : "rounded-xl border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900";
   const relevantBenchmarks = useMemo(
     () => getRelevantBenchmarks(analysisMarkerNames),

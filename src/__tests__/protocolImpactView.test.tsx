@@ -153,6 +153,11 @@ describe("ProtocolImpactView", () => {
     expect(screen.getByRole("link", { name: /17 Jul 2024/i })).toBeTruthy();
   });
 
+  it("keeps jump navigation in a sticky container", () => {
+    const { container } = render(<ProtocolImpactView {...baseProps} />);
+    expect(container.querySelector(".protocol-impact-jump-sticky")).toBeTruthy();
+  });
+
   it("does not render overall conclusions block", () => {
     render(<ProtocolImpactView {...baseProps} />);
     expect(screen.queryByText("Overall conclusions")).toBeNull();
@@ -168,6 +173,18 @@ describe("ProtocolImpactView", () => {
     expect(screen.getByText("Impact")).toBeTruthy();
     const cards = container.querySelectorAll(".protocol-impact-effects-grid li");
     expect(cards.length).toBe(4);
+  });
+
+  it("removes marker-card jargon and repeated measured-effect label", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.queryByText(/Selected:/i)).toBeNull();
+    expect(screen.queryByText(/MEASURED EFFECT/i)).toBeNull();
+  });
+
+  it("shows event-level improved/worsened summary chips", () => {
+    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.getByText(/worsened/i)).toBeTruthy();
+    expect(screen.getByText(/neutral/i)).toBeTruthy();
   });
 
   it("does not show context tooltip chip on marker row", () => {

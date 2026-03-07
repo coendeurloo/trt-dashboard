@@ -10,6 +10,8 @@
   --chart-tooltip-bg: #0f172a;
   --chart-tooltip-border: #334155;
   --chart-tooltip-label: #94a3b8;
+  --welcome-hero-halo: radial-gradient(circle at 45% 45%, rgba(34, 211, 238, 0.22), rgba(8, 145, 178, 0.06) 58%, transparent 78%);
+  --welcome-hero-halo-opacity: 0.92;
 }
 
 body {
@@ -34,6 +36,8 @@ body.light {
   --chart-tooltip-bg: #f8fbff;
   --chart-tooltip-border: #94a3b8;
   --chart-tooltip-label: #334155;
+  --welcome-hero-halo: radial-gradient(circle at 46% 42%, rgba(14, 165, 233, 0.25), rgba(20, 184, 166, 0.12) 58%, transparent 80%);
+  --welcome-hero-halo-opacity: 0.78;
 }
 
 :root[data-theme="dark"] {
@@ -465,6 +469,40 @@ body.light .settings-card {
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
 }
 
+.app-teal-glow-surface {
+  /* Keep glow inside the panel to avoid circular edge bleed into sidebar/menu */
+  background:
+    radial-gradient(130% 170% at 16% 0%, rgba(34, 211, 238, 0.13) 0%, rgba(8, 145, 178, 0.07) 32%, rgba(8, 145, 178, 0.03) 50%, transparent 72%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74) 0%, rgba(15, 23, 42, 0.62) 100%) !important;
+}
+
+body.light .app-teal-glow-surface {
+  background:
+    radial-gradient(130% 170% at 16% 0%, rgba(14, 165, 233, 0.12) 0%, rgba(20, 184, 166, 0.07) 34%, rgba(20, 184, 166, 0.03) 52%, transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(242, 249, 255, 0.92) 100%) !important;
+}
+
+.welcome-hero-halo {
+  position: absolute;
+  top: -160px;
+  left: -80px;
+  width: 520px;
+  height: 420px;
+  border-radius: 999px;
+  pointer-events: none;
+  background: var(--welcome-hero-halo);
+  filter: blur(2px);
+  opacity: var(--welcome-hero-halo-opacity);
+}
+
+.welcome-hero-preview-shell {
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.14);
+}
+
+.welcome-hero-preview-upload {
+  box-shadow: inset 0 1px 0 rgba(103, 232, 249, 0.14);
+}
+
 body.light .upload-panel-shell {
   border-color: rgba(14, 116, 144, 0.3) !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.92) 100%) !important;
@@ -493,6 +531,16 @@ body.light .welcome-hero-feature {
 body.light .welcome-hero-step {
   background-color: rgba(234, 243, 252, 0.88) !important;
   border-color: rgba(148, 163, 184, 0.36) !important;
+}
+
+body.light .welcome-hero-preview-shell {
+  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+}
+
+body.light .welcome-hero-preview-upload {
+  border-color: rgba(14, 116, 144, 0.35) !important;
+  background: rgba(224, 242, 254, 0.8) !important;
 }
 
 body.light .analysis-latest-btn:disabled {
@@ -875,6 +923,17 @@ body.light .dose-projection-context-note {
   display: block;
 }
 
+.protocol-impact-jump-sticky {
+  position: sticky;
+  top: 0.35rem;
+  z-index: 35;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  border-radius: 0.9rem;
+  padding: 0.5rem 0.55rem 0.4rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86) 0%, rgba(15, 23, 42, 0.68) 100%);
+  backdrop-filter: blur(6px);
+}
+
 .protocol-impact-jumpbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
@@ -1116,6 +1175,11 @@ body.light .protocol-impact-story-block {
   color: #334155;
 }
 
+body.light .protocol-impact-jump-sticky {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 247, 254, 0.92) 100%);
+}
+
 body.light .protocol-impact-jump-chip {
   border-color: rgba(148, 163, 184, 0.58);
   background: rgba(241, 245, 249, 0.95);
@@ -1216,6 +1280,10 @@ body.light .protocol-impact-footer-note {
 }
 
 @media (max-width: 768px) {
+  .protocol-impact-jump-sticky {
+    top: 0.25rem;
+  }
+
   .protocol-impact-effect-tile {
     min-height: 0;
   }

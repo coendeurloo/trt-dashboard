@@ -125,7 +125,7 @@ const ProtocolView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold text-slate-100">{tr("Protocolbeheer", "Protocol management")}</h3>
@@ -215,7 +215,7 @@ const ProtocolView = ({
             return (
               <article
                 key={protocol.id}
-                className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3"
+                className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>

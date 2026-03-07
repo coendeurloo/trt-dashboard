@@ -13,7 +13,7 @@ import ComparisonChart from "../components/ComparisonChart";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
-import { getMarkerDisplayName, t, trLocale } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { AppLanguage, AppSettings, DashboardViewMode, LabReport, SymptomCheckIn, TimeRangeKey } from "../types";
 
 interface DashboardViewProps {
@@ -105,7 +105,6 @@ const DashboardView = ({
   trendByMarker,
   alertsByMarker,
   trtStability,
-  outOfRangeCount,
   settings,
   language,
   isShareMode,
@@ -181,15 +180,6 @@ const DashboardView = ({
       compareToBaseline: false
     });
   };
-  const scrollToStabilityIndex = () => {
-    const stabilitySection = document.getElementById("dashboard-stability-index");
-    if (stabilitySection) {
-      stabilitySection.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (stabilitySection instanceof HTMLElement) {
-        stabilitySection.focus({ preventScroll: true });
-      }
-    }
-  };
   const hasPhaseBlocks = dosePhaseBlocks.length > 0;
   const isCompareMode = dashboardMode === "compare2";
   const currentPreset = settings.dashboardChartPreset;
@@ -263,26 +253,6 @@ const DashboardView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      {hasReports ? (
-        <div className="flex flex-wrap items-center gap-2.5 text-sm text-slate-400">
-          <span><strong className="text-slate-100">{reports.length}</strong> {t(language, "reports")}</span>
-          <span className="text-slate-600">·</span>
-          <span><strong className="text-slate-100">{allMarkers.length}</strong> {t(language, "markersTracked")}</span>
-          <span className="text-slate-600">·</span>
-          <span><strong className="text-amber-300">{outOfRangeCount}</strong> {t(language, "outOfRange")}</span>
-          <span className="text-slate-600">·</span>
-          <button
-            type="button"
-            onClick={scrollToStabilityIndex}
-            aria-label={tr("Open Stabiliteitsindex", "Open Stability Index")}
-            className="inline-flex items-center gap-1.5 rounded-md border border-cyan-400/40 bg-cyan-500/12 px-2 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-500/20 sm:text-sm"
-          >
-            <span>{t(language, "trtStabilityShort")}</span>
-            <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong>
-          </button>
-        </div>
-      ) : null}
-
       {/* ── Wellbeing nudge ── */}
       {showWellbeingNudge && hasReports ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
@@ -305,7 +275,7 @@ const DashboardView = ({
       ) : null}
 
       {hasReports ? (
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div ref={chartSettingsRef} className="relative space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1.5">
@@ -689,7 +659,7 @@ const DashboardView = ({
       ) : null}
 
       {hasReports && isCompareMode ? (
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select
               className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
@@ -726,7 +696,7 @@ const DashboardView = ({
       ) : null}
 
       {!isCompareMode || !hasReports ? (
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
         {hasReports ? (
           <>
             {dashboardView === "primary" ? <div className="mb-1" /> : null}

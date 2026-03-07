@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronUp, Eye, Info, ListFilter, Minus, ShieldAlert, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, Eye, Minus, ShieldAlert, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -14,6 +14,7 @@ interface ProtocolImpactEventCardProps {
 }
 
 type ChangeContext = "expected" | "monitor" | "improvement" | "watch" | "neutral";
+type ChangeSentiment = "favorable" | "unfavorable" | "neutral";
 
 const HORMONE_MARKERS = ["Testosterone", "Free Testosterone"];
 const LIPID_IMPROVEMENT_MARKERS = ["LDL Cholesterol", "LDL", "Triglycerides", "Total Cholesterol"];
@@ -150,48 +151,60 @@ const getImpactSummary = (
   return parts.join(" ") || tr("Markers verschoven na de protocolwijziging.", "Markers shifted after the protocol change.");
 };
 
+const classifySentiment = (row: ProtocolImpactMarkerRow, event: ProtocolImpactDoseEvent): ChangeSentiment => {
+  if (row.insufficientData || row.deltaPct === null || !Number.isFinite(row.deltaPct)) {
+    return "neutral";
+  }
+
+  const context = classifyChange(row.marker, row.deltaPct, event);
+  if (context === "improvement" || context === "expected") {
+    return "favorable";
+  }
+  if (context === "monitor" || context === "watch") {
+    return "unfavorable";
+  }
+
+  if (markerMatches(row.marker, [...LIPID_IMPROVEMENT_MARKERS, "Creatinine"])) {
+    return row.deltaPct < 0 ? "favorable" : "unfavorable";
+  }
+
+  if (markerMatches(row.marker, ["eGFR"])) {
+    return row.deltaPct > 0 ? "favorable" : "unfavorable";
+  }
+
+  return "neutral";
+};
+
 const contextStyles: Record<
   ChangeContext,
   {
     border: string;
-    badge: string;
-    label: string;
     chip: string;
     icon: typeof Sparkles;
   }
 > = {
   expected: {
     border: "border-l-2 border-l-emerald-500/40",
-    badge: "bg-emerald-500/10 text-emerald-200 ring-emerald-500/20",
-    label: "text-emerald-200",
     chip: "border-emerald-500/30 bg-emerald-500/8 text-emerald-200",
     icon: Sparkles
   },
   improvement: {
-    border: "border-l-2 border-l-cyan-500/40",
-    badge: "bg-cyan-500/10 text-cyan-200 ring-cyan-500/20",
-    label: "text-cyan-200",
-    chip: "border-cyan-500/30 bg-cyan-500/8 text-cyan-200",
+    border: "border-l-2 border-l-emerald-500/40",
+    chip: "border-emerald-500/30 bg-emerald-500/8 text-emerald-200",
     icon: TrendingDown
   },
   monitor: {
     border: "border-l-2 border-l-amber-500/40",
-    badge: "bg-amber-500/10 text-amber-200 ring-amber-500/20",
-    label: "text-amber-200",
     chip: "border-amber-500/30 bg-amber-500/8 text-amber-200",
     icon: ShieldAlert
   },
   watch: {
     border: "border-l-2 border-l-rose-500/40",
-    badge: "bg-rose-500/10 text-rose-200 ring-rose-500/20",
-    label: "text-rose-200",
     chip: "border-rose-500/30 bg-rose-500/8 text-rose-200",
     icon: Eye
   },
   neutral: {
     border: "border-l-2 border-l-slate-700/40",
-    badge: "bg-slate-800 text-slate-300 ring-slate-700",
-    label: "text-slate-400",
     chip: "border-slate-600/70 bg-slate-800/70 text-slate-300",
     icon: Minus
   }
@@ -272,6 +285,30 @@ const ProtocolImpactEventCard = ({
 
   const hasInsufficientRows = rows.some((row) => row.comparisonBasis === "insufficient");
   const impactSummary = getImpactSummary(displayTopRows, event, language, tr);
+  const eventSummary = useMemo(() => {
+    const measuredRows = rows.filter((row) => !row.insufficientData && row.deltaPct !== null && Number.isFinite(row.deltaPct));
+    let favorable = 0;
+    let unfavorable = 0;
+    let neutral = 0;
+
+    measuredRows.forEach((row) => {
+      const sentiment = classifySentiment(row, event);
+      if (sentiment === "favorable") {
+        favorable += 1;
+      } else if (sentiment === "unfavorable") {
+        unfavorable += 1;
+      } else {
+        neutral += 1;
+      }
+    });
+
+    return {
+      favorable,
+      unfavorable,
+      neutral,
+      total: measuredRows.length
+    };
+  }, [rows, event]);
 
   return (
     <article className="protocol-impact-event-shell rounded-2xl border p-4">
@@ -279,29 +316,29 @@ const ProtocolImpactEventCard = ({
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
           {formatDate(event.changeDate)} · {tr("Protocol update", "Protocol update")}
         </p>
-        <div className="mb-6 mt-3 flex flex-wrap gap-2">
+        <div className="mb-7 mt-3 flex flex-wrap gap-2.5">
           {doseChanged ? (
-            <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-sm">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3.5 py-2 text-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{tr("Dosis", "Dose")}</span>
-              <span className="text-slate-400">{formatDose(event.fromDose)}</span>
+              <span className="font-semibold text-slate-200">{formatDose(event.fromDose)}</span>
               <ArrowRight className="h-3 w-3 text-slate-600" />
-              <span className="font-semibold text-slate-200">{formatDose(event.toDose)}</span>
+              <span className="font-bold text-slate-50">{formatDose(event.toDose)}</span>
             </div>
           ) : null}
           {frequencyChanged ? (
-            <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-sm">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3.5 py-2 text-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{tr("Frequentie", "Frequency")}</span>
-              <span className="text-slate-400">{formatFrequency(event.fromFrequency)}</span>
+              <span className="font-semibold text-slate-200">{formatFrequency(event.fromFrequency)}</span>
               <ArrowRight className="h-3 w-3 text-slate-600" />
-              <span className="font-semibold text-slate-200">{formatFrequency(event.toFrequency)}</span>
+              <span className="font-bold text-slate-50">{formatFrequency(event.toFrequency)}</span>
             </div>
           ) : null}
           {compoundChanged ? (
-            <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-sm">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3.5 py-2 text-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{tr("Compound", "Compound")}</span>
-              <span className="text-slate-400">{formatCompounds(event.fromCompounds, true)}</span>
+              <span className="font-semibold text-slate-200">{formatCompounds(event.fromCompounds, true)}</span>
               <ArrowRight className="h-3 w-3 text-slate-600" />
-              <span className="font-semibold text-slate-200">{formatCompounds(event.toCompounds, false)}</span>
+              <span className="font-bold text-slate-50">{formatCompounds(event.toCompounds, false)}</span>
             </div>
           ) : null}
         </div>
@@ -322,28 +359,39 @@ const ProtocolImpactEventCard = ({
             <span className="protocol-impact-emoji-label">⚠️ {tr("Extra factoren", "Extra factors")}:</span> {confounderLine}
           </p>
         ) : null}
+        {eventSummary.total > 0 ? (
+          <div className="protocol-impact-event-summary rounded-xl border border-slate-700/70 bg-slate-900/45 px-3 py-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-200">
+                {eventSummary.favorable} {tr("verbeterd", "improved")}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 font-semibold text-rose-200">
+                {eventSummary.unfavorable} {tr("verslechterd", "worsened")}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-600/70 bg-slate-800/70 px-2 py-0.5 font-semibold text-slate-300">
+                {eventSummary.neutral} {tr("neutraal", "neutral")}
+              </span>
+            </div>
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-800/80">
+              {eventSummary.favorable > 0 ? (
+                <span style={{ width: `${(eventSummary.favorable / eventSummary.total) * 100}%` }} className="bg-emerald-400/80" />
+              ) : null}
+              {eventSummary.unfavorable > 0 ? (
+                <span style={{ width: `${(eventSummary.unfavorable / eventSummary.total) * 100}%` }} className="bg-rose-400/80" />
+              ) : null}
+              {eventSummary.neutral > 0 ? (
+                <span style={{ width: `${(eventSummary.neutral / eventSummary.total) * 100}%` }} className="bg-slate-500/70" />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <section className="mt-4 space-y-2">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Impact", "Impact")}</h3>
-          <span className="group relative ml-2 cursor-help text-slate-600 hover:text-slate-400">
-            <Info className="h-3.5 w-3.5" />
-            <span className="pointer-events-none absolute left-0 top-full z-40 mt-1 w-80 rounded-xl border border-slate-700 bg-slate-950/95 p-3 text-[11px] leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-              {tr(
-                "Vergelijkt het pre-change venster met het post-change venster rond deze wijziging. Voor sommige markers is de dichtstbijzijnde meting gebruikt als een venster leeg was.",
-                "Comparing the pre-change measurement window to the post-change window around this event. For some markers, the nearest available measurement was used because the window was empty."
-              )}
-            </span>
-          </span>
-        </div>
-        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-900/40 px-2.5 py-1 text-[11px] text-slate-300">
-          <ListFilter className="h-3 w-3 text-slate-400" />
-          <span>
-            {tr(
-              "Top 4 op absolute gemeten verandering (%Δ) in dit eventvenster.",
-              "Top 4 by absolute measured change (%Δ) in this event window."
-            )}
+          <span className="text-[11px] text-slate-400">
+            {tr("Grootste gemeten verschuivingen", "Largest measured shifts")}
           </span>
         </div>
 
@@ -351,7 +399,7 @@ const ProtocolImpactEventCard = ({
           <p className="text-sm text-slate-400">{tr("Nog geen duidelijke effecten; meer metingen nodig.", "No clear effects yet; more measurements are needed.")}</p>
         ) : (
           <ul className="protocol-impact-effects-grid grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            {displayTopRows.map((row, index) => {
+            {displayTopRows.map((row) => {
               const context = classifyChange(row.marker, row.deltaPct, event);
               const styles = contextStyles[context];
               const badgeLabel = contextLabelText(context, tr);
@@ -361,12 +409,19 @@ const ProtocolImpactEventCard = ({
               const ContextIcon = styles.icon;
               const beforeLabel = row.beforeAvg === null ? "-" : formatAxisTick(row.beforeAvg);
               const afterLabel = row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg);
-              const rank = index + 1;
-              const absDeltaLabel = row.deltaPct === null ? "?" : `${Math.abs(row.deltaPct).toFixed(1)}%`;
-              const selectionReason = tr(
-                `Geselecteerd: #${rank} op |%Δ| (${absDeltaLabel}) · n ${row.nBefore}/${row.nAfter}`,
-                `Selected: #${rank} by |%Δ| (${absDeltaLabel}) · n ${row.nBefore}/${row.nAfter}`
-              );
+              const sentiment = classifySentiment(row, event);
+              const deltaToneClass =
+                sentiment === "favorable"
+                  ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
+                  : sentiment === "unfavorable"
+                    ? "border-rose-500/35 bg-rose-500/10 text-rose-200"
+                    : "border-slate-600/80 bg-slate-800/70 text-slate-200";
+              const deltaIconToneClass =
+                sentiment === "favorable"
+                  ? "text-emerald-300"
+                  : sentiment === "unfavorable"
+                    ? "text-rose-300"
+                    : "text-slate-300";
 
               if (row.insufficientData || row.beforeAvg === null || row.afterAvg === null || row.deltaPct === null) {
                 return (
@@ -389,8 +444,7 @@ const ProtocolImpactEventCard = ({
                 >
                   <div className="mb-4 flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-200">{getMarkerDisplayName(row.marker, settings.language)}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">{selectionReason}</p>
+                      <p className="truncate text-base font-semibold text-slate-100">{getMarkerDisplayName(row.marker, settings.language)}</p>
                     </div>
                     <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${styles.chip}`}>
                       <ContextIcon className="h-3 w-3" />
@@ -401,7 +455,7 @@ const ProtocolImpactEventCard = ({
                   <div className="mb-4 flex items-center gap-3">
                     <div className="flex flex-1 flex-col items-center">
                       <span className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{tr("Voor", "Before")}</span>
-                      <span className="text-2xl font-bold tabular-nums text-slate-400">{beforeLabel}</span>
+                      <span className="text-[1.85rem] font-bold tabular-nums text-slate-300">{beforeLabel}</span>
                       <span className="mt-0.5 text-[10px] text-slate-600">{row.unit}</span>
                     </div>
 
@@ -409,19 +463,16 @@ const ProtocolImpactEventCard = ({
 
                     <div className="flex flex-1 flex-col items-center">
                       <span className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{tr("Na", "After")}</span>
-                      <span className="text-2xl font-bold tabular-nums text-slate-200">{afterLabel}</span>
+                      <span className="text-[1.85rem] font-bold tabular-nums text-slate-100">{afterLabel}</span>
                       <span className="mt-0.5 text-[10px] text-slate-600">{row.unit}</span>
                     </div>
                   </div>
 
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ${styles.badge}`}>
-                      <Icon className="h-3 w-3" />
+                  <div className="mt-auto flex items-center">
+                    <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-sm font-semibold ring-1 ring-inset ${deltaToneClass}`}>
+                      <Icon className={`h-3.5 w-3.5 ${deltaIconToneClass}`} />
                       {row.deltaPct > 0 ? "+" : ""}
                       {row.deltaPct.toFixed(1)}%
-                    </span>
-                    <span className={`text-[10px] font-semibold uppercase tracking-widest ${styles.label}`}>
-                      {tr("gemeten effect", "measured effect")}
                     </span>
                   </div>
                 </li>

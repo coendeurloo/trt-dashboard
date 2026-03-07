@@ -68,7 +68,7 @@ const AlertsView = ({
 
   return (
     <section ref={rootRef} className="space-y-4 fade-in">
-      <div className="alerts-hero rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
+      <div className="alerts-hero app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-100">{tr("Alerts Centrum", "Alerts Center")}</h3>
@@ -89,7 +89,7 @@ const AlertsView = ({
       </div>
 
       {predictiveAlerts.length > 0 ? (
-        <section className="alerts-panel-predictive rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+        <section className="alerts-panel-predictive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
           <div className="mb-4 flex items-center gap-2">
             <h4 className="text-sm font-semibold text-slate-100">{tr("Voorspellend", "Predictive")}</h4>
             <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20">
@@ -141,7 +141,7 @@ const AlertsView = ({
         </section>
       ) : null}
 
-      <div className="alerts-panel-positive rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="alerts-panel-positive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Positieve signalen", "Positive signals")}</h4>
         <p className="mt-1 text-xs text-slate-400">
           {tr("Waarden of trends die momenteel gunstig ogen worden hier groen gemarkeerd.", "Values or trends that currently look favorable are shown here in green.")}
@@ -193,7 +193,7 @@ const AlertsView = ({
         )}
       </div>
 
-      <div className="alerts-panel-actionable rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className="alerts-panel-actionable app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
         <p className="mt-1 text-xs text-slate-400">
           {tr("Dit zijn signalen waarbij vaak een bespreekactie of extra monitoring zinvol is.", "These signals often benefit from discussion or additional monitoring.")}

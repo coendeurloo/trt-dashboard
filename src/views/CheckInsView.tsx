@@ -133,7 +133,7 @@ const CheckInForm = ({ initial, onSave, onCancel, language }: CheckInFormProps) 
   };
 
   return (
-    <div className="rounded-xl border border-slate-700/70 bg-slate-900/60 p-5">
+    <div className="app-teal-glow-surface rounded-xl border border-slate-700/70 bg-slate-900/60 p-5">
       {/* Date */}
       <div className="mb-5">
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -329,7 +329,7 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   if (data.length < 2) return null;
 
   return (
-    <div className="checkins-trend-card rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
+    <div className="checkins-trend-card app-teal-glow-surface rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
       <div className="mb-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
           {tr("Trend over tijd", "Trend over time")}
@@ -432,7 +432,7 @@ const CheckInsView = ({
 
   return (
     <div className="space-y-4 px-1 py-2">
-      <section className="checkins-hero rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/65 to-slate-900/35 p-5 shadow-soft">
+      <section className="checkins-hero app-teal-glow-surface rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/65 to-slate-900/35 p-5 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <p className="text-xl font-semibold text-slate-100">{tr("Welzijns check-in", "Wellbeing check-in")}</p>

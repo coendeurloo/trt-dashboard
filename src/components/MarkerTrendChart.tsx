@@ -1,5 +1,6 @@
+import { useId } from "react";
 import { format, parseISO } from "date-fns";
-import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, getTargetZone } from "../analytics";
 import { AppLanguage, AppSettings, SymptomCheckIn } from "../types";
 import { formatDate } from "../utils";
@@ -15,6 +16,7 @@ export interface MarkerTrendChartProps {
   phaseBlocks: ReturnType<typeof buildDosePhaseBlocks>;
   height: number;
   showYearHints?: boolean;
+  showSeriesGradientFill?: boolean;
   checkIns?: SymptomCheckIn[];
 }
 
@@ -27,9 +29,13 @@ const MarkerTrendChart = ({
   phaseBlocks,
   height,
   showYearHints = false,
+  showSeriesGradientFill = false,
   checkIns = []
 }: MarkerTrendChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const seriesColor = markerColor(colorIndex);
+  const gradientBaseId = useId().replace(/:/g, "");
+  const seriesGradientId = `marker-series-fill-${gradientBaseId}`;
   const markerLabel = getMarkerDisplayName(marker, language);
   const mins = points.map((point) => point.referenceMin).filter((value): value is number => value !== null);
   const maxs = points.map((point) => point.referenceMax).filter((value): value is number => value !== null);
@@ -53,6 +59,7 @@ const MarkerTrendChart = ({
   const yDomain = buildYAxisDomain(yAxisCandidates, settings.yAxisMode);
   const chartMin = yDomain?.[0] ?? Math.min(...points.map((point) => point.value));
   const chartMax = yDomain?.[1] ?? Math.max(...points.map((point) => point.value));
+  const areaBaseValue = Number.isFinite(chartMin) ? chartMin : 0;
   const availableKeys = new Set(points.map((point) => point.key));
   const compactTooltip = settings.tooltipDetailMode === "compact";
   const phaseBlocksForSeries = phaseBlocks.filter(
@@ -93,7 +100,16 @@ const MarkerTrendChart = ({
         </div>
       ) : null}
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
+        <ComposedChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
+        {showSeriesGradientFill ? (
+          <defs>
+            <linearGradient id={seriesGradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={seriesColor} stopOpacity={0.34} />
+              <stop offset="52%" stopColor={seriesColor} stopOpacity={0.14} />
+              <stop offset="100%" stopColor={seriesColor} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+        ) : null}
         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
         <XAxis
           dataKey="key"
@@ -228,15 +244,30 @@ const MarkerTrendChart = ({
           />
         ) : null}
 
+        {showSeriesGradientFill ? (
+          <Area
+            type="monotone"
+            dataKey="value"
+            fill={`url(#${seriesGradientId})`}
+            stroke="none"
+            baseValue={areaBaseValue}
+            fillOpacity={1}
+            connectNulls
+            isAnimationActive={false}
+            dot={false}
+            activeDot={false}
+          />
+        ) : null}
+
         <Line
           type="monotone"
           dataKey="value"
-          stroke={markerColor(colorIndex)}
+          stroke={seriesColor}
           strokeWidth={2.6}
           isAnimationActive={false}
           dot={(props) => {
             const payload = props.payload as MarkerSeriesPoint;
-            let fill = markerColor(colorIndex);
+            let fill = seriesColor;
             if (settings.showAbnormalHighlights) {
               if (payload.abnormal === "high") {
                 fill = "#fb7185";
@@ -281,7 +312,7 @@ const MarkerTrendChart = ({
               })
               .filter(Boolean)
           : null}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

@@ -182,7 +182,7 @@ const SupplementsView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold text-slate-100">{tr("Actieve stack en tijdlijn", "Active stack and timeline")}</h3>
@@ -285,7 +285,7 @@ const SupplementsView = ({
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Actieve stack", "Active stack")}</h4>
         {activeStack.length === 0 ? (
           <p className="mt-2 text-sm text-slate-400">{tr("Geen actieve supplementen.", "No active supplements.")}</p>
@@ -383,7 +383,7 @@ const SupplementsView = ({
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+      <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <h4 className="text-sm font-semibold text-slate-100">{tr("Historie", "History")}</h4>
         {groupedHistory.length === 0 ? (
           <p className="mt-2 text-sm text-slate-400">{tr("Nog geen supplementhistorie.", "No supplement history yet.")}</p>
@@ -413,7 +413,7 @@ const SupplementsView = ({
       </div>
 
       {unknownReports.length > 0 ? (
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
+        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-slate-100">
               {tr("Historische backfill (onbekend)", "Historical backfill (unknown)")}

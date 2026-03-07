@@ -72,7 +72,7 @@ const ProtocolImpactView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="protocol-impact-premium-shell rounded-2xl border p-4">
+      <div className="protocol-impact-premium-shell app-teal-glow-surface rounded-2xl border p-4">
         <div className="protocol-impact-header-minimal">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             {tr("Wijzigingstijdlijn", "Change timeline")}
@@ -86,7 +86,7 @@ const ProtocolImpactView = ({
         </div>
 
         {eventAnchors.length > 0 ? (
-          <div className="mt-3">
+          <div className="protocol-impact-jump-sticky mt-3">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
               {tr("Spring naar wijziging", "Jump to change")}
             </p>

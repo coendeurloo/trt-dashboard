@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrtStabilityResult } from "../analytics";
 import { DEFAULT_SETTINGS } from "../constants";
@@ -147,9 +147,64 @@ describe("DashboardView first-report UX", () => {
   });
 });
 
+describe("DashboardView first-visit hero", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows the richer onboarding hero with screenshot, trust cards, and balanced CTAs", () => {
+    const { props } = buildProps();
+    render(<DashboardView {...{ ...props, reports: [], visibleReports: [] }} />);
+
+    expect(screen.getByText("Your data stays on your device. AI only if you want it.")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "LabTracker dashboard preview" })).toBeTruthy();
+
+    const demoButton = screen.getByRole("button", { name: "See a live demo" });
+    const uploadButton = screen.getByRole("button", { name: "Upload your own PDF" });
+    expect(demoButton.className).toContain("border-cyan-400/55");
+    expect(uploadButton.className).toContain("border-cyan-400/55");
+    expect(demoButton.className).toContain("bg-cyan-500/15");
+    expect(uploadButton.className).toContain("bg-cyan-500/15");
+
+    expect(screen.getByText("How it works")).toBeTruthy();
+    expect(screen.getByText("Upload your lab PDF")).toBeTruthy();
+    expect(screen.getByText("See your trends")).toBeTruthy();
+    expect(screen.getByText("Optimize your protocol")).toBeTruthy();
+    expect(screen.getByText("Local processing by default")).toBeTruthy();
+    expect(screen.getByText("Works with many lab formats")).toBeTruthy();
+  });
+});
+
 describe("DashboardView chart controls", () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it("renders stability index details and no changed badge in the dashboard content", () => {
+    const { props } = buildProps();
+    const stabilityWithScore: TrtStabilityResult = {
+      score: 66,
+      components: {}
+    };
+
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          visibleReports: [report],
+          allMarkers: ["Testosterone"],
+          primaryMarkers: ["Testosterone"],
+          trtStability: stabilityWithScore,
+          outOfRangeCount: 0
+        }}
+      />
+    );
+
+    expect(screen.getByText("Stability Index")).toBeTruthy();
+    expect(screen.queryByText("Changed")).toBeNull();
+    const stabilitySection = screen.getByText("Stability Index").closest("#dashboard-stability-index");
+    expect(stabilitySection).toBeTruthy();
+    expect(within(stabilitySection as HTMLElement).getAllByText("66").length).toBeGreaterThan(0);
   });
 
   it("shows Compare 2 markers and Chart settings controls", () => {
@@ -271,18 +326,4 @@ describe("DashboardView chart controls", () => {
     });
   });
 
-  it("scrolls to the stability index section from the top summary button", () => {
-    const { props } = buildProps();
-    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone"], primaryMarkers: ["Testosterone"] }} />);
-
-    const stabilitySection = document.getElementById("dashboard-stability-index");
-    expect(stabilitySection).toBeTruthy();
-    const scrollIntoView = vi.fn();
-    if (stabilitySection) {
-      (stabilitySection as HTMLElement).scrollIntoView = scrollIntoView;
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Stability Index" }));
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
-  });
 });
