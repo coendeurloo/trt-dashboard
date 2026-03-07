@@ -180,6 +180,15 @@ const DashboardView = ({
       compareToBaseline: false
     });
   };
+  const scrollToStabilityIndex = () => {
+    const stabilitySection = document.getElementById("dashboard-stability-index");
+    if (stabilitySection) {
+      stabilitySection.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (stabilitySection instanceof HTMLElement) {
+        stabilitySection.focus({ preventScroll: true });
+      }
+    }
+  };
   const hasPhaseBlocks = dosePhaseBlocks.length > 0;
   const isCompareMode = dashboardMode === "compare2";
   const currentPreset = settings.dashboardChartPreset;
@@ -242,7 +251,15 @@ const DashboardView = ({
           <span className="text-slate-600">·</span>
           <span><strong className="text-amber-300">{outOfRangeCount}</strong> {t(language, "outOfRange")}</span>
           <span className="text-slate-600">·</span>
-          <span>{t(language, "trtStabilityShort")} <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong></span>
+          <button
+            type="button"
+            onClick={scrollToStabilityIndex}
+            aria-label={tr("Open Stabiliteitsindex", "Open Stability Index")}
+            className="inline-flex items-center gap-1.5 rounded-md border border-cyan-400/40 bg-cyan-500/12 px-2 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-500/20 sm:text-sm"
+          >
+            <span>{t(language, "trtStabilityShort")}</span>
+            <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong>
+          </button>
         </div>
       ) : null}
 
@@ -270,22 +287,51 @@ const DashboardView = ({
       {hasReports ? (
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
           <div ref={chartSettingsRef} className="relative space-y-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center whitespace-nowrap px-1 text-xs font-medium text-slate-400 sm:text-sm">
-                {tr("Periode:", "Range:")}
-              </span>
-              {timeRangeOptions.map(([value, label]) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center whitespace-nowrap px-1 text-xs font-medium text-slate-400 sm:text-sm">
+                  {tr("Periode:", "Range:")}
+                </span>
+                {timeRangeOptions.map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                      settings.timeRange === value
+                        ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
+                        : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
+                    }`}
+                    onClick={() => onUpdateSettings({ timeRange: value })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span data-testid="dashboard-filter-divider" className="hidden h-6 w-px bg-slate-700/70 lg:block" />
+              <div data-testid="marker-scope-filter-group" className="flex flex-wrap items-center gap-1.5">
                 <button
-                  key={value}
                   type="button"
                   className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                    settings.timeRange === value ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                    dashboardView === "primary"
+                      ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
+                      : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
                   }`}
-                  onClick={() => onUpdateSettings({ timeRange: value })}
+                  onClick={() => onDashboardViewChange("primary")}
                 >
-                  {label}
+                  {tr("Primaire markers", "Primary markers")}
                 </button>
-              ))}
+                <button
+                  type="button"
+                  className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                    dashboardView === "all"
+                      ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
+                      : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
+                  }`}
+                  onClick={() => onDashboardViewChange("all")}
+                >
+                  {tr("Alle markers", "All markers")}
+                </button>
+              </div>
               {settings.timeRange === "custom" ? (
                 <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-2">
                   <input
@@ -302,24 +348,6 @@ const DashboardView = ({
                   />
                 </div>
               ) : null}
-              <button
-                type="button"
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                }`}
-                onClick={() => onDashboardViewChange("primary")}
-              >
-                {tr("Primaire markers", "Primary markers")}
-              </button>
-              <button
-                type="button"
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                }`}
-                onClick={() => onDashboardViewChange("all")}
-              >
-                {tr("Alle markers", "All markers")}
-              </button>
               <div className="ml-auto">
                 <button
                   type="button"
@@ -748,8 +776,12 @@ const DashboardView = ({
           </div>
         )}
 
-        {hasReports && dashboardView === "primary" ? (
-          <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left">
+        {hasReports ? (
+          <div
+            id="dashboard-stability-index"
+            tabIndex={-1}
+            className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+          >
             <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
               <div className="relative mx-auto h-28 w-28">
                 <ResponsiveContainer width="100%" height="100%">

@@ -156,8 +156,23 @@ describe("DashboardView chart controls", () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
 
-    expect(screen.getByRole("button", { name: "Compare 2 markers" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Chart settings" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
+    expect(screen.getByRole("button", { name: "Compare 2 markers" })).toBeTruthy();
+  });
+
+  it("keeps time range and marker scope filters visually separated with aligned active styling", () => {
+    const { props } = buildProps();
+    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
+
+    expect(screen.getByTestId("time-range-filter-group")).toBeTruthy();
+    expect(screen.getByTestId("marker-scope-filter-group")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-filter-divider")).toBeTruthy();
+
+    const months12 = screen.getByRole("button", { name: "12 months" });
+    const primaryMarkers = screen.getByRole("button", { name: "Primary markers" });
+    expect(months12.className).toContain("dashboard-filter-chip-active");
+    expect(primaryMarkers.className).toContain("dashboard-filter-chip-active");
   });
 
   it("hides card-only layer controls in compare mode", () => {
@@ -187,6 +202,7 @@ describe("DashboardView chart controls", () => {
     const { props, onUpdateSettings } = buildProps();
     render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Protocol" }));
 
     expect(onUpdateSettings).toHaveBeenCalledWith({
@@ -231,5 +247,20 @@ describe("DashboardView chart controls", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open alerts for apolipoprotein b/i }));
     expect(onOpenMarkerAlerts).toHaveBeenCalledWith("Apolipoprotein B");
+  });
+
+  it("scrolls to the stability index section from the top summary button", () => {
+    const { props } = buildProps();
+    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone"], primaryMarkers: ["Testosterone"] }} />);
+
+    const stabilitySection = document.getElementById("dashboard-stability-index");
+    expect(stabilitySection).toBeTruthy();
+    const scrollIntoView = vi.fn();
+    if (stabilitySection) {
+      (stabilitySection as HTMLElement).scrollIntoView = scrollIntoView;
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Stability Index" }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });

@@ -258,7 +258,7 @@ export const trendVisual = (direction: MarkerTrendSummary["direction"] | null): 
     return { icon: createElement(ArrowUp, { className: "h-3.5 w-3.5 text-emerald-300" }), text: "Rising" };
   }
   if (direction === "falling") {
-    return { icon: createElement(ArrowDown, { className: "h-3.5 w-3.5 text-amber-300" }), text: "Falling" };
+    return { icon: createElement(ArrowDown, { className: "h-3.5 w-3.5 text-slate-300" }), text: "Falling" };
   }
   if (direction === "volatile") {
     return { icon: createElement(AlertTriangle, { className: "h-3.5 w-3.5 text-rose-300" }), text: "Volatile" };

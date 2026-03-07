@@ -160,26 +160,30 @@ const AlertsView = ({
                     focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : "border-emerald-500/35"
                   }`}
                 >
-                  <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_190px]">
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
-                        <span className="rounded-full border border-emerald-300/30 bg-emerald-500/20 px-2 py-0.5 text-[11px]">
-                          {tr("Positief", "Positive")}
-                        </span>
+                  <div className="space-y-2">
+                    <div className="grid items-start gap-2 lg:grid-cols-[minmax(0,1fr)_176px]">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="min-w-0 text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
+                          <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/20 px-2 py-0.5 text-[11px]">
+                            {tr("Positief", "Positive")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm leading-snug">{alert.message}</p>
                       </div>
-                      <p className="mt-1 text-sm leading-snug">{alert.message}</p>
-                      <p className="mt-1 text-xs leading-snug text-emerald-200/90">{alert.suggestion}</p>
-                      <p className="mt-1 text-[11px] text-emerald-200/80">{formatDate(alert.date)}</p>
+                      <div>
+                        <AlertTrendMiniChart
+                          marker={alert.marker}
+                          points={series}
+                          highlightDate={alert.date}
+                          language={language}
+                          height={100}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <AlertTrendMiniChart
-                        marker={alert.marker}
-                        points={series}
-                        highlightDate={alert.date}
-                        language={language}
-                        height={100}
-                      />
+                    <div className="w-full">
+                      <p className="text-xs leading-snug text-emerald-200/90">{alert.suggestion}</p>
+                      <p className="mt-1 text-[11px] text-emerald-200/80">{formatDate(alert.date)}</p>
                     </div>
                   </div>
                 </article>

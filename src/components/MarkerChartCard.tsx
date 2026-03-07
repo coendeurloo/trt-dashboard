@@ -62,11 +62,24 @@ const MarkerChartCard = ({
     )
     .replace("Stable trend: slope remains close to zero.", tr("Stabiele trend: helling blijft dicht bij nul.", "Stable trend: slope remains close to zero."))
     .replace("Insufficient points for trend classification.", tr("Onvoldoende meetpunten voor trendclassificatie.", "Insufficient points for trend classification."));
+  const hasAlerts = alertCount > 0;
+  const deltaToneClass = (delta: number | null): string => {
+    if (delta === null) {
+      return "text-slate-300 marker-delta-neutral";
+    }
+    if (delta >= 0) {
+      return "text-emerald-300 marker-delta-positive";
+    }
+    return hasAlerts ? "text-amber-300 marker-delta-alert" : "text-slate-200 marker-delta-neutral";
+  };
 
   return (
     <motion.div
       layout
-      className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 shadow-soft"
+      data-testid={`marker-card-${marker}`}
+      className={`rounded-2xl border p-4 shadow-soft ${
+        hasAlerts ? "marker-card-alert" : "border-slate-700/70 bg-slate-900/60"
+      }`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
@@ -107,14 +120,14 @@ const MarkerChartCard = ({
         </span>
         <span>
           {tr("Sinds vorige test", "Since last test")}:{" "}
-          <strong className={percentChange === null ? "text-slate-300" : percentChange >= 0 ? "text-emerald-300" : "text-amber-300"}>
+          <strong className={deltaToneClass(percentChange)}>
             {percentChange === null ? "-" : `${percentChange > 0 ? "+" : ""}${percentChange}%`}
           </strong>
         </span>
         {settings.compareToBaseline ? (
           <span>
             {tr("t.o.v. baseline", "vs baseline")}:{" "}
-            <strong className={baselineDelta === null ? "text-slate-300" : baselineDelta >= 0 ? "text-emerald-300" : "text-amber-300"}>
+            <strong className={deltaToneClass(baselineDelta)}>
               {baselineDelta === null ? "-" : `${baselineDelta > 0 ? "+" : ""}${baselineDelta}%`}
             </strong>
           </span>

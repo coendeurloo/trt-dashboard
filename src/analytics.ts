@@ -1449,7 +1449,7 @@ const trendSuggestionByMarker = (
         );
   }
 
-  if (marker === "Ferritine") {
+  if (marker === "Ferritine" || marker === "Ferritin") {
     return direction === "up"
       ? tr(
           "Bespreek of stijging past bij herstel of eerder inflammatie/ijzerstapeling; combineer met transferrine-saturatie.",
@@ -1505,11 +1505,21 @@ const isGenerallyPositiveTrend = (
     return direction === "up";
   }
 
-  if (marker === "Ferritine") {
+  if (marker === "Ferritine" || marker === "Ferritin") {
     if (direction === "up") {
       return latest.value <= 200;
     }
     return Boolean(prev && prev.value > 200 && latest.value < prev.value);
+  }
+
+  if (
+    marker === "Apolipoprotein B" ||
+    marker === "LDL Cholesterol" ||
+    marker === "Non-HDL Cholesterol" ||
+    marker === "Triglyceriden" ||
+    marker === "Triglycerides"
+  ) {
+    return direction === "down";
   }
 
   return false;
@@ -1536,14 +1546,14 @@ const positiveTrendSuggestionByMarker = (
     );
   }
 
-  if (marker === "Ferritine" && direction === "up") {
+  if ((marker === "Ferritine" || marker === "Ferritin") && direction === "up") {
     return tr(
       "Stijgende ferritine kan passen bij herstel van ijzervoorraden; volg de trend samen met transferrine-saturatie.",
       "Rising ferritin can fit iron-store recovery; follow the trend together with transferrin saturation."
     );
   }
 
-  if (marker === "Ferritine" && direction === "down") {
+  if ((marker === "Ferritine" || marker === "Ferritin") && direction === "down") {
     return tr(
       "Dalende ferritine vanaf een hoge waarde kan gunstig zijn; blijf monitoren om overcorrectie te voorkomen.",
       "Falling ferritin from a high level can be favorable; keep monitoring to avoid overcorrection."
@@ -1575,7 +1585,7 @@ const abnormalSuggestionByMarker = (
         );
   }
 
-  if (marker === "Ferritine") {
+  if (marker === "Ferritine" || marker === "Ferritin") {
     return abnormal === "low"
       ? tr(
           "Bespreek ijzerinname/suppletie en monitor ferritine, transferrine-saturatie en hemoglobine.",
@@ -1705,7 +1715,7 @@ export const buildAlerts = (
       });
     }
 
-    if (marker === "Ferritine" && (latest.value < 40 || latest.value > 200)) {
+    if ((marker === "Ferritine" || marker === "Ferritin") && (latest.value < 40 || latest.value > 200)) {
       const lowFerritin = latest.value < 40;
       alerts.push({
         id: `${marker}-ferritin-threshold`,
@@ -1714,7 +1724,7 @@ export const buildAlerts = (
         severity: "medium",
         tone: "attention",
         actionNeeded: true,
-        message: tr(`Ferritine is ${ROUND_2(latest.value)} ${latest.unit} (buiten 40-200).`, `Ferritine is ${ROUND_2(latest.value)} ${latest.unit} (outside 40-200).`),
+        message: tr(`${marker} is ${ROUND_2(latest.value)} ${latest.unit} (buiten 40-200).`, `${marker} is ${ROUND_2(latest.value)} ${latest.unit} (outside 40-200).`),
         suggestion: lowFerritin
           ? tr(
               "Bespreek ijzerstatusherstel met je arts (voeding/suppletie) en monitor ferritine, transferrine-saturatie en hemoglobine.",
@@ -1726,7 +1736,7 @@ export const buildAlerts = (
             ),
         date: latest.date
       });
-    } else if (marker === "Ferritine" && latest.value >= 40 && latest.value <= 200) {
+    } else if ((marker === "Ferritine" || marker === "Ferritin") && latest.value >= 40 && latest.value <= 200) {
       alerts.push({
         id: `${marker}-ferritin-positive`,
         marker,
@@ -1735,8 +1745,8 @@ export const buildAlerts = (
         tone: "positive",
         actionNeeded: false,
         message: tr(
-          `Ferritine is ${ROUND_2(latest.value)} ${latest.unit} en ligt binnen het beoogde bereik.`,
-          `Ferritin is ${ROUND_2(latest.value)} ${latest.unit} and within the target range.`
+          `${marker} is ${ROUND_2(latest.value)} ${latest.unit} en ligt binnen het beoogde bereik.`,
+          `${marker} is ${ROUND_2(latest.value)} ${latest.unit} and within the target range.`
         ),
         suggestion: tr("Geen directe actie nodig; blijf periodiek monitoren.", "No immediate action needed; keep periodic monitoring."),
         date: latest.date

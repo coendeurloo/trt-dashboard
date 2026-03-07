@@ -65,6 +65,33 @@ describe("analytics", () => {
     expect(alerts.some((alert) => alert.marker === "LDL Cholesterol" && alert.type === "threshold")).toBe(true);
   });
 
+  it("treats falling ApoB trend as positive (no action-needed alert)", () => {
+    const reports = [
+      mkReport("r1", "2025-01-01", 120, [{ marker: "Apolipoprotein B", value: 1.1, unit: "g/L" }]),
+      mkReport("r2", "2025-02-01", 120, [{ marker: "Apolipoprotein B", value: 0.95, unit: "g/L" }]),
+      mkReport("r3", "2025-03-01", 120, [{ marker: "Apolipoprotein B", value: 0.8, unit: "g/L" }])
+    ];
+
+    const alerts = buildAlerts(reports, ["Apolipoprotein B"], "eu", "en");
+    expect(alerts.length).toBeGreaterThan(0);
+    expect(alerts.some((alert) => alert.marker === "Apolipoprotein B" && alert.actionNeeded)).toBe(false);
+    expect(alerts.some((alert) => alert.marker === "Apolipoprotein B" && alert.tone === "positive")).toBe(true);
+  });
+
+  it("creates actionable ferritin threshold alert when ferritin is above 200", () => {
+    const reports = [
+      mkReport("r1", "2025-01-01", 120, [{ marker: "Ferritine", value: 180, unit: "ug/L" }]),
+      mkReport("r2", "2025-02-01", 120, [{ marker: "Ferritine", value: 210, unit: "ug/L" }])
+    ];
+
+    const alerts = buildAlerts(reports, ["Ferritine"], "eu", "en");
+    expect(
+      alerts.some(
+        (alert) => alert.marker === "Ferritine" && alert.type === "threshold" && alert.actionNeeded && alert.tone === "attention"
+      )
+    ).toBe(true);
+  });
+
   it("calculatePercentChange handles edge cases", () => {
     expect(calculatePercentChange(120, 100)).toBe(20);
     expect(calculatePercentChange(80, 100)).toBe(-20);

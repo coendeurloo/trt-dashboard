@@ -82,7 +82,7 @@ const EXTRA_DEMO_MARKERS_BY_MONTH: Record<number, Array<{ marker: string; value:
   1: [
     { marker: "Triglycerides", value: 1.0 },
     { marker: "Apolipoprotein B", value: 0.8 },
-    { marker: "Ferritin", value: 195 },
+    { marker: "Ferritin", value: 210 },
     { marker: "Prolactin", value: 150 }
   ]
 };
@@ -577,7 +577,7 @@ export const getDemoReports = (): LabReport[] => [
     markers: [
       { marker: "Testosterone", value: 21.1 },
       { marker: "Free Testosterone", value: 0.44 },
-      { marker: "Estradiol", value: 94 },
+      { marker: "Estradiol", value: 86 },
       { marker: "SHBG", value: 34.5 },
       { marker: "Hematocrit", value: 0.47 },
       { marker: "PSA", value: 0.8 },

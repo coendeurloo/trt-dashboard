@@ -48,6 +48,7 @@ import {
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
+import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
 import DashboardView from "./views/DashboardView";
 import {
   AIConsentAction,
@@ -297,12 +298,7 @@ const App = () => {
     ? "rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4"
     : "rounded-2xl border border-cyan-200 bg-cyan-50 p-3 sm:p-4";
   const demoBannerTextClassName = isDarkTheme ? "flex items-start gap-2 text-sm text-cyan-100" : "flex items-start gap-2 text-sm text-cyan-900";
-  const clearDemoButtonClassName = isDarkTheme
-    ? "rounded-md border border-cyan-500/50 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
-    : "rounded-md border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-900 hover:border-cyan-400 hover:bg-cyan-100";
-  const uploadOwnPdfButtonClassName = isDarkTheme
-    ? "rounded-md border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-    : "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-cyan-400 hover:text-cyan-900";
+  const { clearDemoButtonClassName, uploadOwnPdfButtonClassName } = getDemoBannerButtonClassNames(isDarkTheme);
 
   const {
     isAnalyzingLabs,
