@@ -233,6 +233,7 @@ const MarkerTrendChart = ({
           dataKey="value"
           stroke={markerColor(colorIndex)}
           strokeWidth={2.6}
+          isAnimationActive={false}
           dot={(props) => {
             const payload = props.payload as MarkerSeriesPoint;
             let fill = markerColor(colorIndex);

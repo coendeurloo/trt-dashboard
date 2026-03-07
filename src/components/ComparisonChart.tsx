@@ -198,6 +198,7 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
             name={leftLabel}
             stroke="#22d3ee"
             strokeWidth={2.4}
+            isAnimationActive={false}
           />
           <Line
             yAxisId={settings.comparisonScale === "normalized" ? "left" : "right"}
@@ -206,6 +207,7 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
             name={rightLabel}
             stroke="#f472b6"
             strokeWidth={2.4}
+            isAnimationActive={false}
           />
         </ComposedChart>
       </ResponsiveContainer>

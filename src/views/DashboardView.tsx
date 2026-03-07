@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
-import { ChevronDown, ChevronUp, Loader2, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
@@ -63,8 +63,8 @@ interface ToggleSwitchProps {
 
 const ToggleSwitch = ({ checked, onChange, label, tooltip, disabled = false }: ToggleSwitchProps) => (
   <label
-    className={`group relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.25 text-xs sm:text-sm ${
-      disabled ? "cursor-not-allowed bg-slate-800/60 text-slate-500" : "cursor-pointer bg-slate-800 text-slate-300 hover:text-slate-100"
+    className={`group relative inline-flex items-center gap-2 text-xs sm:text-sm ${
+      disabled ? "cursor-not-allowed text-slate-500" : "cursor-pointer text-slate-300 hover:text-slate-100"
     }`}
   >
     <button
@@ -386,13 +386,26 @@ const DashboardView = ({
 
             {showChartSettings ? (
             <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+              <div className="flex items-center justify-between px-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Grafiekinstellingen", "Chart settings")}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowChartSettings(false)}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 p-1 text-slate-300 hover:border-slate-500 hover:text-slate-100"
+                  aria-label={tr("Sluit grafiekinstellingen", "Close chart settings")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Weergavemodus", "View mode")}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   <button
                     type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs ${
-                      dashboardMode === "cards" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                    className={`rounded-md border px-2.5 py-1 text-xs ${
+                      dashboardMode === "cards"
+                        ? "border-violet-400/40 bg-violet-500/15 text-violet-200"
+                        : "border-slate-700 bg-slate-800/70 text-slate-300 hover:text-slate-100"
                     }`}
                     onClick={() => onDashboardModeChange("cards")}
                   >
@@ -400,8 +413,10 @@ const DashboardView = ({
                   </button>
                   <button
                     type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs ${
-                      dashboardMode === "compare2" ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                    className={`rounded-md border px-2.5 py-1 text-xs ${
+                      dashboardMode === "compare2"
+                        ? "border-violet-400/40 bg-violet-500/15 text-violet-200"
+                        : "border-slate-700 bg-slate-800/70 text-slate-300 hover:text-slate-100"
                     }`}
                     onClick={() => onDashboardModeChange("compare2")}
                   >
@@ -409,7 +424,7 @@ const DashboardView = ({
                   </button>
                 </div>
                 {!isCompareMode ? (
-                  <div className="mt-2 border-t border-slate-700/60 pt-2">
+                  <div className="mt-3 border-t border-slate-700/60 pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Primaire markers", "Primary markers")}</p>
                       <button
@@ -423,7 +438,7 @@ const DashboardView = ({
                       </button>
                     </div>
                     {showPrimaryMarkerPicker ? (
-                      <div className="mt-2 space-y-2 rounded-lg border border-slate-700/70 bg-slate-900/60 p-2.5">
+                      <div className="mt-3 space-y-2 rounded-lg border border-slate-700/70 bg-slate-900/60 p-2.5">
                         <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
                           {allMarkers.map((marker) => {
                             const isChecked = selectedPrimaryMarkers.includes(marker);
@@ -431,9 +446,17 @@ const DashboardView = ({
                               <label key={marker} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-200 hover:bg-slate-800/70">
                                 <input
                                   type="checkbox"
+                                  className="peer sr-only"
                                   checked={isChecked}
                                   onChange={() => togglePrimaryMarkerSelection(marker)}
                                 />
+                                <span
+                                  className={`inline-flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                                    isChecked ? "border-cyan-400 bg-cyan-500/20 text-cyan-300" : "border-slate-600 bg-slate-800 text-transparent"
+                                  }`}
+                                >
+                                  <Check className="h-3 w-3" />
+                                </span>
                                 <span>{getMarkerDisplayName(marker, language)}</span>
                               </label>
                             );
@@ -458,7 +481,7 @@ const DashboardView = ({
               </div>
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Preset", "Preset")}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {(
                     [
                       ["clinical", tr("Klinisch", "Clinical")],
@@ -486,7 +509,7 @@ const DashboardView = ({
               </div>
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Data & schaal", "Data & scale")}</p>
-                <div className="mt-2 space-y-2">
+                <div className="mt-3 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400">{tr("Eenheden:", "Units:")}</span>
                     {(["eu", "us"] as const).map((unitSystem) => (
@@ -557,7 +580,7 @@ const DashboardView = ({
               {!isCompareMode ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Klinische lagen", "Clinical layers")}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-col gap-2">
                     <ToggleSwitch
                       checked={settings.showReferenceRanges}
                       onChange={(checked) => updateChartVisualSettings({ showReferenceRanges: checked })}
@@ -583,7 +606,7 @@ const DashboardView = ({
               {!isCompareMode ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Contextlagen", "Context layers")}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-col gap-2">
                     <ToggleSwitch
                       checked={settings.showAnnotations}
                       onChange={(checked) => updateChartVisualSettings({ showAnnotations: checked })}
@@ -616,7 +639,7 @@ const DashboardView = ({
               {!isCompareMode ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Highlights", "Highlights")}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-col gap-2">
                     <ToggleSwitch
                       checked={settings.showAbnormalHighlights}
                       onChange={(checked) => updateChartVisualSettings({ showAbnormalHighlights: checked })}
@@ -630,7 +653,7 @@ const DashboardView = ({
               {samplingControlsEnabled ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Meetcontext", "Sampling context")}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
                       {tr("Meetmoment-filter", "Sampling filter")}
                     </span>
