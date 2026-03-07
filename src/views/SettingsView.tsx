@@ -263,9 +263,15 @@ const SettingsView = ({
               value={settings.unitSystem}
               onChange={(event) => onUpdateSettings({ unitSystem: event.target.value as AppSettings["unitSystem"] })}
             >
-              <option value="eu">{tr("Europees", "European")}</option>
-              <option value="us">US</option>
+              <option value="eu">{tr("SI (metrisch)", "SI (Metric)")}</option>
+              <option value="us">{tr("Conventioneel", "Conventional")}</option>
             </select>
+            <p className="mt-1 text-xs text-slate-400">
+              {tr(
+                "Waarden worden automatisch omgerekend tussen SI (metrisch) en conventionele eenheden.",
+                "Values are automatically converted between SI (Metric) and Conventional units."
+              )}
+            </p>
           </label>
 
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">

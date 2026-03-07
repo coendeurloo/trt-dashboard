@@ -132,6 +132,8 @@ const DashboardView = ({
   onNavigateToCheckIns
 }: DashboardViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const unitSystemLabel = (unitSystem: "eu" | "us"): string =>
+    unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const hasReports = reports.length > 0;
 
   // Wellbeing nudge: show when no check-ins or last one was ≥7 days ago
@@ -490,8 +492,12 @@ const DashboardView = ({
                           settings.unitSystem === unitSystem ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                         }`}
                         onClick={() => onUpdateSettings({ unitSystem })}
+                        title={tr(
+                          "Waarden worden automatisch omgerekend tussen SI (metrisch) en conventionele eenheden.",
+                          "Values are automatically converted between SI (Metric) and Conventional units."
+                        )}
                       >
-                        {unitSystem.toUpperCase()}
+                        {unitSystemLabel(unitSystem)}
                       </button>
                     ))}
                   </div>

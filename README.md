@@ -43,7 +43,7 @@ Live app: [labtracker.app](https://labtracker.app)
   - Abnormal highlight toggle
   - Annotation vertical lines toggle
   - Time range filter (3m/6m/12m/all/custom)
-  - Unit conversion EU/US
+  - Unit conversion SI (Metric) / Conventional
   - Multi-marker comparison mode with dual axes
 - Persistent storage in browser (`window.storage` fallback to `localStorage`)
 - Data management:

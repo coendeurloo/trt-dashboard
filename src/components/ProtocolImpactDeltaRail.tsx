@@ -25,6 +25,7 @@ const ProtocolImpactDeltaRail = ({
   isInsufficient
 }: ProtocolImpactDeltaRailProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const unitSystemLabel = unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
 
   if (isInsufficient || beforeValue === null || afterValue === null) {
     return (
@@ -61,7 +62,7 @@ const ProtocolImpactDeltaRail = ({
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center justify-center" title={`${tr("Eenheidssysteem", "Unit system")}: ${unitSystem.toUpperCase()}`}>
+      <div className="mt-2.5 flex items-center justify-center" title={`${tr("Eenheidssysteem", "Unit system")}: ${unitSystemLabel}`}>
         <span className={`protocol-impact-delta-percent-circle ${deltaToneClass}`}>
           {trend === "up" ? <TrendingUp className="h-3 w-3" /> : null}
           {trend === "down" ? <TrendingDown className="h-3 w-3" /> : null}

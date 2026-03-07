@@ -75,6 +75,7 @@ const AnalysisView = ({
   onCopyAnalysis
 }: AnalysisViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const unitSystemLabel = settings.unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const isDarkTheme = settings.theme === "dark";
   const limitsDisabled = betaLimitsDisabled();
   const dayLimitReached = !limitsDisabled && betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
@@ -167,7 +168,7 @@ const AnalysisView = ({
           </div>
           <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
             <p className={scopeMutedClassName}>{tr("Eenheden", "Unit system")}</p>
-            <p className={scopeValueClassName}>{settings.unitSystem.toUpperCase()}</p>
+            <p className={scopeValueClassName}>{unitSystemLabel}</p>
           </div>
           <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
             <p className={scopeMutedClassName}>{tr("Actief protocol", "Active protocol")}</p>
