@@ -205,7 +205,7 @@ const SupplementsView = ({
 
         {isAdding ? (
           <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_170px_150px_auto]">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_170px_150px_auto] md:items-end">
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 {tr("Supplement", "Supplement")}
                 <div className="relative mt-1">
@@ -275,7 +275,7 @@ const SupplementsView = ({
               </label>
               <button
                 type="button"
-                className="inline-flex items-end justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 md:self-end"
                 onClick={submitNewSupplement}
               >
                 <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}

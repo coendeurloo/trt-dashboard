@@ -72,8 +72,12 @@ const AlertsView = ({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-100">{tr("Alerts Centrum", "Alerts Center")}</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              {tr("Signalen met context en suggesties om met je arts te bespreken.", "Signals with context and discussion suggestions for your doctor.")}
+            <p className="mt-0.5 text-sm text-slate-400">
+              <span className="font-medium text-amber-300">{actionableAlerts.length}</span> {tr("actie nodig", "need action")}
+              <span className="mx-2 text-slate-600">·</span>
+              <span className="font-medium text-emerald-300">{positiveAlerts.length}</span> {tr("positief", "positive")}
+              <span className="mx-2 text-slate-600">·</span>
+              <span className="font-medium text-slate-300">{alerts.length}</span> {tr("totaal", "total")}
             </p>
           </div>
           {samplingControlsEnabled ? (
@@ -81,28 +85,6 @@ const AlertsView = ({
               {tr("Filter actief", "Filter active")}: {settings.samplingFilter}
             </span>
           ) : null}
-        </div>
-
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3">
-            <p className="text-xs uppercase tracking-wide text-rose-200">{tr("Actie nodig", "Action needed")}</p>
-            <p className="mt-1 text-2xl font-semibold text-rose-100">{actionableAlerts.length}</p>
-          </div>
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-            <p className="text-xs uppercase tracking-wide text-emerald-200">{tr("Positieve signalen", "Positive signals")}</p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-100">{positiveAlerts.length}</p>
-          </div>
-          <div className="rounded-xl border border-slate-600 bg-slate-800/70 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-300">{tr("Totaal", "Total alerts")}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-100">{alerts.length}</p>
-          </div>
-        </div>
-
-        <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-900/60 p-3 text-xs text-slate-300">
-          {tr(
-            "Leesvolgorde: 1) bekijk eerst 'Voorspellend', 2) ga daarna naar 'Actie nodig', 3) gebruik 'Positieve signalen' als bevestiging.",
-            "Reading order: 1) review 'Predictive' first, 2) then review 'Action needed', 3) use 'Positive signals' as confirmation."
-          )}
         </div>
       </div>
 
@@ -153,11 +135,8 @@ const AlertsView = ({
             ))}
           </div>
 
-          <p className="mt-4 text-[11px] text-slate-500">
-            {tr(
-              "Projecties zijn gebaseerd op lineaire extrapolatie van je meetgeschiedenis en houden geen rekening met protocolwijzigingen of leefstijlfactoren. Geen medisch advies.",
-              "Projections are based on linear extrapolation of your measurement history and do not account for protocol changes or lifestyle factors. Not medical advice."
-            )}
+          <p className="mt-3 text-[10px] text-slate-600">
+            {tr("Lineaire extrapolatie. Geen medisch advies.", "Linear extrapolation. Not medical advice.")}
           </p>
         </section>
       ) : null}

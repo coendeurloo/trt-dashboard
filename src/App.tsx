@@ -1763,13 +1763,30 @@ const App = () => {
                           </>
                         ) : (
                           // Mixed state (demo + own data): offer to clear demo
-                          <button
-                            type="button"
-                            className={clearDemoButtonClassName}
-                            onClick={clearDemoData}
-                          >
-                            {tr("Demodata wissen", "Clear demo data")}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className={`${uploadOwnPdfButtonClassName} ${isProcessing ? "cursor-not-allowed opacity-70" : ""}`}
+                              onClick={clearDemoAndUpload}
+                              disabled={isProcessing}
+                            >
+                              {isProcessing ? (
+                                <>
+                                  <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                                  {tr("PDF wordt verwerkt...", "Processing PDF...")}
+                                </>
+                              ) : (
+                                tr("Upload je eigen PDF", "Upload your own PDF")
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className={clearDemoButtonClassName}
+                              onClick={clearDemoData}
+                            >
+                              {tr("Demodata wissen", "Clear demo data")}
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>

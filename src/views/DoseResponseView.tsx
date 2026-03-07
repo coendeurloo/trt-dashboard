@@ -148,10 +148,7 @@ const DoseResponseView = ({
               )}
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              {tr(
-                "In beeld: {focus} relevante markers van {total} totaal.",
-                "In view: {focus} relevant markers out of {total} total."
-              )
+              {tr("{focus} van {total} markers", "{focus} of {total} markers")
                 .replace("{focus}", String(Math.min(8, premiumPredictions.length)))
                 .replace("{total}", String(premiumPredictions.length))}
             </p>
@@ -163,12 +160,16 @@ const DoseResponseView = ({
             <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-200">
               {tr("Huidig protocol", "Current protocol")}: {formatAxisTick(baselineDose)} mg/week
             </span>
-            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-cyan-100">
-              {tr("Scenario", "Scenario")}: {formatAxisTick(scenarioDose)} mg/week
-            </span>
-            <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-emerald-200">
-              {tr("Delta vs huidig", "Delta vs current")}: {scenarioDeltaLabel}
-            </span>
+            {!isSameDoseScenario ? (
+              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-cyan-100">
+                {tr("Scenario", "Scenario")}: {formatAxisTick(scenarioDose)} mg/week
+              </span>
+            ) : null}
+            {!isSameDoseScenario ? (
+              <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-emerald-200">
+                {tr("Delta vs huidig", "Delta vs current")}: {scenarioDeltaLabel}
+              </span>
+            ) : null}
             {hasDifferentModelBaseline ? (
               <span className="dose-control-chip rounded-full border px-2.5 py-1 text-xs text-slate-300">
                 {tr("Model-baseline", "Model baseline")}: {formatAxisTick(modelBaselineDose ?? baselineDose)} mg/week

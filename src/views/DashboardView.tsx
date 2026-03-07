@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp, Loader2, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
@@ -147,6 +147,7 @@ const DashboardView = ({
   const firstReportVisible = hasSingleReport && visibleReports.length > 0;
   const firstReportFilteredOut = hasSingleReport && visibleReports.length === 0;
   const [showChartSettings, setShowChartSettings] = useState(false);
+  const chartSettingsRef = useRef<HTMLDivElement | null>(null);
 
   const referenceRangesTooltip = tr(
     "Toont per marker het normale referentiebereik als band in de grafiek.",
@@ -210,22 +211,38 @@ const DashboardView = ({
     onUpdateSettings(buildDashboardPresetPatch(preset));
   };
 
+  useEffect(() => {
+    if (!showChartSettings) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!chartSettingsRef.current) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Node && !chartSettingsRef.current.contains(target)) {
+        setShowChartSettings(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [showChartSettings]);
+
   return (
     <section className="space-y-3 fade-in">
       {hasReports ? (
-        <div className="flex flex-wrap gap-4 rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-sm">
-          <span className="text-slate-400">
-            {t(language, "reports")}: <strong className="text-slate-100">{reports.length}</strong>
-          </span>
-          <span className="text-slate-400">
-            {t(language, "markersTracked")}: <strong className="text-slate-100">{allMarkers.length}</strong>
-          </span>
-          <span className="text-slate-400">
-            {t(language, "outOfRange")}: <strong className="text-amber-300">{outOfRangeCount}</strong>
-          </span>
-          <span className="text-slate-400">
-            {t(language, "trtStabilityShort")}: <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong>
-          </span>
+        <div className="flex flex-wrap items-center gap-2.5 text-sm text-slate-400">
+          <span><strong className="text-slate-100">{reports.length}</strong> {t(language, "reports")}</span>
+          <span className="text-slate-600">·</span>
+          <span><strong className="text-slate-100">{allMarkers.length}</strong> {t(language, "markersTracked")}</span>
+          <span className="text-slate-600">·</span>
+          <span><strong className="text-amber-300">{outOfRangeCount}</strong> {t(language, "outOfRange")}</span>
+          <span className="text-slate-600">·</span>
+          <span>{t(language, "trtStabilityShort")} <strong className="text-cyan-200">{trtStability.score ?? "—"}</strong></span>
         </div>
       ) : null}
 
@@ -252,7 +269,7 @@ const DashboardView = ({
 
       {hasReports ? (
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
-          <div className="space-y-2">
+          <div ref={chartSettingsRef} className="relative space-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="inline-flex items-center whitespace-nowrap px-1 text-xs font-medium text-slate-400 sm:text-sm">
                 {tr("Periode:", "Range:")}
@@ -285,74 +302,93 @@ const DashboardView = ({
                   />
                 </div>
               ) : null}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400 sm:text-sm">
-                {tr("Weergave:", "View:")}
-              </span>
               <button
                 type="button"
-                className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                  dashboardMode === "cards" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                 }`}
-                onClick={() => onDashboardModeChange("cards")}
+                onClick={() => onDashboardViewChange("primary")}
               >
-                {tr("Markerkaarten", "Marker cards")}
+                {tr("Primaire markers", "Primary markers")}
               </button>
               <button
                 type="button"
-                className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                  dashboardMode === "compare2" ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                 }`}
-                onClick={() => onDashboardModeChange("compare2")}
+                onClick={() => onDashboardViewChange("all")}
               >
-                {tr("Vergelijk 2 markers", "Compare 2 markers")}
+                {tr("Alle markers", "All markers")}
               </button>
-
-              <span className="ml-1 inline-flex items-center px-1 text-xs font-medium text-slate-400 sm:ml-2 sm:text-sm">
-                {tr("Preset:", "Preset:")}
-              </span>
-              {(
-                [
-                  ["clinical", tr("Klinisch", "Clinical")],
-                  ["protocol", tr("Protocol", "Protocol")],
-                  ["minimal", tr("Minimaal", "Minimal")]
-                ] as const
-              ).map(([preset, label]) => (
+              <div className="ml-auto">
                 <button
-                  key={preset}
                   type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
-                    currentPreset === preset ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                  onClick={() => setShowChartSettings((current) => !current)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition sm:text-sm ${
+                    showChartSettings ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                   }`}
-                  onClick={() => applyPreset(preset)}
+                  aria-expanded={showChartSettings}
                 >
-                  {label}
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  {tr("Grafiekinstellingen", "Chart settings")}
+                  {showChartSettings ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 </button>
-              ))}
-              {currentPreset === "custom" ? (
-                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 sm:text-sm">
-                  {tr("Aangepast", "Custom")}
-                </span>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => setShowChartSettings((current) => !current)}
-                className={`ml-auto inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition sm:text-sm ${
-                  showChartSettings ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                }`}
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                {tr("Grafiekinstellingen", "Chart settings")}
-                {showChartSettings ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
+              </div>
             </div>
-          </div>
 
-          {showChartSettings ? (
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {showChartSettings ? (
+            <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+              <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Weergavemodus", "View mode")}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-xs ${
+                      dashboardMode === "cards" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                    }`}
+                    onClick={() => onDashboardModeChange("cards")}
+                  >
+                    {tr("Markerkaarten", "Marker cards")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-xs ${
+                      dashboardMode === "compare2" ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                    }`}
+                    onClick={() => onDashboardModeChange("compare2")}
+                  >
+                    {tr("Vergelijk 2 markers", "Compare 2 markers")}
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Preset", "Preset")}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["clinical", tr("Klinisch", "Clinical")],
+                      ["protocol", tr("Protocol", "Protocol")],
+                      ["minimal", tr("Minimaal", "Minimal")]
+                    ] as const
+                  ).map(([preset, label]) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        currentPreset === preset ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => applyPreset(preset)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {currentPreset === "custom" ? (
+                    <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200">
+                      {tr("Aangepast", "Custom")}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Data & schaal", "Data & scale")}</p>
                 <div className="mt-2 space-y-2">
@@ -497,7 +533,7 @@ const DashboardView = ({
               ) : null}
 
               {samplingControlsEnabled ? (
-                <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3 lg:col-span-2">
+                <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Meetcontext", "Sampling context")}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <span className="inline-flex items-center rounded-md bg-slate-800 px-2.5 py-1.25 text-xs text-slate-300 sm:text-sm">
@@ -530,6 +566,7 @@ const DashboardView = ({
               ) : null}
             </div>
           ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -574,27 +611,6 @@ const DashboardView = ({
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
         {hasReports ? (
           <>
-            <div className="mb-3 flex gap-2">
-              <button
-                type="button"
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  dashboardView === "primary" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-                }`}
-                onClick={() => onDashboardViewChange("primary")}
-              >
-                {tr("Primaire markers", "Primary markers")}
-              </button>
-              <button
-                type="button"
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  dashboardView === "all" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300"
-                }`}
-                onClick={() => onDashboardViewChange("all")}
-              >
-                {tr("Alle markers", "All markers")}
-              </button>
-            </div>
-
             {dashboardView === "primary" ? <div className="mb-1" /> : null}
 
             {firstReportVisible ? (

@@ -15,7 +15,6 @@ export interface UploadPanelProps {
 
 const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onUploadIntent, language }: UploadPanelProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
-  const hintId = useId();
   const stageId = useId();
   const stageText = (() => {
     if (processingStage === "reading_text_layer") {
@@ -69,10 +68,10 @@ const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onU
         {...getRootProps({
           role: "button",
           "aria-label": dropzoneLabel,
-          "aria-describedby": `${hintId} ${stageId}`,
+          "aria-describedby": stageId,
           "aria-busy": isProcessing
         })}
-        className="upload-panel-dropzone flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-4 py-4 text-center"
+        className="upload-panel-dropzone flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-center"
         onMouseEnter={onUploadIntent}
         onFocusCapture={onUploadIntent}
         onTouchStart={onUploadIntent}
@@ -80,22 +79,19 @@ const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onU
         <input {...getInputProps()} />
         {isProcessing ? (
           <>
-            <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
-            <p id={stageId} role="status" aria-live="polite" className="text-sm text-slate-200">
+            <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+            <p id={stageId} role="status" aria-live="polite" className="text-xs text-slate-200">
               {stageText}
             </p>
           </>
         ) : (
           <>
-            <UploadCloud className="h-8 w-8 text-cyan-300" />
+            <UploadCloud className="h-6 w-6 text-cyan-300" />
             <div className="max-w-xs">
-              <p className="text-base font-semibold text-slate-100">{tr("Upload lab-PDF", "Upload lab PDF")}</p>
-              <p className="mt-1 text-sm text-slate-300">{tr("Tekst-PDF werkt het best. Scan? Dan gebruiken we OCR.", "Text PDFs work best. Scanned file? We'll use OCR.")}</p>
-              <p className="mt-1.5 inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200">
+              <p className="text-sm font-semibold text-slate-100">{tr("Upload lab-PDF", "Upload lab PDF")}</p>
+              <p className="mt-0.5 text-xs text-slate-300">{tr("Tekst-PDF werkt het best. Scan? Dan gebruiken we OCR.", "Text PDFs work best. Scanned file? We'll use OCR.")}</p>
+              <p className="mt-1 inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200">
                 {tr("Klik of sleep PDF hier", "Click or drop PDF here")}
-              </p>
-              <p id={hintId} className="mt-1.5 text-[11px] text-slate-400">
-                {tr("Mobiel werkt ook: tik om een PDF te kiezen.", "Mobile also works: tap to choose a PDF.")}
               </p>
               <p id={stageId} className="sr-only">
                 {tr("Upload gereed.", "Upload ready.")}
