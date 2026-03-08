@@ -4,13 +4,14 @@ import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
 import { getProtocolCompoundsText, getReportProtocol } from "../protocolUtils";
-import { AppLanguage, LabReport, Protocol } from "../types";
+import { AppLanguage, LabReport, Protocol, UserProfile } from "../types";
 import { createId } from "../utils";
 
 interface ProtocolViewProps {
   protocols: Protocol[];
   reports: LabReport[];
   language: AppLanguage;
+  userProfile: UserProfile;
   isShareMode: boolean;
   onAddProtocol: (protocol: Protocol) => void;
   onUpdateProtocol: (id: string, updates: Partial<Protocol>) => void;
@@ -20,6 +21,7 @@ interface ProtocolViewProps {
 
 const protocolToDraft = (protocol: Protocol): ProtocolDraft => ({
   name: protocol.name,
+  items: protocol.items,
   compounds: protocol.compounds,
   notes: protocol.notes
 });
@@ -28,6 +30,7 @@ const ProtocolView = ({
   protocols,
   reports,
   language,
+  userProfile,
   isShareMode,
   onAddProtocol,
   onUpdateProtocol,
@@ -35,6 +38,28 @@ const ProtocolView = ({
   getProtocolUsageCount
 }: ProtocolViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isProtocolProfile = userProfile === "trt" || userProfile === "enhanced";
+  const entitySingular = isProtocolProfile
+    ? tr("protocol", "protocol")
+    : userProfile === "health"
+      ? tr("interventie", "intervention")
+      : tr("stack", "stack");
+  const entityPlural = isProtocolProfile
+    ? tr("protocollen", "protocols")
+    : userProfile === "health"
+      ? tr("interventies", "interventions")
+      : tr("stacks", "stacks");
+  const entityTitle = isProtocolProfile
+    ? tr("Protocolbeheer", "Protocol management")
+    : userProfile === "health"
+      ? tr("Interventiebeheer", "Intervention management")
+      : tr("Stackbeheer", "Stack management");
+  const entitySummary = isProtocolProfile
+    ? tr("Bewaar compounds als herbruikbare protocollen.", "Store compounds as reusable protocols.")
+    : userProfile === "health"
+      ? tr("Bewaar interventies als herbruikbare plannen.", "Store interventions as reusable plans.")
+      : tr("Bewaar je stack-varianten als herbruikbare plannen.", "Store stack variants as reusable plans.");
+  const itemLabel = isProtocolProfile ? tr("compound", "compound") : tr("item", "item");
 
   const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -50,7 +75,7 @@ const ProtocolView = ({
       return right.createdAt.localeCompare(left.createdAt);
     });
     const latestWithProtocol = sorted.find((report) => getReportProtocol(report, protocols) !== null);
-    return latestWithProtocol?.annotations.protocolId ?? null;
+    return latestWithProtocol?.annotations.interventionId ?? latestWithProtocol?.annotations.protocolId ?? null;
   }, [reports, protocols]);
 
   const startCreate = () => {
@@ -87,21 +112,25 @@ const ProtocolView = ({
   const saveEditor = () => {
     const name = draft.name.trim();
     if (!name) {
-      setFeedback(tr("Geef een protocolnaam op.", "Please enter a protocol name."));
+      setFeedback(tr(`Geef een naam voor dit ${entitySingular}.`, `Please enter a name for this ${entitySingular}.`));
       return;
     }
     if (draft.compounds.length === 0) {
-      setFeedback(tr("Voeg minimaal 1 compound toe.", "Add at least 1 compound."));
+      setFeedback(tr(`Voeg minimaal 1 ${itemLabel} toe.`, `Add at least 1 ${itemLabel}.`));
       return;
     }
 
     if (editorMode === "edit" && editingId) {
       onUpdateProtocol(editingId, {
         name,
+        items: draft.compounds,
         compounds: draft.compounds,
         notes: draft.notes
       });
-      setFeedback(tr("Protocol bijgewerkt.", "Protocol updated."));
+      setFeedback(tr(
+        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} bijgewerkt.`,
+        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} updated.`
+      ));
       setEditorMode(null);
       setEditingId(null);
       setDraft(blankProtocolDraft());
@@ -112,12 +141,16 @@ const ProtocolView = ({
     onAddProtocol({
       id: createId(),
       name,
+      items: draft.compounds,
       compounds: draft.compounds,
       notes: draft.notes,
       createdAt: now,
       updatedAt: now
     });
-    setFeedback(tr("Protocol opgeslagen.", "Protocol saved."));
+    setFeedback(tr(
+      `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} opgeslagen.`,
+      `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} saved.`
+    ));
     setEditorMode(null);
     setEditingId(null);
     setDraft(blankProtocolDraft());
@@ -128,13 +161,8 @@ const ProtocolView = ({
       <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-base font-semibold text-slate-100">{tr("Protocolbeheer", "Protocol management")}</h3>
-            <p className="text-sm text-slate-300">
-              {tr(
-                "Bewaar compounds als herbruikbare protocollen.",
-                "Store compounds as reusable protocols."
-              )}
-            </p>
+            <h3 className="text-base font-semibold text-slate-100">{entityTitle}</h3>
+            <p className="text-sm text-slate-300">{entitySummary}</p>
           </div>
           <button
             type="button"
@@ -142,7 +170,7 @@ const ProtocolView = ({
             onClick={startCreate}
             disabled={isShareMode}
           >
-            <Plus className="h-4 w-4" /> {tr("Nieuw protocol", "New protocol")}
+            <Plus className="h-4 w-4" /> {tr(`Nieuw ${entitySingular}`, `New ${entitySingular}`)}
           </button>
         </div>
       </div>
@@ -151,7 +179,9 @@ const ProtocolView = ({
         <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-3 shadow-soft">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-slate-100">
-              {editorMode === "edit" ? tr("Protocol bewerken", "Edit protocol") : tr("Protocol aanmaken", "Create protocol")}
+              {editorMode === "edit"
+                ? tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} bewerken`, `Edit ${entitySingular}`)
+                : tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} aanmaken`, `Create ${entitySingular}`)}
             </h4>
             <div className="flex items-center gap-2">
               <button
@@ -174,8 +204,8 @@ const ProtocolView = ({
           {editorMode === "edit" && editingId && getProtocolUsageCount(editingId) > 0 ? (
             <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               {tr(
-                `Dit protocol is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Wijzigingen gelden voor toekomstig gebruik.`,
-                `This protocol is linked to ${getProtocolUsageCount(editingId)} reports. Changes apply to future use.`
+                `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Wijzigingen gelden voor toekomstig gebruik.`,
+                `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. Changes apply to future use.`
               )}
             </div>
           ) : null}
@@ -205,7 +235,7 @@ const ProtocolView = ({
 
       {protocols.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400">
-          {tr("Nog geen protocollen opgeslagen.", "No protocols saved yet.")}
+          {tr(`Nog geen ${entityPlural} opgeslagen.`, `No ${entityPlural} saved yet.`)}
         </div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
@@ -223,6 +253,9 @@ const ProtocolView = ({
                     <p className="mt-1 text-sm text-slate-300">{getProtocolCompoundsText(protocol) || "-"}</p>
                     <p className="mt-1 text-xs text-slate-400">
                       {tr("Rapporten", "Reports")}: {usageCount}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {tr("Items", "Items")}: {protocol.compounds.length}
                     </p>
                   </div>
                   {activeProtocolId === protocol.id ? (
@@ -263,7 +296,10 @@ const ProtocolView = ({
                         return;
                       }
                       onDeleteProtocol(protocol.id);
-                      setFeedback(tr("Protocol verwijderd.", "Protocol deleted."));
+                      setFeedback(tr(
+                        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} verwijderd.`,
+                        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} deleted.`
+                      ));
                     }}
                     disabled={isShareMode}
                   >

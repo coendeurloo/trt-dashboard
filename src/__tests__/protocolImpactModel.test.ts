@@ -12,9 +12,19 @@ const mkProtocol = (
 ): Protocol => ({
   id,
   name: id,
+  items: [
+    {
+      name: options.compound ?? "Testosterone Enanthate",
+      dose: String(options.doseMg),
+      doseMg: String(options.doseMg),
+      frequency: options.frequency,
+      route: "IM"
+    }
+  ],
   compounds: [
     {
       name: options.compound ?? "Testosterone Enanthate",
+      dose: String(options.doseMg),
       doseMg: String(options.doseMg),
       frequency: options.frequency,
       route: "IM"

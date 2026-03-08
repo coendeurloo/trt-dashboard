@@ -14,7 +14,7 @@ import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
-import { AppLanguage, AppSettings, DashboardViewMode, LabReport, SymptomCheckIn, TimeRangeKey } from "../types";
+import { AppLanguage, AppSettings, DashboardViewMode, LabReport, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
 
 interface DashboardViewProps {
   reports: LabReport[];
@@ -46,7 +46,7 @@ interface DashboardViewProps {
   chartPointsForMarker: (marker: string) => MarkerSeriesPoint[];
   markerPercentChange: (marker: string) => number | null;
   markerBaselineDelta: (marker: string) => number | null;
-  onLoadDemo: () => void;
+  onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
   isProcessing: boolean;
   checkIns: SymptomCheckIn[];
@@ -135,6 +135,7 @@ const DashboardView = ({
   const unitSystemLabel = (unitSystem: "eu" | "us"): string =>
     unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const hasReports = reports.length > 0;
+  const isGeneralProfile = settings.userProfile === "health" || settings.userProfile === "biohacker";
 
   // Wellbeing nudge: show when no check-ins or last one was ≥7 days ago
   const lastCheckIn = checkIns.length > 0
@@ -163,10 +164,15 @@ const DashboardView = ({
     "Toont duidelijke faseblokken en grenslijnen per protocolfase, zodat je veranderingen direct aan een fase kunt koppelen.",
     "Shows clear phase blocks and boundaries per protocol phase, so you can link marker changes to a phase at a glance."
   );
-  const trtTargetZoneTooltip = tr(
-    "Toont de TRT-streefzone voor markers met een bekende doelband.",
-    "Shows the TRT target zone for markers with a known target band."
-  );
+  const trtTargetZoneTooltip = isGeneralProfile
+    ? tr(
+        "Toont de streefzone voor markers met een bekende doelband.",
+        "Shows the target zone for markers with a known target band."
+      )
+    : tr(
+        "Toont de TRT-streefzone voor markers met een bekende doelband.",
+        "Shows the TRT target zone for markers with a known target band."
+      );
   const longevityZoneTooltip = tr(
     "Toont een conservatievere streefzone gericht op lange termijn risicobeperking.",
     "Shows a more conservative target zone aimed at long-term risk reduction."
@@ -566,7 +572,7 @@ const DashboardView = ({
                     <ToggleSwitch
                       checked={settings.showTrtTargetZone}
                       onChange={(checked) => updateChartVisualSettings({ showTrtTargetZone: checked })}
-                      label={tr("TRT-streefzone", "TRT target zone")}
+                      label={isGeneralProfile ? tr("Streefzone", "Target zone") : tr("TRT-streefzone", "TRT target zone")}
                       tooltip={trtTargetZoneTooltip}
                     />
                     <ToggleSwitch
@@ -742,7 +748,12 @@ const DashboardView = ({
         ) : null}
 
         {reports.length === 0 && !isShareMode ? (
-          <WelcomeHero language={language} onLoadDemo={onLoadDemo} onUploadClick={onUploadClick} />
+          <WelcomeHero
+            language={language}
+            onLoadDemo={onLoadDemo}
+            onUploadClick={onUploadClick}
+            onSetUserProfile={(profile) => onUpdateSettings({ userProfile: profile })}
+          />
         ) : visibleReports.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">
             {firstReportFilteredOut ? (

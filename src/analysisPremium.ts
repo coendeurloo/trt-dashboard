@@ -1,5 +1,6 @@
 import { MarkerAlert, ProtocolImpactSummary, TrtStabilityResult } from "./analytics";
 import type { WellbeingSummary } from "./analysisScope";
+import type { UserProfile } from "./types";
 
 export interface PremiumReportRow {
   date: string;
@@ -53,6 +54,7 @@ export interface SupplementActionabilityDecision {
 }
 
 interface BuildPremiumInsightPackOptions {
+  profile: UserProfile;
   reports: PremiumReportRow[];
   markerTrends: PremiumTrendSignal[];
   alerts: Array<Pick<MarkerAlert, "marker" | "severity">>;
@@ -63,6 +65,7 @@ interface BuildPremiumInsightPackOptions {
 }
 
 interface BuildSupplementActionabilityDecisionOptions {
+  profile: UserProfile;
   generalActionability: {
     actionsNeeded: boolean;
     actionConfidence: "high" | "medium" | "low";
@@ -116,6 +119,7 @@ const parseSupplements = (value: string): string[] => {
 const uniq = <T,>(values: T[]): T[] => Array.from(new Set(values));
 
 export const buildPremiumInsightPack = ({
+  profile: _profile,
   reports,
   markerTrends,
   alerts,
@@ -312,6 +316,7 @@ const markerToSupplementReason = (marker: string): string | null => {
 };
 
 export const buildSupplementActionabilityDecision = ({
+  profile: _profile,
   generalActionability,
   markerTrends,
   alerts,

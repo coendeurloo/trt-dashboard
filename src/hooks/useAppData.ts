@@ -48,6 +48,24 @@ const mergeProtocolsById = (existing: Protocol[], incoming: Protocol[]): Protoco
   return Array.from(byId.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 };
 
+const resolveProtocols = (data: Pick<StoredAppData, "interventions" | "protocols">): Protocol[] =>
+  data.interventions ?? data.protocols ?? [];
+
+const resolveCheckIns = (data: Pick<StoredAppData, "wellbeingEntries" | "checkIns">): SymptomCheckIn[] =>
+  data.wellbeingEntries ?? data.checkIns ?? [];
+
+const withProtocols = <T extends StoredAppData>(data: T, protocols: Protocol[]): T => ({
+  ...data,
+  interventions: protocols,
+  protocols
+});
+
+const withCheckIns = <T extends StoredAppData>(data: T, checkIns: SymptomCheckIn[]): T => ({
+  ...data,
+  wellbeingEntries: checkIns,
+  checkIns
+});
+
 export const detectMarkerMergeSuggestions = (
   incomingCanonicalMarkers: string[],
   existingCanonicalMarkers: string[]
@@ -116,7 +134,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     if (!isShareMode || !sharedData) {
       return;
     }
-    setAppData(sharedData);
+    setAppData(coerceStoredAppData(sharedData));
   }, [isShareMode, sharedData]);
 
   useEffect(() => {
@@ -218,8 +236,14 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
             : annotations.supplementOverrides.length > 0
               ? "anchor"
               : "none";
+      const selectedInterventionId = annotations.interventionId ?? annotations.protocolId ?? null;
+      const selectedInterventionLabel = annotations.interventionLabel ?? annotations.protocol ?? "";
       const normalizedAnnotations: ReportAnnotations = {
         ...annotations,
+        interventionId: selectedInterventionId,
+        interventionLabel: selectedInterventionLabel,
+        protocolId: selectedInterventionId,
+        protocol: selectedInterventionLabel,
         supplementAnchorState: normalizedAnchorState,
         supplementOverrides:
           normalizedAnchorState === "anchor"
@@ -249,10 +273,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => ({
-        ...prev,
-        protocols: mergeProtocolsById(prev.protocols, [protocol])
-      }));
+      setAppData((prev) => withProtocols(prev, mergeProtocolsById(resolveProtocols(prev), [protocol])));
     },
     [isShareMode]
   );
@@ -262,9 +283,10 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => ({
-        ...prev,
-        protocols: prev.protocols.map((protocol) =>
+      setAppData((prev) =>
+        withProtocols(
+          prev,
+          resolveProtocols(prev).map((protocol) =>
           protocol.id === protocolId
             ? {
                 ...protocol,
@@ -273,14 +295,18 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
                 updatedAt: new Date().toISOString()
               }
             : protocol
+          )
         )
-      }));
+      );
     },
     [isShareMode]
   );
 
   const getProtocolUsageCount = useCallback(
-    (protocolId: string): number => appData.reports.filter((report) => report.annotations.protocolId === protocolId).length,
+    (protocolId: string): number =>
+      appData.reports.filter(
+        (report) => (report.annotations.interventionId ?? report.annotations.protocolId ?? null) === protocolId
+      ).length,
     [appData.reports]
   );
 
@@ -289,14 +315,13 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return false;
       }
-      const usageCount = appData.reports.filter((report) => report.annotations.protocolId === protocolId).length;
+      const usageCount = appData.reports.filter(
+        (report) => (report.annotations.interventionId ?? report.annotations.protocolId ?? null) === protocolId
+      ).length;
       if (usageCount > 0) {
         return false;
       }
-      setAppData((prev) => ({
-        ...prev,
-        protocols: prev.protocols.filter((protocol) => protocol.id !== protocolId)
-      }));
+      setAppData((prev) => withProtocols(prev, resolveProtocols(prev).filter((protocol) => protocol.id !== protocolId)));
       return true;
     },
     [appData.reports, isShareMode]
@@ -457,7 +482,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         }
 
         setAppData({
-          ...incoming,
+          ...withCheckIns(withProtocols(incoming, resolveProtocols(incoming)), resolveCheckIns(incoming)),
           settings: {
             ...incoming.settings
           },
@@ -486,14 +511,16 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
           byId.set(report.id, report);
         });
         const merged = normalizeBaselineFlags(sortReportsChronological(Array.from(byId.values())));
+        const mergedProtocols = mergeProtocolsById(resolveProtocols(prev), resolveProtocols(incoming));
+        const mergedCheckIns = [...resolveCheckIns(prev), ...resolveCheckIns(incoming)].sort((left, right) =>
+          left.date.localeCompare(right.date)
+        );
         return {
-          ...prev,
+          ...withCheckIns(withProtocols(prev, mergedProtocols), mergedCheckIns),
           reports: merged,
-          protocols: mergeProtocolsById(prev.protocols, incoming.protocols),
           supplementTimeline: [...prev.supplementTimeline, ...incoming.supplementTimeline].sort(
             (left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name)
           ),
-          checkIns: [...prev.checkIns, ...incoming.checkIns].sort((left, right) => left.date.localeCompare(right.date)),
           markerAliasOverrides: {
             ...prev.markerAliasOverrides,
             ...incoming.markerAliasOverrides
@@ -590,10 +617,12 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => ({
-        ...prev,
-        checkIns: [...prev.checkIns, checkIn].sort((left, right) => left.date.localeCompare(right.date))
-      }));
+      setAppData((prev) =>
+        withCheckIns(
+          prev,
+          [...resolveCheckIns(prev), checkIn].sort((left, right) => left.date.localeCompare(right.date))
+        )
+      );
     },
     [isShareMode]
   );
@@ -603,12 +632,14 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => ({
-        ...prev,
-        checkIns: prev.checkIns
-          .map((checkIn) => (checkIn.id === id ? { ...checkIn, ...updates, id: checkIn.id } : checkIn))
-          .sort((left, right) => left.date.localeCompare(right.date))
-      }));
+      setAppData((prev) =>
+        withCheckIns(
+          prev,
+          resolveCheckIns(prev)
+            .map((checkIn) => (checkIn.id === id ? { ...checkIn, ...updates, id: checkIn.id } : checkIn))
+            .sort((left, right) => left.date.localeCompare(right.date))
+        )
+      );
     },
     [isShareMode]
   );
@@ -618,10 +649,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => ({
-        ...prev,
-        checkIns: prev.checkIns.filter((checkIn) => checkIn.id !== id)
-      }));
+      setAppData((prev) => withCheckIns(prev, resolveCheckIns(prev).filter((checkIn) => checkIn.id !== id)));
     },
     [isShareMode]
   );
@@ -637,7 +665,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         }))
     }));
     const exportPayload = {
-      ...appData,
+      ...withCheckIns(withProtocols(appData, resolveProtocols(appData)), resolveCheckIns(appData)),
       reports: reportsForExport
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });

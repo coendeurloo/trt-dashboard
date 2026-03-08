@@ -76,6 +76,7 @@ describe("ReportsView protocol linking", () => {
       {
         id: "p-1",
         name: "TRT Cypionate 120mg",
+        items: [],
         compounds: [],
         notes: "",
         createdAt: "2024-01-01T00:00:00.000Z",

@@ -4,19 +4,38 @@ import { getEffectiveSupplements, supplementPeriodsToText } from "./supplementUt
 
 export const PROTOCOL_ROUTE_OPTIONS = ["", "IM", "SubQ", "Oral", "Other"] as const;
 
+const getPlanItems = (protocol: Protocol | null): CompoundEntry[] => {
+  if (!protocol) {
+    return [];
+  }
+  if (Array.isArray(protocol.items) && protocol.items.length > 0) {
+    return protocol.items;
+  }
+  return Array.isArray(protocol.compounds) ? protocol.compounds : [];
+};
+
+const getEntryDoseText = (entry: CompoundEntry | null | undefined): string => {
+  if (!entry) {
+    return "";
+  }
+  return (entry.dose ?? entry.doseMg ?? "").trim();
+};
+
 export const getReportProtocol = (report: LabReport, protocols: Protocol[]): Protocol | null => {
-  if (!report.annotations.protocolId) {
+  const linkedId = report.annotations.interventionId ?? report.annotations.protocolId;
+  if (!linkedId) {
     return null;
   }
-  return protocols.find((protocol) => protocol.id === report.annotations.protocolId) ?? null;
+  return protocols.find((protocol) => protocol.id === linkedId) ?? null;
 };
 
 export const getPrimaryProtocolCompound = (protocol: Protocol | null): CompoundEntry | null => {
-  if (!protocol || protocol.compounds.length === 0) {
+  const items = getPlanItems(protocol);
+  if (items.length === 0) {
     return null;
   }
-  const testosterone = protocol.compounds.find((entry) => entry.name.toLowerCase().includes("testosterone"));
-  return testosterone ?? protocol.compounds[0] ?? null;
+  const testosterone = items.find((entry) => entry.name.toLowerCase().includes("testosterone"));
+  return testosterone ?? items[0] ?? null;
 };
 
 export const parseDoseMgFromText = (value: string): number | null => {
@@ -34,7 +53,7 @@ export const getProtocolDoseMgPerWeek = (protocol: Protocol | null): number | nu
   if (!primary) {
     return null;
   }
-  return parseDoseMgFromText(primary.doseMg);
+  return parseDoseMgFromText(getEntryDoseText(primary));
 };
 
 export const getProtocolInjectionFrequency = (protocol: Protocol | null): string => {
@@ -47,16 +66,17 @@ export const getProtocolFrequencyPerWeek = (protocol: Protocol | null): number |
   if (!primary) {
     return null;
   }
-  return frequencyPerWeekFromSelectionOrProtocol(primary.frequency, primary.doseMg);
+  return frequencyPerWeekFromSelectionOrProtocol(primary.frequency, getEntryDoseText(primary));
 };
 
 export const getProtocolCompoundsText = (protocol: Protocol | null): string => {
-  if (!protocol || protocol.compounds.length === 0) {
+  const items = getPlanItems(protocol);
+  if (items.length === 0) {
     return "";
   }
-  return protocol.compounds
+  return items
     .map((entry) => {
-      const dose = entry.doseMg.trim();
+      const dose = getEntryDoseText(entry);
       return dose ? `${entry.name} (${dose})` : entry.name;
     })
     .join(" + ");
@@ -85,6 +105,6 @@ export const getMostRecentlyUsedProtocolId = (reports: LabReport[]): string | nu
     return right.createdAt.localeCompare(left.createdAt);
   });
 
-  const withProtocol = sorted.find((report) => report.annotations.protocolId);
-  return withProtocol?.annotations.protocolId ?? null;
+  const withProtocol = sorted.find((report) => (report.annotations.interventionId ?? report.annotations.protocolId) !== null);
+  return withProtocol?.annotations.interventionId ?? withProtocol?.annotations.protocolId ?? null;
 };

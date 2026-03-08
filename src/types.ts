@@ -31,6 +31,16 @@ export type SupplementAnchorState = "inherit" | "anchor" | "none" | "unknown";
 export type DashboardChartPreset = "clinical" | "protocol" | "minimal" | "custom";
 export type DashboardViewMode = "cards" | "compare2";
 export type AIAnalysisProvider = "auto" | "claude" | "gemini";
+export type UserProfile = "trt" | "enhanced" | "health" | "biohacker";
+export type WellbeingMetricId = "energy" | "mood" | "sleep" | "libido" | "motivation" | "recovery" | "stress" | "focus";
+
+export interface UserProfileConfig {
+  id: UserProfile;
+  labelEn: string;
+  labelNl: string;
+  descriptionEn: string;
+  descriptionNl: string;
+}
 
 export type DosePredictionSource = "personal" | "hybrid" | "study_prior";
 
@@ -49,12 +59,17 @@ export interface SupplementPeriod {
   endDate: string | null;
 }
 
-export interface CompoundEntry {
+export interface InterventionItem {
+  // `dose` is the canonical field; `doseMg` is kept for backward compatibility.
+  dose?: string;
+  // Legacy alias, mirrored from `dose` to keep older code paths stable.
+  doseMg?: string;
   name: string;
-  doseMg: string;
   frequency: string;
   route: string;
 }
+
+export type CompoundEntry = InterventionItem;
 
 export interface DosePriorEvidence {
   citation: string;
@@ -104,8 +119,11 @@ export interface MarkerValue {
 }
 
 export interface ReportAnnotations {
-  protocolId: string | null;
-  protocol: string;
+  interventionId?: string | null;
+  interventionLabel?: string;
+  // Backward-compatible aliases for older snapshots/imports.
+  protocolId?: string | null;
+  protocol?: string;
   supplementAnchorState?: SupplementAnchorState;
   supplementOverrides: SupplementPeriod[] | null;
   symptoms: string;
@@ -113,25 +131,36 @@ export interface ReportAnnotations {
   samplingTiming: SamplingTiming;
 }
 
-export interface Protocol {
+export interface InterventionPlan {
   id: string;
   name: string;
+  items: InterventionItem[];
+  // Legacy alias; keep in sync with `items`.
   compounds: CompoundEntry[];
+  // Legacy key retained for older imports/snapshots.
+  supplements?: SupplementEntry[];
   notes: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface SymptomCheckIn {
+export type Protocol = InterventionPlan;
+
+export interface WellbeingCheckIn {
   id: string;
   date: string;
-  energy: number | null;
-  libido: number | null;
-  mood: number | null;
-  sleep: number | null;
-  motivation: number | null;
+  profileAtEntry?: UserProfile;
+  values?: Partial<Record<WellbeingMetricId, number>>;
+  // Legacy fields, retained for backward compatibility and old components.
+  energy?: number | null;
+  libido?: number | null;
+  mood?: number | null;
+  sleep?: number | null;
+  motivation?: number | null;
   notes: string;
 }
+
+export type SymptomCheckIn = WellbeingCheckIn;
 
 export interface LabReport {
   id: string;
@@ -295,6 +324,7 @@ export interface AppSettings {
   theme: ThemeMode;
   unitSystem: UnitSystem;
   language: AppLanguage;
+  userProfile: UserProfile;
   tooltipDetailMode: "compact" | "full";
   enableSamplingControls: boolean;
   enableCalculatedFreeTestosterone: boolean;
@@ -325,8 +355,12 @@ export interface AppSettings {
 export interface StoredAppData {
   schemaVersion: number;
   reports: LabReport[];
+  interventions: InterventionPlan[];
+  // Legacy alias for backwards compatibility.
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
+  wellbeingEntries: WellbeingCheckIn[];
+  // Legacy alias for backwards compatibility.
   checkIns: SymptomCheckIn[];
   markerAliasOverrides: Record<string, string>;
   settings: AppSettings;

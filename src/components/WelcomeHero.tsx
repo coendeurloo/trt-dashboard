@@ -1,17 +1,22 @@
 import { motion } from "framer-motion";
 import { BarChart3, FileText, Lock, Play, Sparkles, Upload } from "lucide-react";
 import dashboardFirstVisitPreview from "../assets/dashboard-first-visit.png";
+import { USER_PROFILES } from "../data/userProfiles";
 import { trLocale } from "../i18n";
-import { AppLanguage } from "../types";
+import { AppLanguage, UserProfile } from "../types";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface WelcomeHeroProps {
   language: AppLanguage;
-  onLoadDemo: () => void;
+  onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
+  onSetUserProfile: (profile: UserProfile) => void;
 }
 
-const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) => {
+const WelcomeHero = ({ language, onLoadDemo, onUploadClick, onSetUserProfile }: WelcomeHeroProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const [pendingAction, setPendingAction] = useState<"demo" | "upload" | null>(null);
 
   const steps = [
     {
@@ -140,7 +145,61 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
     );
   };
 
+  const continueWithProfile = (profile: UserProfile) => {
+    onSetUserProfile(profile);
+    const action = pendingAction;
+    setPendingAction(null);
+    if (action === "demo") {
+      onLoadDemo(profile);
+      return;
+    }
+    onUploadClick();
+  };
+
+  const profilePickerModal =
+    pendingAction && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4">
+            <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/40 bg-slate-900/95 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-lg font-semibold text-cyan-100">{tr("Wat beschrijft je het beste?", "What best describes you?")}</p>
+                <button
+                  type="button"
+                  onClick={() => setPendingAction(null)}
+                  className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-500"
+                >
+                  {tr("Sluiten", "Close")}
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-slate-300">
+                {tr(
+                  "Kies wat nu het beste past. Geen zorgen, je kunt dit later altijd aanpassen in Instellingen.",
+                  "Pick what fits best for now. Don't worry, you can always change this later in settings."
+                )}
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {USER_PROFILES.map((profile) => (
+                  <button
+                    key={profile.id}
+                    type="button"
+                    onClick={() => continueWithProfile(profile.id)}
+                    className="rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-left transition hover:border-cyan-400/60 hover:bg-cyan-500/10"
+                  >
+                    <p className="text-sm font-semibold text-slate-100">{language === "nl" ? profile.labelNl : profile.labelEn}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {language === "nl" ? profile.descriptionNl : profile.descriptionEn}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
+    <>
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -163,7 +222,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
             <div className="flex flex-col gap-1.5">
               <button
                 type="button"
-                onClick={onLoadDemo}
+                onClick={() => setPendingAction("demo")}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/55 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22 active:scale-[0.98]"
               >
                 <Play className="h-4 w-4" />
@@ -180,7 +239,7 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
             <div className="flex flex-col gap-1.5">
               <button
                 type="button"
-                onClick={onUploadClick}
+                onClick={() => setPendingAction("upload")}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/55 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22 active:scale-[0.98]"
               >
                 <Upload className="h-4 w-4" />
@@ -259,6 +318,8 @@ const WelcomeHero = ({ language, onLoadDemo, onUploadClick }: WelcomeHeroProps) 
         </div>
       </div>
     </motion.section>
+    {profilePickerModal}
+    </>
   );
 };
 

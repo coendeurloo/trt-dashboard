@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAlerts } from "../analytics";
 import { buildProtocolImpactDoseEvents } from "../analytics";
 import { CARDIO_PRIORITY_MARKERS, PRIMARY_MARKERS } from "../constants";
-import { getDemoProtocols, getDemoReports } from "../demoData";
+import { getDemoProtocols, getDemoReports, getDemoSnapshot } from "../demoData";
 
 describe("demo data", () => {
   it("contains multiple protocol transitions for Protocol Impact", () => {
@@ -55,5 +55,24 @@ describe("demo data", () => {
     );
 
     expect(primaryActionableMarkers).toEqual(["Estradiol"]);
+  });
+
+  it("provides persona-specific demo snapshots with matching primary markers", () => {
+    const profiles = ["trt", "enhanced", "health", "biohacker"] as const;
+    const snapshots = profiles.map((profile) => ({ profile, snapshot: getDemoSnapshot(profile) }));
+
+    snapshots.forEach(({ profile, snapshot }) => {
+      expect(snapshot.reports.length).toBeGreaterThan(0);
+      const markerNames = new Set(snapshot.reports.flatMap((report) => report.markers.map((marker) => marker.canonicalMarker)));
+      expect(snapshot.primaryMarkersSelection.length).toBe(6);
+      snapshot.primaryMarkersSelection.forEach((marker) => {
+        expect(markerNames.has(marker)).toBe(true);
+      });
+      if (profile === "health") {
+        expect(snapshot.protocols.length).toBe(0);
+      } else {
+        expect(snapshot.protocols.length).toBeGreaterThan(0);
+      }
+    });
   });
 });

@@ -1,10 +1,11 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
+import { USER_PROFILES } from "../data/userProfiles";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
-import { AppLanguage, AppSettings, LabReport } from "../types";
+import { AppLanguage, AppSettings, LabReport, UserProfile } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
 
 interface MarkerUsageRow {
@@ -228,6 +229,34 @@ const SettingsView = ({
     <section className="space-y-3 fade-in">
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h2>
+        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+          <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Profiel", "Profile")}</span>
+          <p className="mt-1 text-xs text-slate-400">
+            {tr("Bepaalt toon, focusmarkers en AI-context. Later altijd aanpasbaar.", "Sets tone, focus markers, and AI context. You can change this any time.")}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {USER_PROFILES.map((profile) => {
+              const active = settings.userProfile === profile.id;
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  onClick={() => onUpdateSettings({ userProfile: profile.id as UserProfile })}
+                  className={`rounded-lg border p-3 text-left transition ${
+                    active
+                      ? "border-cyan-400/70 bg-cyan-500/15 text-cyan-100"
+                      : "border-slate-700 bg-slate-900/70 text-slate-200 hover:border-slate-500"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">{isNl ? profile.labelNl : profile.labelEn}</p>
+                  <p className={`mt-1 text-xs leading-5 ${active ? "text-cyan-200/90" : "text-slate-400"}`}>
+                    {isNl ? profile.descriptionNl : profile.descriptionEn}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
             <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Thema", "Theme")}</span>

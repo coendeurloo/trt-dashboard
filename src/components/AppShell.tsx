@@ -18,8 +18,9 @@ import appIcon from "../../favicon.svg";
 import labtrackerLogoDark from "../assets/labtracker-logo-dark.svg";
 import labtrackerLogoLight from "../assets/labtracker-logo-light.svg";
 import { APP_LANGUAGE_OPTIONS, getTabLabel, t } from "../i18n";
+import { getPersonaNavSectionLabel, getPersonaSidebarCurrentLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
 import { formatDate } from "../utils";
-import { AppSettings, CompoundEntry, ParserStage, TabKey } from "../types";
+import { AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
 import MobileNavDrawer from "./MobileNavDrawer";
 import UploadPanel from "./UploadPanel";
 
@@ -34,10 +35,12 @@ export interface AppShellState {
   quickUploadDisabled: boolean;
   language: AppSettings["language"];
   theme: AppSettings["theme"];
+  userProfile: UserProfile;
   isShareMode: boolean;
   isNl: boolean;
   sharedSnapshotGeneratedAt: string | null;
   hasReports: boolean;
+  latestReportDate: string | null;
   markersTrackedCount: number;
   stabilityScore: number | null;
   activeProtocolCompound: CompoundEntry | null;
@@ -92,10 +95,12 @@ const AppShell = ({
     quickUploadDisabled,
     language,
     theme,
+    userProfile,
     isShareMode,
     isNl,
     sharedSnapshotGeneratedAt,
     hasReports,
+    latestReportDate,
     markersTrackedCount,
     stabilityScore,
     activeProtocolCompound,
@@ -123,7 +128,11 @@ const AppShell = ({
   } = actions;
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
-    isOnboardingLocked && key !== "dashboard" && key !== "settings";
+    isOnboardingLocked && key !== "dashboard";
+  const isProtocolProfile = userProfile === "trt" || userProfile === "enhanced";
+  const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
+  const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
+  const currentPlanLabel = getPersonaSidebarCurrentLabel(userProfile, language);
 
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
     if (!visibleTabKeys.has(key)) {
@@ -177,7 +186,7 @@ const AppShell = ({
         }`}
       >
         {icon}
-        <span>{getTabLabel(key, language)}</span>
+        <span>{getPersonaTabLabel(userProfile, key, language, getTabLabel(key, language))}</span>
         {isLocked ? (
           <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700/80 bg-slate-900/70 text-slate-500">
             <Lock className="h-3 w-3" />
@@ -209,7 +218,7 @@ const AppShell = ({
       visibleTabKeys.has("protocolImpact") ||
       visibleTabKeys.has("doseResponse") ? (
         <>
-          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Protocol</p>
+          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>{protocolSectionLabel}</p>
           {renderTabButton("protocol", onAfterNavigate)}
           {renderTabButton("supplements", onAfterNavigate)}
           {renderTabButton("protocolImpact", onAfterNavigate)}
@@ -317,12 +326,27 @@ const AppShell = ({
             alt="LabTracker"
             className="brand-logo mx-auto w-full max-w-[230px]"
           />
-          {hasReports && activeProtocolCompound ? (
+          {hasReports ? (
             <div className="sidebar-protocol-card mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tr("Huidig protocol", "Current protocol")}</p>
-              <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
-                {activeProtocolCompound.name} {activeProtocolCompound.doseMg} mg
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                {activeProtocolCompound ? currentPlanLabel : tr("Tracking", "Tracking")}
               </p>
+              {activeProtocolCompound ? (
+                <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
+                  {activeProtocolCompound.name} {activeProtocolCompound.dose}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
+                    {tr(`${markersTrackedCount} markers gevolgd`, `${markersTrackedCount} markers tracked`)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {latestReportDate
+                      ? tr(`Laatste upload: ${formatDate(latestReportDate)}`, `Last upload: ${formatDate(latestReportDate)}`)
+                      : tr("Nog geen uploads", "No uploads yet")}
+                  </p>
+                </>
+              )}
               {outOfRangeCount > 0 ? (
                 <p className="mt-2 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
                   {tr(
@@ -452,7 +476,7 @@ const AppShell = ({
                             aria-label={tr("Open Stabiliteitsindex", "Open Stability Index")}
                             className="inline-flex items-center gap-2 rounded-full border border-slate-600/75 bg-slate-800/70 px-3 py-1 text-slate-200 transition hover:border-slate-500/80 hover:bg-slate-800/90"
                           >
-                            <span className="text-xs font-medium sm:text-sm">{t(language, "trtStabilityShort")}</span>
+                            <span className="text-xs font-medium sm:text-sm">{stabilityLabel}</span>
                             <strong className="text-base font-semibold leading-none text-amber-400 sm:text-lg">{stabilityScore ?? "—"}</strong>
                           </button>
                         </div>

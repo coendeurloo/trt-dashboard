@@ -52,6 +52,12 @@ const buildSuggestions = (value: string, options: string[]): string[] => {
   return [...startsWith, ...includes].slice(0, AUTOCOMPLETE_MAX_OPTIONS);
 };
 
+const syncDraftItems = (draft: ProtocolDraft, compounds: CompoundEntry[]): ProtocolDraft => ({
+  ...draft,
+  compounds,
+  items: compounds
+});
+
 interface ProtocolEditorProps {
   value: ProtocolDraft;
   language: AppLanguage;
@@ -75,18 +81,17 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
       return;
     }
 
-    onChange({
-      ...value,
-      compounds: [
-        ...value.compounds,
-        {
-          name,
-          doseMg: compoundDoseInput.trim(),
-          frequency: normalizeInjectionFrequency(compoundFrequencyInput),
-          route: compoundRouteInput.trim()
-        }
-      ]
-    });
+    const nextCompounds = [
+      ...(value.compounds.length > 0 ? value.compounds : value.items),
+      {
+        name,
+        dose: compoundDoseInput.trim(),
+        doseMg: compoundDoseInput.trim(),
+        frequency: normalizeInjectionFrequency(compoundFrequencyInput),
+        route: compoundRouteInput.trim()
+      }
+    ];
+    onChange(syncDraftItems(value, nextCompounds));
 
     setCompoundNameInput("");
     setCompoundDoseInput("");
@@ -96,24 +101,23 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   };
 
   const updateCompound = (index: number, patch: Partial<CompoundEntry>) => {
-    onChange({
-      ...value,
-      compounds: value.compounds.map((compound, compoundIndex) =>
-        compoundIndex === index
-          ? {
-              ...compound,
-              ...patch
-            }
-          : compound
-      )
-    });
+    const base = value.compounds.length > 0 ? value.compounds : value.items;
+    const nextCompounds = base.map((compound, compoundIndex) =>
+      compoundIndex === index
+        ? {
+            ...compound,
+            ...patch,
+            dose: patch.dose ?? patch.doseMg ?? compound.dose ?? compound.doseMg,
+            doseMg: patch.doseMg ?? patch.dose ?? compound.doseMg ?? compound.dose
+          }
+        : compound
+    );
+    onChange(syncDraftItems(value, nextCompounds));
   };
 
   const removeCompound = (index: number) => {
-    onChange({
-      ...value,
-      compounds: value.compounds.filter((_, compoundIndex) => compoundIndex !== index)
-    });
+    const base = value.compounds.length > 0 ? value.compounds : value.items;
+    onChange(syncDraftItems(value, base.filter((_, compoundIndex) => compoundIndex !== index)));
   };
 
   return (
@@ -218,10 +222,10 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
         </p>
 
         <div className="mt-2 space-y-2">
-          {value.compounds.length === 0 ? (
+          {(value.compounds.length > 0 ? value.compounds : value.items).length === 0 ? (
             <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
           ) : (
-            value.compounds.map((compound, index) => (
+            (value.compounds.length > 0 ? value.compounds : value.items).map((compound, index) => (
               <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
@@ -231,9 +235,12 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
                 <input
-                  value={compound.doseMg}
-                  onChange={(event) => updateCompound(index, { doseMg: event.target.value })}
-                  onBlur={(event) => updateCompound(index, { doseMg: normalizeDoseToWeekly(event.target.value) })}
+                  value={compound.dose || compound.doseMg}
+                  onChange={(event) => updateCompound(index, { dose: event.target.value, doseMg: event.target.value })}
+                  onBlur={(event) => {
+                    const normalizedDose = normalizeDoseToWeekly(event.target.value);
+                    updateCompound(index, { dose: normalizedDose, doseMg: normalizedDose });
+                  }}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                   placeholder={tr("Totale weekdosis", "Total weekly dose")}
                 />

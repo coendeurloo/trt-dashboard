@@ -21,10 +21,12 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     quickUploadDisabled: false,
     language: "en",
     theme: "dark",
+    userProfile: "trt",
     isShareMode: false,
     isNl: false,
     sharedSnapshotGeneratedAt: null,
     hasReports: false,
+    latestReportDate: null,
     markersTrackedCount: 0,
     stabilityScore: null,
     activeProtocolCompound: null,
@@ -153,7 +155,7 @@ describe("AppShell onboarding lock", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps only Dashboard and Settings enabled before the first upload", () => {
+  it("keeps only Dashboard enabled before the first upload", () => {
     const props = buildProps();
     render(
       <AppShell {...props}>
@@ -162,7 +164,7 @@ describe("AppShell onboarding lock", () => {
     );
 
     expect((screen.getByRole("button", { name: "Dashboard" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Settings" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Settings" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Protocols" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Supplements" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /AI Lab Analysis/i }) as HTMLButtonElement).disabled).toBe(true);
@@ -195,6 +197,6 @@ describe("AppShell onboarding lock", () => {
     expect(protocolButtons.length).toBeGreaterThan(1);
     expect(settingsButtons.length).toBeGreaterThan(1);
     protocolButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
-    settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(false));
+    settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
   });
 });

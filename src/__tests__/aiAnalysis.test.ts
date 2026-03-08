@@ -422,7 +422,7 @@ describe("analyzeLabDataWithClaude", () => {
     });
 
     expect(capturedPrompt).toContain(
-      "State no changes are recommended and briefly explain why the current stack appears adequate, citing the specific signals that support this."
+      "If the current stack looks appropriate given the data, say so briefly and explain which signals confirm it."
     );
     expect(result.actionsNeeded).toBe(false);
     expect(result.supplementActionsNeeded).toBe(false);
@@ -485,7 +485,7 @@ describe("analyzeLabDataWithClaude", () => {
       }
     });
 
-    expect(capturedPrompt).toContain("## Supplement Changes (for doctor discussion)");
+    expect(capturedPrompt).toContain("## Supplement tweaks");
     expect(result.actionsNeeded).toBe(true);
     expect(result.supplementActionsNeeded).toBe(true);
     expect(result.supplementAdviceIncluded).toBe(true);
@@ -577,6 +577,6 @@ describe("analyzeLabDataWithClaude", () => {
     expect(result.supplementAdviceIncluded).toBe(false);
     expect(result.text.toLowerCase()).not.toContain("supplement advice");
     expect(result.text.toLowerCase()).not.toContain("supplement changes");
-    expect(result.text).toContain("What Matters Most Now");
+    expect(result.text).toContain("What to focus on");
   });
 });

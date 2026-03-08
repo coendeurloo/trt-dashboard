@@ -8,7 +8,9 @@ import {
   ReportAnnotations,
   StoredAppData,
   SupplementPeriod,
-  SymptomCheckIn
+  SymptomCheckIn,
+  UserProfile,
+  WellbeingMetricId
 } from "./types";
 import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "./markerNormalization";
 import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
@@ -27,8 +29,10 @@ declare global {
 
 type PartialAppData = Partial<StoredAppData> & {
   reports?: Array<Partial<LabReport> & { markers?: Array<Partial<MarkerValue>> }>;
+  interventions?: Array<Partial<Protocol>>;
   protocols?: Array<Partial<Protocol>>;
   supplementTimeline?: Array<Partial<SupplementPeriod>>;
+  wellbeingEntries?: Array<Partial<SymptomCheckIn>>;
   checkIns?: Array<Partial<SymptomCheckIn>>;
   markerAliasOverrides?: Record<string, string>;
   settings?: Partial<AppSettings>;
@@ -44,8 +48,10 @@ const getStorage = (): Storage | null => {
 const createDefaultData = (): StoredAppData => ({
   schemaVersion: APP_SCHEMA_VERSION,
   reports: [],
+  interventions: [],
   protocols: [],
   supplementTimeline: [],
+  wellbeingEntries: [],
   checkIns: [],
   markerAliasOverrides: {},
   settings: DEFAULT_SETTINGS
@@ -141,6 +147,28 @@ const normalizeScore = (value: unknown): number | null => {
   return rounded;
 };
 
+const normalizeUserProfile = (value: unknown, fallback: UserProfile = DEFAULT_SETTINGS.userProfile): UserProfile => {
+  return value === "trt" || value === "enhanced" || value === "health" || value === "biohacker" ? value : fallback;
+};
+
+const normalizeWellbeingValues = (value: unknown): Partial<Record<WellbeingMetricId, number>> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const keys: WellbeingMetricId[] = ["energy", "mood", "sleep", "libido", "motivation", "recovery", "stress", "focus"];
+  return keys.reduce(
+    (acc, key) => {
+      const normalized = normalizeScore(source[key]);
+      if (normalized !== null) {
+        acc[key] = normalized;
+      }
+      return acc;
+    },
+    {} as Partial<Record<WellbeingMetricId, number>>
+  );
+};
+
 const normalizeSymptomCheckIn = (value: unknown): SymptomCheckIn | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -150,14 +178,32 @@ const normalizeSymptomCheckIn = (value: unknown): SymptomCheckIn | null => {
   if (!date) {
     return null;
   }
+  const normalizedValues = normalizeWellbeingValues((row as unknown as { values?: unknown }).values);
+  const energy = normalizeScore(row.energy);
+  const libido = normalizeScore(row.libido);
+  const mood = normalizeScore(row.mood);
+  const sleep = normalizeScore(row.sleep);
+  const motivation = normalizeScore(row.motivation);
+
+  const values: Partial<Record<WellbeingMetricId, number>> = {
+    ...normalizedValues,
+    ...(energy !== null ? { energy } : {}),
+    ...(mood !== null ? { mood } : {}),
+    ...(sleep !== null ? { sleep } : {}),
+    ...(libido !== null ? { libido } : {}),
+    ...(motivation !== null ? { motivation } : {})
+  };
+
   return {
     id: String(row.id ?? createId()),
     date,
-    energy: normalizeScore(row.energy),
-    libido: normalizeScore(row.libido),
-    mood: normalizeScore(row.mood),
-    sleep: normalizeScore(row.sleep),
-    motivation: normalizeScore(row.motivation),
+    profileAtEntry: normalizeUserProfile((row as unknown as { profileAtEntry?: unknown }).profileAtEntry),
+    values,
+    energy: values.energy ?? null,
+    libido: values.libido ?? null,
+    mood: values.mood ?? null,
+    sleep: values.sleep ?? null,
+    motivation: values.motivation ?? null,
     notes: String(row.notes ?? "")
   };
 };
@@ -171,9 +217,11 @@ const normalizeCompoundEntry = (value: unknown): CompoundEntry | null => {
   if (!name) {
     return null;
   }
+  const dose = String((row as Partial<CompoundEntry> & { dose?: unknown }).dose ?? row.doseMg ?? "").trim();
   return {
     name,
-    doseMg: String(row.doseMg ?? "").trim(),
+    dose,
+    doseMg: dose,
     frequency: String(row.frequency ?? "unknown").trim() || "unknown",
     route: String(row.route ?? "").trim()
   };
@@ -190,13 +238,22 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
     return null;
   }
 
-  const compounds = Array.isArray(value.compounds)
-    ? value.compounds.map((entry) => normalizeCompoundEntry(entry)).filter((entry): entry is CompoundEntry => entry !== null)
-    : [];
+  const rawItems = Array.isArray((value as Partial<Protocol> & { items?: unknown[] }).items)
+    ? ((value as Partial<Protocol> & { items?: unknown[] }).items ?? [])
+    : Array.isArray(value.compounds)
+      ? value.compounds
+      : [];
+
+  const items = rawItems
+    .map((entry) => normalizeCompoundEntry(entry))
+    .filter((entry): entry is CompoundEntry => entry !== null);
+
+  const compounds = items;
 
   return {
     id,
     name,
+    items,
     compounds,
     notes: String(value.notes ?? ""),
     createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : new Date().toISOString(),
@@ -205,8 +262,13 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
 };
 
 const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
+  const interventionIdRaw = (annotations as Partial<ReportAnnotations> & { interventionId?: unknown })?.interventionId;
   const protocolIdRaw = annotations?.protocolId;
-  const protocolId = typeof protocolIdRaw === "string" && protocolIdRaw.trim().length > 0 ? protocolIdRaw : null;
+  const selectedId = interventionIdRaw ?? protocolIdRaw;
+  const interventionId = typeof selectedId === "string" && selectedId.trim().length > 0 ? selectedId : null;
+  const interventionLabelRaw = (annotations as Partial<ReportAnnotations> & { interventionLabel?: unknown })?.interventionLabel;
+  const selectedLabel = interventionLabelRaw ?? annotations?.protocol;
+  const interventionLabel = String(selectedLabel ?? "");
   const normalizedOverrides = normalizeSupplementOverrides(annotations?.supplementOverrides);
   const supplementAnchorState = normalizeSupplementAnchorState(annotations?.supplementAnchorState, normalizedOverrides);
   const supplementOverrides =
@@ -219,8 +281,10 @@ const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportA
         : null;
 
   return {
-    protocolId,
-    protocol: String(annotations?.protocol ?? ""),
+    interventionId,
+    interventionLabel,
+    protocolId: interventionId,
+    protocol: interventionLabel,
     supplementAnchorState,
     supplementOverrides,
     symptoms: String(annotations?.symptoms ?? ""),
@@ -619,6 +683,13 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.aiAnalysisProvider === "auto" || rest.aiAnalysisProvider === "claude" || rest.aiAnalysisProvider === "gemini"
       ? rest.aiAnalysisProvider
       : DEFAULT_SETTINGS.aiAnalysisProvider;
+  const userProfile =
+    rest.userProfile === "trt" ||
+    rest.userProfile === "enhanced" ||
+    rest.userProfile === "health" ||
+    rest.userProfile === "biohacker"
+      ? rest.userProfile
+      : DEFAULT_SETTINGS.userProfile;
   const primaryMarkersSelection = Array.isArray(rest.primaryMarkersSelection)
     ? Array.from(
         new Set(
@@ -645,7 +716,8 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     aiCostMode,
     aiAutoImproveEnabled: typeof rest.aiAutoImproveEnabled === "boolean" ? rest.aiAutoImproveEnabled : DEFAULT_SETTINGS.aiAutoImproveEnabled,
     parserDebugMode,
-    primaryMarkersSelection
+    primaryMarkersSelection,
+    userProfile
   };
 
   const inferredPreset = inferDashboardChartPresetFromSettings({
@@ -686,8 +758,13 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
   setMarkerAliasOverrides(markerAliasOverrides);
 
   const reports = Array.isArray(raw.reports) ? raw.reports.map((report) => normalizeReport(report)).filter((item): item is LabReport => item !== null) : [];
-  const protocols = Array.isArray(raw.protocols)
-    ? raw.protocols
+  const rawInterventions = Array.isArray(raw.interventions)
+    ? raw.interventions
+    : Array.isArray(raw.protocols)
+      ? raw.protocols
+      : [];
+
+  const interventions = rawInterventions
         .map((protocol) => normalizeProtocol(protocol))
         .filter((protocol): protocol is Protocol => protocol !== null)
         .reduce((deduped, protocol) => {
@@ -697,19 +774,23 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
           deduped.push(protocol);
           return deduped;
         }, [] as Protocol[])
-    : [];
+  ;
   const supplementTimeline = Array.isArray(raw.supplementTimeline)
     ? raw.supplementTimeline
         .map((entry) => normalizeSupplementPeriod(entry))
         .filter((entry): entry is SupplementPeriod => entry !== null)
         .sort((left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
     : [];
-  const checkIns = Array.isArray(raw.checkIns)
-    ? raw.checkIns
+  const rawWellbeingEntries = Array.isArray(raw.wellbeingEntries)
+    ? raw.wellbeingEntries
+    : Array.isArray(raw.checkIns)
+      ? raw.checkIns
+      : [];
+
+  const wellbeingEntries = rawWellbeingEntries
         .map((entry) => normalizeSymptomCheckIn(entry))
         .filter((entry): entry is SymptomCheckIn => entry !== null)
-        .sort((left, right) => left.date.localeCompare(right.date))
-    : [];
+        .sort((left, right) => left.date.localeCompare(right.date));
 
   // Allow multiple baselines only when they do not overlap by marker.
   const normalizedReports = normalizeBaselineFlagsByMarkerOverlap(reports);
@@ -717,9 +798,11 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
   return {
     schemaVersion: APP_SCHEMA_VERSION,
     reports: normalizedReports,
-    protocols,
+    interventions,
+    protocols: interventions,
     supplementTimeline,
-    checkIns,
+    wellbeingEntries,
+    checkIns: wellbeingEntries,
     markerAliasOverrides,
     settings: normalizeSettings(raw.settings)
   };
@@ -752,7 +835,19 @@ export const saveAppData = (data: StoredAppData): void => {
   if (!storage) {
     return;
   }
-  storage.setItem(APP_STORAGE_KEY, JSON.stringify({ ...data, schemaVersion: APP_SCHEMA_VERSION }));
+  const interventions = Array.isArray(data.interventions) ? data.interventions : data.protocols;
+  const wellbeingEntries = Array.isArray(data.wellbeingEntries) ? data.wellbeingEntries : data.checkIns;
+  storage.setItem(
+    APP_STORAGE_KEY,
+    JSON.stringify({
+      ...data,
+      schemaVersion: APP_SCHEMA_VERSION,
+      interventions,
+      protocols: interventions,
+      wellbeingEntries,
+      checkIns: wellbeingEntries
+    })
+  );
 };
 
 export const loadAnalystMemory = (): AnalystMemory | null => {

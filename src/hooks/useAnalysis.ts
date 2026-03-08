@@ -135,6 +135,7 @@ export const useAnalysis = ({
         protocols,
         supplementTimeline,
         unitSystem: settings.unitSystem,
+        profile: settings.userProfile,
         memory: analystMemory,
         language,
         analysisType,

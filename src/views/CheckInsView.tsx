@@ -1,59 +1,35 @@
-import { useState, useMemo } from "react";
-import { format, parseISO, differenceInDays } from "date-fns";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend
-} from "recharts";
-import type { AppLanguage, SymptomCheckIn } from "../types";
+import { useMemo, useState } from "react";
+import { differenceInDays, format, parseISO } from "date-fns";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { trLocale } from "../i18n";
-
-// ─── Emoji scale helpers ─────────────────────────────────────────────────────
+import { AppLanguage, SymptomCheckIn, UserProfile, WellbeingMetricId } from "../types";
+import { getCheckInAverage, getCheckInMetricValue, WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
 
 const SCORE_EMOJIS: Record<number, string> = {
-  1: "😫", 2: "😩", 3: "😟", 4: "😕", 5: "😐",
-  6: "🙂", 7: "😊", 8: "😄", 9: "😁", 10: "🤩"
+  1: "😫",
+  2: "😩",
+  3: "😟",
+  4: "😕",
+  5: "😐",
+  6: "🙂",
+  7: "😊",
+  8: "😄",
+  9: "😁",
+  10: "🤩"
 };
 
-function scoreToEmoji(score: number | null): string {
+const scoreToEmoji = (score: number | null): string => {
   if (score === null) return "—";
   return SCORE_EMOJIS[Math.round(score)] ?? "😐";
-}
-
-const averageScore = (checkIn: SymptomCheckIn): number | null => {
-  const values = [checkIn.energy, checkIn.mood, checkIn.sleep, checkIn.libido, checkIn.motivation].filter(
-    (value): value is number => value !== null
-  );
-  if (values.length === 0) {
-    return null;
-  }
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
 };
 
-// ─── Metric config ────────────────────────────────────────────────────────────
-
-interface MetricConfig {
-  key: keyof Pick<SymptomCheckIn, "energy" | "libido" | "mood" | "sleep" | "motivation">;
-  labelNl: string;
-  labelEn: string;
-  icon: string;
-  color: string;
-}
-
-const METRICS: MetricConfig[] = [
-  { key: "energy",     labelNl: "Energie",     labelEn: "Energy",     icon: "⚡", color: "#06b6d4" },
-  { key: "mood",       labelNl: "Stemming",     labelEn: "Mood",       icon: "💭", color: "#a855f7" },
-  { key: "sleep",      labelNl: "Slaap",        labelEn: "Sleep",      icon: "🌙", color: "#3b82f6" },
-  { key: "libido",     labelNl: "Libido",       labelEn: "Libido",     icon: "❤️", color: "#ec4899" },
-  { key: "motivation", labelNl: "Motivatie",    labelEn: "Motivation", icon: "🎯", color: "#f97316" }
-];
-
-// ─── Emoji Slider ─────────────────────────────────────────────────────────────
+const toLegacyFields = (values: Partial<Record<WellbeingMetricId, number>>) => ({
+  energy: values.energy ?? null,
+  mood: values.mood ?? null,
+  sleep: values.sleep ?? null,
+  libido: values.libido ?? null,
+  motivation: values.motivation ?? null
+});
 
 interface EmojiSliderProps {
   value: number | null;
@@ -86,10 +62,10 @@ const EmojiSlider = ({ value, onChange, label, icon, color }: EmojiSliderProps) 
           max={10}
           step={1}
           value={current}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(event) => onChange(Number(event.target.value))}
           className="checkin-slider h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-700 outline-none"
           style={{
-            background: `linear-gradient(to right, ${color} 0%, ${color} ${(current - 1) / 9 * 100}%, #334155 ${(current - 1) / 9 * 100}%, #334155 100%)`
+            background: `linear-gradient(to right, ${color} 0%, ${color} ${((current - 1) / 9) * 100}%, #334155 ${((current - 1) / 9) * 100}%, #334155 100%)`
           }}
         />
       </div>
@@ -101,82 +77,83 @@ const EmojiSlider = ({ value, onChange, label, icon, color }: EmojiSliderProps) 
   );
 };
 
-// ─── Check-in form ────────────────────────────────────────────────────────────
-
 interface CheckInFormProps {
+  userProfile: UserProfile;
   initial?: SymptomCheckIn;
   onSave: (data: Omit<SymptomCheckIn, "id">) => void;
   onCancel: () => void;
   language: AppLanguage;
 }
 
-const CheckInForm = ({ initial, onSave, onCancel, language }: CheckInFormProps) => {
+const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: CheckInFormProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const today = new Date().toISOString().slice(0, 10);
-
-  const [date, setDate]         = useState(initial?.date ?? today);
-  const [energy, setEnergy]     = useState<number | null>(initial?.energy ?? 5);
-  const [mood, setMood]         = useState<number | null>(initial?.mood ?? 5);
-  const [sleep, setSleep]       = useState<number | null>(initial?.sleep ?? 5);
-  const [libido, setLibido]     = useState<number | null>(initial?.libido ?? 5);
-  const [motivation, setMotivation] = useState<number | null>(initial?.motivation ?? 5);
-  const [notes, setNotes]       = useState(initial?.notes ?? "");
-
-  const setters: Record<string, (v: number) => void> = {
-    energy: setEnergy, mood: setMood, sleep: setSleep,
-    libido: setLibido, motivation: setMotivation
-  };
-  const values: Record<string, number | null> = { energy, mood, sleep, libido, motivation };
+  const metrics = WELLBEING_PRESETS[userProfile];
+  const [date, setDate] = useState(initial?.date ?? today);
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [values, setValues] = useState<Partial<Record<WellbeingMetricId, number>>>(() =>
+    metrics.reduce(
+      (acc, metricId) => {
+        acc[metricId] = getCheckInMetricValue(initial ?? ({} as SymptomCheckIn), metricId) ?? 5;
+        return acc;
+      },
+      {} as Partial<Record<WellbeingMetricId, number>>
+    )
+  );
 
   const handleSave = () => {
-    onSave({ date, energy, mood, sleep, libido, motivation, notes });
+    const payload = {
+      date,
+      profileAtEntry: userProfile,
+      values,
+      ...toLegacyFields(values),
+      notes
+    };
+    onSave(payload);
   };
 
   return (
     <div className="app-teal-glow-surface rounded-xl border border-slate-700/70 bg-slate-900/60 p-5">
-      {/* Date */}
       <div className="mb-5">
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {tr("Datum", "Date")}
-        </label>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Datum", "Date")}</label>
         <input
           type="date"
           value={date}
           max={today}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(event) => setDate(event.target.value)}
           className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
         />
       </div>
 
-      {/* Sliders */}
       <div className="mb-5 flex flex-col gap-5">
-        {METRICS.map((m) => (
-          <EmojiSlider
-            key={m.key}
-            value={values[m.key] as number | null}
-            onChange={setters[m.key]}
-            label={trLocale(language, m.labelNl, m.labelEn)}
-            icon={m.icon}
-            color={m.color}
-          />
-        ))}
+        {metrics.map((metricId) => {
+          const metric = WELLBEING_METRICS[metricId];
+          return (
+            <EmojiSlider
+              key={metricId}
+              value={values[metricId] ?? null}
+              onChange={(value) => setValues((current) => ({ ...current, [metricId]: value }))}
+              label={trLocale(language, metric.labelNl, metric.labelEn)}
+              icon={metric.icon}
+              color={metric.color}
+            />
+          );
+        })}
       </div>
 
-      {/* Notes */}
       <div className="mb-5">
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           {tr("Notities (optioneel)", "Notes (optional)")}
         </label>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(event) => setNotes(event.target.value)}
           rows={2}
           placeholder={tr("Hoe voelde je je vandaag?", "How were you feeling today?")}
           className="w-full resize-none rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
         />
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2">
         <button
           type="button"
@@ -197,40 +174,33 @@ const CheckInForm = ({ initial, onSave, onCancel, language }: CheckInFormProps) 
   );
 };
 
-// ─── History card ─────────────────────────────────────────────────────────────
-
 interface CheckInCardProps {
   checkIn: SymptomCheckIn;
-  onEdit: () => void;
-  onDelete: () => void;
   language: AppLanguage;
   isEditing: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
   onSaveEdit: (data: Omit<SymptomCheckIn, "id">) => void;
   onCancelEdit: () => void;
 }
 
-const CheckInCard = ({
-  checkIn, onEdit, onDelete, language, isEditing, onSaveEdit, onCancelEdit
-}: CheckInCardProps) => {
+const CheckInCard = ({ checkIn, language, isEditing, onEdit, onDelete, onSaveEdit, onCancelEdit }: CheckInCardProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const avg = averageScore(checkIn);
+  const avg = getCheckInAverage(checkIn);
+  const metrics = WELLBEING_PRESETS[checkIn.profileAtEntry ?? "trt"];
 
   if (isEditing) {
-    return <CheckInForm initial={checkIn} onSave={onSaveEdit} onCancel={onCancelEdit} language={language} />;
+    return <CheckInForm userProfile={checkIn.profileAtEntry ?? "trt"} initial={checkIn} onSave={onSaveEdit} onCancel={onCancelEdit} language={language} />;
   }
 
   return (
     <div className="checkins-history-card h-full rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-3.5 shadow-soft">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-semibold text-slate-100">
-            {format(parseISO(checkIn.date), "d MMM yyyy")}
-          </p>
+          <p className="text-base font-semibold text-slate-100">{format(parseISO(checkIn.date), "d MMM yyyy")}</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            {avg === null
-              ? tr("Geen complete score", "No complete score")
-              : tr("Gemiddelde", "Average")} {avg === null ? "—" : avg.toFixed(1)}
+            {avg === null ? tr("Geen complete score", "No complete score") : tr("Gemiddelde", "Average")} {avg === null ? "—" : avg.toFixed(1)}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-xs font-medium text-slate-300">
@@ -239,26 +209,20 @@ const CheckInCard = ({
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {METRICS.map((m) => {
-          const val = checkIn[m.key];
+        {metrics.map((metricId) => {
+          const metric = WELLBEING_METRICS[metricId];
+          const value = getCheckInMetricValue(checkIn, metricId);
           return (
-            <span
-              key={m.key}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/50 px-2.5 py-1 text-xs text-slate-300"
-            >
-              <span className="text-[13px] leading-none">{m.icon}</span>
-              <span className="text-slate-400">{trLocale(language, m.labelNl, m.labelEn)}</span>
-              <span className="font-semibold text-slate-100">{val ?? "—"}</span>
+            <span key={metricId} className="inline-flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/50 px-2.5 py-1 text-xs text-slate-300">
+              <span className="text-[13px] leading-none">{metric.icon}</span>
+              <span className="text-slate-400">{trLocale(language, metric.labelNl, metric.labelEn)}</span>
+              <span className="font-semibold text-slate-100">{value ?? "—"}</span>
             </span>
           );
         })}
       </div>
 
-      {checkIn.notes ? (
-        <p className="mt-2.5 border-t border-slate-700/60 pt-2.5 text-sm text-slate-300 italic">
-          {checkIn.notes}
-        </p>
-      ) : null}
+      {checkIn.notes ? <p className="mt-2.5 border-t border-slate-700/60 pt-2.5 text-sm text-slate-300 italic">{checkIn.notes}</p> : null}
 
       <div className="mt-2.5 flex items-center justify-end gap-1">
         <button
@@ -299,8 +263,6 @@ const CheckInCard = ({
   );
 };
 
-// ─── Trend chart ──────────────────────────────────────────────────────────────
-
 interface TrendChartProps {
   checkIns: SymptomCheckIn[];
   language: AppLanguage;
@@ -308,37 +270,27 @@ interface TrendChartProps {
 
 const TrendChart = ({ checkIns, language }: TrendChartProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
-  const data = checkIns
-    .filter(
-      (c) =>
-        c.energy !== null ||
-        c.mood !== null ||
-        c.sleep !== null ||
-        c.libido !== null ||
-        c.motivation !== null
-    )
-    .map((c) => ({
-      date: format(parseISO(c.date), "d MMM"),
-      energy: c.energy,
-      mood: c.mood,
-      sleep: c.sleep,
-      libido: c.libido,
-      motivation: c.motivation
-    }));
+  const activeMetrics = Array.from(
+    new Set(checkIns.flatMap((checkIn) => Object.keys(checkIn.values ?? {})))
+  ) as WellbeingMetricId[];
+  const data = checkIns.map((checkIn) => {
+    const row: Record<string, string | number | null> = {
+      date: format(parseISO(checkIn.date), "d MMM")
+    };
+    activeMetrics.forEach((metricId) => {
+      row[metricId] = getCheckInMetricValue(checkIn, metricId);
+    });
+    return row;
+  });
 
-  if (data.length < 2) return null;
+  if (data.length < 2 || activeMetrics.length === 0) return null;
 
   return (
     <div className="checkins-trend-card app-teal-glow-surface rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
       <div className="mb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          {tr("Trend over tijd", "Trend over time")}
-        </p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Trend over tijd", "Trend over time")}</p>
         <p className="mt-1 text-xs text-slate-500">
-          {tr(
-            "Snel overzicht van hoe je welzijn zich ontwikkelt per check-in.",
-            "Quick view of how your wellbeing changes across check-ins."
-          )}
+          {tr("Snel overzicht van hoe je welzijn zich ontwikkelt per check-in.", "Quick view of how your wellbeing changes across check-ins.")}
         </p>
       </div>
       <ResponsiveContainer width="100%" height={280}>
@@ -356,29 +308,31 @@ const TrendChart = ({ checkIns, language }: TrendChartProps) => {
             labelStyle={{ color: "var(--chart-tooltip-label)" }}
           />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 8 }} />
-          {METRICS.map((m) => (
-            <Line
-              key={m.key}
-              type="monotone"
-              dataKey={m.key}
-              name={trLocale(language, m.labelNl, m.labelEn)}
-              stroke={m.color}
-              strokeWidth={2.5}
-              dot={{ r: 3, fill: m.color, strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
-              connectNulls
-            />
-          ))}
+          {activeMetrics.map((metricId) => {
+            const metric = WELLBEING_METRICS[metricId];
+            return (
+              <Line
+                key={metricId}
+                type="monotone"
+                dataKey={metricId}
+                name={trLocale(language, metric.labelNl, metric.labelEn)}
+                stroke={metric.color}
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: metric.color, strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+                connectNulls
+              />
+            );
+          })}
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 };
 
-// ─── Main view ────────────────────────────────────────────────────────────────
-
 interface CheckInsViewProps {
   checkIns: SymptomCheckIn[];
+  userProfile: UserProfile;
   language: AppLanguage;
   isShareMode: boolean;
   onAdd: (data: Omit<SymptomCheckIn, "id">) => void;
@@ -386,29 +340,16 @@ interface CheckInsViewProps {
   onDelete: (id: string) => void;
 }
 
-const CheckInsView = ({
-  checkIns,
-  language,
-  isShareMode,
-  onAdd,
-  onUpdate,
-  onDelete
-}: CheckInsViewProps) => {
+const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onUpdate, onDelete }: CheckInsViewProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
-  const sorted = useMemo(
-    () => [...checkIns].sort((a, b) => b.date.localeCompare(a.date)),
-    [checkIns]
-  );
-
+  const sorted = useMemo(() => [...checkIns].sort((left, right) => right.date.localeCompare(left.date)), [checkIns]);
   const displayedHistory = showAllHistory ? sorted : sorted.slice(0, 6);
   const lastCheckIn = sorted[0] ?? null;
-  const daysSinceLast = lastCheckIn
-    ? differenceInDays(new Date(), parseISO(lastCheckIn.date))
-    : null;
+  const daysSinceLast = lastCheckIn ? differenceInDays(new Date(), parseISO(lastCheckIn.date)) : null;
 
   const handleAdd = (data: Omit<SymptomCheckIn, "id">) => {
     onAdd(data);
@@ -428,7 +369,7 @@ const CheckInsView = ({
   })();
 
   const isDue = daysSinceLast === null || daysSinceLast >= 7;
-  const recentAverage = lastCheckIn ? averageScore(lastCheckIn) : null;
+  const recentAverage = lastCheckIn ? getCheckInAverage(lastCheckIn) : null;
 
   return (
     <div className="space-y-4 px-1 py-2">
@@ -437,17 +378,14 @@ const CheckInsView = ({
           <div className="space-y-1">
             <p className="text-xl font-semibold text-slate-100">{tr("Welzijns check-in", "Wellbeing check-in")}</p>
             <p className={`text-sm ${isDue ? "text-amber-300" : "text-slate-300"}`}>
-              {isDue
-                ? tr("Tijd voor een nieuwe check-in", "Time for a new check-in")
-                : tr("Op schema", "On track")}
+              {isDue ? tr("Tijd voor een nieuwe check-in", "Time for a new check-in") : tr("Op schema", "On track")}
             </p>
             <p className="text-xs text-slate-500">{statusLabel}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
-              {tr("Laatste gemiddelde", "Latest average")}:{" "}
-              <span className="font-semibold text-slate-100">{recentAverage === null ? "—" : recentAverage.toFixed(1)}</span>
+              {tr("Laatste gemiddelde", "Latest average")}: <span className="font-semibold text-slate-100">{recentAverage === null ? "—" : recentAverage.toFixed(1)}</span>
             </div>
             {!isShareMode && !showForm ? (
               <button
@@ -463,11 +401,7 @@ const CheckInsView = ({
 
         {showForm ? (
           <div className="mt-4 border-t border-slate-700/60 pt-4">
-            <CheckInForm
-              onSave={handleAdd}
-              onCancel={() => setShowForm(false)}
-              language={language}
-            />
+            <CheckInForm userProfile={userProfile} onSave={handleAdd} onCancel={() => setShowForm(false)} language={language} />
           </div>
         ) : null}
       </section>
@@ -477,9 +411,7 @@ const CheckInsView = ({
       {sorted.length > 0 ? (
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              {tr("Geschiedenis", "History")}
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Geschiedenis", "History")}</p>
             {sorted.length > 6 ? (
               <button
                 type="button"
@@ -492,16 +424,16 @@ const CheckInsView = ({
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            {displayedHistory.map((c) => (
-              <div key={c.id} className={editingId === c.id ? "lg:col-span-2" : ""}>
+            {displayedHistory.map((checkIn) => (
+              <div key={checkIn.id} className={editingId === checkIn.id ? "lg:col-span-2" : ""}>
                 <CheckInCard
-                  checkIn={c}
+                  checkIn={checkIn}
                   language={language}
-                  isEditing={editingId === c.id}
-                  onEdit={() => setEditingId(c.id)}
+                  isEditing={editingId === checkIn.id}
+                  onEdit={() => setEditingId(checkIn.id)}
                   onCancelEdit={() => setEditingId(null)}
-                  onSaveEdit={(data) => handleUpdate(c.id, data)}
-                  onDelete={() => onDelete(c.id)}
+                  onSaveEdit={(data) => handleUpdate(checkIn.id, data)}
+                  onDelete={() => onDelete(checkIn.id)}
                 />
               </div>
             ))}
@@ -512,9 +444,7 @@ const CheckInsView = ({
       {sorted.length === 0 && !showForm ? (
         <section className="rounded-xl border border-slate-700/50 bg-slate-900/30 px-6 py-10 text-center">
           <p className="text-3xl">🧘</p>
-          <p className="mt-2 text-sm font-medium text-slate-300">
-            {tr("Nog geen check-ins", "No check-ins yet")}
-          </p>
+          <p className="mt-2 text-sm font-medium text-slate-300">{tr("Nog geen check-ins", "No check-ins yet")}</p>
           <p className="mt-1 text-xs text-slate-500">
             {tr(
               "Start met één korte check-in per week om trends naast je labwaarden te zien.",

@@ -14,11 +14,23 @@ const makeSampleData = (): StoredAppData => ({
   markerAliasOverrides: {
     testo: "Testosterone"
   },
+  interventions: [
+    {
+      id: "p1",
+      name: "Protocol A",
+      items: [{ name: "Testosterone Enanthate", dose: "120 mg/week", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+      compounds: [{ name: "Testosterone Enanthate", dose: "120 mg/week", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+      notes: "Protocol note",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  ],
   protocols: [
     {
       id: "p1",
       name: "Protocol A",
-      compounds: [{ name: "Testosterone Enanthate", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+      items: [{ name: "Testosterone Enanthate", dose: "120 mg/week", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+      compounds: [{ name: "Testosterone Enanthate", dose: "120 mg/week", doseMg: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
       notes: "Protocol note",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -34,10 +46,26 @@ const makeSampleData = (): StoredAppData => ({
       endDate: null
     }
   ],
+  wellbeingEntries: [
+    {
+      id: "c1",
+      date: "2026-01-14",
+      profileAtEntry: "trt",
+      values: { energy: 4, mood: 4, sleep: 3, libido: 3, motivation: 4 },
+      energy: 4,
+      libido: 3,
+      mood: 4,
+      sleep: 3,
+      motivation: 4,
+      notes: "stable"
+    }
+  ],
   checkIns: [
     {
       id: "c1",
       date: "2026-01-14",
+      profileAtEntry: "trt",
+      values: { energy: 4, mood: 4, sleep: 3, libido: 3, motivation: 4 },
       energy: 4,
       libido: 3,
       mood: 4,

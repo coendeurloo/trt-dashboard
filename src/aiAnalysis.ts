@@ -1,5 +1,5 @@
 import { sortReportsChronological } from "./utils";
-import { AIAnalysisProvider, AIConsentDecision, AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
+import { AIAnalysisProvider, AIConsentDecision, AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem, UserProfile } from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
   getProtocolCompoundsText,
@@ -46,6 +46,7 @@ interface AnalyzeLabDataOptions {
   protocols: Protocol[];
   supplementTimeline?: SupplementPeriod[];
   unitSystem: UnitSystem;
+  profile?: UserProfile;
   memory?: AnalystMemory | null;
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
@@ -203,45 +204,149 @@ const FORMAT_RULES = (anchorLimit: number, markerLimit: number): string =>
 Plain language. Short sentences. Define jargon inline if unavoidable.
 At most ${anchorLimit} numeric anchors total. At most ${markerLimit} markers unless a safety concern requires more.`;
 
-const ANALYSIS_RULES = `Link every recommendation to a concrete signal in the data.
-currentSupplements = current truth. Never re-suggest an active supplement or completed dose increase unless further change is justified by current data.
-State uncertainty and confounders plainly.
-Action-neutral: no diagnosis, prescriptions, or medical directives.
-Cite studies only when needed for a recommendation or risk statement (max 2 total).
-Avoid marker-by-marker recaps and unchanged markers.`;
+const PROFILE_CRITICAL_MARKERS: Record<UserProfile, Set<string>> = {
+  trt: new Set([
+    "Testosterone",
+    "Free Testosterone",
+    "Estradiol",
+    "Hematocrit",
+    "SHBG",
+    "PSA",
+    "Hemoglobin",
+    "LDL Cholesterol"
+  ]),
+  enhanced: new Set([
+    "Testosterone",
+    "Hematocrit",
+    "ALT",
+    "AST",
+    "GGT",
+    "LDL Cholesterol",
+    "HDL Cholesterol",
+    "Apolipoprotein B",
+    "Creatinine",
+    "eGFR",
+    "Blood Pressure",
+    "Hemoglobin"
+  ]),
+  health: new Set([
+    "Glucose",
+    "HbA1c",
+    "TSH",
+    "Free T4",
+    "Vitamin D",
+    "Vitamin B12",
+    "Ferritin",
+    "CRP",
+    "Homocysteine",
+    "LDL Cholesterol",
+    "HDL Cholesterol",
+    "Triglycerides"
+  ]),
+  biohacker: new Set([
+    "Testosterone",
+    "Free Testosterone",
+    "Estradiol",
+    "SHBG",
+    "Apolipoprotein B",
+    "Homocysteine",
+    "CRP",
+    "Ferritin",
+    "HbA1c",
+    "Vitamin D",
+    "Glucose",
+    "IGF-1"
+  ])
+};
 
-const WELLBEING_RULES = `If wellbeing data is present, treat it as a first-class data source - not a footnote.
-For each wellbeing score that correlates with a lab period: state the specific score, the specific timeframe, and the most likely biological link.
-Do not summarize wellbeing in aggregate averages only. Surface the pattern behind the number.
-Aim for: "Your energy score dropped to 4/10 in October, the same period testosterone hit its lowest trough. Two weeks after the dose change it recovered to 7/10 - suggesting you respond strongly to trough depth."`;
+const buildPersona = (profile: UserProfile, today: string): string => {
+  const base = `Today: ${today}. Language: English.`;
+  const personas: Record<UserProfile, string> = {
+    trt: `You are a knowledgeable TRT coach who helps people understand their blood work in the context of hormone replacement therapy. You explain things the way a well-informed friend would: clearly, directly, without unnecessary medical jargon. You care about safety (especially hematocrit and cardiovascular markers) but you are not alarmist.`,
+    enhanced: `You are an experienced performance health coach who understands anabolic compounds, their effects on blood markers, and harm reduction. You speak directly and practically: no judgment about compound use, just clear guidance on what the blood work shows and what to watch. You prioritize liver function, kidney markers, lipid profile, and cardiovascular safety.`,
+    health: `You are a health optimization coach who helps people understand their blood work and make informed decisions. You explain connections between markers, lifestyle factors, and supplements in accessible language. You focus on metabolic health, inflammation, thyroid function, vitamins, and overall longevity markers.`,
+    biohacker: `You are a data-driven health analyst who speaks the language of optimization and quantified self. You look for correlations, non-obvious patterns, and actionable signals in the data. You are comfortable with uncertainty and frame findings as hypotheses to test, not conclusions. You focus on trends, rate of change, and inter-marker relationships.`
+  };
+  return `${personas[profile]}\n${base}`;
+};
 
-const CAUSAL_RULES = `For every observed change, state the most likely cause - not just the observation.
-Reason in chains: protocol change -> mechanism -> expected effect -> actual effect -> implication.
-If actual differs from expected, flag it as a confounder worth watching.
-Use mechanism language: "because", "which caused", "suggesting" - not "showed", "was", "remained".`;
+const buildCoreRules = (profile: UserProfile): string => {
+  const profileContext: Record<UserProfile, string> = {
+    trt: `The user is on testosterone replacement therapy. Protocol changes, injection frequency, and estradiol management are likely relevant.`,
+    enhanced: `The user may be using multiple anabolic compounds. Do not moralize about compound use. Focus on harm reduction and what the blood work actually shows. If liver or kidney markers are flagged, be direct about the risk.`,
+    health: `The user is focused on general health optimization, not necessarily hormone therapy. They may not be on any protocol. Focus on metabolic health, nutritional markers, and lifestyle connections.`,
+    biohacker: `The user thinks in terms of optimization and experiments. Frame insights as hypotheses and signals, not diagnoses. They appreciate data density and non-obvious correlations.`
+  };
 
-const PREDICTIVE_RULES = `If 3 or more data points exist for a marker approaching a clinically meaningful threshold, add one forward-looking sentence.
-Example: "At the current hematocrit trajectory, you may approach the 52% threshold within 2-3 test cycles."
-Keep predictive language brief (1-2 sentences) and appropriately uncertain.`;
+  return `${profileContext[profile]}
 
-const SUPPLEMENT_SECTION_ACTIVE = `5) ## Supplement Changes (for doctor discussion)
-For each change: current state -> rationale (cite the specific trend) -> expected outcome with timeframe -> what to do if no improvement by that timeframe.`;
+TONE AND STYLE:
+- Talk like a knowledgeable friend, not a textbook. Use "you" and "your", not "the patient" or "the subject".
+- Be direct. Lead with what matters, not with context-setting.
+- Short paragraphs. No bullet dumps. Flowing text that reads naturally.
+- When uncertain, say so plainly.
+- Never invent mechanisms. If unknown, say the cause is unclear from the data.
 
-const SUPPLEMENT_SECTION_NONE = `5) ## Supplement Changes (for doctor discussion)
-State no changes are recommended and briefly explain why the current stack appears adequate, citing the specific signals that support this.`;
+ANALYSIS RULES:
+- Every claim must be traceable to a specific number in the data.
+- Link every recommendation to a concrete signal.
+- State uncertainty and confounders plainly.
+- Do not recap stable markers unless they provide required context.
+- currentSupplements = current truth. Do not suggest supplements or changes the user is already doing.
+
+WELLBEING INTEGRATION:
+- If wellbeing check-in data is present, treat it as first-class evidence.
+- Correlate specific wellbeing scores with specific lab periods.
+- If wellbeing patterns conflict with biomarkers, flag that explicitly.
+- If no wellbeing data is present, do not mention it.
+
+SAFETY:
+- Never diagnose. Never prescribe. Frame recommendations for doctor discussion.
+- If markers indicate possible danger (e.g., hematocrit >54% or very elevated liver enzymes), be direct without panic.
+- Cite studies only when they directly support a recommendation or risk statement (max 2).`;
+};
+
+const buildFullSections = (supplementActionsNeeded: boolean): string => {
+  const supplementSection = supplementActionsNeeded
+    ? `5) ## Supplement tweaks
+For each suggestion: what to change, why (cite the specific signal), what to expect, and when to reassess. Only suggest changes justified by the current data.`
+    : `5) ## Supplement tweaks
+If the current stack looks appropriate given the data, say so briefly and explain which signals confirm it.`;
+
+  return `Required sections in this order:
+1) ## Here's where you stand - a short narrative connecting your protocol history to your current numbers. Tell the story of how decisions led to outcomes. One paragraph, conversational.
+2) ## What's driving these numbers - 2-4 causal chains. Each follows: what changed -> why it likely had this effect -> what you're seeing. Skip anything you cannot connect to a concrete cause.
+3) ## What to focus on - max 3 priorities. Each must name a specific marker and value, not a category. Start each with the most actionable item.
+4) ## Next steps - what to do now, when to retest, and what would trigger a protocol change. If trend data supports it, add one forward-looking sentence about where things are heading.
+${supplementSection}`;
+};
+
+const buildComparisonSections = (supplementActionsNeeded: boolean): string => {
+  const supplementSection = supplementActionsNeeded
+    ? `5) ## Supplement tweaks
+Brief, focused on what changed between reports. Only suggest changes justified by the new data.`
+    : `5) ## Supplement tweaks
+If no changes are needed, say so in one sentence.`;
+
+  return `Required sections in this order:
+1) ## What changed - one paragraph on the key shifts since your last blood draw and the most likely reasons.
+2) ## Why it moved - 2-3 causal chains connecting protocol/supplement/lifestyle changes to the observed shifts. Skip anything stable.
+3) ## What to focus on - max 3 priorities from this comparison. Each must name a specific signal.
+4) ## Next steps - what to do now and when to retest.
+${supplementSection}`;
+};
+
+const HALLUCINATION_GUARDRAILS = `
+CRITICAL - DO NOT:
+- Claim a compound has "lipid-protective effects" or "hepatoprotective properties" unless a specific study is provided in the benchmark data.
+- Predict specific numeric values for future tests. You can describe direction and rough magnitude.
+- Attribute changes to a mechanism you are not confident about.
+- State a marker is normalizing or recovering based on a single improving data point.
+- Claim the user is a hyper-responder or poor responder unless 4+ data points show a consistent pattern across protocol changes.
+- Make supplement dosing recommendations with false precision.`;
 
 const SAFETY_FOOTER =
   "*This analysis is for informational purposes only and does not constitute medical advice or diagnosis. Discuss all changes with your healthcare provider.*";
-
-const CRITICAL_MARKERS = new Set<string>([
-  "Testosterone",
-  "Free Testosterone",
-  "Estradiol",
-  "Hematocrit",
-  "Apolipoprotein B",
-  "LDL Cholesterol",
-  "SHBG"
-]);
 
 const HIGHER_WORSE_MARKERS = new Set<string>([
   "Apolipoprotein B",
@@ -418,6 +523,7 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
 interface FullAnalysisParams {
   today: string;
   unitSystem: UnitSystem;
+  profile: UserProfile;
   memory: AnalystMemory | null;
   payload: AnalysisReportRow[];
   supplementContext: AnalysisSupplementContextRow;
@@ -432,6 +538,7 @@ interface FullAnalysisParams {
 interface ComparisonParams {
   today: string;
   unitSystem: UnitSystem;
+  profile: UserProfile;
   memory: AnalystMemory | null;
   relevantComparison: unknown;
   latestComparison: unknown;
@@ -447,109 +554,69 @@ interface ComparisonParams {
 
 function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
   const {
-    today,
-    unitSystem,
-    memory,
-    payload,
-    supplementContext,
-    signals,
-    fullPremiumInsightPack,
-    fullActionability,
-    fullSupplementActionability,
-    benchmarkSection,
-    supplementActionsNeeded
+    today, unitSystem, profile, memory, payload, supplementContext, signals,
+    fullPremiumInsightPack, fullActionability, fullSupplementActionability,
+    benchmarkSection, supplementActionsNeeded
   } = params;
 
-  const supplementSection = supplementActionsNeeded ? SUPPLEMENT_SECTION_ACTIVE : SUPPLEMENT_SECTION_NONE;
-
-  return `You are a senior clinical analyst for TRT monitoring. Today: ${today}.
-Language: English. Target length: 300-450 words.
-
-${FORMAT_RULES(10, 5)}
-${ANALYSIS_RULES}
-${WELLBEING_RULES}
-${CAUSAL_RULES}
-${PREDICTIVE_RULES}
-
-Required sections in this order:
-1) ## The Story So Far - one short paragraph as a causal timeline (not a fact list). Show how decisions led to outcomes.
-2) ## Why This Likely Happened - 2-4 causal chains only. Each must follow: cause -> mechanism -> effect. No marker dump.
-3) ## What Matters Most Now - max 3 priorities. Each must cite a specific signal, not a category label.
-4) ## What To Do Next - Now / Next test / When to revise. Add one predictive sentence if trend data supports it.
-${supplementSection}
-
-${SAFETY_FOOTER}
-
-${benchmarkSection}
-${buildMemoryContext(memory)}
-DATA START
-${JSON.stringify({
-  type: "full",
-  units: unitSystem,
-  reports: payload,
-  currentSupplements: supplementContext,
-  signals,
-  premiumInsights: fullPremiumInsightPack,
-  actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
-})}
-DATA END`;
+  return [
+    buildPersona(profile, today),
+    "Target length: 300-450 words.",
+    FORMAT_RULES(10, 5),
+    buildCoreRules(profile),
+    HALLUCINATION_GUARDRAILS,
+    buildFullSections(supplementActionsNeeded),
+    SAFETY_FOOTER,
+    benchmarkSection,
+    buildMemoryContext(memory),
+    "DATA START",
+    JSON.stringify({
+      type: "full",
+      units: unitSystem,
+      userProfile: profile,
+      reports: payload,
+      currentSupplements: supplementContext,
+      signals,
+      premiumInsights: fullPremiumInsightPack,
+      actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
+    }),
+    "DATA END"
+  ].join("\n");
 }
 
 function buildComparisonPrompt(params: ComparisonParams): string {
   const {
-    today,
-    unitSystem,
-    memory,
-    relevantComparison,
-    latestComparison,
-    relevantPayload,
-    relevantSupplementContext,
-    comparisonSignals,
-    comparisonPremiumInsightPack,
-    comparisonActionability,
-    comparisonSupplementActionability,
-    relevantBenchmarkSection,
+    today, unitSystem, profile, memory, relevantComparison, latestComparison,
+    relevantPayload, relevantSupplementContext, comparisonSignals, comparisonPremiumInsightPack,
+    comparisonActionability, comparisonSupplementActionability, relevantBenchmarkSection,
     supplementActionsNeeded
   } = params;
 
-  const supplementSection = supplementActionsNeeded ? SUPPLEMENT_SECTION_ACTIVE : SUPPLEMENT_SECTION_NONE;
-
-  return `You are a senior clinical analyst for TRT monitoring. Today: ${today}.
-Scope: latest report vs immediately previous report only. Ignore all earlier reports.
-Language: English. Target length: 220-320 words.
-
-${FORMAT_RULES(7, 4)}
-${ANALYSIS_RULES}
-${WELLBEING_RULES}
-${CAUSAL_RULES}
-
-Focus on what changed between these two reports and why it matters.
-For each change: state the most likely cause, not just the observation.
-Ignore stable markers unless they provide necessary context for an unstable one.
-
-Required sections in this order:
-1) ## The Story So Far - one short paragraph on what shifted since the last draw and why.
-2) ## Why This Likely Happened - 2-3 causal chains. Cause -> mechanism -> effect. No marker dump.
-3) ## What Matters Most Now - max 3 priorities. Each must name a specific signal.
-4) ## What To Do Next - Now / Next test / When to revise.
-${supplementSection}
-
-${SAFETY_FOOTER}
-
-${relevantBenchmarkSection}
-${buildMemoryContext(memory)}
-DATA START
-${JSON.stringify({
-  type: "latestComparison",
-  units: unitSystem,
-  latestComparison: relevantComparison ?? latestComparison,
-  reports: relevantPayload,
-  currentSupplements: relevantSupplementContext,
-  signals: comparisonSignals,
-  premiumInsights: comparisonPremiumInsightPack,
-  actionability: { clinical: comparisonActionability, supplement: comparisonSupplementActionability }
-})}
-DATA END`;
+  return [
+    buildPersona(profile, today),
+    "Scope: latest report vs immediately previous report only.",
+    "Target length: 220-320 words.",
+    FORMAT_RULES(7, 4),
+    buildCoreRules(profile),
+    HALLUCINATION_GUARDRAILS,
+    buildComparisonSections(supplementActionsNeeded),
+    SAFETY_FOOTER,
+    relevantBenchmarkSection,
+    buildMemoryContext(memory),
+    "DATA START",
+    JSON.stringify({
+      type: "latestComparison",
+      units: unitSystem,
+      userProfile: profile,
+      latestComparison: relevantComparison ?? latestComparison,
+      reports: relevantPayload,
+      currentSupplements: relevantSupplementContext,
+      signals: comparisonSignals,
+      premiumInsights: comparisonPremiumInsightPack,
+      actionability: { clinical: comparisonActionability, supplement: comparisonSupplementActionability }
+    }),
+    "DATA END"
+  ].join("\n");
 }
 
 const buildMemoryPrompt = ({
@@ -1022,8 +1089,8 @@ const compactTrendSeverity = (summary: {
   return "low";
 };
 
-const compactTrendRelevance = (marker: string): PremiumTrendSignal["relevanceTag"] => {
-  if (CRITICAL_MARKERS.has(marker)) {
+const compactTrendRelevance = (marker: string, criticalMarkers: Set<string>): PremiumTrendSignal["relevanceTag"] => {
+  if (criticalMarkers.has(marker)) {
     return "critical";
   }
   if (SIGNAL_MARKER_SET.has(marker) || MUST_INCLUDE_MARKERS.has(marker)) {
@@ -1530,7 +1597,8 @@ const buildDerivedSignals = (reports: AnalysisReportRow[]) => {
 
 const buildSignals = (
   derivedSignals: ReturnType<typeof buildDerivedSignals>,
-  context: AnalyzeLabDataOptions["context"]
+  context: AnalyzeLabDataOptions["context"],
+  criticalMarkers: Set<string>
 ) => {
   const markerTrends: PremiumTrendSignal[] = [...derivedSignals.markerSummaries]
     .map((summary) => {
@@ -1541,7 +1609,7 @@ const buildSignals = (
         directionTag: trendDirectionFromSummary(summary),
         severityTag: compactTrendSeverity(summary),
         outOfRangeFlag,
-        relevanceTag: compactTrendRelevance(summary.marker)
+        relevanceTag: compactTrendRelevance(summary.marker, criticalMarkers)
       };
     })
     .sort((left, right) => {
@@ -1665,35 +1733,53 @@ interface QualityGuardResult {
 }
 
 const H2_HEADING_PATTERN = /^##\s+(.+?)\s*$/;
-const SUPPLEMENT_SECTION_HEADING = "Supplement Changes (for doctor discussion)";
-const REQUIRED_NARRATIVE_SECTIONS = [
-  "The Story So Far",
-  "Why This Likely Happened",
-  "What Matters Most Now",
-  "What To Do Next"
-] as const;
+const SUPPLEMENT_SECTION_HEADING = "Supplement tweaks";
+const FULL_REQUIRED_NARRATIVE_SECTIONS = ["Here's where you stand", "What's driving these numbers", "What to focus on", "Next steps"] as const;
+const COMPARISON_REQUIRED_NARRATIVE_SECTIONS = ["What changed", "Why it moved", "What to focus on", "Next steps"] as const;
 
 const canonicalNarrativeHeading = (heading: string): string => {
   const normalized = heading.trim().toLowerCase();
+  if (normalized.includes("what changed")) {
+    return "What changed";
+  }
+  if (normalized.includes("why it moved")) {
+    return "Why it moved";
+  }
+  if (normalized.includes("here's where you stand")) {
+    return "Here's where you stand";
+  }
+  if (normalized.includes("what's driving these numbers")) {
+    return "What's driving these numbers";
+  }
   if (normalized.includes("clinical story")) {
-    return "The Story So Far";
+    return "Here's where you stand";
   }
   if (normalized.includes("the story so far")) {
-    return "The Story So Far";
+    return "Here's where you stand";
   }
   if (normalized.includes("protocol, supplements, and wellbeing links")) {
-    return "Why This Likely Happened";
+    return "What's driving these numbers";
   }
   if (normalized.includes("why this likely happened")) {
-    return "Why This Likely Happened";
+    return "What's driving these numbers";
+  }
+  if (normalized.includes("what to focus on")) {
+    return "What to focus on";
   }
   if (normalized.includes("what matters most now")) {
-    return "What Matters Most Now";
+    return "What to focus on";
+  }
+  if (normalized.includes("next steps")) {
+    return "Next steps";
   }
   if (normalized.includes("what to do next")) {
-    return "What To Do Next";
+    return "Next steps";
   }
-  if (normalized.includes("supplement advice") || normalized.includes("supplement changes")) {
+  if (
+    normalized.includes("supplement advice") ||
+    normalized.includes("supplement changes") ||
+    normalized.includes("supplement tweaks")
+  ) {
     return SUPPLEMENT_SECTION_HEADING;
   }
   return heading.trim();
@@ -1755,10 +1841,12 @@ const hasSupplementSection = (sections: ParsedNarrativeSection[]): boolean =>
 
 const applyNarrativeQualityGuard = ({
   text,
-  supplementActionsNeeded
+  supplementActionsNeeded,
+  analysisType
 }: {
   text: string;
   supplementActionsNeeded: boolean;
+  analysisType: "full" | "latestComparison";
 }): QualityGuardResult => {
   const qualityIssues: string[] = [];
   let qualityGuardApplied = false;
@@ -1789,28 +1877,30 @@ const applyNarrativeQualityGuard = ({
     }
   }
 
+  const requiredNarrativeSections =
+    analysisType === "latestComparison" ? COMPARISON_REQUIRED_NARRATIVE_SECTIONS : FULL_REQUIRED_NARRATIVE_SECTIONS;
   const sectionHeadings = new Set(sections.map((section) => section.heading));
-  REQUIRED_NARRATIVE_SECTIONS.forEach((heading) => {
+  requiredNarrativeSections.forEach((heading) => {
     if (sectionHeadings.has(heading)) {
       return;
     }
     qualityGuardApplied = true;
     qualityIssues.push(`missing_section_${heading.toLowerCase().replace(/\s+/g, "_")}`);
-    if (heading === "The Story So Far") {
+    if (heading === "Here's where you stand" || heading === "What changed") {
       sections.unshift({
         heading,
         lines: ["A clear narrative summary could not be fully inferred from the model output."]
       });
       return;
     }
-    if (heading === "Why This Likely Happened") {
+    if (heading === "What's driving these numbers" || heading === "Why it moved") {
       sections.push({
         heading,
         lines: ["The likely drivers were partially unclear due to limited or conflicting context signals."]
       });
       return;
     }
-    if (heading === "What Matters Most Now") {
+    if (heading === "What to focus on") {
       sections.push({
         heading,
         lines: ["- Prioritize stable protocol execution.", "- Re-check key risk markers on the next test."]
@@ -1818,7 +1908,7 @@ const applyNarrativeQualityGuard = ({
       return;
     }
     sections.push({
-      heading: "What To Do Next",
+      heading: "Next steps",
       lines: [
         "- Now: keep data collection consistent and avoid multiple simultaneous changes.",
         "- Next test: repeat key markers in the same sampling context.",
@@ -1857,6 +1947,7 @@ export const analyzeLabDataWithClaude = async ({
   protocols,
   supplementTimeline = [],
   unitSystem,
+  profile = "trt",
   memory = null,
   language: _language = "nl",
   analysisType = "full",
@@ -1885,12 +1976,14 @@ export const analyzeLabDataWithClaude = async ({
   });
   const payload = compactReportsForPrompt(sanitizedPayload, analysisType);
   const derivedSignals = buildDerivedSignals(sanitizedPayload);
-  const signals = buildSignals(derivedSignals, context);
+  const criticalMarkers = PROFILE_CRITICAL_MARKERS[profile] ?? PROFILE_CRITICAL_MARKERS.trt;
+  const signals = buildSignals(derivedSignals, context, criticalMarkers);
   const fullActionability = buildActionabilityDecision({
     signals,
     analysisType: "full"
   });
   const fullPremiumInsightPack: PremiumInsightPack = buildPremiumInsightPack({
+    profile,
     reports: sanitizedPayload,
     markerTrends: signals.markerTrends,
     alerts: signals.alerts,
@@ -1900,6 +1993,7 @@ export const analyzeLabDataWithClaude = async ({
     samplingFilter: signals.samplingFilter
   });
   const fullSupplementActionability: SupplementActionabilityDecision = buildSupplementActionabilityDecision({
+    profile,
     generalActionability: fullActionability,
     markerTrends: signals.markerTrends,
     alerts: signals.alerts,
@@ -1914,6 +2008,7 @@ export const analyzeLabDataWithClaude = async ({
   const fullPrompt = buildFullAnalysisPrompt({
     today,
     unitSystem,
+    profile,
     memory,
     payload,
     supplementContext,
@@ -1949,6 +2044,7 @@ export const analyzeLabDataWithClaude = async ({
       analysisType: "latestComparison"
     });
     const comparisonPremiumInsightPack: PremiumInsightPack = buildPremiumInsightPack({
+      profile,
       reports: relevantPayload,
       markerTrends: comparisonSignals.markerTrends,
       alerts: comparisonSignals.alerts,
@@ -1958,6 +2054,7 @@ export const analyzeLabDataWithClaude = async ({
       samplingFilter: comparisonSignals.samplingFilter
     });
     const comparisonSupplementActionability: SupplementActionabilityDecision = buildSupplementActionabilityDecision({
+      profile,
       generalActionability: comparisonActionability,
       markerTrends: comparisonSignals.markerTrends,
       alerts: comparisonSignals.alerts,
@@ -1968,6 +2065,7 @@ export const analyzeLabDataWithClaude = async ({
       prompt: buildComparisonPrompt({
         today,
         unitSystem,
+        profile,
         memory,
         relevantComparison,
         latestComparison,
@@ -2109,7 +2207,8 @@ export const analyzeLabDataWithClaude = async ({
           const outputText = stripComplexFormatting(maybeTruncated);
           const qualityResult = applyNarrativeQualityGuard({
             text: outputText,
-            supplementActionsNeeded: supplementActionability.supplementActionsNeeded
+            supplementActionsNeeded: supplementActionability.supplementActionsNeeded,
+            analysisType
           });
           return {
             text: qualityResult.text,

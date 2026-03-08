@@ -14,7 +14,7 @@ import {
 } from "./analytics";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
-import { getDemoCheckIns, getDemoProtocols, getDemoReports, getDemoSupplementTimeline } from "./demoData";
+import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
 import {
@@ -34,6 +34,7 @@ import {
 } from "./hooks/useShareBootstrap";
 import { buildExtractionDiffSummary } from "./extractionDiff";
 import { getCurrentActiveSupplementStack, resolveReportSupplementContexts } from "./supplementUtils";
+import { getPersonaTabLabel, isTabVisibleForProfile } from "./personaConfig";
 import {
   useCoreDerivedData,
   useDashboardDerivedData,
@@ -62,6 +63,7 @@ import {
   ParserUncertaintyAssessment,
   ParserStage,
   ReportAnnotations,
+  UserProfile,
   TabKey,
   DashboardViewMode,
   TimeRangeKey
@@ -550,26 +552,36 @@ const App = () => {
     setActiveTab("dashboard");
   };
 
-  const loadDemoData = () => {
+  const loadDemoData = (profileOverride?: UserProfile) => {
     if (isShareMode) {
       return;
     }
-    const demoProtocols = getDemoProtocols();
-    const demoReports = getDemoReports();
-    const demoSupplementTimeline = getDemoSupplementTimeline();
-    const demoCheckIns = getDemoCheckIns();
+    const selectedProfile = profileOverride ?? appData.settings.userProfile;
+    const demo = getDemoSnapshot(selectedProfile);
+    const demoMarkers = new Set(demo.reports.flatMap((report) => report.markers.map((marker) => marker.canonicalMarker)));
+    const primaryMarkersSelection = demo.primaryMarkersSelection.filter((marker) => demoMarkers.has(marker));
     setAppData((prev) => ({
       ...prev,
-      reports: demoReports,
-      protocols: [...prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demoProtocols],
+      reports: demo.reports,
+      interventions: [...prev.interventions.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demo.protocols],
+      protocols: [...prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")), ...demo.protocols],
       supplementTimeline: [
         ...prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-")),
-        ...demoSupplementTimeline
+        ...demo.supplementTimeline
       ],
+      wellbeingEntries: [
+        ...prev.wellbeingEntries.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-")),
+        ...demo.checkIns
+      ].sort((a, b) => a.date.localeCompare(b.date)),
       checkIns: [
         ...prev.checkIns.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-")),
-        ...demoCheckIns
-      ].sort((a, b) => a.date.localeCompare(b.date))
+        ...demo.checkIns
+      ].sort((a, b) => a.date.localeCompare(b.date)),
+      settings: {
+        ...prev.settings,
+        userProfile: selectedProfile,
+        primaryMarkersSelection: primaryMarkersSelection.length > 0 ? primaryMarkersSelection : demo.primaryMarkersSelection
+      }
     }));
     setActiveTab("dashboard");
   };
@@ -581,8 +593,10 @@ const App = () => {
     setAppData((prev) => ({
       ...prev,
       reports: prev.reports.filter((report) => report.extraction.model !== "demo-data"),
+      interventions: prev.interventions.filter((protocol) => !protocol.id.startsWith("demo-protocol-")),
       protocols: prev.protocols.filter((protocol) => !protocol.id.startsWith("demo-protocol-")),
       supplementTimeline: prev.supplementTimeline.filter((period) => !period.id.startsWith("demo-supp-")),
+      wellbeingEntries: prev.wellbeingEntries.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-")),
       checkIns: prev.checkIns.filter((checkIn) => !checkIn.id.startsWith("demo-checkin-"))
     }));
     setActiveTab("dashboard");
@@ -1335,6 +1349,14 @@ const App = () => {
   }, [visibleReports]);
   const hasReports = reports.length > 0;
   const isOnboardingLocked = !isShareMode && !hasReports;
+  const latestReportDate = useMemo(() => {
+    if (reports.length === 0) {
+      return null;
+    }
+    return [...reports]
+      .sort((left, right) => right.testDate.localeCompare(left.testDate) || right.createdAt.localeCompare(left.createdAt))[0]
+      ?.testDate ?? null;
+  }, [reports]);
   const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
   const activeProtocol = useMemo(
     () => appData.protocols.find((protocol) => protocol.id === activeProtocolId) ?? null,
@@ -1367,7 +1389,7 @@ const App = () => {
     if (linkedLabel) {
       return linkedLabel;
     }
-    const annotationLabel = latestReport.annotations.protocol.trim();
+    const annotationLabel = (latestReport.annotations.interventionLabel ?? latestReport.annotations.protocol ?? "").trim();
     return annotationLabel || tr("Geen protocol", "No protocol");
   }, [appData.protocols, visibleReports, tr]);
   const analysisMarkerNames = useMemo(() => {
@@ -1450,7 +1472,12 @@ const App = () => {
     await runAiAnalysis(analysisType, decision);
   };
 
-  const activeTabTitle = getTabLabel(activeTab, appData.settings.language);
+  const activeTabTitle = getPersonaTabLabel(
+    appData.settings.userProfile,
+    activeTab,
+    appData.settings.language,
+    getTabLabel(activeTab, appData.settings.language)
+  );
   const activeTabSubtitle = (() => {
     if (isShareMode) {
       return activeTab === "dashboard"
@@ -1460,9 +1487,24 @@ const App = () => {
     if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.") : null;
     if (activeTab === "reports") return tr("Alle geüploade labresultaten in één overzicht.", "All uploaded lab reports in one overview.");
     if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je markers.", "Trend and threshold alerts for your markers.");
-    if (activeTab === "protocol") return tr("Je testosteronprotocol in detail.", "Your TRT protocol details and history.");
+    if (activeTab === "protocol") {
+      const protocolProfile = appData.settings.userProfile === "trt" || appData.settings.userProfile === "enhanced";
+      return protocolProfile
+        ? tr("Je testosteronprotocol in detail.", "Your TRT protocol details and history.")
+        : appData.settings.userProfile === "health"
+          ? tr("Je interventies en context in detail.", "Your interventions and context in detail.")
+          : tr("Je stack en context in detail.", "Your stack and context in detail.");
+    }
     if (activeTab === "supplements") return tr("Bijhoud supplementen naast je labresultaten.", "Track your supplements alongside lab results.");
-    if (activeTab === "protocolImpact") return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
+    if (activeTab === "protocolImpact") {
+      if (appData.settings.userProfile === "health") {
+        return tr("Interventiewijzigingen afgezet tegen je gemeten markers.", "Measured impact of intervention changes on your markers.");
+      }
+      if (appData.settings.userProfile === "biohacker") {
+        return tr("Stack-wijzigingen afgezet tegen je gemeten markers.", "Measured impact of stack changes on your markers.");
+      }
+      return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
+    }
     if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
     if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
     if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
@@ -1485,10 +1527,14 @@ const App = () => {
     </section>
   );
   const analysisResultDisplay = useMemo(() => normalizeAnalysisTextForDisplay(analysisResult), [analysisResult]);
-  const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : TAB_ITEMS;
+  const profileTabs = TAB_ITEMS.filter((tab) => isTabVisibleForProfile(appData.settings.userProfile, tab.key as TabKey));
+  const visibleTabs = isShareMode ? TAB_ITEMS.filter((tab) => tab.key === "dashboard") : profileTabs;
   const visibleTabKeys = useMemo(() => new Set(visibleTabs.map((tab) => tab.key as TabKey)), [visibleTabs]);
   const requestTabChange = (nextTab: TabKey) => {
     if (nextTab === activeTab) {
+      return;
+    }
+    if (!visibleTabKeys.has(nextTab)) {
       return;
     }
     if (nextTab !== "reports") {
@@ -1521,11 +1567,18 @@ const App = () => {
     if (!isOnboardingLocked) {
       return;
     }
-    if (activeTab === "dashboard" || activeTab === "settings") {
+    if (activeTab === "dashboard") {
       return;
     }
     setActiveTab("dashboard");
   }, [isOnboardingLocked, activeTab]);
+
+  useEffect(() => {
+    if (visibleTabKeys.has(activeTab)) {
+      return;
+    }
+    setActiveTab("dashboard");
+  }, [activeTab, visibleTabKeys]);
 
   const cancelPendingTabChange = () => {
     setPendingTabChange(null);
@@ -1633,10 +1686,12 @@ const App = () => {
           quickUploadDisabled,
           language: appData.settings.language,
           theme: appData.settings.theme,
+          userProfile: appData.settings.userProfile,
           isShareMode,
           isNl,
           sharedSnapshotGeneratedAt: sharedSnapshot?.generatedAt ?? null,
           hasReports,
+          latestReportDate,
           markersTrackedCount: allMarkers.length,
           stabilityScore: trtStability.score,
           activeProtocolCompound,
@@ -1850,6 +1905,7 @@ const App = () => {
                     protocols={appData.protocols}
                     reports={reports}
                     language={appData.settings.language}
+                    userProfile={appData.settings.userProfile}
                     isShareMode={isShareMode}
                     onAddProtocol={addProtocol}
                     onUpdateProtocol={updateProtocol}
@@ -1876,6 +1932,7 @@ const App = () => {
                 {activeTab === "checkIns" ? (
                   <CheckInsView
                     checkIns={appData.checkIns}
+                    userProfile={appData.settings.userProfile}
                     language={appData.settings.language}
                     isShareMode={isShareMode}
                     onAdd={(data) => addCheckIn({ ...data, id: crypto.randomUUID() })}

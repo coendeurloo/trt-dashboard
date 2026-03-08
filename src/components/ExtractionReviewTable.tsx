@@ -624,6 +624,7 @@ const ExtractionReviewTable = ({
     const protocol: Protocol = {
       id: createId(),
       name,
+      items: protocolDraft.compounds,
       compounds: protocolDraft.compounds,
       notes: protocolDraft.notes,
       createdAt: now,

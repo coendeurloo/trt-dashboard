@@ -58,7 +58,8 @@ describe("storage supplement schema", () => {
         {
           id: "p1",
           name: "Legacy protocol",
-          compounds: [{ name: "Testosterone Enanthate", doseMg: "120", frequency: "2x/week", route: "IM" }],
+          items: [{ name: "Testosterone Enanthate", dose: "120", doseMg: "120", frequency: "2x/week", route: "IM" }],
+          compounds: [{ name: "Testosterone Enanthate", dose: "120", doseMg: "120", frequency: "2x/week", route: "IM" }],
           supplements: [{ name: "Old", dose: "1", frequency: "daily" }],
           notes: "",
           createdAt: "2025-01-01T00:00:00.000Z",

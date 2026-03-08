@@ -80,7 +80,7 @@ export const buildCsv = (
           escapeCsv(getProtocolDoseMgPerWeek(protocol)),
           escapeCsv(getProtocolCompoundsText(protocol)),
           escapeCsv(injectionFrequencyLabel(getProtocolInjectionFrequency(protocol), "en")),
-          escapeCsv(protocol?.name ?? report.annotations.protocol),
+          escapeCsv(protocol?.name ?? report.annotations.interventionLabel ?? report.annotations.protocol ?? ""),
           escapeCsv(getReportSupplementsText(report, supplementTimeline)),
           escapeCsv(report.annotations.symptoms),
           escapeCsv(report.annotations.notes)

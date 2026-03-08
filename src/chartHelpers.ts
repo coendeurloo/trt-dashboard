@@ -156,6 +156,8 @@ export const buildYAxisDomain = (
 };
 
 export const blankAnnotations = (): ReportAnnotations => ({
+  interventionId: null,
+  interventionLabel: "",
   protocolId: null,
   protocol: "",
   supplementAnchorState: "inherit",

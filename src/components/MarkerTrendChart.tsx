@@ -6,6 +6,7 @@ import { AppLanguage, AppSettings, SymptomCheckIn } from "../types";
 import { formatDate } from "../utils";
 import { buildYAxisDomain, compactTooltipText, formatAxisTick, markerColor, phaseColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
+import { getCheckInAverage } from "../wellbeingMetrics";
 
 export interface MarkerTrendChartProps {
   marker: string;
@@ -294,9 +295,7 @@ const MarkerTrendChart = ({
                   if (diff < bestDiff) { bestDiff = diff; best = point; }
                 }
                 if (!best || bestDiff > 30 * 24 * 60 * 60 * 1000) return null;
-                const avgScore = [c.energy, c.mood, c.sleep, c.libido, c.motivation]
-                  .filter((v): v is number => v !== null)
-                  .reduce((sum, v, _, arr) => sum + v / arr.length, 0);
+                const avgScore = getCheckInAverage(c) ?? 0;
                 const emoji = avgScore >= 7.5 ? "😄" : avgScore >= 5 ? "🙂" : "😟";
                 return (
                   <ReferenceLine

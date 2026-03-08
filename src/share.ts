@@ -84,8 +84,10 @@ const sanitizeReportForShare = (report: LabReport, options: ShareOptions): LabRe
   ...report,
   annotations: {
     ...report.annotations,
-    protocolId: options.hideProtocol ? null : report.annotations.protocolId,
-    protocol: options.hideProtocol ? "" : report.annotations.protocol,
+    interventionId: options.hideProtocol ? null : (report.annotations.interventionId ?? report.annotations.protocolId ?? null),
+    interventionLabel: options.hideProtocol ? "" : (report.annotations.interventionLabel ?? report.annotations.protocol ?? ""),
+    protocolId: options.hideProtocol ? null : (report.annotations.interventionId ?? report.annotations.protocolId ?? null),
+    protocol: options.hideProtocol ? "" : (report.annotations.interventionLabel ?? report.annotations.protocol ?? ""),
     supplementOverrides: null,
     symptoms: options.hideSymptoms ? "" : report.annotations.symptoms,
     notes: options.hideNotes ? "" : report.annotations.notes
@@ -119,12 +121,16 @@ export const buildShareSubsetData = (data: StoredAppData, reportCap: number): St
 };
 
 const buildLegacyShareToken = (data: StoredAppData, options: ShareOptions): string => {
+  const protocols = options.hideProtocol ? [] : data.protocols;
+  const checkIns = options.hideProtocol ? [] : data.checkIns;
   const sanitizedData: StoredAppData = {
     schemaVersion: APP_SCHEMA_VERSION,
     reports: data.reports.map((report) => sanitizeReportForShare(report, options)),
-    protocols: options.hideProtocol ? [] : data.protocols,
+    interventions: protocols,
+    protocols,
     supplementTimeline: options.hideProtocol ? [] : data.supplementTimeline,
-    checkIns: options.hideProtocol ? [] : data.checkIns,
+    wellbeingEntries: checkIns,
+    checkIns,
     markerAliasOverrides: data.markerAliasOverrides,
     settings: {
       ...DEFAULT_SETTINGS,
@@ -151,7 +157,7 @@ const toCompactV2 = (data: StoredAppData, options: ShareOptions): SharedSnapshot
       f: sanitized.sourceFileName,
       t: sanitized.annotations.samplingTiming,
       an: {
-        p: sanitized.annotations.protocol,
+        p: sanitized.annotations.interventionLabel ?? sanitized.annotations.protocol ?? "",
         sy: sanitized.annotations.symptoms,
         n: sanitized.annotations.notes
       },
@@ -242,6 +248,8 @@ const parseV2Snapshot = (
         createdAt,
         markers,
         annotations: {
+          interventionId: null,
+          interventionLabel: typeof report.an?.p === "string" ? report.an.p : "",
           protocolId: null,
           protocol: typeof report.an?.p === "string" ? report.an.p : "",
           supplementOverrides: null,

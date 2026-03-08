@@ -1,5 +1,6 @@
-import { SymptomCheckIn, LabReport } from "./types";
+import { SymptomCheckIn, LabReport, WellbeingMetricId } from "./types";
 import { sortReportsChronological } from "./utils";
+import { getCheckInMetricValue, getCheckInValues } from "./wellbeingMetrics";
 
 export const AI_ANALYSIS_REPORT_CAP = 10;
 export const AI_ANALYSIS_LOOKBACK_MONTHS = 24;
@@ -21,7 +22,7 @@ export interface AnalysisScopeSelection {
   notice: AnalysisScopeNotice | null;
 }
 
-export type WellbeingMetricKey = "energy" | "mood" | "sleep" | "libido" | "motivation";
+export type WellbeingMetricKey = WellbeingMetricId;
 export type WellbeingTrendDirection = "rising" | "falling" | "stable" | "insufficient";
 
 export interface WellbeingSummary {
@@ -30,15 +31,17 @@ export interface WellbeingSummary {
   count: number;
   latestDate: string | null;
   latestAverage: number | null;
-  metricAverages: Record<WellbeingMetricKey, number | null>;
-  metricTrends: Record<WellbeingMetricKey, WellbeingTrendDirection>;
+  metricAverages: Partial<Record<WellbeingMetricKey, number | null>>;
+  metricTrends: Partial<Record<WellbeingMetricKey, WellbeingTrendDirection>>;
   recentPoints: Array<{
     date: string;
-    energy: number | null;
-    mood: number | null;
-    sleep: number | null;
-    libido: number | null;
-    motivation: number | null;
+    profileAtEntry?: string;
+    values?: Partial<Record<WellbeingMetricKey, number>>;
+    energy?: number | null;
+    mood?: number | null;
+    sleep?: number | null;
+    libido?: number | null;
+    motivation?: number | null;
   }>;
 }
 
@@ -53,7 +56,7 @@ interface BuildWellbeingSummaryOptions {
   checkIns: SymptomCheckIn[];
 }
 
-const WELLBEING_METRIC_KEYS: WellbeingMetricKey[] = ["energy", "mood", "sleep", "libido", "motivation"];
+const WELLBEING_METRIC_KEYS: WellbeingMetricKey[] = ["energy", "mood", "sleep", "libido", "motivation", "recovery", "stress", "focus"];
 
 const toIsoDate = (value: Date): string => value.toISOString().slice(0, 10);
 
@@ -91,7 +94,10 @@ const emptyWellbeingMetrics = <T>(value: T): Record<WellbeingMetricKey, T> => ({
   mood: value,
   sleep: value,
   libido: value,
-  motivation: value
+  motivation: value,
+  recovery: value,
+  stress: value,
+  focus: value
 });
 
 const trendFromSeries = (values: number[]): WellbeingTrendDirection => {
@@ -191,16 +197,14 @@ export const buildWellbeingSummary = ({ reports, checkIns }: BuildWellbeingSumma
     .sort((left, right) => left.date.localeCompare(right.date));
 
   const latest = scopedCheckIns[scopedCheckIns.length - 1] ?? null;
-  const latestAverage = latest
-    ? averageNumbers([latest.energy, latest.mood, latest.sleep, latest.libido, latest.motivation])
-    : null;
+  const latestAverage = latest ? averageNumbers(Object.values(getCheckInValues(latest))) : null;
 
   const metricAverages = emptyWellbeingMetrics<number | null>(null);
   const metricTrends = emptyWellbeingMetrics<WellbeingTrendDirection>("insufficient");
 
   WELLBEING_METRIC_KEYS.forEach((key) => {
     const values = scopedCheckIns
-      .map((checkIn) => checkIn[key])
+      .map((checkIn) => getCheckInMetricValue(checkIn, key))
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     metricAverages[key] = averageNumbers(values);
     metricTrends[key] = trendFromSeries(values);
@@ -216,11 +220,13 @@ export const buildWellbeingSummary = ({ reports, checkIns }: BuildWellbeingSumma
     metricTrends,
     recentPoints: scopedCheckIns.slice(-WELLBEING_RECENT_POINTS_CAP).map((checkIn) => ({
       date: checkIn.date,
-      energy: checkIn.energy,
-      mood: checkIn.mood,
-      sleep: checkIn.sleep,
-      libido: checkIn.libido,
-      motivation: checkIn.motivation
+      profileAtEntry: checkIn.profileAtEntry ?? "trt",
+      values: getCheckInValues(checkIn),
+      energy: getCheckInMetricValue(checkIn, "energy"),
+      mood: getCheckInMetricValue(checkIn, "mood"),
+      sleep: getCheckInMetricValue(checkIn, "sleep"),
+      libido: getCheckInMetricValue(checkIn, "libido"),
+      motivation: getCheckInMetricValue(checkIn, "motivation")
     }))
   };
 };

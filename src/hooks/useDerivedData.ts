@@ -15,9 +15,9 @@ import {
   buildMarkerSeries,
   buildProtocolImpactDoseEvents,
   buildProtocolImpactSummary,
-  buildTrtStabilitySeries,
+  buildProfileStabilitySeries,
   classifyMarkerTrend,
-  computeTrtStabilityIndex,
+  computeProfileStabilityIndex,
   enrichReportsWithCalculatedMarkers,
   estimateDoseResponse,
   filterReportsBySampling
@@ -241,8 +241,8 @@ export const useDashboardDerivedData = ({
     if (!enabled) {
       return EMPTY_ALERTS;
     }
-    return buildAlerts(visibleReports, allMarkers, settings.unitSystem, settings.language);
-  }, [enabled, visibleReports, allMarkers, settings.unitSystem, settings.language]);
+    return buildAlerts(visibleReports, allMarkers, settings.unitSystem, settings.language, settings.userProfile);
+  }, [enabled, visibleReports, allMarkers, settings.unitSystem, settings.language, settings.userProfile]);
 
   const actionableAlerts = useMemo(() => {
     if (!enabled) {
@@ -282,15 +282,15 @@ export const useDashboardDerivedData = ({
     if (!enabled) {
       return EMPTY_STABILITY;
     }
-    return computeTrtStabilityIndex(visibleReports, settings.unitSystem);
-  }, [enabled, visibleReports, settings.unitSystem]);
+    return computeProfileStabilityIndex(visibleReports, settings.userProfile, settings.unitSystem);
+  }, [enabled, visibleReports, settings.userProfile, settings.unitSystem]);
 
   const trtStabilitySeries = useMemo(() => {
     if (!enabled) {
       return EMPTY_STABILITY_SERIES;
     }
-    return buildTrtStabilitySeries(visibleReports, settings.unitSystem);
-  }, [enabled, visibleReports, settings.unitSystem]);
+    return buildProfileStabilitySeries(visibleReports, settings.userProfile, settings.unitSystem);
+  }, [enabled, visibleReports, settings.userProfile, settings.unitSystem]);
 
   return {
     trendByMarker,

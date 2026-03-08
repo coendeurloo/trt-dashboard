@@ -10,7 +10,8 @@ import {
   MarkerValue,
   Protocol,
   SamplingTiming,
-  SupplementPeriod
+  SupplementPeriod,
+  UserProfile
 } from "./types";
 import {
   getProtocolCompoundsText,
@@ -187,7 +188,7 @@ export interface DoseCorrelationInsight {
 
 export interface TrtStabilityResult {
   score: number | null;
-  components: Partial<Record<"Testosterone" | "Estradiol" | "Hematocrit" | "SHBG", number>>;
+  components: Partial<Record<string, number>>;
 }
 
 export interface TrtStabilityPoint {
@@ -1297,7 +1298,7 @@ export const buildMarkerSeries = (
           dosageMgPerWeek: getProtocolDoseMgPerWeek(protocol),
           compound: getProtocolCompoundsText(protocol),
           injectionFrequency: primaryFrequency,
-          protocol: protocol?.name ?? report.annotations.protocol,
+          protocol: protocol?.name ?? report.annotations.interventionLabel ?? report.annotations.protocol ?? "",
           supplements: getReportSupplementsText(report, supplementTimeline, reports),
           symptoms: report.annotations.symptoms,
           notes: report.annotations.notes,
@@ -1643,7 +1644,8 @@ export const buildAlerts = (
   reports: LabReport[],
   markerNames: string[],
   unitSystem: AppSettings["unitSystem"],
-  language: AppLanguage = "en"
+  language: AppLanguage = "en",
+  userProfile: UserProfile = "trt"
 ): MarkerAlert[] => {
   const alerts: MarkerAlert[] = [];
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -1866,7 +1868,18 @@ export const buildAlerts = (
     }
   }
 
-  return alerts.sort((left, right) => {
+  const filteredAlerts = alerts.filter((alert) => {
+    if (userProfile !== "enhanced") {
+      return true;
+    }
+    const androgenMarkers = new Set(["Testosterone", "Free Testosterone", "Estradiol"]);
+    if (!androgenMarkers.has(alert.marker)) {
+      return true;
+    }
+    return alert.tone === "positive" || !alert.actionNeeded;
+  });
+
+  return filteredAlerts.sort((left, right) => {
     const severityDiff = severityWeight(right) - severityWeight(left);
     if (severityDiff !== 0) {
       return severityDiff;
@@ -1888,23 +1901,45 @@ export const buildAlertsByMarker = (alerts: MarkerAlert[]): Record<string, Marke
   );
 };
 
-const TRT_COMPONENT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG"] as const;
-const TRT_WEIGHTS: Record<(typeof TRT_COMPONENT_MARKERS)[number], number> = {
-  Testosterone: 0.35,
-  Estradiol: 0.25,
-  Hematocrit: 0.25,
-  SHBG: 0.15
+const STABILITY_COMPONENTS_BY_PROFILE: Record<UserProfile, Array<{ marker: string; weight: number }>> = {
+  trt: [
+    { marker: "Testosterone", weight: 0.35 },
+    { marker: "Estradiol", weight: 0.25 },
+    { marker: "Hematocrit", weight: 0.25 },
+    { marker: "SHBG", weight: 0.15 }
+  ],
+  enhanced: [
+    { marker: "Testosterone", weight: 0.35 },
+    { marker: "Estradiol", weight: 0.25 },
+    { marker: "Hematocrit", weight: 0.25 },
+    { marker: "SHBG", weight: 0.15 }
+  ],
+  health: [
+    { marker: "Glucose", weight: 0.2 },
+    { marker: "HbA1c", weight: 0.2 },
+    { marker: "TSH", weight: 0.2 },
+    { marker: "CRP", weight: 0.2 },
+    { marker: "LDL Cholesterol", weight: 0.2 }
+  ],
+  biohacker: [
+    { marker: "Apolipoprotein B", weight: 0.2 },
+    { marker: "Homocysteine", weight: 0.2 },
+    { marker: "CRP", weight: 0.2 },
+    { marker: "HbA1c", weight: 0.2 },
+    { marker: "IGF-1", weight: 0.2 }
+  ]
 };
 
-export const computeTrtStabilityIndex = (
+export const computeProfileStabilityIndex = (
   reports: LabReport[],
+  userProfile: UserProfile,
   unitSystem: AppSettings["unitSystem"] = "eu"
 ): TrtStabilityResult => {
   const components: TrtStabilityResult["components"] = {};
   let weightedSum = 0;
   let weightTotal = 0;
 
-  for (const marker of TRT_COMPONENT_MARKERS) {
+  for (const { marker, weight } of STABILITY_COMPONENTS_BY_PROFILE[userProfile]) {
     const series = buildMarkerSeries(reports, marker, unitSystem);
     if (series.length < 2) {
       continue;
@@ -1913,19 +1948,10 @@ export const computeTrtStabilityIndex = (
     const avg = mean(values);
     const variation = stdDev(values);
     const cv = Math.abs(avg) <= 0.000001 ? 0 : variation / Math.abs(avg);
-
-    /**
-     * TRT Stability formula:
-     * 1) Compute coefficient of variation (CV = stddev / mean) per core marker.
-     * 2) Convert to marker score with: score = clamp(100 - CV * 220, 0, 100).
-     * 3) Composite score = weighted average:
-     *    Testosterone 35%, Estradiol 25%, Hematocrit 25%, SHBG 15%.
-     * Lower variance increases the final score.
-     */
     const markerScore = clip(100 - cv * 220, 0, 100);
     components[marker] = ROUND_2(markerScore);
-    weightedSum += markerScore * TRT_WEIGHTS[marker];
-    weightTotal += TRT_WEIGHTS[marker];
+    weightedSum += markerScore * weight;
+    weightTotal += weight;
   }
 
   if (weightTotal === 0) {
@@ -1941,15 +1967,23 @@ export const computeTrtStabilityIndex = (
   };
 };
 
-export const buildTrtStabilitySeries = (
+export const computeTrtStabilityIndex = (
   reports: LabReport[],
+  unitSystem: AppSettings["unitSystem"] = "eu"
+): TrtStabilityResult => {
+  return computeProfileStabilityIndex(reports, "trt", unitSystem);
+};
+
+export const buildProfileStabilitySeries = (
+  reports: LabReport[],
+  userProfile: UserProfile,
   unitSystem: AppSettings["unitSystem"] = "eu"
 ): TrtStabilityPoint[] => {
   const sorted = sortReportsChronological(reports);
   const points: TrtStabilityPoint[] = [];
   for (let index = 0; index < sorted.length; index += 1) {
     const subset = sorted.slice(0, index + 1);
-    const score = computeTrtStabilityIndex(subset, unitSystem).score;
+    const score = computeProfileStabilityIndex(subset, userProfile, unitSystem).score;
     if (score === null) {
       continue;
     }
@@ -1961,6 +1995,13 @@ export const buildTrtStabilitySeries = (
     });
   }
   return points;
+};
+
+export const buildTrtStabilitySeries = (
+  reports: LabReport[],
+  unitSystem: AppSettings["unitSystem"] = "eu"
+): TrtStabilityPoint[] => {
+  return buildProfileStabilitySeries(reports, "trt", unitSystem);
 };
 
 export const extractProtocolFrequencyPerWeek = (protocol: Protocol | null): number | null => getProtocolFrequencyPerWeek(protocol);
@@ -2013,8 +2054,8 @@ export const buildProtocolImpactSummary = (
     const compoundTo = getProtocolCompoundsText(currentProtocol);
     const compoundChanged = normalizeProtocolText(compoundFrom) !== normalizeProtocolText(compoundTo);
     const protocolTextChanged =
-      normalizeProtocolText(previousProtocol?.name ?? previous.annotations.protocol) !==
-      normalizeProtocolText(currentProtocol?.name ?? current.annotations.protocol);
+      normalizeProtocolText(previousProtocol?.name ?? previous.annotations.interventionLabel ?? previous.annotations.protocol ?? "") !==
+      normalizeProtocolText(currentProtocol?.name ?? current.annotations.interventionLabel ?? current.annotations.protocol ?? "");
     const doseChanged = previousDose !== currentDose;
     const frequencyChanged = frequencyFrom !== null && frequencyTo !== null && Math.abs(frequencyFrom - frequencyTo) > 0.01;
 
@@ -2043,8 +2084,8 @@ export const buildProtocolImpactSummary = (
       doseTo: currentDose,
       frequencyFrom,
       frequencyTo,
-      protocolFrom: previousProtocol?.name ?? previous.annotations.protocol,
-      protocolTo: currentProtocol?.name ?? current.annotations.protocol,
+      protocolFrom: previousProtocol?.name ?? previous.annotations.interventionLabel ?? previous.annotations.protocol ?? "",
+      protocolTo: currentProtocol?.name ?? current.annotations.interventionLabel ?? current.annotations.protocol ?? "",
       trigger
     });
 
@@ -2477,7 +2518,7 @@ export const buildDosePhaseBlocks = (reports: LabReport[], protocols: Protocol[]
       fromKey: `${current.testDate}__${current.id}`,
       toKey: `${next.testDate}__${next.id}`,
       dosageMgPerWeek: getProtocolDoseMgPerWeek(protocol),
-      protocol: protocol?.name ?? current.annotations.protocol
+      protocol: protocol?.name ?? current.annotations.interventionLabel ?? current.annotations.protocol ?? ""
     });
   }
   return blocks;
