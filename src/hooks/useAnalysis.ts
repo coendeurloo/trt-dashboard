@@ -44,6 +44,7 @@ export const useAnalysis = ({
   mapErrorToMessage,
   tr
 }: UseAnalysisOptions) => {
+  const analysisBaseReports = allReports;
   const [isAnalyzingLabs, setIsAnalyzingLabs] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [analysisResult, setAnalysisResult] = useState("");
@@ -83,14 +84,14 @@ export const useAnalysis = ({
 
   const suggestedScopeNotice = useMemo(() => {
     const scope = selectReportsForAnalysis({
-      reports: visibleReports,
+      reports: analysisBaseReports,
       analysisType: "full"
     });
     return scope.notice;
-  }, [visibleReports]);
+  }, [analysisBaseReports]);
 
   const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
-    if (analysisType === "latestComparison" && visibleReports.length < 2) {
+    if (analysisType === "latestComparison" && analysisBaseReports.length < 2) {
       setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
       return;
     }
@@ -121,7 +122,7 @@ export const useAnalysis = ({
 
     try {
       const scopeSelection = selectReportsForAnalysis({
-        reports: visibleReports,
+        reports: analysisBaseReports,
         analysisType
       });
       const selectedReports = scopeSelection.selectedReports;

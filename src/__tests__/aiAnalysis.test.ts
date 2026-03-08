@@ -283,7 +283,10 @@ describe("analyzeLabDataWithClaude", () => {
     const data = extractDataBlock(capturedPrompt);
     const promptReports = data.reports as unknown[] | undefined;
     const promptSignals = data.signals as { wellbeing?: unknown } | undefined;
+    const latestReportEvidence = data.latestReportEvidence as { latestDate?: string; presence?: Record<string, boolean> } | undefined;
     expect(promptReports).toHaveLength(3);
+    expect(latestReportEvidence?.latestDate).toBe("2026-02-04");
+    expect(latestReportEvidence?.presence?.Testosterone).toBe(true);
     expect(promptSignals?.wellbeing).toEqual({
       windowStart: "2026-01-21",
       windowEnd: "2026-02-04",

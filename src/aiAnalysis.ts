@@ -293,6 +293,8 @@ ANALYSIS RULES:
 - State uncertainty and confounders plainly.
 - Do not recap stable markers unless they provide required context.
 - currentSupplements = current truth. Do not suggest supplements or changes the user is already doing.
+- Use latestReportEvidence as source of truth for marker presence in the newest report.
+- Never claim a marker was "not measured" or "missing" if latestReportEvidence.presence[marker] is true.
 
 WELLBEING INTEGRATION:
 - If wellbeing check-in data is present, treat it as first-class evidence.
@@ -304,6 +306,39 @@ SAFETY:
 - Never diagnose. Never prescribe. Frame recommendations for doctor discussion.
 - If markers indicate possible danger (e.g., hematocrit >54% or very elevated liver enzymes), be direct without panic.
 - Cite studies only when they directly support a recommendation or risk statement (max 2).`;
+};
+
+const buildLatestReportEvidence = (
+  reports: AnalysisReportRow[],
+  profile: UserProfile
+): {
+  latestDate: string | null;
+  markerCount: number;
+  markerNames: string[];
+  presence: Record<string, boolean>;
+} => {
+  const latest = reports[reports.length - 1];
+  if (!latest) {
+    return {
+      latestDate: null,
+      markerCount: 0,
+      markerNames: [],
+      presence: {}
+    };
+  }
+  const markerNames = latest.markers.map((marker) => marker.m);
+  const markerSet = new Set(markerNames);
+  const presence: Record<string, boolean> = {};
+  const keys = PROFILE_CRITICAL_MARKERS[profile] ?? PROFILE_CRITICAL_MARKERS.trt;
+  keys.forEach((marker) => {
+    presence[marker] = markerSet.has(marker);
+  });
+  return {
+    latestDate: latest.date,
+    markerCount: markerNames.length,
+    markerNames,
+    presence
+  };
 };
 
 const buildFullSections = (supplementActionsNeeded: boolean): string => {
@@ -575,6 +610,7 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
       units: unitSystem,
       userProfile: profile,
       reports: payload,
+      latestReportEvidence: buildLatestReportEvidence(payload, profile),
       currentSupplements: supplementContext,
       signals,
       premiumInsights: fullPremiumInsightPack,
@@ -610,6 +646,7 @@ function buildComparisonPrompt(params: ComparisonParams): string {
       userProfile: profile,
       latestComparison: relevantComparison ?? latestComparison,
       reports: relevantPayload,
+      latestReportEvidence: buildLatestReportEvidence(relevantPayload, profile),
       currentSupplements: relevantSupplementContext,
       signals: comparisonSignals,
       premiumInsights: comparisonPremiumInsightPack,

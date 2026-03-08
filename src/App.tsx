@@ -2019,7 +2019,7 @@ const App = () => {
                     analysisKind={analysisKind}
                     analyzingKind={analyzingKind}
                     analysisScopeNotice={analysisScopeNotice}
-                    reportsInScope={visibleReports.length}
+                    reportsInScope={reports.length}
                     markersTracked={allMarkers.length}
                     analysisMarkerNames={analysisMarkerNames}
                     activeProtocolLabel={activeAnalysisProtocolLabel}
