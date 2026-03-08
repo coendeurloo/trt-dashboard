@@ -101,6 +101,7 @@ const SettingsView = ({
   onGenerateShareLink
 }: SettingsViewProps) => {
   const isNl = language === "nl";
+  const isLightTheme = settings.theme === "light";
   const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const [mergeFromMarker, setMergeFromMarker] = useState("");
@@ -243,13 +244,27 @@ const SettingsView = ({
                   type="button"
                   onClick={() => onUpdateSettings({ userProfile: profile.id as UserProfile })}
                   className={`rounded-lg border p-3 text-left transition ${
-                    active
-                      ? "border-cyan-400/70 bg-cyan-500/15 text-cyan-100"
-                      : "border-slate-700 bg-slate-900/70 text-slate-200 hover:border-slate-500"
+                    isLightTheme
+                      ? active
+                        ? "border-cyan-500/55 bg-cyan-100/75 text-cyan-900"
+                        : "border-slate-300 bg-white/90 text-slate-800 hover:border-cyan-400/50"
+                      : active
+                        ? "border-cyan-400/70 bg-cyan-500/15 text-cyan-100"
+                        : "border-slate-700 bg-slate-900/70 text-slate-200 hover:border-slate-500"
                   }`}
                 >
                   <p className="text-sm font-semibold">{isNl ? profile.labelNl : profile.labelEn}</p>
-                  <p className={`mt-1 text-xs leading-5 ${active ? "text-cyan-200/90" : "text-slate-400"}`}>
+                  <p
+                    className={`mt-1 text-xs leading-5 ${
+                      isLightTheme
+                        ? active
+                          ? "text-cyan-800/90"
+                          : "text-slate-600"
+                        : active
+                          ? "text-cyan-200/90"
+                          : "text-slate-400"
+                    }`}
+                  >
                     {isNl ? profile.descriptionNl : profile.descriptionEn}
                   </p>
                 </button>

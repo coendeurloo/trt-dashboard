@@ -142,7 +142,7 @@ const SupplementsView = ({
     setEditingPeriodId(period.id);
     setEditDoseInput(period.dose);
     setEditFrequencyInput(period.frequency);
-    setEditStartDateInput(todayIso());
+    setEditStartDateInput(period.startDate);
   };
 
   const cancelEditDose = () => {
@@ -157,10 +157,20 @@ const SupplementsView = ({
       return;
     }
     const newStart = editStartDateInput;
-    if (newStart <= period.startDate) {
+    if (newStart === period.startDate) {
       onUpdateSupplementPeriod(period.id, {
         dose: editDoseInput.trim(),
         frequency: editFrequencyInput
+      });
+      cancelEditDose();
+      return;
+    }
+
+    if (newStart < period.startDate) {
+      onUpdateSupplementPeriod(period.id, {
+        dose: editDoseInput.trim(),
+        frequency: editFrequencyInput,
+        startDate: newStart
       });
       cancelEditDose();
       return;
