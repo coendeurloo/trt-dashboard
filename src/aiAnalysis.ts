@@ -594,7 +594,7 @@ function buildComparisonPrompt(params: ComparisonParams): string {
 
   return [
     buildPersona(profile, today),
-    "Scope: latest report vs immediately previous report only.",
+    "Scope: latest report vs the most comparable previous report (highest marker overlap; nearest date on tie).",
     "Target length: 220-320 words.",
     FORMAT_RULES(7, 4),
     buildCoreRules(profile),
@@ -1141,7 +1141,13 @@ const compactReportsForPrompt = (
   if (reports.length === 0) {
     return reports;
   }
-  const scopedReports = analysisType === "latestComparison" ? reports.slice(-2) : reports;
+  const scopedReports =
+    analysisType === "latestComparison"
+      ? (() => {
+          const pair = resolveLatestComparisonPair(reports);
+          return pair ? [pair.previous, pair.latest] : reports.slice(-2);
+        })()
+      : reports;
   const perReportCap = Math.max(
     14,
     Math.min(MAX_MARKERS_PER_REPORT, Math.floor(MAX_TOTAL_MARKERS_IN_PROMPT / Math.max(1, scopedReports.length)))
@@ -1368,13 +1374,74 @@ const stripComplexFormatting = (input: string): string => {
     .trim();
 };
 
-const buildLatestVsPrevious = (reports: AnalysisReportRow[]) => {
+const markerNameKey = (value: string): string => normalizeText(value);
+
+const markerOverlapCount = (latest: AnalysisReportRow, candidate: AnalysisReportRow): number => {
+  const latestMarkers = new Set(latest.markers.map((marker) => markerNameKey(marker.m)));
+  if (latestMarkers.size === 0) {
+    return 0;
+  }
+  return candidate.markers.reduce((count, marker) => {
+    return latestMarkers.has(markerNameKey(marker.m)) ? count + 1 : count;
+  }, 0);
+};
+
+const resolveLatestComparisonPair = (
+  reports: AnalysisReportRow[]
+): { previous: AnalysisReportRow; latest: AnalysisReportRow; overlap: number; usedFallback: boolean } | null => {
   if (reports.length < 2) {
     return null;
   }
+  if (reports.length === 2) {
+    return {
+      previous: reports[0],
+      latest: reports[1],
+      overlap: markerOverlapCount(reports[1], reports[0]),
+      usedFallback: false
+    };
+  }
 
   const latest = reports[reports.length - 1];
-  const previous = reports[reports.length - 2];
+  const immediatePrevious = reports[reports.length - 2];
+  let bestPrevious = immediatePrevious;
+  let bestIndex = reports.length - 2;
+  let bestOverlap = markerOverlapCount(latest, immediatePrevious);
+
+  for (let index = 0; index < reports.length - 1; index += 1) {
+    const candidate = reports[index];
+    const overlap = markerOverlapCount(latest, candidate);
+    if (overlap > bestOverlap || (overlap === bestOverlap && index > bestIndex)) {
+      bestPrevious = candidate;
+      bestIndex = index;
+      bestOverlap = overlap;
+    }
+  }
+
+  if (bestOverlap <= 0) {
+    return {
+      previous: immediatePrevious,
+      latest,
+      overlap: markerOverlapCount(latest, immediatePrevious),
+      usedFallback: true
+    };
+  }
+
+  return {
+    previous: bestPrevious,
+    latest,
+    overlap: bestOverlap,
+    usedFallback: false
+  };
+};
+
+const buildLatestVsPrevious = (reports: AnalysisReportRow[]) => {
+  const pair = resolveLatestComparisonPair(reports);
+  if (!pair) {
+    return null;
+  }
+
+  const latest = pair.latest;
+  const previous = pair.previous;
   const previousByMarker = new Map(previous.markers.map((marker) => [marker.m, marker] as const));
   const latestByMarker = new Map(latest.markers.map((marker) => [marker.m, marker] as const));
 
@@ -1424,6 +1491,11 @@ const buildLatestVsPrevious = (reports: AnalysisReportRow[]) => {
   return {
     previousDate: previous.date,
     latestDate: latest.date,
+    pairSelection: {
+      overlapMarkers: pair.overlap,
+      comparedCandidates: Math.max(1, reports.length - 1),
+      usedImmediateFallback: pair.usedFallback
+    },
     previousAnnotations: previous.ann,
     latestAnnotations: latest.ann,
     overlapping,

@@ -41,54 +41,65 @@ describe("selectReportsForAnalysis", () => {
     const reports = Array.from({ length: 5 }, (_, index) => makeReport(index + 1, `2025-0${index + 1}-01`));
     const result = selectReportsForAnalysis({
       reports,
-      analysisType: "full",
-      now: "2026-02-25"
+      analysisType: "full"
     });
 
     expect(result.selectedReports).toHaveLength(5);
     expect(result.notice).toBeNull();
   });
 
-  it("applies lookback and cap when many reports exist within last 24 months", () => {
+  it("samples timeline when report count exceeds cap", () => {
     const reports = Array.from({ length: 12 }, (_, index) => {
       const month = String(index + 1).padStart(2, "0");
       return makeReport(index + 1, `2025-${month}-15`);
     });
     const result = selectReportsForAnalysis({
       reports,
-      analysisType: "full",
-      now: "2026-02-25"
+      analysisType: "full"
     });
 
     expect(result.selectedReports).toHaveLength(10);
     expect(result.notice).toEqual({
       usedReports: 10,
       totalReports: 12,
-      lookbackApplied: true,
+      lookbackApplied: false,
       capApplied: true,
-      reason: "lookback_and_cap"
+      reason: "timeline_sampled"
     });
+    expect(result.selectedReports[0]?.testDate).toBe("2025-01-15");
+    expect(result.selectedReports[result.selectedReports.length - 1]?.testDate).toBe("2025-12-15");
   });
 
-  it("falls back to most recent cap when no report is inside lookback window", () => {
-    const reports = Array.from({ length: 12 }, (_, index) => {
-      const month = String((index % 12) + 1).padStart(2, "0");
-      return makeReport(index + 1, `2021-${month}-10`);
-    });
+  it("selects previous report with best marker overlap for latest comparison", () => {
+    const reports = [
+      makeReport(1, "2025-01-01"),
+      {
+        ...makeReport(2, "2025-02-01"),
+        markers: [
+          {
+            id: "m-2",
+            marker: "TSH",
+            canonicalMarker: "TSH",
+            value: 2,
+            unit: "mIU/L",
+            referenceMin: 0.27,
+            referenceMax: 4.2,
+            abnormal: "normal" as const,
+            confidence: 1
+          }
+        ]
+      },
+      makeReport(3, "2025-03-01")
+    ];
     const result = selectReportsForAnalysis({
       reports,
-      analysisType: "full",
-      now: "2026-02-25"
+      analysisType: "latestComparison"
     });
 
-    expect(result.selectedReports).toHaveLength(10);
-    expect(result.notice).toEqual({
-      usedReports: 10,
-      totalReports: 12,
-      lookbackApplied: true,
-      capApplied: true,
-      reason: "recent_cap_fallback"
-    });
+    expect(result.selectedReports).toHaveLength(2);
+    expect(result.selectedReports[0]?.id).toBe("r-1");
+    expect(result.selectedReports[1]?.id).toBe("r-3");
+    expect(result.notice).toBeNull();
   });
 });
 

@@ -397,6 +397,90 @@ describe("analyzeLabDataWithClaude", () => {
     );
   });
 
+  it("uses the most comparable previous report in latest comparison when immediate previous has low marker overlap", async () => {
+    const reports: LabReport[] = [
+      {
+        ...sampleReport,
+        id: "r-old",
+        testDate: "2025-10-01",
+        createdAt: "2025-10-01T10:00:00.000Z",
+        markers: [
+          {
+            ...sampleReport.markers[0],
+            id: "m-old",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 18.2
+          }
+        ]
+      },
+      {
+        ...sampleReport,
+        id: "r-mid",
+        testDate: "2025-11-01",
+        createdAt: "2025-11-01T10:00:00.000Z",
+        markers: [
+          {
+            ...sampleReport.markers[0],
+            id: "m-mid",
+            marker: "CRP",
+            canonicalMarker: "CRP",
+            value: 2.1,
+            unit: "mg/L",
+            referenceMin: 0,
+            referenceMax: 5
+          }
+        ]
+      },
+      {
+        ...sampleReport,
+        id: "r-latest",
+        testDate: "2025-12-01",
+        createdAt: "2025-12-01T10:00:00.000Z",
+        markers: [
+          {
+            ...sampleReport.markers[0],
+            id: "m-latest",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 21.4
+          }
+        ]
+      }
+    ];
+
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports,
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      analysisType: "latestComparison",
+      externalAiAllowed: true
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const latestComparison = data.latestComparison as { previousDate?: string; latestDate?: string } | undefined;
+    const promptReports = data.reports as Array<{ date?: string }> | undefined;
+    expect(latestComparison?.previousDate).toBe("2025-10-01");
+    expect(latestComparison?.latestDate).toBe("2025-12-01");
+    expect(promptReports?.map((report) => report.date)).toEqual(["2025-10-01", "2025-12-01"]);
+  });
+
   it("uses no-supplement prompt contract when no actions are needed", async () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {

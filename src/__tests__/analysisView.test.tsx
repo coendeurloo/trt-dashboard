@@ -87,9 +87,9 @@ describe("AnalysisView", () => {
         analysisScopeNotice={{
           usedReports: 10,
           totalReports: 27,
-          lookbackApplied: true,
+          lookbackApplied: false,
           capApplied: true,
-          reason: "lookback_and_cap"
+          reason: "timeline_sampled"
         }}
       />
     );

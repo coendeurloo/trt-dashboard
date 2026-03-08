@@ -126,21 +126,9 @@ const AnalysisView = ({
     if (!analysisScopeNotice) {
       return "";
     }
-    if (analysisScopeNotice.reason === "lookback_and_cap") {
-      return tr(
-        "Alleen rapporten uit de laatste 24 maanden zijn meegenomen en beperkt tot het maximum om requestgrootte stabiel te houden.",
-        "Only reports from the last 24 months were included and then capped to keep request size stable."
-      );
-    }
-    if (analysisScopeNotice.reason === "lookback_only") {
-      return tr(
-        "Alleen rapporten uit de laatste 24 maanden zijn meegenomen om de analyse relevant en compact te houden.",
-        "Only reports from the last 24 months were included to keep analysis relevant and compact."
-      );
-    }
     return tr(
-      "Er waren geen rapporten in de laatste 24 maanden, daarom zijn de meest recente rapporten gebruikt met een veilige limiet.",
-      "No reports were within the last 24 months, so the most recent reports were used with a safe cap."
+      "Voor deze run is slim gesampled over je volledige tijdlijn: beginpunt, recente metingen en tussenliggende ankers.",
+      "For this run, reports were smart-sampled across your full timeline: origin, recent labs, and spaced anchors in between."
     );
   })();
 

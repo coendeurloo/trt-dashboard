@@ -3,11 +3,10 @@ import { sortReportsChronological } from "./utils";
 import { getCheckInMetricValue, getCheckInValues } from "./wellbeingMetrics";
 
 export const AI_ANALYSIS_REPORT_CAP = 10;
-export const AI_ANALYSIS_LOOKBACK_MONTHS = 24;
 export const WELLBEING_RECENT_POINTS_CAP = 8;
 const WELLBEING_TREND_DELTA_THRESHOLD = 0.6;
 
-export type AnalysisScopeReason = "lookback_and_cap" | "lookback_only" | "recent_cap_fallback";
+export type AnalysisScopeReason = "timeline_sampled";
 
 export interface AnalysisScopeNotice {
   usedReports: number;
@@ -48,7 +47,6 @@ export interface WellbeingSummary {
 interface SelectReportsForAnalysisOptions {
   reports: LabReport[];
   analysisType: "full" | "latestComparison";
-  now?: Date | string;
 }
 
 interface BuildWellbeingSummaryOptions {
@@ -57,26 +55,6 @@ interface BuildWellbeingSummaryOptions {
 }
 
 const WELLBEING_METRIC_KEYS: WellbeingMetricKey[] = ["energy", "mood", "sleep", "libido", "motivation", "recovery", "stress", "focus"];
-
-const toIsoDate = (value: Date): string => value.toISOString().slice(0, 10);
-
-const resolveNow = (now?: Date | string): Date => {
-  if (!now) {
-    return new Date();
-  }
-  if (now instanceof Date) {
-    return Number.isFinite(now.getTime()) ? now : new Date();
-  }
-  const parsed = new Date(now);
-  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
-};
-
-const lookbackStartIsoDate = (now?: Date | string): string => {
-  const current = resolveNow(now);
-  const lookbackStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate()));
-  lookbackStart.setUTCMonth(lookbackStart.getUTCMonth() - AI_ANALYSIS_LOOKBACK_MONTHS);
-  return toIsoDate(lookbackStart);
-};
 
 const round2 = (value: number): number => Number(value.toFixed(2));
 
@@ -114,16 +92,90 @@ const trendFromSeries = (values: number[]): WellbeingTrendDirection => {
   return "stable";
 };
 
+const markerKey = (value: string): string => value.trim().toLowerCase();
+
+const markerOverlapCount = (left: LabReport, right: LabReport): number => {
+  const leftMarkers = new Set(left.markers.map((marker) => markerKey(marker.canonicalMarker || marker.marker)));
+  if (leftMarkers.size === 0) {
+    return 0;
+  }
+  return right.markers.reduce((count, marker) => {
+    const key = markerKey(marker.canonicalMarker || marker.marker);
+    return leftMarkers.has(key) ? count + 1 : count;
+  }, 0);
+};
+
+const selectLatestComparisonPair = (chronological: LabReport[]): LabReport[] => {
+  if (chronological.length <= 2) {
+    return chronological.slice(-2);
+  }
+
+  const latest = chronological[chronological.length - 1];
+  const immediatePrevious = chronological[chronological.length - 2];
+
+  let bestIndex = chronological.length - 2;
+  let bestOverlap = markerOverlapCount(latest, immediatePrevious);
+
+  for (let index = 0; index < chronological.length - 1; index += 1) {
+    const candidate = chronological[index];
+    const overlap = markerOverlapCount(latest, candidate);
+    if (overlap > bestOverlap || (overlap === bestOverlap && index > bestIndex)) {
+      bestIndex = index;
+      bestOverlap = overlap;
+    }
+  }
+
+  if (bestOverlap <= 0) {
+    return [immediatePrevious, latest];
+  }
+  return [chronological[bestIndex], latest];
+};
+
+const selectTimelineSample = (chronological: LabReport[], cap: number): LabReport[] => {
+  if (chronological.length <= cap) {
+    return chronological;
+  }
+
+  const total = chronological.length;
+  const recentCount = Math.min(4, cap - 2);
+  const recentStart = Math.max(1, total - recentCount);
+  const anchorPool = Array.from({ length: Math.max(0, recentStart - 1) }, (_, index) => index + 1);
+  const anchorSlots = Math.max(0, cap - 1 - recentCount);
+  const selectedIndexSet = new Set<number>([0]);
+
+  if (anchorPool.length > 0 && anchorSlots > 0) {
+    const targetCount = Math.min(anchorSlots, anchorPool.length);
+    for (let slot = 0; slot < targetCount; slot += 1) {
+      const fractional = (slot + 0.5) * (anchorPool.length / targetCount);
+      const poolIndex = Math.min(anchorPool.length - 1, Math.floor(fractional));
+      selectedIndexSet.add(anchorPool[poolIndex]);
+    }
+    if (selectedIndexSet.size < 1 + targetCount) {
+      for (let poolIndex = anchorPool.length - 1; poolIndex >= 0 && selectedIndexSet.size < 1 + targetCount; poolIndex -= 1) {
+        selectedIndexSet.add(anchorPool[poolIndex]);
+      }
+    }
+  }
+
+  for (let index = recentStart; index < total; index += 1) {
+    selectedIndexSet.add(index);
+  }
+
+  return Array.from(selectedIndexSet)
+    .sort((left, right) => left - right)
+    .slice(-cap)
+    .map((index) => chronological[index]);
+};
+
 export const selectReportsForAnalysis = ({
   reports,
-  analysisType,
-  now
+  analysisType
 }: SelectReportsForAnalysisOptions): AnalysisScopeSelection => {
   const chronological = sortReportsChronological(reports);
 
   if (analysisType === "latestComparison") {
     return {
-      selectedReports: chronological.slice(-2),
+      selectedReports: selectLatestComparisonPair(chronological),
       notice: null
     };
   }
@@ -135,45 +187,16 @@ export const selectReportsForAnalysis = ({
     };
   }
 
-  const lookbackStart = lookbackStartIsoDate(now);
-  const lookbackReports = chronological.filter((report) => report.testDate >= lookbackStart);
-
-  if (lookbackReports.length === 0) {
-    const selectedReports = chronological.slice(-AI_ANALYSIS_REPORT_CAP);
-    return {
-      selectedReports,
-      notice: {
-        usedReports: selectedReports.length,
-        totalReports: chronological.length,
-        lookbackApplied: true,
-        capApplied: true,
-        reason: "recent_cap_fallback"
-      }
-    };
-  }
-
-  if (lookbackReports.length > AI_ANALYSIS_REPORT_CAP) {
-    const selectedReports = lookbackReports.slice(-AI_ANALYSIS_REPORT_CAP);
-    return {
-      selectedReports,
-      notice: {
-        usedReports: selectedReports.length,
-        totalReports: chronological.length,
-        lookbackApplied: true,
-        capApplied: true,
-        reason: "lookback_and_cap"
-      }
-    };
-  }
+  const selectedReports = selectTimelineSample(chronological, AI_ANALYSIS_REPORT_CAP);
 
   return {
-    selectedReports: lookbackReports,
+    selectedReports,
     notice: {
-      usedReports: lookbackReports.length,
+      usedReports: selectedReports.length,
       totalReports: chronological.length,
-      lookbackApplied: true,
-      capApplied: false,
-      reason: "lookback_only"
+      lookbackApplied: false,
+      capApplied: true,
+      reason: "timeline_sampled"
     }
   };
 };
