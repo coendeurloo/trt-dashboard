@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CloudAuthModal from "../components/CloudAuthModal";
 
@@ -9,7 +9,7 @@ describe("CloudAuthModal", () => {
     cleanup();
   });
 
-  it("shows Google as the primary action and keeps email auth in tabs", () => {
+  it("renders a dedicated sign-in view without a mode switch", () => {
     render(
       <CloudAuthModal
         open
@@ -28,51 +28,15 @@ describe("CloudAuthModal", () => {
       />
     );
 
+    expect(screen.getByText("Sign in for cloud sync")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
-    expect(screen.getByText("or continue with email")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Sign in" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
   });
 
-  it("submits the signup tab through the email form", async () => {
+  it("requires consent before enabling signup actions", async () => {
     const onSignUpEmail = vi.fn(async () => undefined);
 
-    render(
-      <CloudAuthModal
-        open
-        language="en"
-        configured
-        initialView="signin"
-        authStatus="unauthenticated"
-        authError={null}
-        consentRequired={false}
-        privacyPolicyVersion="2026-03-09"
-        onClose={vi.fn()}
-        onSignInGoogle={vi.fn(async () => undefined)}
-        onSignInEmail={vi.fn(async () => undefined)}
-        onSignUpEmail={onSignUpEmail}
-        onCompleteConsent={vi.fn(async () => undefined)}
-      />
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
-    const privacyCheckbox = screen.getByLabelText(/i agree to the privacy policy/i);
-    const healthCheckbox = screen.getByLabelText(/i explicitly consent to processing health data/i);
-    fireEvent.click(privacyCheckbox);
-    fireEvent.click(healthCheckbox);
-    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "test@example.com" } });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret12" } });
-    const createButtons = screen.getAllByRole("button", { name: "Create account" });
-    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement);
-
-    expect(onSignUpEmail).toHaveBeenCalledWith("test@example.com", "secret12", {
-      acceptPrivacyPolicy: true,
-      acceptHealthDataConsent: true,
-      privacyPolicyVersion: "2026-03-09"
-    });
-  });
-
-  it("shows an explicit step hint when signup consent is still missing", () => {
     render(
       <CloudAuthModal
         open
@@ -86,15 +50,36 @@ describe("CloudAuthModal", () => {
         onClose={vi.fn()}
         onSignInGoogle={vi.fn(async () => undefined)}
         onSignInEmail={vi.fn(async () => undefined)}
-        onSignUpEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={onSignUpEmail}
         onCompleteConsent={vi.fn(async () => undefined)}
       />
     );
 
-    expect(screen.getByText("Step 1 of 2")).toBeTruthy();
-    expect(
-      screen.getByText("One more step: confirm both checkboxes. Then choose Google or email.")
-    ).toBeTruthy();
+    const googleButton = screen.getByRole("button", { name: "Continue with Google" }) as HTMLButtonElement;
+    const createButton = screen.getByRole("button", { name: "Create account" }) as HTMLButtonElement;
+
+    expect(googleButton.disabled).toBe(true);
+    expect(createButton.disabled).toBe(true);
+
+    fireEvent.click(screen.getByLabelText(/i agree to the privacy policy/i));
+    fireEvent.click(screen.getByLabelText(/i explicitly consent to processing health data/i));
+
+    await waitFor(() => {
+      expect(googleButton.disabled).toBe(false);
+      expect(createButton.disabled).toBe(false);
+    });
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "test@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret12" } });
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(onSignUpEmail).toHaveBeenCalledWith("test@example.com", "secret12", {
+        acceptPrivacyPolicy: true,
+        acceptHealthDataConsent: true,
+        privacyPolicyVersion: "2026-03-09"
+      });
+    });
   });
 
   it("links to privacy policy in a new tab from signup", () => {

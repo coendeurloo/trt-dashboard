@@ -60,7 +60,6 @@ const CloudAuthModal = ({
   onCompleteConsent
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
-  const [view, setView] = useState<CloudAuthView>(initialView);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [acceptPrivacyPolicy, setAcceptPrivacyPolicy] = useState(false);
@@ -69,10 +68,14 @@ const CloudAuthModal = ({
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setView(initialView);
-      setLocalError(null);
+    if (!open) {
+      return;
     }
+    setEmail("");
+    setPassword("");
+    setAcceptPrivacyPolicy(false);
+    setAcceptHealthDataConsent(false);
+    setLocalError(null);
   }, [initialView, open]);
 
   const consentPayload = useMemo<CloudConsentPayload | null>(() => {
@@ -89,6 +92,9 @@ const CloudAuthModal = ({
   if (!open || typeof document === "undefined") {
     return null;
   }
+
+  const isSignupView = initialView === "signup";
+  const signupBlocked = isSignupView && !consentPayload;
 
   const run = async (fn: () => Promise<void>) => {
     setIsBusy(true);
@@ -107,38 +113,20 @@ const CloudAuthModal = ({
   const submitEmail = async (event: FormEvent) => {
     event.preventDefault();
     await run(() => {
-      if (view === "signin") {
-        return onSignInEmail(email, password);
+      if (isSignupView) {
+        if (!consentPayload) {
+          throw new Error(
+            tr(
+              "Bevestig eerst de privacy policy en health-data toestemming.",
+              "Please confirm privacy policy and health-data consent first."
+            )
+          );
+        }
+        return onSignUpEmail(email, password, consentPayload);
       }
-      if (!consentPayload) {
-        throw new Error(
-          tr(
-            "Bevestig eerst de privacy policy en health-data toestemming.",
-            "Please confirm privacy policy and health-data consent first."
-          )
-        );
-      }
-      return onSignUpEmail(email, password, consentPayload);
+      return onSignInEmail(email, password);
     });
   };
-
-  const signupBlocked = view === "signup" && !consentPayload;
-  const consentProgressCount = Number(acceptPrivacyPolicy) + Number(acceptHealthDataConsent);
-  const consentTitle = tr("Cloud toestemming vereist", "Cloud consent required");
-  const headline =
-    view === "signin"
-      ? tr("Log in en sync tussen apparaten", "Sign in and sync across devices")
-      : tr("Maak een account voor automatische sync", "Create an account for automatic sync");
-  const subline =
-    view === "signin"
-      ? tr(
-          "Je data blijft local-first. Log alleen in als je back-up en sync tussen apparaten wilt.",
-          "LabTracker stays local-first. Sign in only if you want backup and sync across devices."
-        )
-      : tr(
-          "Cloud sync is optioneel, maar voor accountregistratie vragen we expliciet privacy- en health-data consent.",
-          "Cloud sync is optional, but account registration requires explicit privacy and health-data consent."
-        );
 
   const consentBlock = (
     <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
@@ -176,8 +164,37 @@ const CloudAuthModal = ({
           )}
         </span>
       </label>
+      {isSignupView ? (
+        <p className="text-xs text-slate-400">
+          {tr(
+            "Beide vinkjes zijn verplicht voor accountregistratie.",
+            "Both checkboxes are required to create an account."
+          )}
+        </p>
+      ) : null}
     </div>
   );
+
+  const title = authStatus === "authenticated" && consentRequired
+    ? tr("Cloud toestemming vereist", "Cloud consent required")
+    : isSignupView
+      ? tr("Maak een account voor automatische sync", "Create an account for automatic sync")
+      : tr("Log in voor cloud sync", "Sign in for cloud sync");
+
+  const subtitle = authStatus === "authenticated" && consentRequired
+    ? tr(
+        "Je bent ingelogd, maar cloud sync blijft uit tot je de verplichte consent bevestigt.",
+        "You are signed in, but cloud sync remains disabled until you confirm the required consent."
+      )
+    : isSignupView
+      ? tr(
+          "Cloud sync is optioneel. Maak een account als je back-up en sync tussen apparaten wilt.",
+          "Cloud sync is optional. Create an account if you want backup and sync across devices."
+        )
+      : tr(
+          "Log in om je clouddata te openen en automatisch te synchroniseren tussen apparaten.",
+          "Sign in to access your cloud data and automatically sync across devices."
+        );
 
   const modal = (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -193,17 +210,8 @@ const CloudAuthModal = ({
                 <Cloud className="h-3.5 w-3.5" />
                 {tr("Cloud sync", "Cloud sync")}
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">
-                {authStatus === "authenticated" && consentRequired ? consentTitle : headline}
-              </h2>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">
-                {authStatus === "authenticated" && consentRequired
-                  ? tr(
-                      "Je bent ingelogd, maar cloud sync blijft uit tot je de verplichte consent bevestigt.",
-                      "You are signed in, but cloud sync remains disabled until you confirm the required consent."
-                    )
-                  : subline}
-              </p>
+              <h2 className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">{title}</h2>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">{subtitle}</p>
             </div>
             <button
               type="button"
@@ -215,14 +223,10 @@ const CloudAuthModal = ({
             </button>
           </div>
 
-          <div className="relative mt-4 flex flex-wrap gap-2 text-xs text-slate-300">
+          <div className="relative mt-4 text-xs text-slate-300">
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900/55 px-3 py-1">
               <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-              {tr("Lokaal blijft altijd beschikbaar", "Local mode always stays available")}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900/55 px-3 py-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-              {tr("Cloud alleen met expliciete toestemming", "Cloud only with explicit consent")}
+              {tr("Lokale modus blijft altijd beschikbaar", "Local mode always stays available")}
             </span>
           </div>
         </div>
@@ -269,71 +273,13 @@ const CloudAuthModal = ({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
-                <button
-                  type="button"
-                  onClick={() => setView("signin")}
-                  className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                    view === "signin"
-                      ? "bg-cyan-500/15 text-cyan-100 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35)]"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {tr("Inloggen", "Sign in")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("signup")}
-                  className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                    view === "signup"
-                      ? "bg-cyan-500/15 text-cyan-100 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35)]"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {tr("Account maken", "Create account")}
-                </button>
-              </div>
-
-              {view === "signup" ? (
-                <div className="space-y-2 rounded-2xl border border-cyan-500/35 bg-cyan-500/10 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
-                      {tr("Stap 1 van 2", "Step 1 of 2")}
-                    </p>
-                    <span className="rounded-full border border-cyan-500/45 bg-slate-900/45 px-2 py-0.5 text-[11px] text-cyan-100">
-                      {consentProgressCount}/2
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-200">
-                    {tr(
-                      "Vink eerst beide verplichte consent-checkboxes aan.",
-                      "First check both required consent checkboxes."
-                    )}
-                  </p>
-                  {consentBlock}
-                  <p className={`text-xs ${signupBlocked ? "text-amber-200" : "text-emerald-200"}`}>
-                    {signupBlocked
-                      ? tr(
-                          "Nog 1 stap: bevestig beide checkboxen. Daarna kun je Google of e-mail kiezen.",
-                          "One more step: confirm both checkboxes. Then choose Google or email."
-                        )
-                      : tr(
-                          "Top, consent staat goed. Ga nu verder met Google of e-mail.",
-                          "Great, consent is set. Continue with Google or email."
-                        )}
-                  </p>
-                </div>
-              ) : null}
-
-              {view === "signup" ? (
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{tr("Stap 2 van 2", "Step 2 of 2")}</p>
-              ) : null}
+              {isSignupView ? consentBlock : null}
 
               <button
                 type="button"
                 onClick={() => {
                   void run(async () => {
-                    if (view === "signup" && !consentPayload) {
+                    if (isSignupView && !consentPayload) {
                       throw new Error(
                         tr(
                           "Vink eerst beide consent-checkboxes aan om door te gaan.",
@@ -341,24 +287,15 @@ const CloudAuthModal = ({
                         )
                       );
                     }
-                    await onSignInGoogle(view, view === "signup" ? consentPayload ?? undefined : undefined);
+                    await onSignInGoogle(initialView, isSignupView ? consentPayload ?? undefined : undefined);
                   });
                 }}
-                disabled={isBusy || authStatus === "loading"}
+                disabled={isBusy || authStatus === "loading" || signupBlocked}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <GoogleIcon />
                 {tr("Doorgaan met Google", "Continue with Google")}
               </button>
-
-              {view === "signup" && signupBlocked ? (
-                <p className="text-xs text-slate-400">
-                  {tr(
-                    "Google signup wordt actief zodra beide checkboxen zijn bevestigd.",
-                    "Google signup unlocks after both checkboxes are confirmed."
-                  )}
-                </p>
-              ) : null}
 
               <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">
                 <span className="h-px flex-1 bg-slate-800" />
@@ -375,7 +312,7 @@ const CloudAuthModal = ({
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="name@example.com"
-                      autoComplete={view === "signin" ? "email" : "username"}
+                      autoComplete={isSignupView ? "username" : "email"}
                       className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/65 focus:outline-none"
                       required
                     />
@@ -387,7 +324,7 @@ const CloudAuthModal = ({
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder={tr("Minimaal 6 tekens", "At least 6 characters")}
-                      autoComplete={view === "signin" ? "current-password" : "new-password"}
+                      autoComplete={isSignupView ? "new-password" : "current-password"}
                       className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/65 focus:outline-none"
                       minLength={6}
                       required
@@ -397,21 +334,22 @@ const CloudAuthModal = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy || authStatus === "loading"}
+                  disabled={isBusy || authStatus === "loading" || signupBlocked}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isBusy || authStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {view === "signin" ? tr("Inloggen", "Sign in") : tr("Account maken", "Create account")}
+                  {isSignupView ? tr("Account maken", "Create account") : tr("Inloggen", "Sign in")}
                 </button>
-                {view === "signup" && signupBlocked ? (
-                  <p className="text-xs text-slate-400">
-                    {tr(
-                      "E-mail registratie werkt zodra beide consent-checkboxes zijn bevestigd.",
-                      "Email signup works once both consent checkboxes are confirmed."
-                    )}
-                  </p>
-                ) : null}
               </form>
+
+              {isSignupView && signupBlocked ? (
+                <p className="text-xs text-slate-400">
+                  {tr(
+                    "Vink beide verplichte checkboxen aan om accountregistratie te starten.",
+                    "Check both required checkboxes to start account registration."
+                  )}
+                </p>
+              ) : null}
             </>
           )}
 
