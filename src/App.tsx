@@ -14,6 +14,7 @@ import {
 } from "./analytics";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
+import CloudSyncPanel from "./components/CloudSyncPanel";
 import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
@@ -27,6 +28,8 @@ import {
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
 import useAppData, { MarkerMergeSuggestion, detectMarkerMergeSuggestions } from "./hooks/useAppData";
+import { useCloudAuth } from "./hooks/useCloudAuth";
+import { useCloudSync } from "./hooks/useCloudSync";
 import { useShareGeneration } from "./hooks/useShareGeneration";
 import {
   useShareBootstrap,
@@ -54,6 +57,7 @@ import DashboardView from "./views/DashboardView";
 import {
   AIConsentAction,
   AIConsentDecision,
+  AppMode,
   AppSettings,
   ExtractionDraft,
   ExtractionDiffSummary,
@@ -151,6 +155,15 @@ const App = () => {
     sharedData: sharedSnapshot ? sharedSnapshot.data : null,
     isShareMode
   });
+  const cloudAuth = useCloudAuth(isShareMode);
+  const cloudSync = useCloudSync({
+    enabled: cloudAuth.appMode === "cloud",
+    session: cloudAuth.session,
+    isShareMode,
+    appData,
+    setAppData
+  });
+  const appMode: AppMode = cloudAuth.appMode;
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const {
     shareOptions,
@@ -1635,6 +1648,38 @@ const App = () => {
         ["peak", "Peak only"]
       ];
   const quickUploadDisabled = isShareMode || isProcessing;
+  const cloudPanel = (
+    <CloudSyncPanel
+      language={appData.settings.language}
+      appMode={appMode}
+      configured={cloudAuth.configured}
+      authStatus={cloudAuth.status}
+      cloudEnabled={cloudAuth.cloudEnabled}
+      userEmail={cloudAuth.session?.user.email ?? null}
+      schemaVersionCompatible={cloudSync.schemaVersionCompatible}
+      syncStatus={cloudSync.syncStatus}
+      lastSyncedAt={cloudSync.lastSyncedAt}
+      authError={cloudAuth.error}
+      syncError={cloudSync.error}
+      actionRequired={cloudSync.actionRequired}
+      conflictDetected={cloudSync.conflictDetected}
+      onEnableCloud={() => cloudAuth.setCloudEnabled(true)}
+      onDisableCloud={() => cloudAuth.setCloudEnabled(false)}
+      onSignInGoogle={cloudAuth.signInGoogle}
+      onSignInEmail={cloudAuth.signInEmail}
+      onSignUpEmail={cloudAuth.signUpEmail}
+      onSignOut={cloudAuth.signOut}
+      onDeleteAccount={async () => {
+        await cloudAuth.deleteAccount();
+        clearAllData();
+        setAnalystMemory(null);
+      }}
+      onUploadLocalData={cloudSync.uploadLocalData}
+      onUseCloudCopy={cloudSync.useCloudCopy}
+      onReplaceCloudWithLocal={cloudSync.replaceCloudWithLocal}
+      onRefreshCloud={cloudSync.refreshFromCloud}
+    />
+  );
 
   if (isShareResolving) {
     return (
@@ -1696,7 +1741,9 @@ const App = () => {
           stabilityScore: trtStability.score,
           activeProtocolCompound,
           outOfRangeCount,
-          reportsCount: reports.length
+          reportsCount: reports.length,
+          appMode,
+          syncStatus: appMode === "cloud" ? cloudSync.syncStatus : "idle"
         }}
         uploadState={{
           uploadPanelRef,
@@ -2062,6 +2109,7 @@ const App = () => {
                     onAddMarkerSuggestions={appendMarkerSuggestions}
                     onShareOptionsChange={setShareOptions}
                     onGenerateShareLink={generateShareLink}
+                    cloudPanel={cloudPanel}
                   />
                 ) : null}
               </Suspense>

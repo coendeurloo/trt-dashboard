@@ -25,6 +25,7 @@ export type TabKey =
   | "settings"
   | "analysis"
   | "checkIns";
+export type AppMode = "local" | "cloud" | "share";
 export type TimeRangeKey = "3m" | "6m" | "12m" | "all" | "custom";
 export type SamplingTiming = "unknown" | "trough" | "mid" | "peak";
 export type SupplementAnchorState = "inherit" | "anchor" | "none" | "unknown";

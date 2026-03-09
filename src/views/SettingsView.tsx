@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
 import { USER_PROFILES } from "../data/userProfiles";
@@ -39,6 +39,7 @@ interface SettingsViewProps {
   onAddMarkerSuggestions: (suggestions: MarkerMergeSuggestion[]) => void;
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
+  cloudPanel?: ReactNode;
 }
 
 interface ToggleSwitchProps {
@@ -98,7 +99,8 @@ const SettingsView = ({
   onClearAllData,
   onAddMarkerSuggestions,
   onShareOptionsChange,
-  onGenerateShareLink
+  onGenerateShareLink,
+  cloudPanel
 }: SettingsViewProps) => {
   const isNl = language === "nl";
   const isLightTheme = settings.theme === "light";
@@ -228,6 +230,7 @@ const SettingsView = ({
 
   return (
     <section className="space-y-3 fade-in">
+      {cloudPanel ?? null}
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Voorkeuren", "Preferences")}</h2>
         <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">

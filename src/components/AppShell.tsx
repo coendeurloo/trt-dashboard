@@ -20,7 +20,7 @@ import labtrackerLogoLight from "../assets/labtracker-logo-light.svg";
 import { APP_LANGUAGE_OPTIONS, getTabLabel, t } from "../i18n";
 import { getPersonaNavSectionLabel, getPersonaSidebarCurrentLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
 import { formatDate } from "../utils";
-import { AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
+import { AppMode, AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
 import MobileNavDrawer from "./MobileNavDrawer";
 import UploadPanel from "./UploadPanel";
 
@@ -46,6 +46,8 @@ export interface AppShellState {
   activeProtocolCompound: CompoundEntry | null;
   outOfRangeCount: number;
   reportsCount: number;
+  appMode?: AppMode;
+  syncStatus?: "idle" | "loading" | "syncing" | "pending" | "error";
 }
 
 export interface AppShellUploadState {
@@ -105,7 +107,9 @@ const AppShell = ({
     stabilityScore,
     activeProtocolCompound,
     outOfRangeCount,
-    reportsCount
+    reportsCount,
+    appMode = "local",
+    syncStatus = "idle"
   } = shellState;
   const {
     uploadPanelRef,
@@ -326,6 +330,20 @@ const AppShell = ({
             alt="LabTracker"
             className="brand-logo mx-auto w-full max-w-[230px]"
           />
+          <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200">
+              {appMode === "share"
+                ? tr("Mode: Share", "Mode: Share")
+                : appMode === "cloud"
+                  ? tr("Mode: Cloud", "Mode: Cloud")
+                  : tr("Mode: Local", "Mode: Local")}
+            </span>
+            {appMode === "cloud" ? (
+              <span className="rounded-full border border-slate-600 bg-slate-900/60 px-2 py-0.5 text-[11px] text-slate-300">
+                {tr("Sync", "Sync")}: {syncStatus}
+              </span>
+            ) : null}
+          </div>
           {hasReports ? (
             <div className="sidebar-protocol-card mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
