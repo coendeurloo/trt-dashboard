@@ -241,7 +241,7 @@ BEGIN
          last_synced_at = now()
    WHERE user_id = p_user_id
      AND device_id = p_device_id
-  RETURNING last_revision, last_synced_at
+  RETURNING sync_state.last_revision, sync_state.last_synced_at
        INTO new_revision, last_synced_at;
 
   RETURN NEXT;
@@ -568,7 +568,7 @@ BEGIN
          last_synced_at = now()
    WHERE user_id = p_user_id
      AND device_id = p_device_id
-  RETURNING last_revision, last_synced_at
+  RETURNING sync_state.last_revision, sync_state.last_synced_at
        INTO new_revision, last_synced_at;
 
   RETURN NEXT;

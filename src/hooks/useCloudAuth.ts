@@ -42,6 +42,13 @@ const loadCloudEnabledPref = (): boolean => {
   return window.localStorage.getItem(CLOUD_MODE_STORAGE_KEY) === "1";
 };
 
+const hasStoredCloudEnabledPref = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(CLOUD_MODE_STORAGE_KEY) !== null;
+};
+
 export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
   const configured = isSupabaseConfigured();
   const [status, setStatus] = useState<CloudAuthStatus>(configured ? "loading" : "unauthenticated");
@@ -63,10 +70,13 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
       setError(null);
       try {
         let nextSession = loadStoredSession();
+        const hasStoredPreference = hasStoredCloudEnabledPref();
+        let usedOAuthReturn = false;
         if (typeof window !== "undefined") {
           const hashSession = await parseOAuthHashSession(window.location.hash);
           if (hashSession) {
             nextSession = hashSession;
+            usedOAuthReturn = true;
             const cleanUrl = `${window.location.pathname}${window.location.search}`;
             window.history.replaceState({}, document.title, cleanUrl);
           }
@@ -81,6 +91,11 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
             setSession(nextSession);
             persistSession(nextSession);
             setStatus("authenticated");
+            if (usedOAuthReturn) {
+              setCloudEnabled(true);
+            } else if (!hasStoredPreference) {
+              setCloudEnabled(true);
+            }
           }
           return;
         }
@@ -205,4 +220,3 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
 };
 
 export type { CloudAuthStatus, UseCloudAuthResult };
-

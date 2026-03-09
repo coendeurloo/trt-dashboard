@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { APP_SCHEMA_VERSION } from "../constants";
@@ -139,17 +139,42 @@ describe("useCloudSync", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.actionRequired).toBe("upload_local");
-    });
-
-    await act(async () => {
-      await result.current.uploadLocalData();
-    });
-
-    await waitFor(() => {
       expect(result.current.conflictDetected).toBe(true);
       expect(result.current.actionRequired).toBe("choose_source");
       expect(result.current.syncStatus).toBe("pending");
+    });
+  });
+
+  it("automatically uploads local data when cloud is empty", async () => {
+    const localData = makeLocalDataWithReport();
+    const emptyData = makeEmptyData();
+    fetchSnapshotMock.mockResolvedValue({
+      data: emptyData,
+      rawPayload: toCloudSyncPayload(emptyData),
+      schemaVersion: APP_SCHEMA_VERSION,
+      revision: 2
+    });
+    replaceAllMock.mockResolvedValue({
+      revision: 3,
+      lastSyncedAt: "2026-03-09T15:00:00.000Z"
+    });
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(localData);
+      return useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+    });
+
+    await waitFor(() => {
+      expect(replaceAllMock).toHaveBeenCalledTimes(1);
+      expect(result.current.actionRequired).toBe("none");
+      expect(result.current.syncStatus).toBe("idle");
+      expect(result.current.lastRevision).toBe(3);
     });
   });
 });

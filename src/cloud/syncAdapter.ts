@@ -20,6 +20,10 @@ type SupabaseErrorPayload = {
   hint?: string;
 };
 
+type ApiErrorEnvelope = SupabaseErrorPayload & {
+  error?: SupabaseErrorPayload | null;
+};
+
 type ReplaceResponse = {
   revision: number;
   lastSyncedAt: string | null;
@@ -46,7 +50,8 @@ const parseJson = async <T>(response: Response): Promise<T> => {
     payload = null;
   }
   if (!response.ok) {
-    const apiError = payload as SupabaseErrorPayload | null;
+    const errorEnvelope = payload as ApiErrorEnvelope | null;
+    const apiError = errorEnvelope?.error ?? errorEnvelope;
     const code = apiError?.code || `SUPABASE_HTTP_${response.status}`;
     const message = apiError?.message || apiError?.details || "Supabase request failed";
     throw new Error(`${code}:${message}`);

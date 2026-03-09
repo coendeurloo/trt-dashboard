@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppMode } from "../types";
+import CloudSyncConflictModal from "./CloudSyncConflictModal";
 
 type CloudAuthStatus = "loading" | "authenticated" | "unauthenticated" | "error";
 type CloudSyncStatus = "idle" | "loading" | "syncing" | "pending" | "error";
@@ -173,16 +174,23 @@ const CloudSyncPanel = ({
           <p className="text-sm text-slate-300">
             {tr("Ingelogd als", "Signed in as")} <span className="font-medium text-slate-100">{userEmail ?? "unknown"}</span>
           </p>
+          <p className="text-xs text-slate-400">
+            {cloudEnabled
+              ? tr("Cloud sync staat aan en loopt automatisch op de achtergrond.", "Cloud sync is on and runs automatically in the background.")
+              : tr("Cloud sync staat uit op dit apparaat.", "Cloud sync is off on this device.")}
+          </p>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onEnableCloud}
-              disabled={cloudEnabled || isBusy}
-              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 disabled:opacity-50"
-            >
-              <Cloud className="h-4 w-4" />
-              {tr("Cloud inschakelen", "Enable cloud")}
-            </button>
+            {!cloudEnabled ? (
+              <button
+                type="button"
+                onClick={onEnableCloud}
+                disabled={isBusy}
+                className="inline-flex items-center gap-1 rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 disabled:opacity-50"
+              >
+                <Cloud className="h-4 w-4" />
+                {tr("Cloud sync hervatten", "Resume cloud sync")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onDisableCloud}
@@ -220,42 +228,22 @@ const CloudSyncPanel = ({
 
           {actionRequired === "upload_local" ? (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-              <p>{tr("Cloud is leeg en lokaal bevat data.", "Cloud is empty and local data exists.")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void run(onUploadLocalData)}
-                  className="rounded-md border border-amber-400/60 bg-amber-500/20 px-3 py-1.5 text-sm"
-                >
-                  {tr("Upload lokale data", "Upload local data")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {actionRequired === "choose_source" ? (
-            <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100">
               <p>
-                {conflictDetected
-                  ? tr("Revision conflict gedetecteerd.", "Revision conflict detected.")
-                  : tr("Cloud en lokaal wijken af.", "Cloud and local data differ.")}
+                {syncStatus === "error"
+                  ? tr("De eerste cloud-upload is niet gelukt. Probeer het opnieuw.", "The first cloud upload did not finish. Try again.")
+                  : tr("We zetten je lokale data automatisch in de cloud.", "We are automatically moving your local data into the cloud.")}
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={onUseCloudCopy}
-                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-100"
-                >
-                  {tr("Gebruik cloudkopie", "Use cloud copy")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void run(onReplaceCloudWithLocal)}
-                  className="rounded-md border border-rose-400/60 bg-rose-500/20 px-3 py-1.5 text-sm text-rose-100"
-                >
-                  {tr("Vervang cloud met lokaal", "Replace cloud with local")}
-                </button>
-              </div>
+              {syncStatus === "error" ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void run(onUploadLocalData)}
+                    className="rounded-md border border-amber-400/60 bg-amber-500/20 px-3 py-1.5 text-sm"
+                  >
+                    {tr("Opnieuw proberen", "Try again")}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -303,9 +291,20 @@ const CloudSyncPanel = ({
       {authError || syncError || localError ? (
         <p className="mt-2 text-xs text-rose-200">{localError ?? syncError ?? authError}</p>
       ) : null}
+
+      <CloudSyncConflictModal
+        open={configured && authStatus === "authenticated" && actionRequired === "choose_source"}
+        language={language}
+        conflictDetected={conflictDetected}
+        isBusy={isBusy}
+        onUseCloudCopy={onUseCloudCopy}
+        onReplaceCloudWithLocal={() => {
+          void run(onReplaceCloudWithLocal);
+        }}
+        onUseLocalOnly={onDisableCloud}
+      />
     </div>
   );
 };
 
 export default CloudSyncPanel;
-

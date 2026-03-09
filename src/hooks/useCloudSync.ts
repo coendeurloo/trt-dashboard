@@ -78,6 +78,7 @@ export const useCloudSync = ({
   const lastSyncedPayloadRef = useRef<CloudSyncPayload | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoUploadAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled || !session) {
@@ -95,6 +96,7 @@ export const useCloudSync = ({
       lastSyncedHashRef.current = "";
       lastSyncedPayloadRef.current = null;
       lastRevisionRef.current = null;
+      autoUploadAttemptedRef.current = false;
       return;
     }
     if (!localAtInitRef.current) {
@@ -247,9 +249,22 @@ export const useCloudSync = ({
   const refreshFromCloud = useCallback(async () => {
     setInitialized(false);
     setBootstrapped(false);
+    autoUploadAttemptedRef.current = false;
     localAtInitRef.current = coerceStoredAppData(appData);
     await loadFromCloud();
   }, [appData, loadFromCloud]);
+
+  useEffect(() => {
+    if (!adapter || !enabled || isShareMode) {
+      return;
+    }
+    if (actionRequired !== "upload_local" || autoUploadAttemptedRef.current) {
+      return;
+    }
+
+    autoUploadAttemptedRef.current = true;
+    void uploadLocalData();
+  }, [actionRequired, adapter, enabled, isShareMode, uploadLocalData]);
 
   useEffect(() => {
     if (!adapter || !enabled || isShareMode) {
