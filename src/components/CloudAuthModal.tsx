@@ -123,6 +123,7 @@ const CloudAuthModal = ({
   };
 
   const signupBlocked = view === "signup" && !consentPayload;
+  const consentProgressCount = Number(acceptPrivacyPolicy) + Number(acceptHealthDataConsent);
   const consentTitle = tr("Cloud toestemming vereist", "Cloud consent required");
   const headline =
     view === "signin"
@@ -293,25 +294,77 @@ const CloudAuthModal = ({
                 </button>
               </div>
 
+              {view === "signup" ? (
+                <div className="space-y-2 rounded-2xl border border-cyan-500/35 bg-cyan-500/10 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
+                      {tr("Stap 1 van 2", "Step 1 of 2")}
+                    </p>
+                    <span className="rounded-full border border-cyan-500/45 bg-slate-900/45 px-2 py-0.5 text-[11px] text-cyan-100">
+                      {consentProgressCount}/2
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-200">
+                    {tr(
+                      "Vink eerst beide verplichte consent-checkboxes aan.",
+                      "First check both required consent checkboxes."
+                    )}
+                  </p>
+                  {consentBlock}
+                  <p className={`text-xs ${signupBlocked ? "text-amber-200" : "text-emerald-200"}`}>
+                    {signupBlocked
+                      ? tr(
+                          "Nog 1 stap: bevestig beide checkboxen. Daarna kun je Google of e-mail kiezen.",
+                          "One more step: confirm both checkboxes. Then choose Google or email."
+                        )
+                      : tr(
+                          "Top, consent staat goed. Ga nu verder met Google of e-mail.",
+                          "Great, consent is set. Continue with Google or email."
+                        )}
+                  </p>
+                </div>
+              ) : null}
+
+              {view === "signup" ? (
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{tr("Stap 2 van 2", "Step 2 of 2")}</p>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => {
-                  void run(() => onSignInGoogle(view, view === "signup" ? consentPayload ?? undefined : undefined));
+                  void run(async () => {
+                    if (view === "signup" && !consentPayload) {
+                      throw new Error(
+                        tr(
+                          "Vink eerst beide consent-checkboxes aan om door te gaan.",
+                          "Check both consent checkboxes first to continue."
+                        )
+                      );
+                    }
+                    await onSignInGoogle(view, view === "signup" ? consentPayload ?? undefined : undefined);
+                  });
                 }}
-                disabled={isBusy || authStatus === "loading" || signupBlocked}
+                disabled={isBusy || authStatus === "loading"}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <GoogleIcon />
                 {tr("Doorgaan met Google", "Continue with Google")}
               </button>
 
+              {view === "signup" && signupBlocked ? (
+                <p className="text-xs text-slate-400">
+                  {tr(
+                    "Google signup wordt actief zodra beide checkboxen zijn bevestigd.",
+                    "Google signup unlocks after both checkboxes are confirmed."
+                  )}
+                </p>
+              ) : null}
+
               <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">
                 <span className="h-px flex-1 bg-slate-800" />
                 {tr("of ga verder met e-mail", "or continue with email")}
                 <span className="h-px flex-1 bg-slate-800" />
               </div>
-
-              {view === "signup" ? consentBlock : null}
 
               <form className="space-y-3" onSubmit={submitEmail}>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -344,12 +397,20 @@ const CloudAuthModal = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy || authStatus === "loading" || signupBlocked}
+                  disabled={isBusy || authStatus === "loading"}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isBusy || authStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {view === "signin" ? tr("Inloggen", "Sign in") : tr("Account maken", "Create account")}
                 </button>
+                {view === "signup" && signupBlocked ? (
+                  <p className="text-xs text-slate-400">
+                    {tr(
+                      "E-mail registratie werkt zodra beide consent-checkboxes zijn bevestigd.",
+                      "Email signup works once both consent checkboxes are confirmed."
+                    )}
+                  </p>
+                ) : null}
               </form>
             </>
           )}

@@ -72,6 +72,31 @@ describe("CloudAuthModal", () => {
     });
   });
 
+  it("shows an explicit step hint when signup consent is still missing", () => {
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        configured
+        initialView="signup"
+        authStatus="unauthenticated"
+        authError={null}
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect(screen.getByText("Step 1 of 2")).toBeTruthy();
+    expect(
+      screen.getByText("One more step: confirm both checkboxes. Then choose Google or email.")
+    ).toBeTruthy();
+  });
+
   it("links to privacy policy in a new tab from signup", () => {
     render(
       <CloudAuthModal
