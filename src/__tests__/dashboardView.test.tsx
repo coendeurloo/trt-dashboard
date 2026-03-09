@@ -100,8 +100,11 @@ const buildProps = () => {
       chartPointsForMarker: vi.fn(() => []),
       markerPercentChange: vi.fn(() => null),
       markerBaselineDelta: vi.fn(() => null),
+      cloudConfigured: true,
+      cloudReady: false,
       onLoadDemo: vi.fn(),
       onUploadClick,
+      onOpenCloudAuth: vi.fn(),
       isProcessing: false,
       checkIns: [],
       onNavigateToCheckIns: vi.fn()
@@ -172,6 +175,9 @@ describe("DashboardView first-visit hero", () => {
     expect(screen.getByText("Optimize your protocol")).toBeTruthy();
     expect(screen.getByText("Local processing by default")).toBeTruthy();
     expect(screen.getByText("Works with many lab formats")).toBeTruthy();
+    expect(screen.getByText("Optional cloud sync")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
   });
 });
 

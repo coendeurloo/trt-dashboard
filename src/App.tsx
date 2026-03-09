@@ -14,6 +14,7 @@ import {
 } from "./analytics";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
+import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
 import CloudSyncPanel from "./components/CloudSyncPanel";
 import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
@@ -163,6 +164,8 @@ const App = () => {
     appData,
     setAppData
   });
+  const [cloudAuthModalOpen, setCloudAuthModalOpen] = useState(false);
+  const [cloudAuthModalView, setCloudAuthModalView] = useState<CloudAuthView>("signin");
   const appMode: AppMode = cloudAuth.appMode;
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const {
@@ -188,6 +191,13 @@ const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
+  const openCloudAuthModal = useCallback((view: CloudAuthView = "signin") => {
+    setCloudAuthModalView(view);
+    setCloudAuthModalOpen(true);
+  }, []);
+  const closeCloudAuthModal = useCallback(() => {
+    setCloudAuthModalOpen(false);
+  }, []);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false);
@@ -207,6 +217,12 @@ const App = () => {
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
+
+  useEffect(() => {
+    if (cloudAuth.status === "authenticated") {
+      setCloudAuthModalOpen(false);
+    }
+  }, [cloudAuth.status]);
 
   const [dashboardMode, setDashboardMode] = useState<DashboardViewMode>("cards");
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
@@ -1665,9 +1681,7 @@ const App = () => {
       conflictDetected={cloudSync.conflictDetected}
       onEnableCloud={() => cloudAuth.setCloudEnabled(true)}
       onDisableCloud={() => cloudAuth.setCloudEnabled(false)}
-      onSignInGoogle={cloudAuth.signInGoogle}
-      onSignInEmail={cloudAuth.signInEmail}
-      onSignUpEmail={cloudAuth.signUpEmail}
+      onOpenAuthModal={openCloudAuthModal}
       onSignOut={cloudAuth.signOut}
       onDeleteAccount={async () => {
         await cloudAuth.deleteAccount();
@@ -1937,8 +1951,11 @@ const App = () => {
                 chartPointsForMarker={chartPointsForMarker}
                 markerPercentChange={markerPercentChange}
                 markerBaselineDelta={markerBaselineDelta}
+                cloudConfigured={cloudAuth.configured}
+                cloudReady={cloudAuth.status === "authenticated" && cloudAuth.cloudEnabled}
                 onLoadDemo={loadDemoData}
                 onUploadClick={startSecondUpload}
+                onOpenCloudAuth={openCloudAuthModal}
                 isProcessing={isProcessing}
                 checkIns={appData.checkIns}
                 onNavigateToCheckIns={() => setActiveTab("checkIns")}
@@ -2137,6 +2154,19 @@ const App = () => {
           onDecide={(decision) => resolveConsentRequest(decision)}
         />
       </Suspense>
+
+      <CloudAuthModal
+        open={cloudAuthModalOpen}
+        language={appData.settings.language}
+        configured={cloudAuth.configured}
+        initialView={cloudAuthModalView}
+        authStatus={cloudAuth.status}
+        authError={cloudAuth.error}
+        onClose={closeCloudAuthModal}
+        onSignInGoogle={cloudAuth.signInGoogle}
+        onSignInEmail={cloudAuth.signInEmail}
+        onSignUpEmail={cloudAuth.signUpEmail}
+      />
 
       <AnimatePresence>
         {isProcessing || isImprovingExtraction ? (

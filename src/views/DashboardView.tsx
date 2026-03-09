@@ -46,8 +46,11 @@ interface DashboardViewProps {
   chartPointsForMarker: (marker: string) => MarkerSeriesPoint[];
   markerPercentChange: (marker: string) => number | null;
   markerBaselineDelta: (marker: string) => number | null;
+  cloudConfigured: boolean;
+  cloudReady: boolean;
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
+  onOpenCloudAuth: (view: "signin" | "signup") => void;
   isProcessing: boolean;
   checkIns: SymptomCheckIn[];
   onNavigateToCheckIns: () => void;
@@ -125,8 +128,11 @@ const DashboardView = ({
   chartPointsForMarker,
   markerPercentChange,
   markerBaselineDelta,
+  cloudConfigured,
+  cloudReady,
   onLoadDemo,
   onUploadClick,
+  onOpenCloudAuth,
   isProcessing,
   checkIns,
   onNavigateToCheckIns
@@ -750,9 +756,12 @@ const DashboardView = ({
         {reports.length === 0 && !isShareMode ? (
           <WelcomeHero
             language={language}
+            cloudConfigured={cloudConfigured}
+            cloudReady={cloudReady}
             onLoadDemo={onLoadDemo}
             onUploadClick={onUploadClick}
             onSetUserProfile={(profile) => onUpdateSettings({ userProfile: profile })}
+            onOpenCloudAuth={onOpenCloudAuth}
           />
         ) : visibleReports.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-14 text-center">

@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
-import { Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowRight, Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppMode } from "../types";
 import CloudSyncConflictModal from "./CloudSyncConflictModal";
@@ -24,9 +24,7 @@ interface CloudSyncPanelProps {
   conflictDetected: boolean;
   onEnableCloud: () => void;
   onDisableCloud: () => void;
-  onSignInGoogle: () => void;
-  onSignInEmail: (email: string, password: string) => Promise<void>;
-  onSignUpEmail: (email: string, password: string) => Promise<void>;
+  onOpenAuthModal: (view: "signin" | "signup") => void;
   onSignOut: () => Promise<void>;
   onDeleteAccount: () => Promise<void>;
   onUploadLocalData: () => Promise<void>;
@@ -51,9 +49,7 @@ const CloudSyncPanel = ({
   conflictDetected,
   onEnableCloud,
   onDisableCloud,
-  onSignInGoogle,
-  onSignInEmail,
-  onSignUpEmail,
+  onOpenAuthModal,
   onSignOut,
   onDeleteAccount,
   onUploadLocalData,
@@ -62,8 +58,6 @@ const CloudSyncPanel = ({
   onRefreshCloud
 }: CloudSyncPanelProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -89,14 +83,6 @@ const CloudSyncPanel = ({
     }
   };
 
-  const submitSignIn = async (event: FormEvent) => {
-    event.preventDefault();
-    await run(async () => {
-      await onSignInEmail(email, password);
-      setPassword("");
-    });
-  };
-
   return (
     <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -116,56 +102,42 @@ const CloudSyncPanel = ({
       ) : null}
 
       {configured && authStatus !== "authenticated" ? (
-        <div className="mt-3 space-y-3">
-          <p className="text-sm text-slate-300">
-            {tr("Log in om cloud sync tussen apparaten te activeren.", "Sign in to enable cloud sync across devices.")}
-          </p>
-          <form className="grid gap-2 sm:grid-cols-2" onSubmit={submitSignIn}>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Email"
-              className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-              required
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={tr("Wachtwoord", "Password")}
-              className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-              required
-            />
-            <button
-              type="submit"
-              disabled={isBusy}
-              className="rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-2 text-sm text-cyan-100 disabled:opacity-50"
-            >
-              {tr("Inloggen", "Sign in")}
-            </button>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
-                void run(async () => {
-                  await onSignUpEmail(email, password);
-                  setPassword("");
-                });
-              }}
-              className="rounded-md border border-emerald-500/45 bg-emerald-500/15 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50"
-            >
-              {tr("Account maken", "Create account")}
-            </button>
-          </form>
-          <button
-            type="button"
-            onClick={onSignInGoogle}
-            disabled={isBusy}
-            className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 disabled:opacity-50"
-          >
-            {tr("Doorgaan met Google", "Continue with Google")}
-          </button>
+        <div className="mt-3 rounded-2xl border border-slate-700/80 bg-slate-950/45 p-4">
+          {authStatus === "loading" ? (
+            <p className="inline-flex items-center gap-2 text-sm text-slate-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {tr("Cloud-account wordt gecontroleerd...", "Checking your cloud account...")}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-slate-100">
+                {tr("Maak een account voor automatische cloud sync.", "Create an account for automatic cloud sync.")}
+              </p>
+              <p className="mt-1 text-sm text-slate-300">
+                {tr(
+                  "Cloud is optioneel. Zodra je inlogt, lopen back-up en sync vanzelf op de achtergrond.",
+                  "Cloud is optional. Once you sign in, backup and sync run automatically in the background."
+                )}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenAuthModal("signup")}
+                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22"
+                >
+                  {tr("Account maken", "Create account")}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAuthModal("signin")}
+                  className="rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-50"
+                >
+                  {tr("Ik heb al een account", "I already have an account")}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       ) : null}
 
