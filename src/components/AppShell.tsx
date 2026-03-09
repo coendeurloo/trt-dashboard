@@ -48,6 +48,9 @@ export interface AppShellState {
   reportsCount: number;
   appMode?: AppMode;
   syncStatus?: "idle" | "loading" | "syncing" | "pending" | "error";
+  cloudConfigured?: boolean;
+  cloudAuthStatus?: "loading" | "authenticated" | "unauthenticated" | "error";
+  cloudUserEmail?: string | null;
 }
 
 export interface AppShellUploadState {
@@ -69,6 +72,7 @@ export interface AppShellActions {
   onUploadFileSelected: (file: File) => void | Promise<void>;
   onUploadIntent: () => void;
   onStartManualEntry: () => void;
+  onOpenCloudAuth: (view: "signin" | "signup") => void;
 }
 
 interface AppShellProps {
@@ -109,7 +113,10 @@ const AppShell = ({
     outOfRangeCount,
     reportsCount,
     appMode = "local",
-    syncStatus = "idle"
+    syncStatus = "idle",
+    cloudConfigured = false,
+    cloudAuthStatus = "unauthenticated",
+    cloudUserEmail = null
   } = shellState;
   const {
     uploadPanelRef,
@@ -128,7 +135,8 @@ const AppShell = ({
     onToggleTheme,
     onUploadFileSelected,
     onUploadIntent,
-    onStartManualEntry
+    onStartManualEntry,
+    onOpenCloudAuth
   } = actions;
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
@@ -322,6 +330,9 @@ const AppShell = ({
     onAfterNavigate?: () => void;
   }) => {
     const sidebarUploadPanel = !isShareMode && includeUploadPanel ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3") : null;
+    const showAccountTools = !isShareMode && cloudConfigured;
+    const isSynced = appMode === "cloud" && syncStatus === "idle";
+    const syncBadgeLabel = isSynced ? tr("Gesynct", "Synced") : tr("Sync wacht", "Sync pending");
     return (
       <>
         <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
@@ -330,20 +341,45 @@ const AppShell = ({
             alt="LabTracker"
             className="brand-logo mx-auto w-full max-w-[230px]"
           />
-          <div className="mt-2 flex flex-wrap justify-center gap-1.5">
-            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200">
-              {appMode === "share"
-                ? tr("Mode: Share", "Mode: Share")
-                : appMode === "cloud"
-                  ? tr("Mode: Cloud", "Mode: Cloud")
-                  : tr("Mode: Local", "Mode: Local")}
-            </span>
-            {appMode === "cloud" ? (
-              <span className="rounded-full border border-slate-600 bg-slate-900/60 px-2 py-0.5 text-[11px] text-slate-300">
-                {tr("Sync", "Sync")}: {syncStatus}
-              </span>
-            ) : null}
-          </div>
+          {showAccountTools ? (
+            <div className="mt-2">
+              {cloudAuthStatus === "authenticated" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRequestTabChange("settings");
+                    onAfterNavigate?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/65 px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:border-cyan-500/45 hover:text-cyan-100"
+                >
+                  <span className={`h-2 w-2 rounded-full ${isSynced ? "bg-emerald-300" : "bg-amber-300"}`} />
+                  <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
+                  <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-1.5 py-0.5 text-[10px] text-slate-300">
+                    {syncBadgeLabel}
+                  </span>
+                </button>
+              ) : cloudAuthStatus === "loading" ? (
+                <p className="text-center text-xs text-slate-300">{tr("Account check...", "Account check...")}</p>
+              ) : (
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenCloudAuth("signup")}
+                    className="rounded-md border border-cyan-500/45 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                  >
+                    {tr("Sign up", "Sign up")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenCloudAuth("signin")}
+                    className="rounded-md px-2 py-1 text-xs text-slate-300 transition hover:text-slate-100"
+                  >
+                    {tr("Sign in", "Sign in")}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
           {hasReports ? (
             <div className="sidebar-protocol-card mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">

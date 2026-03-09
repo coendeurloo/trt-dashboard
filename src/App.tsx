@@ -16,6 +16,10 @@ import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
 import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
 import CloudSyncPanel from "./components/CloudSyncPanel";
+import {
+  CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
+  CLOUD_PRIVACY_POLICY_VERSION
+} from "./cloud/constants";
 import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
@@ -120,6 +124,12 @@ const GOOD_UPLOAD_CONFIDENCE_THRESHOLD = 0.75;
 // During beta we still show raw confidence percentages in upload results.
 // Set to false before public launch to only show Good / Needs review labels.
 const showUploadConfidencePercent = true;
+const loadBackupPromptDismissed = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY) === "1";
+};
 
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
@@ -166,6 +176,7 @@ const App = () => {
   });
   const [cloudAuthModalOpen, setCloudAuthModalOpen] = useState(false);
   const [cloudAuthModalView, setCloudAuthModalView] = useState<CloudAuthView>("signin");
+  const [backupPromptDismissed, setBackupPromptDismissed] = useState<boolean>(() => loadBackupPromptDismissed());
   const appMode: AppMode = cloudAuth.appMode;
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
   const {
@@ -219,10 +230,14 @@ const App = () => {
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
 
   useEffect(() => {
-    if (cloudAuth.status === "authenticated") {
+    if (cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted") {
       setCloudAuthModalOpen(false);
+      setBackupPromptDismissed(true);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY, "1");
+      }
     }
-  }, [cloudAuth.status]);
+  }, [cloudAuth.consentStatus, cloudAuth.status]);
 
   const [dashboardMode, setDashboardMode] = useState<DashboardViewMode>("cards");
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
@@ -1663,6 +1678,12 @@ const App = () => {
         ["trough", "Trough only"],
         ["peak", "Peak only"]
       ];
+  const showBackupPrompt =
+    !isShareMode &&
+    activeTab === "dashboard" &&
+    reports.length > 0 &&
+    cloudAuth.status !== "authenticated" &&
+    !backupPromptDismissed;
   const quickUploadDisabled = isShareMode || isProcessing;
   const cloudPanel = (
     <CloudSyncPanel
@@ -1670,6 +1691,7 @@ const App = () => {
       appMode={appMode}
       configured={cloudAuth.configured}
       authStatus={cloudAuth.status}
+      consentStatus={cloudAuth.consentStatus}
       cloudEnabled={cloudAuth.cloudEnabled}
       userEmail={cloudAuth.session?.user.email ?? null}
       schemaVersionCompatible={cloudSync.schemaVersionCompatible}
@@ -1682,12 +1704,14 @@ const App = () => {
       onEnableCloud={() => cloudAuth.setCloudEnabled(true)}
       onDisableCloud={() => cloudAuth.setCloudEnabled(false)}
       onOpenAuthModal={openCloudAuthModal}
+      onCompleteConsent={() => openCloudAuthModal("signup")}
       onSignOut={cloudAuth.signOut}
       onDeleteAccount={async () => {
         await cloudAuth.deleteAccount();
         clearAllData();
         setAnalystMemory(null);
       }}
+      onExportData={exportJson}
       onUploadLocalData={cloudSync.uploadLocalData}
       onUseCloudCopy={cloudSync.useCloudCopy}
       onReplaceCloudWithLocal={cloudSync.replaceCloudWithLocal}
@@ -1757,7 +1781,10 @@ const App = () => {
           outOfRangeCount,
           reportsCount: reports.length,
           appMode,
-          syncStatus: appMode === "cloud" ? cloudSync.syncStatus : "idle"
+          syncStatus: appMode === "cloud" ? cloudSync.syncStatus : "idle",
+          cloudConfigured: cloudAuth.configured,
+          cloudAuthStatus: cloudAuth.status,
+          cloudUserEmail: cloudAuth.session?.user.email ?? null
         }}
         uploadState={{
           uploadPanelRef,
@@ -1778,7 +1805,8 @@ const App = () => {
           onUploadIntent: () => {
             void ensurePdfParsingModule();
           },
-          onStartManualEntry: startManualEntry
+          onStartManualEntry: startManualEntry,
+          onOpenCloudAuth: openCloudAuthModal
         }}
         tr={tr}
       >
@@ -1920,6 +1948,42 @@ const App = () => {
                 ) : null}
             </AnimatePresence>
 
+            <AnimatePresence>
+              {showBackupPrompt ? (
+                <motion.section
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 p-3 text-sm text-cyan-100"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <p>
+                      {tr("Je resultaten staan lokaal opgeslagen. Wil je een back-up?", "Your results are saved locally. Want to back them up?")}{" "}
+                      <button
+                        type="button"
+                        onClick={() => openCloudAuthModal("signup")}
+                        className="text-cyan-100 underline decoration-cyan-300/70 underline-offset-2 transition hover:text-cyan-50"
+                      >
+                        {tr("Maak gratis een account ->", "Create a free account ->")}
+                      </button>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBackupPromptDismissed(true);
+                        if (typeof window !== "undefined") {
+                          window.localStorage.setItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY, "1");
+                        }
+                      }}
+                      className="self-start rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:border-slate-500 md:self-auto"
+                    >
+                      {tr("Sluiten", "Dismiss")}
+                    </button>
+                  </div>
+                </motion.section>
+              ) : null}
+            </AnimatePresence>
+
             {activeTab === "dashboard" ? (
               <DashboardView
                 reports={reports}
@@ -1952,7 +2016,6 @@ const App = () => {
                 markerPercentChange={markerPercentChange}
                 markerBaselineDelta={markerBaselineDelta}
                 cloudConfigured={cloudAuth.configured}
-                cloudReady={cloudAuth.status === "authenticated" && cloudAuth.cloudEnabled}
                 onLoadDemo={loadDemoData}
                 onUploadClick={startSecondUpload}
                 onOpenCloudAuth={openCloudAuthModal}
@@ -2162,10 +2225,13 @@ const App = () => {
         initialView={cloudAuthModalView}
         authStatus={cloudAuth.status}
         authError={cloudAuth.error}
+        consentRequired={cloudAuth.status === "authenticated" && cloudAuth.consentStatus !== "granted"}
+        privacyPolicyVersion={CLOUD_PRIVACY_POLICY_VERSION}
         onClose={closeCloudAuthModal}
         onSignInGoogle={cloudAuth.signInGoogle}
         onSignInEmail={cloudAuth.signInEmail}
         onSignUpEmail={cloudAuth.signUpEmail}
+        onCompleteConsent={cloudAuth.completeConsent}
       />
 
       <AnimatePresence>

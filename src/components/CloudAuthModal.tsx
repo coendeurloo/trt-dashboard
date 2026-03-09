@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Cloud, Loader2, ShieldCheck, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { trLocale } from "../i18n";
 import { AppLanguage } from "../types";
+import { CloudConsentPayload } from "../cloud/consentClient";
 
 export type CloudAuthView = "signin" | "signup";
 
@@ -13,10 +14,13 @@ interface CloudAuthModalProps {
   initialView: CloudAuthView;
   authStatus: "loading" | "authenticated" | "unauthenticated" | "error";
   authError: string | null;
+  consentRequired: boolean;
+  privacyPolicyVersion: string;
   onClose: () => void;
-  onSignInGoogle: () => void;
+  onSignInGoogle: (intent?: "signin" | "signup", payload?: CloudConsentPayload) => Promise<void>;
   onSignInEmail: (email: string, password: string) => Promise<void>;
-  onSignUpEmail: (email: string, password: string) => Promise<void>;
+  onSignUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
+  onCompleteConsent: (payload: CloudConsentPayload) => Promise<void>;
 }
 
 const GoogleIcon = () => (
@@ -47,15 +51,20 @@ const CloudAuthModal = ({
   initialView,
   authStatus,
   authError,
+  consentRequired,
+  privacyPolicyVersion,
   onClose,
   onSignInGoogle,
   onSignInEmail,
-  onSignUpEmail
+  onSignUpEmail,
+  onCompleteConsent
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const [view, setView] = useState<CloudAuthView>(initialView);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptPrivacyPolicy, setAcceptPrivacyPolicy] = useState(false);
+  const [acceptHealthDataConsent, setAcceptHealthDataConsent] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -65,6 +74,17 @@ const CloudAuthModal = ({
       setLocalError(null);
     }
   }, [initialView, open]);
+
+  const consentPayload = useMemo<CloudConsentPayload | null>(() => {
+    if (!acceptPrivacyPolicy || !acceptHealthDataConsent) {
+      return null;
+    }
+    return {
+      acceptPrivacyPolicy: true,
+      acceptHealthDataConsent: true,
+      privacyPolicyVersion
+    };
+  }, [acceptHealthDataConsent, acceptPrivacyPolicy, privacyPolicyVersion]);
 
   if (!open || typeof document === "undefined") {
     return null;
@@ -86,14 +106,28 @@ const CloudAuthModal = ({
 
   const submitEmail = async (event: FormEvent) => {
     event.preventDefault();
-    await run(() => (view === "signin" ? onSignInEmail(email, password) : onSignUpEmail(email, password)));
+    await run(() => {
+      if (view === "signin") {
+        return onSignInEmail(email, password);
+      }
+      if (!consentPayload) {
+        throw new Error(
+          tr(
+            "Bevestig eerst de privacy policy en health-data toestemming.",
+            "Please confirm privacy policy and health-data consent first."
+          )
+        );
+      }
+      return onSignUpEmail(email, password, consentPayload);
+    });
   };
 
+  const signupBlocked = view === "signup" && !consentPayload;
+  const consentTitle = tr("Cloud toestemming vereist", "Cloud consent required");
   const headline =
     view === "signin"
       ? tr("Log in en sync tussen apparaten", "Sign in and sync across devices")
       : tr("Maak een account voor automatische sync", "Create an account for automatic sync");
-
   const subline =
     view === "signin"
       ? tr(
@@ -101,9 +135,48 @@ const CloudAuthModal = ({
           "LabTracker stays local-first. Sign in only if you want backup and sync across devices."
         )
       : tr(
-          "Na het aanmaken van je account gaat cloud sync vanzelf op de achtergrond lopen.",
-          "Once your account exists, cloud sync starts automatically in the background."
+          "Cloud sync is optioneel, maar voor accountregistratie vragen we expliciet privacy- en health-data consent.",
+          "Cloud sync is optional, but account registration requires explicit privacy and health-data consent."
         );
+
+  const consentBlock = (
+    <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+      <label className="flex items-start gap-2 text-sm text-slate-200">
+        <input
+          type="checkbox"
+          checked={acceptPrivacyPolicy}
+          onChange={(event) => setAcceptPrivacyPolicy(event.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400"
+        />
+        <span>
+          {tr("Ik ga akkoord met de", "I agree to the")}{" "}
+          <a
+            href="/privacy-policy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cyan-200 underline underline-offset-2"
+          >
+            {tr("privacy policy", "privacy policy")}
+          </a>
+          .
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm text-slate-200">
+        <input
+          type="checkbox"
+          checked={acceptHealthDataConsent}
+          onChange={(event) => setAcceptHealthDataConsent(event.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400"
+        />
+        <span>
+          {tr(
+            "Ik geef expliciet toestemming voor verwerking van gezondheidsdata voor cloud sync.",
+            "I explicitly consent to processing health data for cloud sync."
+          )}
+        </span>
+      </label>
+    </div>
+  );
 
   const modal = (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -119,8 +192,17 @@ const CloudAuthModal = ({
                 <Cloud className="h-3.5 w-3.5" />
                 {tr("Cloud sync", "Cloud sync")}
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">{headline}</h2>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">{subline}</p>
+              <h2 className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">
+                {authStatus === "authenticated" && consentRequired ? consentTitle : headline}
+              </h2>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">
+                {authStatus === "authenticated" && consentRequired
+                  ? tr(
+                      "Je bent ingelogd, maar cloud sync blijft uit tot je de verplichte consent bevestigt.",
+                      "You are signed in, but cloud sync remains disabled until you confirm the required consent."
+                    )
+                  : subline}
+              </p>
             </div>
             <button
               type="button"
@@ -139,7 +221,7 @@ const CloudAuthModal = ({
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900/55 px-3 py-1">
               <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-              {tr("Automatische back-up en multi-device sync", "Automatic backup and multi-device sync")}
+              {tr("Cloud alleen met expliciete toestemming", "Cloud only with explicit consent")}
             </span>
           </div>
         </div>
@@ -152,6 +234,38 @@ const CloudAuthModal = ({
                 "Cloud is not configured yet. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` first."
               )}
             </div>
+          ) : authStatus === "authenticated" && consentRequired ? (
+            <>
+              {consentBlock}
+              <button
+                type="button"
+                disabled={isBusy || !consentPayload}
+                onClick={() => {
+                  void run(async () => {
+                    if (!consentPayload) {
+                      throw new Error(
+                        tr(
+                          "Bevestig beide consent-opties om door te gaan.",
+                          "Please confirm both consent options to continue."
+                        )
+                      );
+                    }
+                    await onCompleteConsent(consentPayload);
+                  });
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {tr("Consent bevestigen en cloud activeren", "Confirm consent and enable cloud")}
+              </button>
+            </>
+          ) : authStatus === "authenticated" ? (
+            <p className="text-sm text-slate-200">
+              {tr(
+                "Je bent al ingelogd. Cloud sync wordt automatisch beheerd in Settings.",
+                "You are already signed in. Cloud sync is managed automatically in Settings."
+              )}
+            </p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
@@ -182,11 +296,9 @@ const CloudAuthModal = ({
               <button
                 type="button"
                 onClick={() => {
-                  setIsBusy(true);
-                  setLocalError(null);
-                  onSignInGoogle();
+                  void run(() => onSignInGoogle(view, view === "signup" ? consentPayload ?? undefined : undefined));
                 }}
-                disabled={isBusy || authStatus === "loading"}
+                disabled={isBusy || authStatus === "loading" || signupBlocked}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <GoogleIcon />
@@ -198,6 +310,8 @@ const CloudAuthModal = ({
                 {tr("of ga verder met e-mail", "or continue with email")}
                 <span className="h-px flex-1 bg-slate-800" />
               </div>
+
+              {view === "signup" ? consentBlock : null}
 
               <form className="space-y-3" onSubmit={submitEmail}>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -230,7 +344,7 @@ const CloudAuthModal = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy || authStatus === "loading"}
+                  disabled={isBusy || authStatus === "loading" || signupBlocked}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isBusy || authStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

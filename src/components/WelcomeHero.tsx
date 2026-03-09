@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, Cloud, FileText, Lock, Play, Sparkles, Upload } from "lucide-react";
+import { BarChart3, FileText, Lock, Play, Sparkles, Upload } from "lucide-react";
 import dashboardFirstVisitPreview from "../assets/dashboard-first-visit.png";
 import { USER_PROFILES } from "../data/userProfiles";
 import { trLocale } from "../i18n";
@@ -10,14 +10,13 @@ import { createPortal } from "react-dom";
 export interface WelcomeHeroProps {
   language: AppLanguage;
   cloudConfigured: boolean;
-  cloudReady: boolean;
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
   onSetUserProfile: (profile: UserProfile) => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
 }
 
-const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUploadClick, onSetUserProfile, onOpenCloudAuth }: WelcomeHeroProps) => {
+const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onSetUserProfile, onOpenCloudAuth }: WelcomeHeroProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const [pendingAction, setPendingAction] = useState<"demo" | "upload" | null>(null);
 
@@ -48,6 +47,15 @@ const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUplo
         "Connect protocols to your labs and use AI only if you explicitly opt in."
       ),
       preview: "protocol" as const
+    },
+    {
+      icon: Lock,
+      title: tr("Sync & back-up", "Sync & backup"),
+      description: tr(
+        "Maak gratis een account aan voor sync tussen apparaten. Je data blijft in de EU.",
+        "Create a free account to access your data from any device. Your data stays in the EU."
+      ),
+      preview: "protocol" as const
     }
   ];
 
@@ -56,8 +64,8 @@ const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUplo
       icon: Lock,
       label: tr("Standaard lokaal verwerkt", "Local processing by default"),
       description: tr(
-        "Analyse draait lokaal in je browser. Jij houdt controle over je data.",
-        "Processing runs locally in your browser so you stay in control."
+        "Analyse draait lokaal in je browser. Jij houdt controle over je data. Optioneel kun je met een gratis account naar de cloud syncen.",
+        "Processing runs locally in your browser so you stay in control. Optionally sync to the cloud with a free account."
       )
     },
     {
@@ -219,6 +227,18 @@ const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUplo
             <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">
               {tr("Jouw data blijft op jouw apparaat. AI alleen als jij dat wil.", "Your data stays on your device. AI only if you want it.")}
             </p>
+            {cloudConfigured ? (
+              <p className="mt-2 text-xs text-slate-400 sm:text-sm">
+                {tr("Wil je sync tussen apparaten?", "Want to sync across devices?")}{" "}
+                <button
+                  type="button"
+                  onClick={() => onOpenCloudAuth("signup")}
+                  className="text-cyan-200 underline decoration-cyan-500/70 underline-offset-2 transition hover:text-cyan-100"
+                >
+                  {tr("Maak gratis een account ->", "Create a free account ->")}
+                </button>
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -269,48 +289,6 @@ const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUplo
             })}
           </div>
 
-          {cloudConfigured ? (
-            <div className="mt-5 rounded-2xl border border-slate-700/70 bg-[linear-gradient(135deg,rgba(8,145,178,0.12),rgba(2,6,23,0.78))] p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="max-w-xl">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
-                    <Cloud className="h-3.5 w-3.5" />
-                    {tr("Optionele cloud sync", "Optional cloud sync")}
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-100">
-                    {cloudReady
-                      ? tr("Cloud sync staat klaar. Je eerste upload wordt automatisch meegenomen.", "Cloud sync is ready. Your first upload will be synced automatically.")
-                      : tr("Wil je sync tussen apparaten? Maak een account of log meteen in.", "Want sync across devices? Create an account or sign in.")}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-300">
-                    {cloudReady
-                      ? tr("Je kunt gewoon lokaal blijven werken. Back-up en sync lopen nu stil op de achtergrond.", "You can keep working normally. Backup and sync now run quietly in the background.")
-                      : tr("Niet verplicht. Handig als je back-up wilt of op meerdere apparaten verder wilt gaan.", "Completely optional. Useful if you want backup or want to continue on multiple devices.")}
-                  </p>
-                </div>
-
-                {!cloudReady ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onOpenCloudAuth("signup")}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/55 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22"
-                    >
-                      {tr("Account maken", "Create account")}
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenCloudAuth("signin")}
-                      className="rounded-xl border border-slate-600 px-4 py-2.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-50"
-                    >
-                      {tr("Inloggen", "Sign in")}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
         </div>
         <div>
           <div className="relative rounded-xl border border-slate-700/80 bg-slate-950/60 p-2 shadow-[0_18px_40px_-30px_rgba(8,145,178,0.75)]">
@@ -334,7 +312,7 @@ const WelcomeHero = ({ language, cloudConfigured, cloudReady, onLoadDemo, onUplo
         <p className="mb-4 text-xs font-medium uppercase tracking-widest text-slate-500">
           {tr("Hoe het werkt", "How it works")}
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (

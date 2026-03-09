@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { createRef } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TAB_ITEMS } from "../constants";
 import AppShell, { AppShellActions, AppShellState, AppShellUploadState } from "../components/AppShell";
@@ -53,7 +53,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     onToggleTheme: vi.fn(),
     onUploadFileSelected: vi.fn(),
     onUploadIntent: vi.fn(),
-    onStartManualEntry: vi.fn()
+    onStartManualEntry: vi.fn(),
+    onOpenCloudAuth: vi.fn()
   };
 
   return {
@@ -198,5 +199,43 @@ describe("AppShell onboarding lock", () => {
     expect(settingsButtons.length).toBeGreaterThan(1);
     protocolButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
     settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
+  });
+
+  it("shows subtle Sign up and Sign in buttons in sidebar header when unauthenticated", () => {
+    const props = buildProps({
+      cloudConfigured: true,
+      cloudAuthStatus: "unauthenticated"
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign up" })[0]);
+    expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signup");
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign in" })[0]);
+    expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
+  });
+
+  it("shows account badge with sync status and opens Settings when authenticated", () => {
+    const props = buildProps({
+      cloudConfigured: true,
+      cloudAuthStatus: "authenticated",
+      cloudUserEmail: "alice@example.com",
+      appMode: "cloud",
+      syncStatus: "idle"
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    const accountButton = screen.getByRole("button", { name: /alice@example.com/i });
+    expect(accountButton).toBeTruthy();
+    expect(screen.getByText("Synced")).toBeTruthy();
+    fireEvent.click(accountButton);
+    expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("settings");
   });
 });

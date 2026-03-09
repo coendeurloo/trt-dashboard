@@ -13,6 +13,7 @@ interface CloudSyncPanelProps {
   appMode: AppMode;
   configured: boolean;
   authStatus: CloudAuthStatus;
+  consentStatus: "loading" | "granted" | "required" | "error";
   cloudEnabled: boolean;
   userEmail: string | null;
   schemaVersionCompatible: boolean;
@@ -25,8 +26,10 @@ interface CloudSyncPanelProps {
   onEnableCloud: () => void;
   onDisableCloud: () => void;
   onOpenAuthModal: (view: "signin" | "signup") => void;
+  onCompleteConsent: () => void;
   onSignOut: () => Promise<void>;
   onDeleteAccount: () => Promise<void>;
+  onExportData: () => void;
   onUploadLocalData: () => Promise<void>;
   onUseCloudCopy: () => void;
   onReplaceCloudWithLocal: () => Promise<void>;
@@ -38,6 +41,7 @@ const CloudSyncPanel = ({
   appMode,
   configured,
   authStatus,
+  consentStatus,
   cloudEnabled,
   userEmail,
   schemaVersionCompatible,
@@ -50,8 +54,10 @@ const CloudSyncPanel = ({
   onEnableCloud,
   onDisableCloud,
   onOpenAuthModal,
+  onCompleteConsent,
   onSignOut,
   onDeleteAccount,
+  onExportData,
   onUploadLocalData,
   onUseCloudCopy,
   onReplaceCloudWithLocal,
@@ -147,16 +153,38 @@ const CloudSyncPanel = ({
             {tr("Ingelogd als", "Signed in as")} <span className="font-medium text-slate-100">{userEmail ?? "unknown"}</span>
           </p>
           <p className="text-xs text-slate-400">
-            {cloudEnabled
-              ? tr("Cloud sync staat aan en loopt automatisch op de achtergrond.", "Cloud sync is on and runs automatically in the background.")
-              : tr("Cloud sync staat uit op dit apparaat.", "Cloud sync is off on this device.")}
+            {consentStatus === "required"
+              ? tr(
+                  "Cloud sync wacht op verplichte privacy- en health-data consent.",
+                  "Cloud sync is waiting for required privacy and health-data consent."
+                )
+              : cloudEnabled
+                ? tr("Cloud sync staat aan en loopt automatisch op de achtergrond.", "Cloud sync is on and runs automatically in the background.")
+                : tr("Cloud sync staat uit op dit apparaat.", "Cloud sync is off on this device.")}
           </p>
+          {consentStatus === "required" ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+              <p>
+                {tr(
+                  "Rond je consent af om cloud sync en back-up te activeren.",
+                  "Complete consent to enable cloud sync and backup."
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={onCompleteConsent}
+                className="mt-2 rounded-md border border-amber-400/60 bg-amber-500/20 px-3 py-1.5 text-sm"
+              >
+                {tr("Consent afronden", "Complete consent")}
+              </button>
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {!cloudEnabled ? (
               <button
                 type="button"
                 onClick={onEnableCloud}
-                disabled={isBusy}
+                disabled={isBusy || consentStatus !== "granted"}
                 className="inline-flex items-center gap-1 rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 disabled:opacity-50"
               >
                 <Cloud className="h-4 w-4" />
@@ -220,6 +248,13 @@ const CloudSyncPanel = ({
           ) : null}
 
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onExportData}
+              className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
+            >
+              {tr("Exporteer data (JSON)", "Export data (JSON)")}
+            </button>
             <button
               type="button"
               onClick={() => void run(onSignOut)}

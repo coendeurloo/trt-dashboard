@@ -47,7 +47,6 @@ interface DashboardViewProps {
   markerPercentChange: (marker: string) => number | null;
   markerBaselineDelta: (marker: string) => number | null;
   cloudConfigured: boolean;
-  cloudReady: boolean;
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
@@ -129,7 +128,6 @@ const DashboardView = ({
   markerPercentChange,
   markerBaselineDelta,
   cloudConfigured,
-  cloudReady,
   onLoadDemo,
   onUploadClick,
   onOpenCloudAuth,
@@ -757,7 +755,6 @@ const DashboardView = ({
           <WelcomeHero
             language={language}
             cloudConfigured={cloudConfigured}
-            cloudReady={cloudReady}
             onLoadDemo={onLoadDemo}
             onUploadClick={onUploadClick}
             onSetUserProfile={(profile) => onUpdateSettings({ userProfile: profile })}
