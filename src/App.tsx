@@ -20,6 +20,7 @@ import {
   CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
   CLOUD_PRIVACY_POLICY_VERSION
 } from "./cloud/constants";
+import type { CloudConsentPayload } from "./cloud/consentClient";
 import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
@@ -124,6 +125,58 @@ const GOOD_UPLOAD_CONFIDENCE_THRESHOLD = 0.75;
 // During beta we still show raw confidence percentages in upload results.
 // Set to false before public launch to only show Good / Needs review labels.
 const showUploadConfidencePercent = true;
+const CLOUD_POST_AUTH_INTENT_STORAGE_KEY = "labtracker-cloud-post-auth-intent-v1";
+const CLOUD_POST_AUTH_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
+
+type PendingCloudAuthIntent = {
+  view: CloudAuthView;
+  createdAt: string;
+};
+
+const persistCloudPostAuthIntent = (view: CloudAuthView): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const payload: PendingCloudAuthIntent = {
+    view,
+    createdAt: new Date().toISOString()
+  };
+  window.localStorage.setItem(CLOUD_POST_AUTH_INTENT_STORAGE_KEY, JSON.stringify(payload));
+};
+
+const clearCloudPostAuthIntent = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(CLOUD_POST_AUTH_INTENT_STORAGE_KEY);
+};
+
+const loadCloudPostAuthIntent = (): CloudAuthView | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = window.localStorage.getItem(CLOUD_POST_AUTH_INTENT_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as PendingCloudAuthIntent;
+    if (parsed.view !== "signin" && parsed.view !== "signup") {
+      clearCloudPostAuthIntent();
+      return null;
+    }
+    const createdAtMs = new Date(parsed.createdAt).getTime();
+    if (!Number.isFinite(createdAtMs) || Date.now() - createdAtMs > CLOUD_POST_AUTH_INTENT_MAX_AGE_MS) {
+      clearCloudPostAuthIntent();
+      return null;
+    }
+    return parsed.view;
+  } catch {
+    clearCloudPostAuthIntent();
+    return null;
+  }
+};
+
 const loadBackupPromptDismissed = (): boolean => {
   if (typeof window === "undefined") {
     return false;
@@ -176,6 +229,11 @@ const App = () => {
   });
   const [cloudAuthModalOpen, setCloudAuthModalOpen] = useState(false);
   const [cloudAuthModalView, setCloudAuthModalView] = useState<CloudAuthView>("signin");
+  const [pendingCloudPostAuthIntent, setPendingCloudPostAuthIntent] = useState<CloudAuthView | null>(() =>
+    loadCloudPostAuthIntent()
+  );
+  const [showSignupSuccessModal, setShowSignupSuccessModal] = useState(false);
+  const [showSigninSuccessToast, setShowSigninSuccessToast] = useState(false);
   const [backupPromptDismissed, setBackupPromptDismissed] = useState<boolean>(() => loadBackupPromptDismissed());
   const appMode: AppMode = cloudAuth.appMode;
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
@@ -209,6 +267,50 @@ const App = () => {
   const closeCloudAuthModal = useCallback(() => {
     setCloudAuthModalOpen(false);
   }, []);
+  const rememberCloudPostAuthIntent = useCallback((view: CloudAuthView) => {
+    setPendingCloudPostAuthIntent(view);
+    persistCloudPostAuthIntent(view);
+  }, []);
+  const clearPendingCloudPostAuthIntent = useCallback(() => {
+    setPendingCloudPostAuthIntent(null);
+    clearCloudPostAuthIntent();
+  }, []);
+  const handleCloudGoogleSignIn = useCallback(
+    async (intent: "signin" | "signup" = "signin", payload?: CloudConsentPayload) => {
+      rememberCloudPostAuthIntent(intent);
+      try {
+        await cloudAuth.signInGoogle(intent, payload);
+      } catch (error) {
+        clearPendingCloudPostAuthIntent();
+        throw error;
+      }
+    },
+    [clearPendingCloudPostAuthIntent, cloudAuth, rememberCloudPostAuthIntent]
+  );
+  const handleCloudSignInEmail = useCallback(
+    async (email: string, password: string) => {
+      rememberCloudPostAuthIntent("signin");
+      try {
+        await cloudAuth.signInEmail(email, password);
+      } catch (error) {
+        clearPendingCloudPostAuthIntent();
+        throw error;
+      }
+    },
+    [clearPendingCloudPostAuthIntent, cloudAuth, rememberCloudPostAuthIntent]
+  );
+  const handleCloudSignUpEmail = useCallback(
+    async (email: string, password: string, payload: CloudConsentPayload) => {
+      rememberCloudPostAuthIntent("signup");
+      try {
+        await cloudAuth.signUpEmail(email, password, payload);
+      } catch (error) {
+        clearPendingCloudPostAuthIntent();
+        throw error;
+      }
+    },
+    [clearPendingCloudPostAuthIntent, cloudAuth, rememberCloudPostAuthIntent]
+  );
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false);
@@ -229,15 +331,41 @@ const App = () => {
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
 
+  const hadGrantedCloudAuthRef = useRef(false);
   useEffect(() => {
-    if (cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted") {
+    const cloudAuthGranted = cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted";
+    if (cloudAuthGranted) {
       setCloudAuthModalOpen(false);
       setBackupPromptDismissed(true);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY, "1");
       }
+      if (!hadGrantedCloudAuthRef.current && pendingCloudPostAuthIntent) {
+        if (pendingCloudPostAuthIntent === "signup") {
+          setShowSignupSuccessModal(true);
+        } else {
+          setShowSigninSuccessToast(true);
+        }
+        clearPendingCloudPostAuthIntent();
+      }
     }
-  }, [cloudAuth.consentStatus, cloudAuth.status]);
+    hadGrantedCloudAuthRef.current = cloudAuthGranted;
+  }, [
+    clearPendingCloudPostAuthIntent,
+    cloudAuth.consentStatus,
+    cloudAuth.status,
+    pendingCloudPostAuthIntent
+  ]);
+
+  useEffect(() => {
+    if (!showSigninSuccessToast) {
+      return;
+    }
+    const timeout = globalThis.setTimeout(() => {
+      setShowSigninSuccessToast(false);
+    }, 4500);
+    return () => globalThis.clearTimeout(timeout);
+  }, [showSigninSuccessToast]);
 
   const [dashboardMode, setDashboardMode] = useState<DashboardViewMode>("cards");
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
@@ -695,6 +823,21 @@ const App = () => {
     requestAnimationFrame(() => {
       openHiddenUploadPicker();
     });
+  };
+  const hasAnyReportData = reports.length > 0;
+  const handleSignupSuccessPrimaryAction = () => {
+    setShowSignupSuccessModal(false);
+    if (hasAnyReportData) {
+      setActiveTab("dashboard");
+      scrollPageToTop();
+      return;
+    }
+    startSecondUpload();
+  };
+  const handleSignupSuccessSecondaryAction = () => {
+    setShowSignupSuccessModal(false);
+    setActiveTab("dashboard");
+    scrollPageToTop();
   };
 
   const clearDemoAndUpload = () => {
@@ -2228,11 +2371,95 @@ const App = () => {
         consentRequired={cloudAuth.status === "authenticated" && cloudAuth.consentStatus !== "granted"}
         privacyPolicyVersion={CLOUD_PRIVACY_POLICY_VERSION}
         onClose={closeCloudAuthModal}
-        onSignInGoogle={cloudAuth.signInGoogle}
-        onSignInEmail={cloudAuth.signInEmail}
-        onSignUpEmail={cloudAuth.signUpEmail}
+        onSignInGoogle={handleCloudGoogleSignIn}
+        onSignInEmail={handleCloudSignInEmail}
+        onSignUpEmail={handleCloudSignUpEmail}
         onCompleteConsent={cloudAuth.completeConsent}
       />
+
+      <AnimatePresence>
+        {showSignupSuccessModal ? (
+          <motion.div
+            className="fixed inset-0 z-[88] flex items-center justify-center bg-slate-950/75 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowSignupSuccessModal(false)}
+          >
+            <motion.div
+              className="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-900 p-5 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl border border-emerald-500/45 bg-emerald-500/12 p-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    {tr("Account succesvol aangemaakt", "Account created successfully")}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {tr(
+                      "Cloud sync staat nu automatisch aan. Je kunt meteen verder in LabTracker.",
+                      "Cloud sync is now automatically enabled. You can continue in LabTracker right away."
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                  onClick={handleSignupSuccessSecondaryAction}
+                >
+                  {hasAnyReportData ? tr("Sluiten", "Close") : tr("Naar dashboard", "Go to dashboard")}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                  onClick={handleSignupSuccessPrimaryAction}
+                >
+                  {hasAnyReportData ? tr("Ga naar dashboard", "Go to dashboard") : tr("Upload je eerste PDF", "Upload your first PDF")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSigninSuccessToast ? (
+          <motion.div
+            className="fixed bottom-4 right-4 z-[89] w-[min(92vw,380px)] rounded-xl border border-emerald-500/45 bg-slate-900/95 p-3 shadow-soft"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+          >
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-100">
+                  {tr("Ingelogd", "Signed in")}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-300">
+                  {tr("Cloud sync is actief.", "Cloud sync is active.")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSigninSuccessToast(false)}
+                className="rounded-md border border-slate-700 px-1.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100"
+                aria-label={tr("Melding sluiten", "Dismiss notification")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isProcessing || isImprovingExtraction ? (
