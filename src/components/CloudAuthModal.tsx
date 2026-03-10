@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { trLocale } from "../i18n";
 import { AppLanguage, ThemeMode } from "../types";
 import { CloudConsentPayload } from "../cloud/consentClient";
+import { mapCloudAuthErrorToMessage } from "../lib/cloudErrorMessages";
 
 export type CloudAuthView = "signin" | "signup";
 
@@ -273,6 +274,11 @@ const CloudAuthModal = ({
           "Sign in to access your cloud data and automatically sync across devices."
         );
 
+  const displayError =
+    localError || authError
+      ? mapCloudAuthErrorToMessage(localError ?? authError ?? "", tr)
+      : null;
+
   const modal = (
     <div
       className={`fixed inset-0 z-[90] flex items-center justify-center p-4 backdrop-blur-sm ${
@@ -507,8 +513,8 @@ const CloudAuthModal = ({
             </>
           )}
 
-          {localError || authError ? (
-            <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{localError ?? authError}</p>
+          {displayError ? (
+            <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{displayError}</p>
           ) : null}
         </div>
       </div>

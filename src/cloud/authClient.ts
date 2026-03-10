@@ -28,6 +28,15 @@ type AuthTokenResponse = {
   error_description?: string;
 };
 
+type AuthErrorPayload = {
+  code?: string;
+  error?: string;
+  error_description?: string;
+  message?: string;
+  msg?: string;
+  details?: string;
+};
+
 const authHeaders = (accessToken?: string): HeadersInit => {
   const anonKey = getSupabaseAnonKey();
   return {
@@ -38,6 +47,55 @@ const authHeaders = (accessToken?: string): HeadersInit => {
 };
 
 const buildAuthUrl = (path: string): string => `${getSupabaseUrl()}/auth/v1${path}`;
+
+const normalizeAuthError = (status: number, payload: unknown): string => {
+  const authError = payload as AuthErrorPayload | null;
+  const rawCode = String(authError?.code || authError?.error || "").trim().toLowerCase();
+  const rawMessage = String(
+    authError?.error_description ||
+      authError?.message ||
+      authError?.msg ||
+      authError?.details ||
+      ""
+  ).trim();
+  const combined = `${rawCode} ${rawMessage}`.toLowerCase();
+
+  if (rawCode === "invalid_credentials" || combined.includes("invalid login credentials")) {
+    return "AUTH_INVALID_CREDENTIALS";
+  }
+  if (rawCode === "email_not_confirmed" || combined.includes("email not confirmed")) {
+    return "AUTH_EMAIL_NOT_CONFIRMED";
+  }
+  if (combined.includes("user already registered") || combined.includes("already registered")) {
+    return "AUTH_USER_ALREADY_REGISTERED";
+  }
+  if (combined.includes("password should be at least") || combined.includes("at least 6 characters")) {
+    return "AUTH_WEAK_PASSWORD";
+  }
+  if (combined.includes("unable to validate email") || combined.includes("invalid email")) {
+    return "AUTH_INVALID_EMAIL";
+  }
+  if (status === 429 || combined.includes("rate limit") || combined.includes("too many requests")) {
+    return "AUTH_RATE_LIMITED";
+  }
+  if (status === 401) {
+    return "AUTH_UNAUTHORIZED";
+  }
+  if (status >= 500) {
+    return "AUTH_PROVIDER_UNAVAILABLE";
+  }
+  if (status === 400) {
+    return "AUTH_BAD_REQUEST";
+  }
+  if (status === 422) {
+    return "AUTH_UNPROCESSABLE";
+  }
+
+  if (rawMessage) {
+    return `AUTH_HTTP_${status}:${rawMessage}`;
+  }
+  return `AUTH_HTTP_${status}`;
+};
 
 const normalizeTokenResponse = (response: AuthTokenResponse): CloudSession => {
   const accessToken = response.access_token ?? "";
@@ -68,8 +126,7 @@ const parseJson = async <T>(res: Response): Promise<T> => {
     payload = null;
   }
   if (!res.ok) {
-    const authError = payload as { error?: string; error_description?: string } | null;
-    throw new Error(authError?.error_description || authError?.error || `AUTH_HTTP_${res.status}`);
+    throw new Error(normalizeAuthError(res.status, payload));
   }
   return payload as T;
 };
@@ -191,4 +248,3 @@ export const buildGoogleOAuthUrl = (redirectTo: string): string => {
   url.searchParams.set("redirect_to", redirectTo);
   return url.toString();
 };
-

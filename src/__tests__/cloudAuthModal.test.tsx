@@ -145,4 +145,28 @@ describe("CloudAuthModal", () => {
     expect(link.getAttribute("href")).toBe("/privacy-policy.html");
     expect(link.getAttribute("target")).toBe("_blank");
   });
+
+  it("renders a friendly error message for invalid credentials", () => {
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        authStatus="unauthenticated"
+        authError="AUTH_INVALID_CREDENTIALS"
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect(screen.getByText("Sign-in failed. This account doesn't exist or the password is incorrect.")).toBeTruthy();
+    expect(screen.queryByText("AUTH_INVALID_CREDENTIALS")).toBeNull();
+  });
 });

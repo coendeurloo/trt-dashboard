@@ -3,6 +3,7 @@ import { ArrowRight, Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppMode, ThemeMode } from "../types";
 import CloudSyncConflictModal from "./CloudSyncConflictModal";
+import { mapCloudAuthErrorToMessage, mapCloudSyncErrorToMessage } from "../lib/cloudErrorMessages";
 
 type CloudAuthStatus = "loading" | "authenticated" | "unauthenticated" | "error";
 type CloudSyncStatus = "idle" | "loading" | "syncing" | "pending" | "error";
@@ -91,6 +92,19 @@ const CloudSyncPanel = ({
       setIsBusy(false);
     }
   };
+
+  const displayError = useMemo(() => {
+    if (localError) {
+      return mapCloudSyncErrorToMessage(localError, tr);
+    }
+    if (syncError) {
+      return mapCloudSyncErrorToMessage(syncError, tr);
+    }
+    if (authError) {
+      return mapCloudAuthErrorToMessage(authError, tr);
+    }
+    return null;
+  }, [authError, localError, syncError, tr]);
 
   return (
     <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
@@ -312,8 +326,8 @@ const CloudSyncPanel = ({
         </p>
       ) : null}
 
-      {authError || syncError || localError ? (
-        <p className="mt-2 text-xs text-rose-200">{localError ?? syncError ?? authError}</p>
+      {displayError ? (
+        <p className="mt-2 text-xs text-rose-200">{displayError}</p>
       ) : null}
 
       <CloudSyncConflictModal
