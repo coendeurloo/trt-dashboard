@@ -129,7 +129,7 @@ const CloudAuthModal = ({
     }, 3200);
   };
 
-  const run = async (fn: () => Promise<void>) => {
+  const runWithClose = async (fn: () => Promise<void>) => {
     setIsBusy(true);
     setLocalError(null);
     try {
@@ -143,6 +143,28 @@ const CloudAuthModal = ({
     }
   };
 
+  const runWithoutClose = async (fn: () => Promise<void>) => {
+    setIsBusy(true);
+    setLocalError(null);
+    try {
+      await fn();
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : tr("Actie mislukt.", "Action failed."));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleGoogleClick = async () => {
+    await runWithoutClose(async () => {
+      if (isSignupView && !consentPayload) {
+        showConsentNotice();
+        return;
+      }
+      await onSignInGoogle(initialView, isSignupView ? consentPayload ?? undefined : undefined);
+    });
+  };
+
   const submitEmail = async (event: FormEvent) => {
     event.preventDefault();
     if (isSignupView && !consentPayload) {
@@ -151,7 +173,7 @@ const CloudAuthModal = ({
       return;
     }
     const signupPayload = consentPayload;
-    await run(() => {
+    await runWithClose(() => {
       if (isSignupView) {
         if (!signupPayload) {
           throw new Error(
@@ -341,7 +363,7 @@ const CloudAuthModal = ({
                 type="button"
                 disabled={isBusy || !consentPayload}
                 onClick={() => {
-                  void run(async () => {
+                  void runWithClose(async () => {
                     if (!consentPayload) {
                       throw new Error(
                         tr(
@@ -394,14 +416,7 @@ const CloudAuthModal = ({
               <button
                 type="button"
                 onClick={() => {
-                  void run(async () => {
-                    if (isSignupView && !consentPayload) {
-                      setLocalError(null);
-                      showConsentNotice();
-                      return;
-                    }
-                    await onSignInGoogle(initialView, isSignupView ? consentPayload ?? undefined : undefined);
-                  });
+                  void handleGoogleClick();
                 }}
                 disabled={isBusy || authStatus === "loading"}
                 className={`inline-flex w-full items-center justify-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${

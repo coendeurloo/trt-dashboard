@@ -38,6 +38,7 @@ describe("CloudAuthModal", () => {
   it("requires consent before enabling signup actions", async () => {
     const onSignUpEmail = vi.fn(async () => undefined);
     const onSignInGoogle = vi.fn(async () => undefined);
+    const onClose = vi.fn();
 
     render(
       <CloudAuthModal
@@ -50,7 +51,7 @@ describe("CloudAuthModal", () => {
         authError={null}
         consentRequired={false}
         privacyPolicyVersion="2026-03-09"
-        onClose={vi.fn()}
+        onClose={onClose}
         onSignInGoogle={onSignInGoogle}
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={onSignUpEmail}
@@ -63,6 +64,7 @@ describe("CloudAuthModal", () => {
       screen.getByText("Start here: check both consent boxes first to continue.")
     ).toBeTruthy();
     expect(onSignInGoogle).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
     await waitFor(() => {
       expect((screen.getByRole("button", { name: "Create account" }) as HTMLButtonElement).disabled).toBe(false);
     });
@@ -86,6 +88,37 @@ describe("CloudAuthModal", () => {
         privacyPolicyVersion: "2026-03-09"
       });
     });
+  });
+
+  it("does not close the modal immediately on Google sign-in click", async () => {
+    const onClose = vi.fn();
+    const onSignInGoogle = vi.fn(async () => undefined);
+
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        authStatus="unauthenticated"
+        authError={null}
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={onClose}
+        onSignInGoogle={onSignInGoogle}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+    await waitFor(() => {
+      expect(onSignInGoogle).toHaveBeenCalledWith("signin", undefined);
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("links to privacy policy in a new tab from signup", () => {
