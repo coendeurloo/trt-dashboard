@@ -37,6 +37,7 @@ describe("CloudAuthModal", () => {
 
   it("requires consent before enabling signup actions", async () => {
     const onSignUpEmail = vi.fn(async () => undefined);
+    const onSignInGoogle = vi.fn(async () => undefined);
 
     render(
       <CloudAuthModal
@@ -50,30 +51,33 @@ describe("CloudAuthModal", () => {
         consentRequired={false}
         privacyPolicyVersion="2026-03-09"
         onClose={vi.fn()}
-        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInGoogle={onSignInGoogle}
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={onSignUpEmail}
         onCompleteConsent={vi.fn(async () => undefined)}
       />
     );
 
-    const googleButton = screen.getByRole("button", { name: "Continue with Google" }) as HTMLButtonElement;
-    const createButton = screen.getByRole("button", { name: "Create account" }) as HTMLButtonElement;
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    expect(
+      screen.getByText("Start here: check both consent boxes first to continue.")
+    ).toBeTruthy();
+    expect(onSignInGoogle).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "Create account" }) as HTMLButtonElement).disabled).toBe(false);
+    });
 
-    expect(googleButton.disabled).toBe(true);
-    expect(createButton.disabled).toBe(true);
+    fireEvent.focus(screen.getByLabelText("Email"));
+    expect(
+      screen.getByText("Start here: check both consent boxes first to continue.")
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText(/i agree to the privacy policy/i));
     fireEvent.click(screen.getByLabelText(/i explicitly consent to processing health data/i));
 
-    await waitFor(() => {
-      expect(googleButton.disabled).toBe(false);
-      expect(createButton.disabled).toBe(false);
-    });
-
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "test@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret12" } });
-    fireEvent.click(createButton);
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {
       expect(onSignUpEmail).toHaveBeenCalledWith("test@example.com", "secret12", {

@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Cloud, Loader2, ShieldCheck, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Cloud, Loader2, ShieldCheck, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { trLocale } from "../i18n";
 import { AppLanguage, ThemeMode } from "../types";
@@ -69,6 +69,9 @@ const CloudAuthModal = ({
   const [acceptHealthDataConsent, setAcceptHealthDataConsent] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [consentNotice, setConsentNotice] = useState<string | null>(null);
+  const [consentHighlight, setConsentHighlight] = useState(false);
+  const consentNoticeTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -79,7 +82,17 @@ const CloudAuthModal = ({
     setAcceptPrivacyPolicy(false);
     setAcceptHealthDataConsent(false);
     setLocalError(null);
+    setConsentNotice(null);
+    setConsentHighlight(false);
   }, [initialView, open]);
+
+  useEffect(() => {
+    return () => {
+      if (consentNoticeTimeoutRef.current !== null) {
+        globalThis.clearTimeout(consentNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const consentPayload = useMemo<CloudConsentPayload | null>(() => {
     if (!acceptPrivacyPolicy || !acceptHealthDataConsent) {
@@ -99,6 +112,23 @@ const CloudAuthModal = ({
   const isSignupView = initialView === "signup";
   const signupBlocked = isSignupView && !consentPayload;
 
+  const showConsentNotice = () => {
+    const message = tr(
+      "Start hier: vink eerst beide consent-vakjes aan om verder te gaan.",
+      "Start here: check both consent boxes first to continue."
+    );
+    setConsentNotice(message);
+    setConsentHighlight(true);
+    if (consentNoticeTimeoutRef.current !== null) {
+      globalThis.clearTimeout(consentNoticeTimeoutRef.current);
+    }
+    consentNoticeTimeoutRef.current = globalThis.setTimeout(() => {
+      setConsentNotice(null);
+      setConsentHighlight(false);
+      consentNoticeTimeoutRef.current = null;
+    }, 3200);
+  };
+
   const run = async (fn: () => Promise<void>) => {
     setIsBusy(true);
     setLocalError(null);
@@ -115,9 +145,15 @@ const CloudAuthModal = ({
 
   const submitEmail = async (event: FormEvent) => {
     event.preventDefault();
+    if (isSignupView && !consentPayload) {
+      setLocalError(null);
+      showConsentNotice();
+      return;
+    }
+    const signupPayload = consentPayload;
     await run(() => {
       if (isSignupView) {
-        if (!consentPayload) {
+        if (!signupPayload) {
           throw new Error(
             tr(
               "Bevestig eerst de privacy policy en health-data toestemming.",
@@ -125,7 +161,7 @@ const CloudAuthModal = ({
             )
           );
         }
-        return onSignUpEmail(email, password, consentPayload);
+        return onSignUpEmail(email, password, signupPayload);
       }
       return onSignInEmail(email, password);
     });
@@ -133,10 +169,16 @@ const CloudAuthModal = ({
 
   const consentBlock = (
     <div
-      className={`space-y-2 rounded-2xl p-3 ${
+      className={`space-y-2 rounded-2xl p-3 transition ${
         isLightTheme
           ? "border border-slate-300 bg-slate-50/95"
           : "border border-slate-800 bg-slate-950/70"
+      } ${
+        consentHighlight && signupBlocked
+          ? isLightTheme
+            ? "ring-2 ring-cyan-500/45"
+            : "ring-2 ring-cyan-400/45"
+          : ""
       }`}
     >
       <label className={`flex items-start gap-2 text-sm ${isLightTheme ? "text-slate-700" : "text-slate-200"}`}>
@@ -332,22 +374,36 @@ const CloudAuthModal = ({
             <>
               {isSignupView ? consentBlock : null}
 
+              {isSignupView && consentNotice ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={`rounded-xl border px-3 py-2 text-sm ${
+                    isLightTheme
+                      ? "border-cyan-500/45 bg-cyan-50 text-cyan-900"
+                      : "border-cyan-500/40 bg-cyan-500/10 text-cyan-100"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />
+                    {consentNotice}
+                  </span>
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => {
                   void run(async () => {
                     if (isSignupView && !consentPayload) {
-                      throw new Error(
-                        tr(
-                          "Vink eerst beide consent-checkboxes aan om door te gaan.",
-                          "Check both consent checkboxes first to continue."
-                        )
-                      );
+                      setLocalError(null);
+                      showConsentNotice();
+                      return;
                     }
                     await onSignInGoogle(initialView, isSignupView ? consentPayload ?? undefined : undefined);
                   });
                 }}
-                disabled={isBusy || authStatus === "loading" || signupBlocked}
+                disabled={isBusy || authStatus === "loading"}
                 className={`inline-flex w-full items-center justify-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
                   isLightTheme
                     ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
@@ -372,6 +428,11 @@ const CloudAuthModal = ({
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
+                      onFocus={() => {
+                        if (isSignupView && !consentPayload) {
+                          showConsentNotice();
+                        }
+                      }}
                       placeholder="name@example.com"
                       autoComplete={isSignupView ? "username" : "email"}
                       className={`w-full rounded-xl border px-3.5 py-3 text-sm placeholder:text-slate-500 focus:outline-none ${
@@ -388,6 +449,11 @@ const CloudAuthModal = ({
                       type="password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
+                      onFocus={() => {
+                        if (isSignupView && !consentPayload) {
+                          showConsentNotice();
+                        }
+                      }}
                       placeholder={tr("Minimaal 6 tekens", "At least 6 characters")}
                       autoComplete={isSignupView ? "new-password" : "current-password"}
                       className={`w-full rounded-xl border px-3.5 py-3 text-sm placeholder:text-slate-500 focus:outline-none ${
@@ -403,7 +469,7 @@ const CloudAuthModal = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy || authStatus === "loading" || signupBlocked}
+                  disabled={isBusy || authStatus === "loading"}
                   className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
                     isLightTheme
                       ? "border border-cyan-700/65 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
