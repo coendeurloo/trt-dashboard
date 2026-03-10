@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { trLocale } from "../i18n";
-import { AppLanguage, AppMode } from "../types";
+import { AppLanguage, AppMode, ThemeMode } from "../types";
 import CloudSyncConflictModal from "./CloudSyncConflictModal";
 
 type CloudAuthStatus = "loading" | "authenticated" | "unauthenticated" | "error";
@@ -10,6 +10,7 @@ type CloudSyncAction = "none" | "upload_local" | "choose_source";
 
 interface CloudSyncPanelProps {
   language: AppLanguage;
+  theme: ThemeMode;
   appMode: AppMode;
   configured: boolean;
   authStatus: CloudAuthStatus;
@@ -38,6 +39,7 @@ interface CloudSyncPanelProps {
 
 const CloudSyncPanel = ({
   language,
+  theme,
   appMode,
   configured,
   authStatus,
@@ -64,6 +66,7 @@ const CloudSyncPanel = ({
   onRefreshCloud
 }: CloudSyncPanelProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isLightTheme = theme === "light";
   const [isBusy, setIsBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -108,7 +111,13 @@ const CloudSyncPanel = ({
       ) : null}
 
       {configured && authStatus !== "authenticated" ? (
-        <div className="mt-3 rounded-2xl border border-slate-700/80 bg-slate-950/45 p-4">
+        <div
+          className={`mt-3 rounded-2xl p-4 ${
+            isLightTheme
+              ? "border border-slate-300/80 bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+              : "border border-slate-700/80 bg-slate-950/45"
+          }`}
+        >
           {authStatus === "loading" ? (
             <p className="inline-flex items-center gap-2 text-sm text-slate-300">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -129,7 +138,11 @@ const CloudSyncPanel = ({
                 <button
                   type="button"
                   onClick={() => onOpenAuthModal("signup")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22"
+                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                    isLightTheme
+                      ? "border border-cyan-600/40 bg-cyan-500/20 text-cyan-900 hover:border-cyan-700/60 hover:bg-cyan-500/30"
+                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/80 hover:bg-cyan-500/22"
+                  }`}
                 >
                   {tr("Account maken", "Create account")}
                   <ArrowRight className="h-4 w-4" />
@@ -137,7 +150,11 @@ const CloudSyncPanel = ({
                 <button
                   type="button"
                   onClick={() => onOpenAuthModal("signin")}
-                  className="rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-50"
+                  className={`rounded-xl border px-4 py-2 text-sm transition ${
+                    isLightTheme
+                      ? "border-slate-300 text-slate-700 hover:border-slate-400 hover:text-slate-900"
+                      : "border-slate-600 text-slate-200 hover:border-slate-500 hover:text-slate-50"
+                  }`}
                 >
                   {tr("Ik heb al een account", "I already have an account")}
                 </button>

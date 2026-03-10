@@ -1831,6 +1831,7 @@ const App = () => {
   const cloudPanel = (
     <CloudSyncPanel
       language={appData.settings.language}
+      theme={appData.settings.theme}
       appMode={appMode}
       configured={cloudAuth.configured}
       authStatus={cloudAuth.status}
@@ -2364,6 +2365,7 @@ const App = () => {
       <CloudAuthModal
         open={cloudAuthModalOpen}
         language={appData.settings.language}
+        theme={appData.settings.theme}
         configured={cloudAuth.configured}
         initialView={cloudAuthModalView}
         authStatus={cloudAuth.status}

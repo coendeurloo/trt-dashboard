@@ -14,6 +14,7 @@ describe("CloudAuthModal", () => {
       <CloudAuthModal
         open
         language="en"
+        theme="dark"
         configured
         initialView="signin"
         authStatus="unauthenticated"
@@ -41,6 +42,7 @@ describe("CloudAuthModal", () => {
       <CloudAuthModal
         open
         language="en"
+        theme="dark"
         configured
         initialView="signup"
         authStatus="unauthenticated"
@@ -87,6 +89,7 @@ describe("CloudAuthModal", () => {
       <CloudAuthModal
         open
         language="en"
+        theme="dark"
         configured
         initialView="signup"
         authStatus="unauthenticated"

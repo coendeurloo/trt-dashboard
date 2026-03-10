@@ -754,6 +754,7 @@ const DashboardView = ({
         {reports.length === 0 && !isShareMode ? (
           <WelcomeHero
             language={language}
+            theme={settings.theme}
             cloudConfigured={cloudConfigured}
             onLoadDemo={onLoadDemo}
             onUploadClick={onUploadClick}

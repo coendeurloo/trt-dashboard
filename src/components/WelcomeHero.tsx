@@ -3,12 +3,13 @@ import { BarChart3, FileText, Lock, Play, Sparkles, Upload } from "lucide-react"
 import dashboardFirstVisitPreview from "../assets/dashboard-first-visit.png";
 import { USER_PROFILES } from "../data/userProfiles";
 import { trLocale } from "../i18n";
-import { AppLanguage, UserProfile } from "../types";
+import { AppLanguage, ThemeMode, UserProfile } from "../types";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
 export interface WelcomeHeroProps {
   language: AppLanguage;
+  theme: ThemeMode;
   cloudConfigured: boolean;
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
@@ -16,8 +17,9 @@ export interface WelcomeHeroProps {
   onOpenCloudAuth: (view: "signin" | "signup") => void;
 }
 
-const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onSetUserProfile, onOpenCloudAuth }: WelcomeHeroProps) => {
+const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadClick, onSetUserProfile, onOpenCloudAuth }: WelcomeHeroProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isLightTheme = theme === "light";
   const [pendingAction, setPendingAction] = useState<"demo" | "upload" | null>(null);
 
   const steps = [
@@ -171,18 +173,30 @@ const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onS
     pendingAction && typeof document !== "undefined"
       ? createPortal(
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4">
-            <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/40 bg-slate-900/95 p-4 sm:p-5">
+            <div
+              className={`w-full max-w-3xl rounded-2xl p-4 sm:p-5 ${
+                isLightTheme
+                  ? "border border-cyan-500/35 bg-white/95 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.45)]"
+                  : "border border-cyan-500/40 bg-slate-900/95"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-lg font-semibold text-cyan-100">{tr("Wat beschrijft je het beste?", "What best describes you?")}</p>
+                <p className={`text-lg font-semibold ${isLightTheme ? "text-slate-900" : "text-cyan-100"}`}>
+                  {tr("Wat beschrijft je het beste?", "What best describes you?")}
+                </p>
                 <button
                   type="button"
                   onClick={() => setPendingAction(null)}
-                  className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-500"
+                  className={`rounded-md border px-2.5 py-1.5 text-xs ${
+                    isLightTheme
+                      ? "border-slate-300 text-slate-700 hover:border-slate-400"
+                      : "border-slate-600 text-slate-300 hover:border-slate-500"
+                  }`}
                 >
                   {tr("Sluiten", "Close")}
                 </button>
               </div>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className={`mt-1 text-sm ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
                 {tr(
                   "Kies wat nu het beste past. Geen zorgen, je kunt dit later altijd aanpassen in Instellingen.",
                   "Pick what fits best for now. Don't worry, you can always change this later in settings."
@@ -194,10 +208,16 @@ const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onS
                     key={profile.id}
                     type="button"
                     onClick={() => continueWithProfile(profile.id)}
-                    className="rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-left transition hover:border-cyan-400/60 hover:bg-cyan-500/10"
+                    className={`rounded-lg border p-3 text-left transition ${
+                      isLightTheme
+                        ? "border-slate-300 bg-slate-50 hover:border-cyan-500/60 hover:bg-cyan-500/10"
+                        : "border-slate-700 bg-slate-900/60 hover:border-cyan-400/60 hover:bg-cyan-500/10"
+                    }`}
                   >
-                    <p className="text-sm font-semibold text-slate-100">{language === "nl" ? profile.labelNl : profile.labelEn}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                    <p className={`text-sm font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>
+                      {language === "nl" ? profile.labelNl : profile.labelEn}
+                    </p>
+                    <p className={`mt-1 text-xs leading-5 ${isLightTheme ? "text-slate-600" : "text-slate-400"}`}>
                       {language === "nl" ? profile.descriptionNl : profile.descriptionEn}
                     </p>
                   </button>
@@ -233,7 +253,9 @@ const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onS
                 <button
                   type="button"
                   onClick={() => onOpenCloudAuth("signup")}
-                  className="text-cyan-200 underline decoration-cyan-500/70 underline-offset-2 transition hover:text-cyan-100"
+                  className={`underline decoration-cyan-500/70 underline-offset-2 transition ${
+                    isLightTheme ? "text-cyan-700 hover:text-cyan-900" : "text-cyan-200 hover:text-cyan-100"
+                  }`}
                 >
                   {tr("Maak gratis een account ->", "Create a free account ->")}
                 </button>
@@ -246,7 +268,11 @@ const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onS
               <button
                 type="button"
                 onClick={() => setPendingAction("demo")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/55 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22 active:scale-[0.98]"
+                className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+                  isLightTheme
+                    ? "border-cyan-600/45 bg-cyan-500/20 text-cyan-900 hover:border-cyan-700/70 hover:bg-cyan-500/30"
+                    : "border-cyan-400/55 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/80 hover:bg-cyan-500/22"
+                }`}
               >
                 <Play className="h-4 w-4" />
                 {tr("Bekijk live demo", "See a live demo")}
@@ -263,7 +289,11 @@ const WelcomeHero = ({ language, cloudConfigured, onLoadDemo, onUploadClick, onS
               <button
                 type="button"
                 onClick={() => setPendingAction("upload")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/55 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80 hover:bg-cyan-500/22 active:scale-[0.98]"
+                className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+                  isLightTheme
+                    ? "border-cyan-600/45 bg-cyan-500/20 text-cyan-900 hover:border-cyan-700/70 hover:bg-cyan-500/30"
+                    : "border-cyan-400/55 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/80 hover:bg-cyan-500/22"
+                }`}
               >
                 <Upload className="h-4 w-4" />
                 {tr("Upload je eigen PDF", "Upload your own PDF")}

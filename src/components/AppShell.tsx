@@ -142,6 +142,7 @@ const AppShell = ({
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
     isOnboardingLocked && key !== "dashboard";
   const isProtocolProfile = userProfile === "trt" || userProfile === "enhanced";
+  const isLightTheme = theme === "light";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
   const currentPlanLabel = getPersonaSidebarCurrentLabel(userProfile, language);
@@ -365,14 +366,22 @@ const AppShell = ({
                   <button
                     type="button"
                     onClick={() => onOpenCloudAuth("signup")}
-                    className="rounded-md border border-cyan-500/45 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                    className={`rounded-md border px-2.5 py-1 text-xs transition ${
+                      isLightTheme
+                        ? "border-cyan-600/45 bg-cyan-500/20 font-medium text-cyan-900 hover:border-cyan-700/60 hover:bg-cyan-500/30"
+                        : "border-cyan-500/45 bg-cyan-500/10 text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                    }`}
                   >
                     {tr("Sign up", "Sign up")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onOpenCloudAuth("signin")}
-                    className="rounded-md px-2 py-1 text-xs text-slate-300 transition hover:text-slate-100"
+                    className={`rounded-md px-2 py-1 text-xs transition ${
+                      isLightTheme
+                        ? "font-medium text-slate-700 hover:text-slate-900"
+                        : "text-slate-300 hover:text-slate-100"
+                    }`}
                   >
                     {tr("Sign in", "Sign in")}
                   </button>

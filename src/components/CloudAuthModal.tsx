@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Cloud, Loader2, ShieldCheck, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { trLocale } from "../i18n";
-import { AppLanguage } from "../types";
+import { AppLanguage, ThemeMode } from "../types";
 import { CloudConsentPayload } from "../cloud/consentClient";
 
 export type CloudAuthView = "signin" | "signup";
@@ -10,6 +10,7 @@ export type CloudAuthView = "signin" | "signup";
 interface CloudAuthModalProps {
   open: boolean;
   language: AppLanguage;
+  theme: ThemeMode;
   configured: boolean;
   initialView: CloudAuthView;
   authStatus: "loading" | "authenticated" | "unauthenticated" | "error";
@@ -47,6 +48,7 @@ const GoogleIcon = () => (
 const CloudAuthModal = ({
   open,
   language,
+  theme,
   configured,
   initialView,
   authStatus,
@@ -60,6 +62,7 @@ const CloudAuthModal = ({
   onCompleteConsent
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isLightTheme = theme === "light";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [acceptPrivacyPolicy, setAcceptPrivacyPolicy] = useState(false);
@@ -129,13 +132,21 @@ const CloudAuthModal = ({
   };
 
   const consentBlock = (
-    <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-      <label className="flex items-start gap-2 text-sm text-slate-200">
+    <div
+      className={`space-y-2 rounded-2xl p-3 ${
+        isLightTheme
+          ? "border border-slate-300 bg-slate-50/95"
+          : "border border-slate-800 bg-slate-950/70"
+      }`}
+    >
+      <label className={`flex items-start gap-2 text-sm ${isLightTheme ? "text-slate-700" : "text-slate-200"}`}>
         <input
           type="checkbox"
           checked={acceptPrivacyPolicy}
           onChange={(event) => setAcceptPrivacyPolicy(event.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400"
+          className={`mt-0.5 h-4 w-4 rounded text-cyan-500 ${
+            isLightTheme ? "border-slate-400 bg-white" : "border-slate-600 bg-slate-900"
+          }`}
         />
         <span>
           {tr("Ik ga akkoord met de", "I agree to the")}{" "}
@@ -143,19 +154,21 @@ const CloudAuthModal = ({
             href="/privacy-policy.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-cyan-200 underline underline-offset-2"
+            className={`underline underline-offset-2 ${isLightTheme ? "text-cyan-700" : "text-cyan-200"}`}
           >
             {tr("privacy policy", "privacy policy")}
           </a>
           .
         </span>
       </label>
-      <label className="flex items-start gap-2 text-sm text-slate-200">
+      <label className={`flex items-start gap-2 text-sm ${isLightTheme ? "text-slate-700" : "text-slate-200"}`}>
         <input
           type="checkbox"
           checked={acceptHealthDataConsent}
           onChange={(event) => setAcceptHealthDataConsent(event.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400"
+          className={`mt-0.5 h-4 w-4 rounded text-cyan-500 ${
+            isLightTheme ? "border-slate-400 bg-white" : "border-slate-600 bg-slate-900"
+          }`}
         />
         <span>
           {tr(
@@ -165,7 +178,7 @@ const CloudAuthModal = ({
         </span>
       </label>
       {isSignupView ? (
-        <p className="text-xs text-slate-400">
+        <p className={`text-xs ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
           {tr(
             "Beide vinkjes zijn verplicht voor accountregistratie.",
             "Both checkboxes are required to create an account."
@@ -197,35 +210,69 @@ const CloudAuthModal = ({
         );
 
   const modal = (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-[90] flex items-center justify-center p-4 backdrop-blur-sm ${
+        isLightTheme ? "bg-slate-900/45" : "bg-slate-950/80"
+      }`}
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-700/80 bg-slate-950/95 shadow-[0_30px_90px_-45px_rgba(34,211,238,0.65)]"
+        className={`w-full max-w-xl overflow-hidden rounded-[28px] ${
+          isLightTheme
+            ? "border border-slate-300/80 bg-white/95 shadow-[0_28px_72px_-42px_rgba(15,23,42,0.45)]"
+            : "border border-slate-700/80 bg-slate-950/95 shadow-[0_30px_90px_-45px_rgba(34,211,238,0.65)]"
+        }`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative overflow-hidden border-b border-slate-800 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.16),transparent_45%),linear-gradient(135deg,rgba(8,47,73,0.92),rgba(2,6,23,0.96))] p-5 sm:p-6">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-cyan-400/5 blur-3xl" aria-hidden />
+        <div
+          className={`relative overflow-hidden p-5 sm:p-6 ${
+            isLightTheme
+              ? "border-b border-slate-200 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.14),transparent_52%),linear-gradient(145deg,rgba(240,249,255,0.98),rgba(255,255,255,0.98))]"
+              : "border-b border-slate-800 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.16),transparent_45%),linear-gradient(135deg,rgba(8,47,73,0.92),rgba(2,6,23,0.96))]"
+          }`}
+        >
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 h-24 blur-3xl ${isLightTheme ? "bg-cyan-400/10" : "bg-cyan-400/5"}`}
+            aria-hidden
+          />
           <div className="relative flex items-start justify-between gap-3">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
+                  isLightTheme
+                    ? "border border-cyan-600/30 bg-cyan-500/12 text-cyan-800"
+                    : "border border-cyan-500/35 bg-cyan-500/10 text-cyan-200"
+                }`}
+              >
                 <Cloud className="h-3.5 w-3.5" />
                 {tr("Cloud sync", "Cloud sync")}
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">{title}</h2>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">{subtitle}</p>
+              <h2 className={`mt-3 text-xl font-semibold sm:text-2xl ${isLightTheme ? "text-slate-900" : "text-slate-50"}`}>{title}</h2>
+              <p className={`mt-2 max-w-lg text-sm leading-6 ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>{subtitle}</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-slate-700 bg-slate-900/70 p-2 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+              className={`rounded-full p-2 transition ${
+                isLightTheme
+                  ? "border border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
+                  : "border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500 hover:text-slate-100"
+              }`}
               aria-label={tr("Sluiten", "Close")}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="relative mt-4 text-xs text-slate-300">
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900/55 px-3 py-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+          <div className={`relative mt-4 text-xs ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${
+                isLightTheme
+                  ? "border border-slate-300 bg-white/90"
+                  : "border border-slate-700/80 bg-slate-900/55"
+              }`}
+            >
+              <ShieldCheck className={`h-3.5 w-3.5 ${isLightTheme ? "text-cyan-700" : "text-cyan-300"}`} />
               {tr("Lokale modus blijft altijd beschikbaar", "Local mode always stays available")}
             </span>
           </div>
@@ -233,7 +280,13 @@ const CloudAuthModal = ({
 
         <div className="space-y-5 p-5 sm:p-6">
           {!configured ? (
-            <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm text-amber-100">
+            <div
+              className={`rounded-2xl border p-4 text-sm ${
+                isLightTheme
+                  ? "border-amber-400/45 bg-amber-100/80 text-amber-900"
+                  : "border-amber-500/35 bg-amber-500/10 text-amber-100"
+              }`}
+            >
               {tr(
                 "Cloud is nog niet geconfigureerd. Voeg eerst `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe.",
                 "Cloud is not configured yet. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` first."
@@ -258,14 +311,18 @@ const CloudAuthModal = ({
                     await onCompleteConsent(consentPayload);
                   });
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  isLightTheme
+                    ? "border border-cyan-700/65 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                    : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                }`}
               >
                 {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {tr("Consent bevestigen en cloud activeren", "Confirm consent and enable cloud")}
               </button>
             </>
           ) : authStatus === "authenticated" ? (
-            <p className="text-sm text-slate-200">
+            <p className={`text-sm ${isLightTheme ? "text-slate-700" : "text-slate-200"}`}>
               {tr(
                 "Je bent al ingelogd. Cloud sync wordt automatisch beheerd in Settings.",
                 "You are already signed in. Cloud sync is managed automatically in Settings."
@@ -291,41 +348,53 @@ const CloudAuthModal = ({
                   });
                 }}
                 disabled={isBusy || authStatus === "loading" || signupBlocked}
-                className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                className={`inline-flex w-full items-center justify-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  isLightTheme
+                    ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+                    : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                }`}
               >
                 <GoogleIcon />
                 {tr("Doorgaan met Google", "Continue with Google")}
               </button>
 
-              <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                <span className="h-px flex-1 bg-slate-800" />
+              <div className={`flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] ${isLightTheme ? "text-slate-500" : "text-slate-500"}`}>
+                <span className={`h-px flex-1 ${isLightTheme ? "bg-slate-300" : "bg-slate-800"}`} />
                 {tr("of ga verder met e-mail", "or continue with email")}
-                <span className="h-px flex-1 bg-slate-800" />
+                <span className={`h-px flex-1 ${isLightTheme ? "bg-slate-300" : "bg-slate-800"}`} />
               </div>
 
               <form className="space-y-3" onSubmit={submitEmail}>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm text-slate-300">
-                    <span className="mb-1.5 block text-xs uppercase tracking-wide text-slate-500">Email</span>
+                  <label className={`text-sm ${isLightTheme ? "text-slate-700" : "text-slate-300"}`}>
+                    <span className={`mb-1.5 block text-xs uppercase tracking-wide ${isLightTheme ? "text-slate-500" : "text-slate-500"}`}>Email</span>
                     <input
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="name@example.com"
                       autoComplete={isSignupView ? "username" : "email"}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/65 focus:outline-none"
+                      className={`w-full rounded-xl border px-3.5 py-3 text-sm placeholder:text-slate-500 focus:outline-none ${
+                        isLightTheme
+                          ? "border-slate-300 bg-white text-slate-900 focus:border-cyan-600"
+                          : "border-slate-700 bg-slate-900/80 text-slate-100 focus:border-cyan-400/65"
+                      }`}
                       required
                     />
                   </label>
-                  <label className="text-sm text-slate-300">
-                    <span className="mb-1.5 block text-xs uppercase tracking-wide text-slate-500">{tr("Wachtwoord", "Password")}</span>
+                  <label className={`text-sm ${isLightTheme ? "text-slate-700" : "text-slate-300"}`}>
+                    <span className={`mb-1.5 block text-xs uppercase tracking-wide ${isLightTheme ? "text-slate-500" : "text-slate-500"}`}>{tr("Wachtwoord", "Password")}</span>
                     <input
                       type="password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder={tr("Minimaal 6 tekens", "At least 6 characters")}
                       autoComplete={isSignupView ? "new-password" : "current-password"}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/65 focus:outline-none"
+                      className={`w-full rounded-xl border px-3.5 py-3 text-sm placeholder:text-slate-500 focus:outline-none ${
+                        isLightTheme
+                          ? "border-slate-300 bg-white text-slate-900 focus:border-cyan-600"
+                          : "border-slate-700 bg-slate-900/80 text-slate-100 focus:border-cyan-400/65"
+                      }`}
                       minLength={6}
                       required
                     />
@@ -335,7 +404,11 @@ const CloudAuthModal = ({
                 <button
                   type="submit"
                   disabled={isBusy || authStatus === "loading" || signupBlocked}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/75 hover:bg-cyan-500/22 disabled:cursor-not-allowed disabled:opacity-70"
+                  className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                    isLightTheme
+                      ? "border border-cyan-700/65 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                  }`}
                 >
                   {isBusy || authStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {isSignupView ? tr("Account maken", "Create account") : tr("Inloggen", "Sign in")}
@@ -343,7 +416,7 @@ const CloudAuthModal = ({
               </form>
 
               {isSignupView && signupBlocked ? (
-                <p className="text-xs text-slate-400">
+                <p className={`text-xs ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
                   {tr(
                     "Vink beide verplichte checkboxen aan om accountregistratie te starten.",
                     "Check both required checkboxes to start account registration."
@@ -353,7 +426,9 @@ const CloudAuthModal = ({
             </>
           )}
 
-          {localError || authError ? <p className="text-sm text-rose-200">{localError ?? authError}</p> : null}
+          {localError || authError ? (
+            <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{localError ?? authError}</p>
+          ) : null}
         </div>
       </div>
     </div>
