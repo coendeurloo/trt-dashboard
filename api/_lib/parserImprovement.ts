@@ -78,7 +78,7 @@ const readMultipartFormData = async (req: IncomingMessage): Promise<FormData> =>
   }
 
   const rawBody = await readRawBody(req, PARSER_IMPROVEMENT_MAX_MULTIPART_BYTES);
-  const response = new Response(rawBody, {
+  const response = new Response(new Uint8Array(rawBody), {
     headers: {
       "content-type": contentType
     }

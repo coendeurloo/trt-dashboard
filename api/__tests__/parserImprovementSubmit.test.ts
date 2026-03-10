@@ -6,7 +6,7 @@ const { checkRateLimitMock, sendParserImprovementEmailMock } = vi.hoisted(() => 
   sendParserImprovementEmailMock: vi.fn(async () => undefined)
 }));
 
-vi.mock("../claude/rateLimit.js", () => ({
+vi.mock("../_lib/rateLimit.js", () => ({
   checkRateLimit: checkRateLimitMock
 }));
 

@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { checkRateLimit } from "../claude/rateLimit.js";
+import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import {
   getClientIp,

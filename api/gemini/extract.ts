@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { checkRateLimit } from "../claude/rateLimit.js";
+import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError, getCounter, incrementCounterWindow, incrementFloatWindow } from "../_lib/redisStore.js";
 import { requireAiEntitlement } from "../_lib/entitlements.js";
 
@@ -545,7 +545,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       usage = fallbackResult.usage;
     }
 
-    let spend: Awaited<ReturnType<typeof recordSpend>> = { daily: 0, monthly: 0 };
+    let spend = await getCurrentSpend();
     if (!aiLimitsDisabled()) {
       try {
         await incrementCounterWindow(userKey, DAY_TTL_SECONDS, 1);

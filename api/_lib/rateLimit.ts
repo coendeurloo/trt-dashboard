@@ -1,4 +1,4 @@
-import { incrementCounterWindow } from "../_lib/redisStore.js";
+import { incrementCounterWindow } from "./redisStore.js";
 
 export interface RateLimitConfig {
   windowMs: number;
