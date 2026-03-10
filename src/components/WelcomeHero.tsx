@@ -49,15 +49,6 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
         "Connect protocols to your labs and use AI only if you explicitly opt in."
       ),
       preview: "protocol" as const
-    },
-    {
-      icon: Lock,
-      title: tr("Sync & back-up", "Sync & backup"),
-      description: tr(
-        "Maak gratis een account aan voor sync tussen apparaten. Je data blijft in de EU.",
-        "Create a free account to access your data from any device. Your data stays in the EU."
-      ),
-      preview: "protocol" as const
     }
   ];
 
@@ -342,7 +333,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
         <p className="mb-4 text-xs font-medium uppercase tracking-widest text-slate-500">
           {tr("Hoe het werkt", "How it works")}
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (

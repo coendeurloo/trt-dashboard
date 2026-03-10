@@ -172,7 +172,7 @@ describe("DashboardView first-visit hero", () => {
     expect(screen.getByText("Upload your lab PDF")).toBeTruthy();
     expect(screen.getByText("See your trends")).toBeTruthy();
     expect(screen.getByText("Optimize your protocol")).toBeTruthy();
-    expect(screen.getByText("Sync & backup")).toBeTruthy();
+    expect(screen.queryByText("Sync & backup")).toBeNull();
     expect(screen.getByText("Local processing by default")).toBeTruthy();
     expect(screen.getByText("Works with many lab formats")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create a free account ->" })).toBeTruthy();
