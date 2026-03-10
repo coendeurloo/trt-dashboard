@@ -799,15 +799,13 @@ const ExtractionReviewTable = ({
                 {tr("Handmatig invullen", "Enter manually")}
               </button>
             ) : null}
-            <a
-              href={parsingFeedbackMailto}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-500/20 sm:text-sm"
-            >
-              {tr("Geanonimiseerde feedback sturen", "Send anonymized feedback")}
-            </a>
           </div>
+          <p className="mt-2 text-xs text-rose-100/80 sm:text-sm">
+            {tr(
+              "Wil je ons helpen de parser te verbeteren? Gebruik dan de beta-kaart boven deze tabel om het originele PDF-bestand expliciet te delen.",
+              "Want to help us improve the parser? Use the beta card above this table to explicitly share the original PDF."
+            )}
+          </p>
         </div>
       ) : null}
 

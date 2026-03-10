@@ -185,3 +185,54 @@ it("preserves parser rescue consent settings when valid", () => {
   expect(coerced.settings.parserRescueAllowPdfAttachment).toBe(true);
 });
 
+it("preserves parser debug page count when present", () => {
+  const coerced = coerceStoredAppData({
+    reports: [
+      {
+        id: "report-1",
+        sourceFileName: "poor-scan.pdf",
+        testDate: "2026-03-01",
+        createdAt: "2026-03-01T10:00:00.000Z",
+        annotations: {
+          protocolId: null,
+          protocol: "",
+          supplementOverrides: null,
+          symptoms: "",
+          notes: "",
+          samplingTiming: "unknown"
+        },
+        markers: [
+          {
+            id: "marker-1",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 22,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "normal",
+            confidence: 0.7
+          }
+        ],
+        extraction: {
+          provider: "fallback",
+          model: "fallback",
+          confidence: 0.4,
+          needsReview: true,
+          debug: {
+            pageCount: 3,
+            textItems: 0,
+            ocrUsed: true,
+            ocrPages: 2,
+            keptRows: 1,
+            rejectedRows: 9,
+            topRejectReasons: {}
+          }
+        }
+      }
+    ]
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.reports[0]?.extraction.debug?.pageCount).toBe(3);
+});
+

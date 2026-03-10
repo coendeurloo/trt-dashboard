@@ -4,6 +4,7 @@ import {
   isSevereParserExtraction,
   resolveParserRescueAction,
   resolveUploadTriggerAction,
+  shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
 } from "../uploadFlow";
 import { ExtractionDraft, ParserUncertaintyAssessment } from "../types";
@@ -147,6 +148,17 @@ describe("uploadFlow severe trigger", () => {
     );
 
     expect(severe).toBe(false);
+  });
+
+  it("reuses the severe trigger for parser-improvement submissions", () => {
+    const assessment = makeAssessment({
+      markerCount: 3,
+      confidence: 0.9,
+      warnings: []
+    });
+
+    expect(shouldOfferParserImprovementSubmission(assessment)).toBe(true);
+    expect(shouldOfferParserImprovementSubmission(assessment)).toBe(isSevereParserExtraction(assessment));
   });
 });
 

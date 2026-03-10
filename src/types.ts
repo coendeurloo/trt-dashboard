@@ -290,6 +290,7 @@ export interface AIConsentDecision {
 }
 
 export interface ExtractionDebugInfo {
+  pageCount?: number;
   textItems: number;
   ocrUsed: boolean;
   ocrPages: number;

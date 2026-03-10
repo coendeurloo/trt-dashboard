@@ -53,12 +53,18 @@ import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
   resolveUploadTriggerAction,
+  shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
 } from "./uploadFlow";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
+import {
+  ParserImprovementFormValues,
+  ParserImprovementSubmissionError,
+  submitParserImprovementSample
+} from "./parserImprovementSubmission";
 import DashboardView from "./views/DashboardView";
 import {
   AIConsentAction,
@@ -95,6 +101,7 @@ const ExtractionReviewTable = lazy(() => import("./components/ExtractionReviewTa
 const MarkerTrendChart = lazy(() => import("./components/MarkerTrendChart"));
 const AIConsentModal = lazy(() => import("./components/AIConsentModal"));
 const ExtractionComparisonModal = lazy(() => import("./components/ExtractionComparisonModal"));
+const ParserImprovementSubmissionCard = lazy(() => import("./components/ParserImprovementSubmissionCard"));
 
 type UploadSummary =
   | {
@@ -327,6 +334,10 @@ const App = () => {
   const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [draftOriginalMarkerLabels, setDraftOriginalMarkerLabels] = useState<Record<string, string>>({});
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
+  const [parserImprovementPromptState, setParserImprovementPromptState] = useState<
+    "idle" | "dismissed" | "submitting" | "success" | "error"
+  >("idle");
+  const [parserImprovementPromptError, setParserImprovementPromptError] = useState("");
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
@@ -397,6 +408,11 @@ const App = () => {
       consentResolveRef.current = resolve;
       setConsentAction(action);
     });
+
+  const resetParserImprovementPrompt = () => {
+    setParserImprovementPromptState("idle");
+    setParserImprovementPromptError("");
+  };
 
   const resolveConsentRequest = (decision: AIConsentDecision | null) => {
     setConsentAction(null);
@@ -693,6 +709,7 @@ const App = () => {
     setPendingDiff(null);
     setAiCandidateDraft(null);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     const manualDraft: ExtractionDraft = {
       sourceFileName: "Manual entry",
       testDate: new Date().toISOString().slice(0, 10),
@@ -994,6 +1011,7 @@ const App = () => {
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     setShowComparisonModal(false);
     setPendingDiff(null);
     setAiCandidateDraft(null);
@@ -1196,6 +1214,7 @@ const App = () => {
       }
       const diff = buildExtractionDiffSummary(baselineDraft, improvedDraft);
       setAiCandidateDraft(improvedDraft);
+      resetParserImprovementPrompt();
       setPendingDiff(diff);
       setShowComparisonModal(true);
       setUploadSummary(null);
@@ -1237,6 +1256,7 @@ const App = () => {
     setDraft(aiCandidateDraft);
     setLocalBaselineDraft(aiCandidateDraft);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     captureOriginalDraftMarkerLabels(aiCandidateDraft);
     const routeSummary = getExtractionRouteSummary(aiCandidateDraft);
     setUploadSummary({
@@ -1280,6 +1300,7 @@ const App = () => {
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     setShowComparisonModal(false);
     setPendingDiff(null);
     setAiCandidateDraft(null);
@@ -1305,6 +1326,7 @@ const App = () => {
       setPendingDiff(null);
       setShowComparisonModal(false);
       setUncertaintyAssessment(assessment);
+      resetParserImprovementPrompt();
       captureOriginalDraftMarkerLabels(enrichedDraft);
       setDraftAnnotations(blankAnnotations());
       setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
@@ -1442,6 +1464,7 @@ const App = () => {
     setPendingDiff(null);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     setDraftOriginalMarkerLabels({});
     setLastUploadedFile(null);
     setDraftAnnotations(blankAnnotations());
@@ -1784,7 +1807,9 @@ const App = () => {
     setPendingDiff(null);
     setShowComparisonModal(false);
     setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
     setDraftOriginalMarkerLabels({});
+    setLastUploadedFile(null);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(null);
     setUploadError("");
@@ -1793,6 +1818,50 @@ const App = () => {
     }
     setActiveTab(nextTab);
   };
+
+  const handleParserImprovementSubmit = async (values: ParserImprovementFormValues) => {
+    if (!draft || !uncertaintyAssessment || !lastUploadedFile) {
+      setParserImprovementPromptState("error");
+      setParserImprovementPromptError(
+        tr(
+          "Upload dit PDF-bestand opnieuw als je het voor parserverbetering wilt versturen.",
+          "Re-upload this PDF if you want to send it for parser improvement."
+        )
+      );
+      return;
+    }
+
+    setParserImprovementPromptState("submitting");
+    setParserImprovementPromptError("");
+
+    try {
+      await submitParserImprovementSample({
+        file: lastUploadedFile,
+        draft,
+        assessment: uncertaintyAssessment,
+        values
+      });
+      setParserImprovementPromptState("success");
+    } catch (error) {
+      const message =
+        error instanceof ParserImprovementSubmissionError
+          ? error.message
+          : tr(
+              "Het versturen van dit PDF-bestand is mislukt. Probeer het later opnieuw.",
+              "Sending this PDF failed. Please try again later."
+            );
+      setParserImprovementPromptState("error");
+      setParserImprovementPromptError(message);
+    }
+  };
+
+  const shouldShowParserImprovementPrompt = Boolean(
+    draft &&
+      lastUploadedFile &&
+      uncertaintyAssessment &&
+      shouldOfferParserImprovementSubmission(uncertaintyAssessment) &&
+      parserImprovementPromptState !== "dismissed"
+  );
 
   const timeRangeOptions: Array<[TimeRangeKey, string]> = isNl
     ? [
@@ -1957,53 +2026,70 @@ const App = () => {
         <AnimatePresence mode="wait">
             {isReviewMode ? (
               <Suspense fallback={tabLoadFallback}>
-                <ExtractionReviewTable
-                  key="draft"
-                  draft={draft!}
-                  annotations={draftAnnotations}
-                  protocols={appData.protocols}
-                  supplementTimeline={appData.supplementTimeline}
-                  inheritedSupplementsPreview={draftInheritedSupplements}
-                  inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
-                  selectedProtocolId={selectedProtocolId}
-                  parserDebugMode={appData.settings.parserDebugMode}
-                  language={appData.settings.language}
-                  onDraftChange={setDraft}
-                  onAnnotationsChange={setDraftAnnotations}
-                  onSelectedProtocolIdChange={setSelectedProtocolId}
-                  onProtocolCreate={addProtocol}
-                  onAddSupplementPeriod={addSupplementPeriod}
-                  isImprovingWithAi={isImprovingExtraction}
-                  onImproveWithAi={
-                    showAdvancedParserActions && lastUploadedFile && !hasParserAiAlreadyRunForCurrentUpload
-                      ? improveDraftWithAi
-                      : undefined
-                  }
-                  onEnableAiRescue={
-                    lastUploadedFile &&
-                    !hasParserAiAlreadyRunForCurrentUpload &&
-                    Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
-                      ? enableAiRescueFromReview
-                      : undefined
-                  }
-                  onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
-                  onStartManualEntry={startManualEntry}
-                  onSave={saveDraftAsReport}
-                  onCancel={() => {
-                    setUploadSummary(null);
-                    setDraft(null);
-                    setLocalBaselineDraft(null);
-                    setAiCandidateDraft(null);
-                    setAiAttemptedForCurrentUpload(false);
-                    setPendingDiff(null);
-                    setShowComparisonModal(false);
-                    setUncertaintyAssessment(null);
-                    setDraftOriginalMarkerLabels({});
-                    setLastUploadedFile(null);
-                    setSelectedProtocolId(null);
-                    setIsImprovingExtraction(false);
-                  }}
-                />
+                <div>
+                  {shouldShowParserImprovementPrompt ? (
+                    <ParserImprovementSubmissionCard
+                      language={appData.settings.language}
+                      draft={draft!}
+                      assessment={uncertaintyAssessment!}
+                      status={parserImprovementPromptState}
+                      errorMessage={parserImprovementPromptError}
+                      onSubmit={handleParserImprovementSubmit}
+                      onDismiss={() => {
+                        setParserImprovementPromptState("dismissed");
+                        setParserImprovementPromptError("");
+                      }}
+                    />
+                  ) : null}
+                  <ExtractionReviewTable
+                    key="draft"
+                    draft={draft!}
+                    annotations={draftAnnotations}
+                    protocols={appData.protocols}
+                    supplementTimeline={appData.supplementTimeline}
+                    inheritedSupplementsPreview={draftInheritedSupplements}
+                    inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
+                    selectedProtocolId={selectedProtocolId}
+                    parserDebugMode={appData.settings.parserDebugMode}
+                    language={appData.settings.language}
+                    onDraftChange={setDraft}
+                    onAnnotationsChange={setDraftAnnotations}
+                    onSelectedProtocolIdChange={setSelectedProtocolId}
+                    onProtocolCreate={addProtocol}
+                    onAddSupplementPeriod={addSupplementPeriod}
+                    isImprovingWithAi={isImprovingExtraction}
+                    onImproveWithAi={
+                      showAdvancedParserActions && lastUploadedFile && !hasParserAiAlreadyRunForCurrentUpload
+                        ? improveDraftWithAi
+                        : undefined
+                    }
+                    onEnableAiRescue={
+                      lastUploadedFile &&
+                      !hasParserAiAlreadyRunForCurrentUpload &&
+                      Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
+                        ? enableAiRescueFromReview
+                        : undefined
+                    }
+                    onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
+                    onStartManualEntry={startManualEntry}
+                    onSave={saveDraftAsReport}
+                    onCancel={() => {
+                      setUploadSummary(null);
+                      setDraft(null);
+                      setLocalBaselineDraft(null);
+                      setAiCandidateDraft(null);
+                      setAiAttemptedForCurrentUpload(false);
+                      setPendingDiff(null);
+                      setShowComparisonModal(false);
+                      setUncertaintyAssessment(null);
+                      resetParserImprovementPrompt();
+                      setDraftOriginalMarkerLabels({});
+                      setLastUploadedFile(null);
+                      setSelectedProtocolId(null);
+                      setIsImprovingExtraction(false);
+                    }}
+                  />
+                </div>
               </Suspense>
             ) : null}
         </AnimatePresence>

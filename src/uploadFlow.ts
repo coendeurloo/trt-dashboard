@@ -82,6 +82,9 @@ export const isSevereParserExtraction = (assessment: ParserUncertaintyAssessment
   return assessment.warnings.some((warning) => SEVERE_WARNING_CODES.has(warning));
 };
 
+export const shouldOfferParserImprovementSubmission = (assessment: ParserUncertaintyAssessment): boolean =>
+  isSevereParserExtraction(assessment);
+
 export const resolveParserRescueAction = ({
   isSevere,
   consentState

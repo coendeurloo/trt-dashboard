@@ -79,6 +79,23 @@ Client/build flags:
 
 Important: never expose server keys (`CLAUDE_API_KEY`, `GEMINI_API_KEY`, `UPSTASH_*`, `SHARE_LINK_SECRET_BASE64`) in client-side `VITE_*` variables.
 
+## Beta parser-improvement PDF submissions
+
+- When a PDF parses with very low quality, the review screen can show an inline beta card that lets the user explicitly consent to sending the original PDF to the LabTracker team.
+- The submission includes the original PDF plus safe parser metadata such as confidence, warning codes, extraction route, marker count, and optional user-entered context.
+- This flow is intended only for beta parser-improvement submissions. If the user skips it, the normal review and save flow continues unchanged.
+
+Required server env vars for this feature:
+- `RESEND_API_KEY`
+- `LABTRACKER_REPORTS_TO`
+- `LABTRACKER_REPORTS_FROM` (optional, recommended for production; otherwise a clearly marked beta/test sender is used)
+
+Local testing:
+- Run the app with `npx vercel dev` so the Vercel API route is available locally.
+- Set the env vars above in your local Vercel environment or `.env`.
+- Upload a known poor-quality lab PDF until the beta card appears in the review screen.
+- Check the consent box, optionally add note/country/lab/language, click `Send PDF to improve parser`, and confirm the success state plus received email attachment.
+
 ## Tech stack
 
 - React 18

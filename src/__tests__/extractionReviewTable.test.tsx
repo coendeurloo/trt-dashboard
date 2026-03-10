@@ -290,7 +290,7 @@ describe("ExtractionReviewTable", () => {
     expect(rescueButton.disabled).toBe(true);
   });
 
-  it("shows unknown-layout recovery actions and anonymized feedback link", () => {
+  it("shows unknown-layout recovery actions and points users to the beta card", () => {
     const onRetryWithOcr = vi.fn();
     const onStartManualEntry = vi.fn();
 
@@ -331,10 +331,6 @@ describe("ExtractionReviewTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Enter manually/i }));
     expect(onStartManualEntry).toHaveBeenCalledTimes(1);
-
-    const feedbackLink = screen.getByRole("link", { name: /Send anonymized feedback/i }) as HTMLAnchorElement;
-    const href = feedbackLink.getAttribute("href") ?? "";
-    expect(href).toContain("anonymized");
-    expect(href).not.toContain("Sep blood work clean.pdf");
+    expect(screen.getByText(/Use the beta card above this table/i)).toBeTruthy();
   });
 });

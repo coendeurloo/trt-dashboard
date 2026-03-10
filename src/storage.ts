@@ -457,6 +457,10 @@ const normalizeReport = (report: Partial<LabReport>): LabReport | null => {
         typeof report.extraction.debug === "object" &&
         !Array.isArray(report.extraction.debug)
           ? {
+              pageCount:
+                typeof report.extraction.debug.pageCount === "number" && Number.isFinite(report.extraction.debug.pageCount)
+                  ? Math.max(0, Math.round(report.extraction.debug.pageCount))
+                  : undefined,
               textItems:
                 typeof report.extraction.debug.textItems === "number" && Number.isFinite(report.extraction.debug.textItems)
                   ? Math.max(0, Math.round(report.extraction.debug.textItems))

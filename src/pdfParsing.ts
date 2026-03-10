@@ -5580,6 +5580,12 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     const warningMeta = buildLocalExtractionWarnings(textResult, textExtractionFailed, ocrResult, parsingDraft, aiWarnings);
     const normalizationSummary = buildNormalizationSummary(parsingDraft.markers);
     const debugMeta: ExtractionDebugInfo = {
+      pageCount:
+        textResult.pageCount > 0
+          ? textResult.pageCount
+          : ocrResult.pagesAttempted > 0
+            ? ocrResult.pagesAttempted
+            : undefined,
       textItems: textResult.textItemCount,
       ocrUsed: ocrResult.used,
       ocrPages: ocrResult.pagesSucceeded,
