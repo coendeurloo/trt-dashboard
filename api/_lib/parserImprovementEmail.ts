@@ -6,10 +6,22 @@ type ConfigError = Error & {
   statusCode?: number;
 };
 
+type EmailSendError = Error & {
+  code?: string;
+  statusCode?: number;
+};
+
 const createConfigError = (message: string): ConfigError => {
   const error = new Error(message) as ConfigError;
   error.code = "RESEND_NOT_CONFIGURED";
   error.statusCode = 500;
+  return error;
+};
+
+const createEmailSendError = (message: string): EmailSendError => {
+  const error = new Error(message) as EmailSendError;
+  error.code = "EMAIL_SEND_FAILED";
+  error.statusCode = 502;
   return error;
 };
 
@@ -66,7 +78,7 @@ export const sendParserImprovementEmail = async (payload: ParserImprovementSubmi
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: resolveSender(),
     to,
     subject: "[LabTracker Beta] Low-quality parser PDF submission",
@@ -78,4 +90,8 @@ export const sendParserImprovementEmail = async (payload: ParserImprovementSubmi
       }
     ]
   });
+
+  if (result.error) {
+    throw createEmailSendError(result.error.message || "Resend rejected the parser-improvement email.");
+  }
 };
