@@ -653,8 +653,10 @@ const ExtractionReviewTable = ({
           {!isManualEntry ? (
             <>
               <p className="text-sm text-slate-300">
-                {draft.sourceFileName} | {tr("betrouwbaarheid", "confidence")} {" "}
-                <span className="font-medium text-cyan-300">{Math.round(draft.extraction.confidence * 100)}%</span>
+                {draft.sourceFileName} | {draft.markers.length} {tr("markers", "markers")}
+                <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
+                  {tr("confidence", "confidence")} {Math.round(draft.extraction.confidence * 100)}%
+                </span>
                 <span
                   className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
                     resultOrigin === "ai"
@@ -1126,7 +1128,7 @@ const ExtractionReviewTable = ({
           >
             {isImprovingWithAi
               ? tr("AI-rescue bezig...", "AI rescue in progress...")
-              : tr("Probeer AI-rescue (optioneel)", "Try AI rescue (optional)")}
+              : tr("AI-rescue met PDF (optioneel)", "AI rescue with PDF (optional)")}
           </button>
         ) : null}
         {onImproveWithAi ? (

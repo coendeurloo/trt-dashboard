@@ -67,10 +67,11 @@ describe("ExtractionReviewTable", () => {
     cleanup();
   });
 
-  it("does not expose parser provider text and keeps confidence subtitle", () => {
+  it("does not expose parser provider text and keeps review metadata compact", () => {
     renderTable();
 
-    expect(screen.getByText(/Sep blood work clean\.pdf \| confidence/i)).toBeTruthy();
+    expect(screen.getByText(/Sep blood work clean\.pdf \| 1 markers/i)).toBeTruthy();
+    expect(screen.getByText(/confidence 90%/i)).toBeTruthy();
     expect(screen.getByText(/90%/)).toBeTruthy();
     expect(screen.queryByText(/GEMINI|FALLBACK|CLAUDE/i)).toBeNull();
   });
