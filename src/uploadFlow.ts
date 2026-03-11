@@ -24,6 +24,11 @@ interface AutoApplyAiRescueDecision {
   reason: "critical_coverage_up" | "marker_count_up" | "confidence_up" | "not_better";
 }
 
+interface UploadReviewPresentationInput {
+  draft: ExtractionDraft;
+  assessment: ParserUncertaintyAssessment | null;
+}
+
 const SEVERE_WARNING_CODES: ReadonlySet<string> = new Set([
   "PDF_TEXT_EXTRACTION_FAILED",
   "PDF_TEXT_LAYER_EMPTY",
@@ -84,6 +89,12 @@ export const isSevereParserExtraction = (assessment: ParserUncertaintyAssessment
 
 export const shouldOfferParserImprovementSubmission = (assessment: ParserUncertaintyAssessment): boolean =>
   isSevereParserExtraction(assessment);
+
+export const shouldPresentUploadAsNeedsReview = ({
+  draft,
+  assessment
+}: UploadReviewPresentationInput): boolean =>
+  draft.extraction.needsReview || Boolean(assessment?.isUncertain) || draft.markers.length < 4;
 
 export const resolveParserRescueAction = ({
   isSevere,

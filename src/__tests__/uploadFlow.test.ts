@@ -4,6 +4,7 @@ import {
   isSevereParserExtraction,
   resolveParserRescueAction,
   resolveUploadTriggerAction,
+  shouldPresentUploadAsNeedsReview,
   shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
 } from "../uploadFlow";
@@ -159,6 +160,27 @@ describe("uploadFlow severe trigger", () => {
 
     expect(shouldOfferParserImprovementSubmission(assessment)).toBe(true);
     expect(shouldOfferParserImprovementSubmission(assessment)).toBe(isSevereParserExtraction(assessment));
+  });
+
+  it("presents sparse uncertain uploads as needs review even above the raw confidence threshold", () => {
+    const draft = makeDraft({
+      markerCount: 2,
+      confidence: 0.76
+    });
+    const assessment = makeAssessment({
+      isUncertain: true,
+      markerCount: 2,
+      confidence: 0.76,
+      reasons: ["marker_count_low"],
+      warnings: []
+    });
+
+    expect(
+      shouldPresentUploadAsNeedsReview({
+        draft,
+        assessment
+      })
+    ).toBe(true);
   });
 });
 

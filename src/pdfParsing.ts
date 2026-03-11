@@ -5458,6 +5458,11 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
       ocrResult.used &&
       ocrResult.initFailed;
     const shouldUseAi = allowAi && (forceAi || shouldAutoUseAi || mustUseAiRescue);
+    const forcePdfRescue =
+      forceAi &&
+      Boolean(consent?.allowPdfAttachment) &&
+      aiRawPdfBuffer.byteLength > 0 &&
+      aiRawPdfBuffer.byteLength <= MAX_PDF_RESCUE_BYTES;
 
     if (!allowAi && (forceAiRequested || (allowAiByMode && !localQualityGood))) {
       if (consentBlocksAi) {
@@ -5469,80 +5474,100 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
     }
 
     if (shouldUseAi) {
-      emitStage("running_ai_text");
       const registerAttempt = (result: GeminiExtractionAttemptResult) => {
         aiInputTokens += result.usage?.inputTokens ?? 0;
         aiOutputTokens += result.usage?.outputTokens ?? 0;
         aiCacheHit = aiCacheHit || Boolean(result.cacheHit);
       };
 
-      aiAttemptedModes.push("text_only");
-      const textOnlyResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
-        mode: "text_only",
-        fileHash,
-        traceId,
-        allowPdfAttachment: false
-      });
-      let aiResult = textOnlyResult;
-      registerAttempt(textOnlyResult);
-      const textOnlyInsufficient = textOnlyResult.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT";
-      const aiTextOnlyPoorResult =
-        !textOnlyResult.draft ||
-        textOnlyResult.draft.markers.length < 6 ||
-        textOnlyResult.draft.extraction.confidence < 0.65;
+      let aiResult: GeminiExtractionAttemptResult;
+      let textOnlyInsufficient = false;
 
-      if (textOnlyResult.warningCode && textOnlyResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
-        aiWarnings.push(textOnlyResult.warningCode);
-      }
+      if (forcePdfRescue) {
+        aiRescueTriggered = true;
+        aiRescueReason = "manual_force_ai";
+        emitStage("running_ai_pdf_rescue");
+        aiAttemptedModes.push("pdf_rescue");
+        aiResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
+          mode: "pdf_rescue",
+          fileHash,
+          traceId,
+          allowPdfAttachment: true
+        });
+        registerAttempt(aiResult);
+        if (aiResult.warningCode) {
+          aiWarnings.push(aiResult.warningCode);
+        }
+      } else {
+        emitStage("running_ai_text");
+        aiAttemptedModes.push("text_only");
+        const textOnlyResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
+          mode: "text_only",
+          fileHash,
+          traceId,
+          allowPdfAttachment: false
+        });
+        aiResult = textOnlyResult;
+        registerAttempt(textOnlyResult);
+        textOnlyInsufficient = textOnlyResult.warningCode === "PDF_AI_TEXT_ONLY_INSUFFICIENT";
+        const aiTextOnlyPoorResult =
+          !textOnlyResult.draft ||
+          textOnlyResult.draft.markers.length < 6 ||
+          textOnlyResult.draft.extraction.confidence < 0.65;
 
-      const rescueDecision = shouldAutoPdfRescue({
-        costMode,
-        forceAi,
-        localMetrics,
-        textItems: textResult.textItemCount,
-        compactTextLength: compactAiText.length,
-        ocrResult,
-        aiTextOnlySucceeded: !aiTextOnlyPoorResult
-      });
+        if (textOnlyResult.warningCode && textOnlyResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
+          aiWarnings.push(textOnlyResult.warningCode);
+        }
 
-      if (!textOnlyResult.draft) {
-        if (rescueDecision.shouldRescue) {
-          aiRescueTriggered = true;
-          aiRescueReason = rescueDecision.reason;
-          if (!Boolean(consent?.allowPdfAttachment)) {
-            aiRescueReason = "pdf_rescue_not_consented";
-          } else if (aiRawPdfBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
-            aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_SIZE");
-          } else {
-            emitStage("running_ai_pdf_rescue");
-            aiAttemptedModes.push("pdf_rescue");
-            const rescueResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
-              mode: "pdf_rescue",
-              fileHash,
-              traceId,
-              allowPdfAttachment: Boolean(consent?.allowPdfAttachment)
-            });
-            registerAttempt(rescueResult);
-            if (rescueResult.draft) {
-              aiResult = rescueResult;
-            } else if (rescueResult.warningCode) {
-              aiWarnings.push(rescueResult.warningCode);
+        const rescueDecision = shouldAutoPdfRescue({
+          costMode,
+          forceAi,
+          localMetrics,
+          textItems: textResult.textItemCount,
+          compactTextLength: compactAiText.length,
+          ocrResult,
+          aiTextOnlySucceeded: !aiTextOnlyPoorResult
+        });
+
+        if (!textOnlyResult.draft) {
+          if (rescueDecision.shouldRescue) {
+            aiRescueTriggered = true;
+            aiRescueReason = rescueDecision.reason;
+            if (!Boolean(consent?.allowPdfAttachment)) {
+              aiRescueReason = "pdf_rescue_not_consented";
+            } else if (aiRawPdfBuffer.byteLength > MAX_PDF_RESCUE_BYTES) {
+              aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_SIZE");
             } else {
-              aiWarnings.push("PDF_AI_PDF_RESCUE_FAILED");
+              emitStage("running_ai_pdf_rescue");
+              aiAttemptedModes.push("pdf_rescue");
+              const rescueResult = await callGeminiExtraction(combinedText, file.name, aiRawPdfBuffer, {
+                mode: "pdf_rescue",
+                fileHash,
+                traceId,
+                allowPdfAttachment: Boolean(consent?.allowPdfAttachment)
+              });
+              registerAttempt(rescueResult);
+              if (rescueResult.draft) {
+                aiResult = rescueResult;
+              } else if (rescueResult.warningCode) {
+                aiWarnings.push(rescueResult.warningCode);
+              } else {
+                aiWarnings.push("PDF_AI_PDF_RESCUE_FAILED");
+              }
+            }
+          } else {
+            aiRescueReason = rescueDecision.reason;
+            if (rescueDecision.reason === "cost_mode_ultra_low") {
+              aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE");
             }
           }
-        } else {
-          aiRescueReason = rescueDecision.reason;
-          if (rescueDecision.reason === "cost_mode_ultra_low") {
-            aiWarnings.push("PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE");
-          }
         }
-      }
 
-      if (textOnlyInsufficient && !aiResult.draft) {
-        aiWarnings.push("PDF_AI_TEXT_ONLY_INSUFFICIENT");
-      } else if (aiResult.warningCode && aiResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
-        aiWarnings.push(aiResult.warningCode);
+        if (textOnlyInsufficient && !aiResult.draft) {
+          aiWarnings.push("PDF_AI_TEXT_ONLY_INSUFFICIENT");
+        } else if (aiResult.warningCode && aiResult.warningCode !== "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
+          aiWarnings.push(aiResult.warningCode);
+        }
       }
 
       if (aiResult.draft) {

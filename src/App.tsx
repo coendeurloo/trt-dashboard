@@ -53,6 +53,7 @@ import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
   resolveUploadTriggerAction,
+  shouldPresentUploadAsNeedsReview,
   shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
 } from "./uploadFlow";
@@ -893,14 +894,16 @@ const App = () => {
 
   const uploadSummaryConfidence =
     uploadSummary?.kind === "ai_rescue" ? uploadSummary.finalConfidence : uploadSummary?.confidence ?? 0;
-  const uploadSummaryConfidenceIsGood = uploadSummaryConfidence > GOOD_UPLOAD_CONFIDENCE_THRESHOLD;
-  const uploadSummaryConfidenceLabel = uploadSummaryConfidenceIsGood
-    ? showUploadConfidencePercent
-      ? tr("Goed (>75%)", "Good (>75%)")
-      : tr("Goed", "Good")
-    : showUploadConfidencePercent
-      ? tr("Controle nodig (<=75%)", "Needs review (<=75%)")
-      : tr("Controle nodig", "Needs review");
+  const uploadSummaryNeedsReview =
+    uploadSummary?.kind === "upload" && draft
+      ? shouldPresentUploadAsNeedsReview({
+          draft,
+          assessment: uncertaintyAssessment
+        })
+      : false;
+  const uploadSummaryConfidenceIsGood =
+    !uploadSummaryNeedsReview && uploadSummaryConfidence > GOOD_UPLOAD_CONFIDENCE_THRESHOLD;
+  const uploadSummaryConfidenceLabel = uploadSummaryConfidenceIsGood ? tr("Goed", "Good") : tr("Controle nodig", "Needs review");
 
   const getExtractionRouteSummary = (
     candidate: ExtractionDraft
@@ -1657,8 +1660,8 @@ const App = () => {
     : tr("Je PDF wordt verwerkt", "Your PDF is being processed");
   const processingHint = isImprovingExtraction
     ? tr(
-        "AI-rescue is actief. We kunnen eerst lokaal voorbereiden (tekst/OCR) en daarna - met toestemming - geanonimiseerde tekst of PDF naar AI sturen.",
-        "AI rescue is active. We may first run local preparation (text/OCR) and then - with consent - send redacted text or the PDF to AI."
+        "AI-rescue is actief. We doen eerst lokale voorbereiding en sturen daarna - met je toestemming - het originele PDF-bestand naar AI voor een volledige rescue-pass.",
+        "AI rescue is active. We first do local preparation and then - with your consent - send the original PDF to AI for a full rescue pass."
       )
     : tr(
         "Markerwaarden, eenheden en referentiebereiken worden lokaal uitgelezen (zonder externe AI). Bij lage kwaliteit kun je daarna optioneel AI-rescue starten (na toestemming).",
@@ -2608,7 +2611,9 @@ const App = () => {
                       {uploadSummary.kind === "ai_rescue"
                         ? tr("AI-rescue voltooid", "AI rescue completed")
                         : uploadSummary.markerCount > 0
-                          ? tr("PDF succesvol verwerkt", "PDF processed successfully")
+                          ? uploadSummaryNeedsReview
+                            ? tr("PDF verwerkt - controle nodig", "PDF processed - review needed")
+                            : tr("PDF verwerkt", "PDF processed")
                           : tr("PDF geüpload, maar geen markers gevonden", "PDF uploaded, but no markers were found")}
                     </h3>
                     <p className="mt-1 text-sm text-slate-300">{uploadSummary.fileName}</p>
@@ -2675,11 +2680,11 @@ const App = () => {
                     <p className="text-[11px] uppercase tracking-wide text-slate-400">{tr("Betrouwbaarheid", "Confidence")}</p>
                     {showUploadConfidencePercent ? (
                       <>
-                        <p
-                          className={`mt-0.5 text-sm font-semibold ${
-                            uploadSummaryConfidenceIsGood ? "text-emerald-100" : "text-slate-100"
-                          }`}
-                        >
+                          <p
+                            className={`mt-0.5 text-sm font-semibold ${
+                              uploadSummaryConfidenceIsGood ? "text-emerald-100" : "text-amber-100"
+                            }`}
+                          >
                           {Math.round(uploadSummary.confidence * 100)}%
                         </p>
                         <p className={`mt-0.5 text-[11px] font-medium ${uploadSummaryConfidenceIsGood ? "text-emerald-200" : "text-amber-200"}`}>
