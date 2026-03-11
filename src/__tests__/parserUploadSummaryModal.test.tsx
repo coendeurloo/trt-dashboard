@@ -97,4 +97,31 @@ describe("ParserUploadSummaryModal", () => {
     expect(screen.getByText(/OCR fallback -> AI PDF rescue/i)).toBeTruthy();
     expect(screen.queryByText(/confidence/i)).toBeNull();
   });
+
+  it("does not claim only a few markers when many markers were extracted", () => {
+    const summary: ParserUploadSummaryModalData = {
+      kind: "upload",
+      fileName: "tb5of6 blood work.pdf",
+      markerCount: 33,
+      warnings: 0,
+      routeLabel: "Text layer only",
+      needsReview: true,
+      canSendPdf: true
+    };
+
+    render(
+      <ParserUploadSummaryModal
+        open
+        language="en"
+        summary={summary}
+        onContinue={vi.fn()}
+        onOpenParserImprovement={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/Only a few markers were found/i)).toBeNull();
+    expect(
+      screen.getByText(/Parser quality signals indicate this report needs extra review before saving/i)
+    ).toBeTruthy();
+  });
 });
