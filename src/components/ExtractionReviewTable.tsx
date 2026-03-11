@@ -947,36 +947,37 @@ const ExtractionReviewTable = ({
         </div>
       ) : null}
 
-      <div className="mt-3 overflow-x-auto overflow-y-visible rounded-xl border border-slate-700">
-        <table className="min-w-full divide-y divide-slate-700 text-sm">
-          <thead className="bg-slate-900/80 text-left text-slate-300">
-            <tr>
-              <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
-              <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
-              <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
-              <th className="px-3 py-2 text-right">{tr("Ref min", "Ref min")}</th>
-              <th className="px-3 py-2 text-right">{tr("Ref max", "Ref max")}</th>
-              <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
-              <th className="px-3 py-2 text-center">{tr("Visual Range", "Visual Range")}</th>
-              <th className="px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
-              <th className="px-3 py-2 text-right">{tr("Review", "Review")}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/80">
-            {reviewMarkers.map((row) => {
-              const rangeType = resolveRangeType(row);
-              const rangeMin =
-                displayReferenceMin(row) !== null ? displayReferenceMin(row) : row._matchResult?.canonical?.defaultRange?.min;
-              const rangeMax =
-                displayReferenceMax(row) !== null ? displayReferenceMax(row) : row._matchResult?.canonical?.defaultRange?.max;
-              const optimalMin = row._matchResult?.canonical?.optimalRange?.min;
-              const optimalMax = row._matchResult?.canonical?.optimalRange?.max;
-              const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
-              const reviewTitle = reviewTooltip(row);
-              const reviewTooltipId = `review-tooltip-${row.id}`;
+      <div className="mt-3 overflow-hidden rounded-xl border border-slate-700">
+        <div className="overflow-x-auto overflow-y-hidden">
+          <table className="min-w-full divide-y divide-slate-700 text-sm">
+            <thead className="bg-slate-900/80 text-left text-slate-300">
+              <tr>
+                <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
+                <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
+                <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
+                <th className="px-3 py-2 text-right">{tr("Ref min", "Ref min")}</th>
+                <th className="px-3 py-2 text-right">{tr("Ref max", "Ref max")}</th>
+                <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
+                <th className="px-3 py-2 text-center">{tr("Visual Range", "Visual Range")}</th>
+                <th className="px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
+                <th className="px-3 py-2 text-right">{tr("Review", "Review")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80">
+              {reviewMarkers.map((row) => {
+                const rangeType = resolveRangeType(row);
+                const rangeMin =
+                  displayReferenceMin(row) !== null ? displayReferenceMin(row) : row._matchResult?.canonical?.defaultRange?.min;
+                const rangeMax =
+                  displayReferenceMax(row) !== null ? displayReferenceMax(row) : row._matchResult?.canonical?.defaultRange?.max;
+                const optimalMin = row._matchResult?.canonical?.optimalRange?.min;
+                const optimalMax = row._matchResult?.canonical?.optimalRange?.max;
+                const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
+                const reviewTitle = reviewTooltip(row);
+                const reviewTooltipId = `review-tooltip-${row.id}`;
 
-              return (
-              <tr key={row.id} className="bg-slate-900/35">
+                return (
+                  <tr key={row.id} className="bg-slate-900/35">
                 <td className="align-top px-3 py-2">
                   <EditableCell
                     value={row.marker}
@@ -1138,11 +1139,12 @@ const ExtractionReviewTable = ({
                     ) : null}
                   </div>
                 </td>
-              </tr>
-            );
-            })}
-          </tbody>
-        </table>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
