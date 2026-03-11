@@ -38,8 +38,6 @@ const formatMarkerCountLabel = (count: number, language: AppLanguage): string =>
   return count === 1 ? "1 marker found" : `${count} markers found`;
 };
 
-const FEW_MARKERS_WARNING_THRESHOLD = 4;
-
 const ParserUploadSummaryModal = ({
   open,
   language,
@@ -114,15 +112,10 @@ const ParserUploadSummaryModal = ({
               "Er zijn parserwaarschuwingen gevonden. Controleer de gevonden markers zorgvuldig voordat je opslaat.",
               "Parser warnings were detected. Review the extracted markers carefully before saving."
             )
-          : summary.markerCount <= FEW_MARKERS_WARNING_THRESHOLD
-            ? tr(
-                "Er zijn maar weinig markers gevonden. Controleer de gevonden markers zorgvuldig voordat je opslaat.",
-                "Only a few markers were found. Review the extracted markers carefully before saving."
-              )
-            : tr(
-                "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
-                "Parser quality signals indicate this report needs extra review before saving."
-              )
+          : tr(
+              "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
+              "Parser quality signals indicate this report needs extra review before saving."
+            )
         : summary.warnings > 0
           ? tr(
               "Er zijn parserwaarschuwingen gevonden. Controleer de markers nog even voordat je opslaat.",
