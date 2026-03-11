@@ -36,13 +36,14 @@ describe("ParserImprovementSubmissionCard", () => {
 
     render(
       <ParserImprovementSubmissionCard
+        open
         language="en"
         draft={draft}
         assessment={assessment}
         status="idle"
         errorMessage=""
         onSubmit={onSubmit}
-        onDismiss={vi.fn()}
+        onClose={vi.fn()}
       />
     );
 
@@ -57,13 +58,14 @@ describe("ParserImprovementSubmissionCard", () => {
 
     render(
       <ParserImprovementSubmissionCard
+        open
         language="en"
         draft={draft}
         assessment={assessment}
         status="idle"
         errorMessage=""
         onSubmit={onSubmit}
-        onDismiss={vi.fn()}
+        onClose={vi.fn()}
       />
     );
 
@@ -87,53 +89,57 @@ describe("ParserImprovementSubmissionCard", () => {
     });
   });
 
-  it("shows loading and success states", () => {
+  it("shows loading state and stays hidden when closed", () => {
     const { rerender } = render(
       <ParserImprovementSubmissionCard
+        open
         language="en"
         draft={draft}
         assessment={assessment}
         status="submitting"
         errorMessage=""
         onSubmit={vi.fn(async () => undefined)}
-        onDismiss={vi.fn()}
+        onClose={vi.fn()}
       />
     );
 
     const loadingButton = screen.getByRole("button", { name: /sending pdf/i }) as HTMLButtonElement;
     expect(loadingButton.disabled).toBe(true);
+    expect(screen.queryByText(/confidence/i)).toBeNull();
 
     rerender(
       <ParserImprovementSubmissionCard
-        language="en"
-        draft={draft}
-        assessment={assessment}
-        status="success"
-        errorMessage=""
-        onSubmit={vi.fn(async () => undefined)}
-        onDismiss={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText(/PDF sent for parser improvement/i)).toBeTruthy();
-  });
-
-  it("calls dismiss without blocking review flow", () => {
-    const onDismiss = vi.fn();
-
-    render(
-      <ParserImprovementSubmissionCard
+        open={false}
         language="en"
         draft={draft}
         assessment={assessment}
         status="idle"
         errorMessage=""
         onSubmit={vi.fn(async () => undefined)}
-        onDismiss={onDismiss}
+        onClose={vi.fn()}
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("calls close without blocking review flow", () => {
+    const onClose = vi.fn();
+
+    render(
+      <ParserImprovementSubmissionCard
+        open
+        language="en"
+        draft={draft}
+        assessment={assessment}
+        status="idle"
+        errorMessage=""
+        onSubmit={vi.fn(async () => undefined)}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

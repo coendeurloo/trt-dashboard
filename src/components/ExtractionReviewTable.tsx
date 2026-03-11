@@ -45,6 +45,9 @@ export interface ExtractionReviewTableProps {
   onProtocolCreate: (protocol: Protocol) => void;
   onAddSupplementPeriod: (period: SupplementPeriod) => void;
   isImprovingWithAi?: boolean;
+  showLowQualityReviewBanner?: boolean;
+  onOpenParserImprovement?: () => void;
+  parserImprovementSubmitted?: boolean;
   onImproveWithAi?: () => void;
   onEnableAiRescue?: () => void;
   onRetryWithOcr?: () => void;
@@ -69,6 +72,9 @@ const ExtractionReviewTable = ({
   onProtocolCreate,
   onAddSupplementPeriod,
   isImprovingWithAi = false,
+  showLowQualityReviewBanner = false,
+  onOpenParserImprovement,
+  parserImprovementSubmitted = false,
   onImproveWithAi,
   onEnableAiRescue,
   onRetryWithOcr,
@@ -242,6 +248,21 @@ const ExtractionReviewTable = ({
       ? draft.markers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / draft.markers.length
       : 0;
   const referenceCoveragePercent = Math.round(referenceCoverage * 100);
+  const lowQualityReviewMessage =
+    draft.markers.length > 1
+      ? tr(
+          "Er zijn maar {count} markers uit dit rapport gehaald. Controleer ze zorgvuldig voordat je opslaat.",
+          "Only {count} markers were extracted from this report. Review them carefully before saving."
+        ).replace("{count}", String(draft.markers.length))
+      : draft.markers.length === 1
+        ? tr(
+            "Er is maar 1 marker uit dit rapport gehaald. Controleer die zorgvuldig voordat je opslaat.",
+            "Only 1 marker was extracted from this report. Review it carefully before saving."
+          )
+      : tr(
+          "Er zijn nog geen bruikbare markers uit dit rapport gehaald. Controleer het resultaat zorgvuldig voordat je opslaat.",
+          "No usable markers were extracted from this report yet. Review the result carefully before saving."
+        );
 
   const selectedProtocol = useMemo(
     () => protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null,
@@ -654,9 +675,6 @@ const ExtractionReviewTable = ({
             <>
               <p className="text-sm text-slate-300">
                 {draft.sourceFileName} | {draft.markers.length} {tr("markers", "markers")}
-                <span className="ml-2 inline-flex items-center rounded-full border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-300">
-                  {tr("confidence", "confidence")} {Math.round(draft.extraction.confidence * 100)}%
-                </span>
                 <span
                   className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
                     resultOrigin === "ai"
@@ -674,11 +692,6 @@ const ExtractionReviewTable = ({
                     {tr("ingestelde parsermodus", "configured parser mode")}: {configuredParserModeLabel}
                   </span>
                 ) : null}
-              </p>
-              <p className="text-xs text-slate-400">
-                {resultOrigin === "ai"
-                  ? tr("Je bekijkt nu: AI-resultaat", "You are viewing: AI result")
-                  : tr("Je bekijkt nu: lokaal resultaat", "You are viewing: local result")}
               </p>
             </>
           ) : null}
@@ -706,7 +719,28 @@ const ExtractionReviewTable = ({
         </div>
       </div>
 
-      {warningMessages.length > 0 ? (
+      {showLowQualityReviewBanner ? (
+        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-1.5 font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              {tr("Controleer dit rapport extra goed", "Review this report carefully")}
+            </p>
+            <p className="mt-1 text-xs text-amber-100/95 sm:text-sm">{lowQualityReviewMessage}</p>
+          </div>
+          {onOpenParserImprovement && !parserImprovementSubmitted ? (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/45 bg-slate-950/25 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/15 sm:text-sm"
+              onClick={onOpenParserImprovement}
+            >
+              {tr("Stuur PDF om parser te verbeteren", "Send PDF to improve parser")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {warningMessages.length > 0 && !showLowQualityReviewBanner ? (
         <div className="mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="inline-flex items-center gap-1.5 font-medium">
@@ -804,8 +838,8 @@ const ExtractionReviewTable = ({
           </div>
           <p className="mt-2 text-xs text-rose-100/80 sm:text-sm">
             {tr(
-              "Wil je ons helpen de parser te verbeteren? Gebruik dan de beta-kaart boven deze tabel om het originele PDF-bestand expliciet te delen.",
-              "Want to help us improve the parser? Use the beta card above this table to explicitly share the original PDF."
+              "Wil je ons helpen de parser te verbeteren? Gebruik dan de knop om het originele PDF-bestand expliciet te delen.",
+              "Want to help us improve the parser? Use the button to explicitly share the original PDF."
             )}
           </p>
         </div>

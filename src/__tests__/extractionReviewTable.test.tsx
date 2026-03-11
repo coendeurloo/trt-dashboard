@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import ExtractionReviewTable from "../components/ExtractionReviewTable";
+import ExtractionReviewTable, { type ExtractionReviewTableProps } from "../components/ExtractionReviewTable";
 import { ExtractionDraft, ReportAnnotations } from "../types";
 
 const draft: ExtractionDraft = {
@@ -41,7 +41,10 @@ const annotations: ReportAnnotations = {
 
 const markerBase = draft.markers[0];
 
-const renderTable = (overrideDraft?: Partial<ExtractionDraft>) =>
+const renderTable = (
+  overrideDraft?: Partial<ExtractionDraft>,
+  overrideProps?: Partial<ExtractionReviewTableProps>
+) =>
   render(
     <ExtractionReviewTable
       draft={{ ...draft, ...overrideDraft }}
@@ -59,6 +62,7 @@ const renderTable = (overrideDraft?: Partial<ExtractionDraft>) =>
       onAddSupplementPeriod={vi.fn()}
       onSave={vi.fn()}
       onCancel={vi.fn()}
+      {...overrideProps}
     />
   );
 
@@ -71,8 +75,8 @@ describe("ExtractionReviewTable", () => {
     renderTable();
 
     expect(screen.getByText(/Sep blood work clean\.pdf \| 1 markers/i)).toBeTruthy();
-    expect(screen.getByText(/confidence 90%/i)).toBeTruthy();
-    expect(screen.getByText(/90%/)).toBeTruthy();
+    expect(screen.queryByText(/confidence 90%/i)).toBeNull();
+    expect(screen.queryByText(/\b90%\b/)).toBeNull();
     expect(screen.queryByText(/GEMINI|FALLBACK|CLAUDE/i)).toBeNull();
   });
 
@@ -133,7 +137,7 @@ describe("ExtractionReviewTable", () => {
       />
     );
 
-    expect(screen.getByText(/You are viewing: local result/i)).toBeTruthy();
+    expect(screen.getByText(/Local result/i)).toBeTruthy();
     expect(screen.getByText(/used: text layer only/i)).toBeTruthy();
 
     rerender(
@@ -162,8 +166,24 @@ describe("ExtractionReviewTable", () => {
       />
     );
 
-    expect(screen.getByText(/You are viewing: AI result/i)).toBeTruthy();
+    expect(screen.getByText(/AI applied/i)).toBeTruthy();
     expect(screen.getByText(/used: text \+ AI/i)).toBeTruthy();
+  });
+
+  it("shows a compact low-quality review banner with parser improvement action", () => {
+    const onOpenParserImprovement = vi.fn();
+
+    renderTable(undefined, {
+      showLowQualityReviewBanner: true,
+      onOpenParserImprovement
+    });
+
+    expect(screen.getByText(/Review this report carefully/i)).toBeTruthy();
+    expect(screen.getByText(/Only 1 marker was extracted from this report/i)).toBeTruthy();
+    expect(screen.queryByText(/Parser warnings \(1\)/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Send PDF to improve parser/i }));
+    expect(onOpenParserImprovement).toHaveBeenCalledTimes(1);
   });
 
   it("hides auto-fix for ok markers that only have deterministic standardization", () => {
@@ -291,7 +311,7 @@ describe("ExtractionReviewTable", () => {
     expect(rescueButton.disabled).toBe(true);
   });
 
-  it("shows unknown-layout recovery actions and points users to the beta card", () => {
+  it("shows unknown-layout recovery actions and points users to the share button", () => {
     const onRetryWithOcr = vi.fn();
     const onStartManualEntry = vi.fn();
 
@@ -332,6 +352,16 @@ describe("ExtractionReviewTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Enter manually/i }));
     expect(onStartManualEntry).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Use the beta card above this table/i)).toBeTruthy();
+    expect(screen.getByText(/Use the button to explicitly share the original PDF/i)).toBeTruthy();
+  });
+
+  it("hides the parser improvement button after a successful submission", () => {
+    renderTable(undefined, {
+      showLowQualityReviewBanner: true,
+      parserImprovementSubmitted: true
+    });
+
+    expect(screen.getByText(/Review this report carefully/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Send PDF to improve parser/i })).toBeNull();
   });
 });
