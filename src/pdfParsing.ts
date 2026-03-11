@@ -163,7 +163,7 @@ const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const MARKER_ANCHOR_PATTERN =
-  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|lymphs|eosinophils?|eos|basophils?|basos?|neutrophils?|monocytes?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine|homocysteine|transferrine|transferrin|transferrine saturatie|transferrin saturation|ijzer|iron)\b/i;
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|chol\/hdlc|triglycerides?|triglyceriden|apolipoprotein|lipoprotein\s*\(a\)|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|white blood cell count|red blood cell count|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|lymphs|eosinophils?|eos|basophils?|basos?|neutrophils?|monocytes?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|sodium|potassium|chloride|carbon dioxide|calcium|protein,\s*total|total protein|globulin|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine|homocysteine|transferrine|transferrin|transferrine saturatie|transferrin saturation|ijzer|iron)\b/i;
 const COMMENTARY_FRAGMENT_PATTERN =
   /\b(?:for intermediate and high risk individuals|low risk individuals|please interpret results with caution|if dexamethasone has been given|for further information please contact|new method effective|shown to interfere|changes in serial psa levels|this high sensitivity crp method is sensitive to|in presence of significant hypoalbuminemia|is suitable for coronary artery disease assessment)\b/i;
 const GUIDANCE_RESULT_PATTERN =
@@ -173,7 +173,7 @@ const COMMENTARY_GUARD_PATTERN =
 const HISTORY_CALCULATOR_NOISE_PATTERN =
   /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|free\s+testosterone\s*-\s*calculated|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay|calculated\s+value)\b|https?:\/\/|www\./i;
 const SPATIAL_PRIORITY_MARKER_PATTERN =
-  /\b(?:testosterone|testosteron|free\s+testosterone|bioavailable\s+testosterone|estradiol|oestradiol|shbg|hematocrit|hematocriet|haemoglobin|hemoglobin|rbc|wbc|platelets?|neutrophils?|lymphocytes?|lymphs|monocytes?|eosinophils?|eos|basophils?|basos?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|lh|fsh|dht|dihydrotestosterone|prolactin|progesterone|psa|tsh|t3|t4|glucose|creatinine|egfr|bilirubin|alkaline\s+phosphatase|alt|ast|ggt|albumin|globulin|protein|cholesterol|hdl|ldl|triglycerides?|ferritin|transferrin|iron|vitamin\s*d|dhea|igf-?1)\b/i;
+  /\b(?:testosterone|testosteron|free\s+testosterone|bioavailable\s+testosterone|estradiol|oestradiol|shbg|hematocrit|hematocriet|haemoglobin|hemoglobin|rbc|wbc|platelets?|neutrophils?|lymphocytes?|lymphs|monocytes?|eosinophils?|eos|basophils?|basos?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|lh|fsh|dht|dihydrotestosterone|prolactin|progesterone|psa|tsh|t3|t4|glucose|creatinine|egfr|bilirubin|alkaline\s+phosphatase|alt|ast|ggt|albumin|globulin|protein|cholesterol|hdl|ldl|triglycerides?|apolipoprotein|lipoprotein\s*\(a\)|ferritin|transferrin|iron|vitamin\s*d|dhea|igf-?1)\b/i;
 const SINGLE_TOKEN_MARKER_STOPWORDS = new Set([
   "is",
   "to",
@@ -242,7 +242,7 @@ const EDGE_NOISE_TOKEN_ALLOWLIST = new Set([
   "MPV"
 ]);
 const ALLOWED_RATIO_MARKER_PATTERN =
-  /\b(?:chol(?:esterol)?\s*\/\s*h(?:dl|dh)|ldl\s*\/\s*hdl|a\/g|albumin\s*\/\s*globulin|free androgen index)\b/i;
+  /\b(?:chol(?:esterol)?\s*\/\s*h(?:dlc?|dh)|ldl\s*\/\s*hdl|a\/g|albumin\s*\/\s*globulin|free androgen index)\b/i;
 const HISTORY_CANONICAL_COLLAPSE_UNITS: Record<string, string[]> = {
   Testosterone: ["nmol/L", "ng/dL", "ng/mL"],
   "Free Testosterone": ["pmol/L", "pg/mL", "ng/dL", "nmol/L"],
@@ -275,6 +275,12 @@ const LIFELABS_TABLE_END_PATTERN =
   /^(?:FINAL RESULTS|This report contains confidential information intended for view|Note to physicians:|Note to patients:)\b/i;
 const LIFELABS_CONTINUATION_PATTERN =
   /^(?:for|if|this|that|see|indicates|therapeutic|units for|kidney function|assumption|clinical state|accuracy|adults?:|children:|persistently|target reduction|new method|changes in serial|interpretation:|no reference range|a1c\s*[<>]=?)\b/i;
+const QUEST_TREND_MARKER_HEADER_PATTERN =
+  /^([A-Z][A-Za-z0-9 ,/().+\-]{2,}?(?:\s+\([A-Za-z]\))?)\s+\(\s*\d{3,6}-\d+\s*\)\s*(?:([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+)?FINAL(?:\s+Lab:\s*[A-Z0-9]+)?$/i;
+const QUEST_TREND_MARKER_BLOCK_PATTERN =
+  /([A-Z][A-Za-z0-9 ,/%().+\-]{2,}?(?:\s+\([A-Za-z]\))?)\s+\(\s*\d{3,6}-\d+\s*\)\s*([\s\S]*?)(?=(?:[A-Z][A-Za-z0-9 ,/%().+\-]{2,}?(?:\s+\([A-Za-z]\))?\s+\(\s*\d{3,6}-\d+\s*\))|$)/gi;
+const QUEST_TREND_STOP_PATTERN = /^Report Insights\b/i;
+const QUEST_TREND_UNIT_FROM_PATTERN = /^([A-Za-z%µμ][A-Za-z0-9%µμ/().\-]*)(?:\s+\(calc\))?\s+From\b/i;
 type MarkerCandidateSource = "fallback" | "claude";
 const OCR_DEFAULT_LANG = "eng";
 const OCR_MAX_PAGES = 12;
@@ -1386,7 +1392,12 @@ const normalizeMarker = (raw: RawMarker): MarkerValue | null => {
 };
 
 const cleanWhitespace = (value: string): string => {
-  const compact = value.replace(/\u00a0/g, " ").replace(NOISE_SYMBOL_PATTERN, " ").replace(/\s+/g, " ").trim();
+  const compact = value
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(NOISE_SYMBOL_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // Some lab reports split micro-units as "μ g/l", which breaks row parsing.
   return compact
@@ -1411,7 +1422,7 @@ const cleanWhitespace = (value: string): string => {
 };
 
 const normalizeUnit = (unit: string): string => {
-  const compact = unit.replace(/\s+/g, "").replace(/μ/g, "µ");
+  const compact = unit.replace(/\s+/g, "").replace(/μ/g, "µ").replace(/[.,;:]+$/g, "");
   if (/^mmol\/l$/i.test(compact)) {
     return "mmol/L";
   }
@@ -1499,6 +1510,9 @@ const normalizeUnit = (unit: string): string => {
   if (/^l\/l$/i.test(compact)) {
     return "L/L";
   }
+  if (/^angstrom$/i.test(compact)) {
+    return "Angstrom";
+  }
   return compact;
 };
 
@@ -1513,10 +1527,20 @@ const isLikelyUnit = (token: string): boolean => {
   }
 
   if (token.includes("/") || token.includes("%")) {
+    if (token.includes("/")) {
+      const slashParts = compact.split("/").filter(Boolean);
+      if (
+        slashParts.length === 2 &&
+        /^[a-z]{3,}$/i.test(slashParts[0]) &&
+        /^[a-z]{3,}$/i.test(slashParts[1])
+      ) {
+        return false;
+      }
+    }
     return true;
   }
 
-  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|IU|mg|g|µg|ug|µmol|umol|fL|fl|fmol|ratio|l\/l|mm\/hr)$/i.test(
+  return /^(?:mmol|nmol|pmol|pg|ng|mU|mIU|U|IU|mg|g|µg|ug|µmol|umol|fL|fl|fmol|ratio|l\/l|mm\/hr|angstrom)$/i.test(
     token
   );
 };
@@ -1967,13 +1991,20 @@ const parseMijnGezondheidRows = (text: string): ParsedFallbackRow[] => {
 
 const cleanMarkerName = (rawMarker: string): string => {
   const normalizeEdgeToken = (token: string): string => token.replace(/^[^A-Za-z0-9/%+.-]+|[^A-Za-z0-9/%+.-]+$/g, "");
-  const shouldTrimEdgeToken = (token: string): boolean => {
+  const shouldTrimEdgeToken = (token: string, adjacentToken = ""): boolean => {
     const normalized = normalizeEdgeToken(token);
     if (!normalized) {
       return true;
     }
     const upper = normalized.toUpperCase();
     const lower = normalized.toLowerCase();
+    const adjacent = normalizeEdgeToken(adjacentToken).toLowerCase();
+    if (
+      /^(?:a|b)$/i.test(normalized) &&
+      /(?:apolipoprotein|lipoprotein|pattern|type)$/i.test(adjacent)
+    ) {
+      return false;
+    }
     if (EDGE_NOISE_TOKEN_ALLOWLIST.has(upper)) {
       return false;
     }
@@ -1993,10 +2024,10 @@ const cleanMarkerName = (rawMarker: string): string => {
   };
   const trimEdgeNoiseTokens = (value: string): string => {
     const tokens = value.split(/\s+/).filter(Boolean);
-    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[0])) {
+    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[0], tokens[1])) {
       tokens.shift();
     }
-    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[tokens.length - 1])) {
+    while (tokens.length > 1 && shouldTrimEdgeToken(tokens[tokens.length - 1], tokens[tokens.length - 2])) {
       tokens.pop();
     }
     return tokens.join(" ");
@@ -2057,7 +2088,7 @@ const cleanMarkerName = (rawMarker: string): string => {
     if (
       prefix.length > 20 ||
       shortPrefixNoise ||
-      /\b(?:risk|risico|report|resultaat|patient|uitslag|diagnostiek|caution|interpret|method|given|individuals|effective|assessment|presence)\b/i.test(
+      /\b(?:risk|risico|report|resultaat|patient|uitslag|diagnostiek|caution|interpret|method|given|individuals|effective|assessment|presence|final|performing|applicable)\b/i.test(
         prefix
       )
     ) {
@@ -2216,6 +2247,20 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   }
 
   if (referenceMin === null && referenceMax === null) {
+    const upperOrEqualMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*OR\s*=\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    if (upperOrEqualMatch) {
+      referenceMax = safeNumber(upperOrEqualMatch[1]);
+    }
+  }
+
+  if (referenceMin === null && referenceMax === null) {
+    const lowerOrEqualMatch = cleaned.match(/(?:^|\s)(?:>|≥)\s*OR\s*=\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    if (lowerOrEqualMatch) {
+      referenceMin = safeNumber(lowerOrEqualMatch[1]);
+    }
+  }
+
+  if (referenceMin === null && referenceMax === null) {
     const upperMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (upperMatch) {
       referenceMax = safeNumber(upperMatch[1]);
@@ -2238,6 +2283,9 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
       unit = normalizeUnit(tokens[index]);
       break;
     }
+  }
+  if (!unit && /\(calc\)/i.test(cleaned)) {
+    unit = "ratio";
   }
 
   return {
@@ -2537,6 +2585,361 @@ const parseLifeLabsTableRows = (text: string, profile: ParserProfile): ParsedFal
   }
 
   return rows;
+};
+
+const extractQuestTrendNumbers = (text: string): number[] => {
+  const values: number[] = [];
+  const matches = text.matchAll(/[<>≤≥]?\s*-?\d+(?:[.,]\d+)?/g);
+  for (const match of matches) {
+    const parsed = safeNumber(match[0]);
+    if (parsed !== null) {
+      values.push(parsed);
+    }
+  }
+  return values;
+};
+
+const numberNear = (left: number, right: number): boolean => Math.abs(left - right) <= 0.001;
+
+const pickQuestTrendValue = (
+  candidates: number[],
+  referenceMin: number | null,
+  referenceMax: number | null
+): number | null => {
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const candidate = candidates[index];
+    if (referenceMin !== null && numberNear(candidate, referenceMin)) {
+      continue;
+    }
+    if (referenceMax !== null && numberNear(candidate, referenceMax)) {
+      continue;
+    }
+    return candidate;
+  }
+  return candidates.length > 0 ? candidates[0] : null;
+};
+
+const dedupeQuestTrendRows = (rows: ParsedFallbackRow[]): ParsedFallbackRow[] => {
+  const byKey = new Map<string, ParsedFallbackRow>();
+  for (const row of rows) {
+    const key = [
+      row.markerName.toLowerCase(),
+      row.value,
+      normalizeUnit(row.unit),
+      row.referenceMin ?? "",
+      row.referenceMax ?? ""
+    ].join("|");
+    const existing = byKey.get(key);
+    if (!existing || row.confidence > existing.confidence) {
+      byKey.set(key, row);
+    }
+  }
+  return Array.from(byKey.values());
+};
+
+const normalizeQuestTrendMarkerHeader = (rawMarker: string): string => {
+  let marker = cleanWhitespace(rawMarker);
+  if (/\bFINAL\b/i.test(marker)) {
+    const parts = marker
+      .split(/\bFINAL\b/i)
+      .map((part) => cleanWhitespace(part))
+      .filter(Boolean);
+    if (parts.length > 1) {
+      marker = parts[parts.length - 1];
+    }
+  }
+  marker = marker.replace(/^(?:Lab:\s*)?[A-Z]\d[A-Z0-9]\s+/i, "").trim();
+  marker = marker.replace(/^CARDIO IQ\s+®?\s+/i, "").trim();
+  return marker;
+};
+
+const parseQuestTrendInlineRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  const reportInsightsIndex = text.search(/\bReport Insights\b/i);
+  const source = reportInsightsIndex >= 0 ? text.slice(0, reportInsightsIndex) : text;
+  const rows: ParsedFallbackRow[] = [];
+  const blockPattern = new RegExp(QUEST_TREND_MARKER_BLOCK_PATTERN.source, "gi");
+
+  let match: RegExpExecArray | null = blockPattern.exec(source);
+  while (match) {
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(normalizeQuestTrendMarkerHeader(match[1] ?? "")));
+    const body = cleanWhitespace(match[2] ?? "");
+    if (!markerName || looksLikeNoiseMarker(markerName) || !/\bFINAL\b/i.test(body)) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+    if (/\bNOT\s+APPLICABLE\b/i.test(body) && !/[<>≤≥]?\s*-?\d+(?:[.,]\d+)?\s+FINAL\b/i.test(body)) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const finalToken = body.match(/\bFINAL\b/i);
+    if (!finalToken || finalToken.index === undefined) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const finalIndex = finalToken.index;
+    const finalEnd = finalIndex + finalToken[0].length;
+    const prefix = cleanWhitespace(body.slice(0, finalIndex));
+    const suffix = cleanWhitespace(body.slice(finalEnd));
+    const fromMatch = suffix.match(/\bFrom\s+\d{2}\/\d{2}\/\d{4}\b/i);
+    const suffixBeforeFrom =
+      fromMatch && fromMatch.index !== undefined ? cleanWhitespace(suffix.slice(0, fromMatch.index)) : suffix;
+
+    const referenceMatch = body.match(
+      /Reference Range:\s*([\s\S]*?)(?=\s+(?:FINAL\b|From\b|Lab:\b|Unit of Measure\b|Reference range varies\b|Risk:|Relative Risk:|$))/i
+    );
+    const referenceText = cleanWhitespace(referenceMatch?.[1] ?? "");
+    const referenceSnippet = cleanWhitespace(referenceText.split(/(?:\.\s+|;\s+)/)[0] ?? referenceText);
+    const parsedReference = extractReferenceAndUnit(referenceSnippet);
+    let referenceMin = parsedReference.referenceMin;
+    let referenceMax = parsedReference.referenceMax;
+    let unit = parsedReference.unit;
+
+    if (referenceMin === null && referenceMax === null && /\bLDL-?CHOLESTEROL\b/i.test(markerName)) {
+      const desirableRangeMatch = body.match(/Desirable range\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (desirableRangeMatch) {
+        referenceMax = safeNumber(desirableRangeMatch[1]);
+      }
+    }
+
+    if (
+      referenceMin === null &&
+      referenceMax === null &&
+      /\b(?:APOLIPOPROTEIN\s*B|LIPOPROTEIN\s*\(a\))\b/i.test(markerName)
+    ) {
+      const moderateRangeMatch = body.match(/\bModerate\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (moderateRangeMatch) {
+        referenceMin = safeNumber(moderateRangeMatch[1]);
+        referenceMax = safeNumber(moderateRangeMatch[2]);
+      }
+    }
+
+    let value: number | null = null;
+    if (/Reference Range:/i.test(prefix)) {
+      value = pickQuestTrendValue(extractQuestTrendNumbers(suffixBeforeFrom), referenceMin, referenceMax);
+    }
+    if (value === null) {
+      value = pickQuestTrendValue(extractQuestTrendNumbers(prefix), referenceMin, referenceMax);
+    }
+    if (value === null && !/Reference Range:/i.test(prefix)) {
+      value = pickQuestTrendValue(extractQuestTrendNumbers(suffixBeforeFrom), referenceMin, referenceMax);
+    }
+    if (value === null) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    if (!unit) {
+      const trailingUnitMatch = prefix.match(
+        /(?:^|\s)([A-Za-z%µμ][A-Za-z0-9%µμ/().\-]{0,24})(?:\s+\(calc\))?\s+[<>≤≥]?\s*-?\d+(?:[.,]\d+)?\s*$/i
+      );
+      if (trailingUnitMatch) {
+        const candidate = normalizeUnit(trailingUnitMatch[1]);
+        if (isLikelyUnit(candidate)) {
+          unit = candidate;
+        }
+      }
+    }
+    if (!unit) {
+      const fromUnitMatch = body.match(
+        /([A-Za-z%µμ][A-Za-z0-9%µμ/().\-]{0,24})(?:\s+\(calc\))?\s+From\b/i
+      );
+      if (fromUnitMatch) {
+        const candidate = normalizeUnit(fromUnitMatch[1]);
+        if (isLikelyUnit(candidate)) {
+          unit = candidate;
+        }
+      }
+    }
+    if (!unit && /\bratio\b/i.test(markerName) && /\bcalc\b/i.test(body)) {
+      unit = "ratio";
+    }
+
+    unit = normalizeUnit(unit);
+    if (/^calc$/i.test(unit)) {
+      unit = "ratio";
+    }
+    if (!unit && /\bratio\b/i.test(markerName)) {
+      unit = "ratio";
+    }
+
+    const row: ParsedFallbackRow = {
+      markerName,
+      value,
+      unit,
+      referenceMin,
+      referenceMax,
+      confidence: 0.87
+    };
+    if (shouldKeepParsedRow(row, profile)) {
+      rows.push(row);
+    }
+
+    match = blockPattern.exec(source);
+  }
+
+  const hasLipoproteinA = rows.some((row) => /\bLIPOPROTEIN\s*\(a\)\b/i.test(row.markerName));
+  if (!hasLipoproteinA) {
+    const lpaMatch = source.match(
+      /LIPOPROTEIN\s*\(a\)\s+\(\s*\d{3,6}-\d+\s*\)\s*([A-Za-z%µμ/().\-]+)\s*([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s+FINAL([\s\S]*?)(?=(?:[A-Z][A-Za-z0-9 ,/%().+\-]{2,}?(?:\s+\([A-Za-z]\))?\s+\(\s*\d{3,6}-\d+\s*\))|$)/i
+    );
+    if (lpaMatch) {
+      const value = safeNumber(lpaMatch[2] ?? "");
+      let unit = normalizeUnit(lpaMatch[1] ?? "");
+      const moderateRangeMatch = (lpaMatch[3] ?? "").match(/\bModerate\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i);
+      const referenceMin = moderateRangeMatch ? safeNumber(moderateRangeMatch[1]) : null;
+      const referenceMax = moderateRangeMatch ? safeNumber(moderateRangeMatch[2]) : null;
+
+      if (value !== null) {
+        if (/^calc$/i.test(unit)) {
+          unit = "ratio";
+        }
+        const row: ParsedFallbackRow = {
+          markerName: "LIPOPROTEIN (a)",
+          value,
+          unit,
+          referenceMin,
+          referenceMax,
+          confidence: 0.87
+        };
+        if (shouldKeepParsedRow(row, profile)) {
+          rows.push(row);
+        }
+      }
+    }
+  }
+
+  return rows;
+};
+
+const parseQuestTrendRows = (text: string, profile: ParserProfile): ParsedFallbackRow[] => {
+  const rawLines = text
+    .split("\n")
+    .map((line) => cleanWhitespace(line))
+    .filter(Boolean);
+
+  if (rawLines.length === 0) {
+    return [];
+  }
+
+  const stopIndex = rawLines.findIndex((line) => QUEST_TREND_STOP_PATTERN.test(line));
+  const lines = stopIndex >= 0 ? rawLines.slice(0, stopIndex) : rawLines;
+  const lineRows: ParsedFallbackRow[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = lines[index];
+    const markerMatch = header.match(QUEST_TREND_MARKER_HEADER_PATTERN);
+    if (!markerMatch) {
+      continue;
+    }
+
+    const markerName = applyProfileMarkerFixes(cleanMarkerName(markerMatch[1] ?? ""));
+    if (!markerName || looksLikeNoiseMarker(markerName)) {
+      continue;
+    }
+
+    let value = safeNumber(markerMatch[2] ?? "");
+    let unit = "";
+    let referenceMin: number | null = null;
+    let referenceMax: number | null = null;
+    const lookahead: string[] = [];
+
+    for (let offset = 1; offset <= 8 && index + offset < lines.length; offset += 1) {
+      const candidate = lines[index + offset];
+      if (QUEST_TREND_MARKER_HEADER_PATTERN.test(candidate)) {
+        break;
+      }
+      lookahead.push(candidate);
+    }
+
+    if (value === null) {
+      const valueLine = lookahead.find((candidate) => /^[<>≤≥]?\s*-?\d+(?:[.,]\d+)?$/.test(candidate));
+      if (valueLine) {
+        value = safeNumber(valueLine);
+      }
+    }
+    if (value === null) {
+      continue;
+    }
+
+    for (const candidate of lookahead) {
+      if (!/\bReference Range:/i.test(candidate)) {
+        continue;
+      }
+      const marker = candidate.match(/\bReference Range:\s*(.*)$/i);
+      const parsed = extractReferenceAndUnit(marker?.[1] ?? "");
+      if (parsed.unit) {
+        unit = parsed.unit;
+      }
+      if (parsed.referenceMin !== null) {
+        referenceMin = parsed.referenceMin;
+      }
+      if (parsed.referenceMax !== null) {
+        referenceMax = parsed.referenceMax;
+      }
+      break;
+    }
+
+    if (referenceMin === null && referenceMax === null && /\bLDL-?CHOLESTEROL\b/i.test(markerName)) {
+      const desirableRangeMatch = lookahead.join(" ").match(/Desirable range\s*[<≤]\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (desirableRangeMatch) {
+        referenceMax = safeNumber(desirableRangeMatch[1]);
+      }
+    }
+    if (
+      referenceMin === null &&
+      referenceMax === null &&
+      /\b(?:APOLIPOPROTEIN\s*B|LIPOPROTEIN\s*\(a\))\b/i.test(markerName)
+    ) {
+      const moderateRangeMatch = lookahead.join(" ").match(/\bModerate\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (moderateRangeMatch) {
+        referenceMin = safeNumber(moderateRangeMatch[1]);
+        referenceMax = safeNumber(moderateRangeMatch[2]);
+      }
+    }
+
+    if (!unit) {
+      const unitLine = lookahead.find(
+        (candidate) => /^%\s+From\b/i.test(candidate) || QUEST_TREND_UNIT_FROM_PATTERN.test(candidate)
+      );
+      if (unitLine) {
+        if (/^%\s+From\b/i.test(unitLine)) {
+          unit = "%";
+        } else {
+          const unitMatch = unitLine.match(QUEST_TREND_UNIT_FROM_PATTERN);
+          unit = unitMatch?.[1] ?? "";
+        }
+      }
+    }
+    if (!unit && /\bratio\b/i.test(markerName) && lookahead.some((candidate) => /\bcalc\b/i.test(candidate))) {
+      unit = "ratio";
+    }
+
+    unit = normalizeUnit(unit);
+    if (/^calc$/i.test(unit)) {
+      unit = "ratio";
+    }
+    if (!unit && /\bratio\b/i.test(markerName)) {
+      unit = "ratio";
+    }
+
+    const row: ParsedFallbackRow = {
+      markerName,
+      value,
+      unit,
+      referenceMin,
+      referenceMax,
+      confidence: 0.86
+    };
+
+    if (shouldKeepParsedRow(row, profile)) {
+      lineRows.push(row);
+    }
+  }
+
+  const inlineRows = parseQuestTrendInlineRows(lines.join(" "), profile);
+  return dedupeQuestTrendRows([...lineRows, ...inlineRows]);
 };
 
 const parseTwoLineRow = (line: string, nextLine: string, profile: ParserProfile): ParsedFallbackRow | null => {
@@ -4410,16 +4813,18 @@ const fallbackExtractDetailed = (
   const latvianRows = shouldRunTemplate("latvia_indexed") ? parseLatvianIndexedRows(text, profile) : [];
   const londonRows = shouldRunTemplate("london") ? parseLondonDoctorSummaryRows(text, profile) : [];
   const lifeLabsRows = shouldRunTemplate("lifelabs") ? parseLifeLabsTableRows(text, profile) : [];
+  const questTrendRows = parseQuestTrendRows(text, profile);
+  const hasStructuredQuestTrend = questTrendRows.length >= 12;
   const historyRows = parseHistoryCurrentColumnRows(spatialRows, text, profile);
-  const columnRows = parseColumnRows(text, profile);
-  const lineRows = parseLineRows(text, profile);
+  const columnRows = hasStructuredQuestTrend ? [] : parseColumnRows(text, profile);
+  const lineRows = hasStructuredQuestTrend ? [] : parseLineRows(text, profile);
   const indexedRowsRaw = parseIndexedRows(text, profile);
   const indexedRows = latvianRows.length > 0 ? [] : indexedRowsRaw;
-  const looseRows = lineRows.length + columnRows.length < 6 ? parseLooseRows(text, profile) : [];
+  const looseRows = hasStructuredQuestTrend || lineRows.length + columnRows.length >= 6 ? [] : parseLooseRows(text, profile);
   const ultraLooseRows =
-    lineRows.length + columnRows.length + indexedRows.length + looseRows.length < 6
-      ? parseUltraLooseRows(text, profile)
-      : [];
+    hasStructuredQuestTrend || lineRows.length + columnRows.length + indexedRows.length + looseRows.length >= 6
+      ? []
+      : parseUltraLooseRows(text, profile);
   const keywordRangeLocale = profile.keywordRangeLocaleId
     ? getKeywordRangeLocaleById(profile.keywordRangeLocaleId)
     : null;
@@ -4435,6 +4840,7 @@ const fallbackExtractDetailed = (
           ...latvianRows,
           ...londonRows,
           ...lifeLabsRows,
+          ...questTrendRows,
           ...columnRows,
           ...lineRows,
           ...indexedRows,
@@ -4450,6 +4856,7 @@ const fallbackExtractDetailed = (
           ...latvianRows,
           ...londonRows,
           ...lifeLabsRows,
+          ...questTrendRows,
           ...columnRows,
           ...lineRows,
           ...looseRows,
@@ -4461,6 +4868,7 @@ const fallbackExtractDetailed = (
   const nonSpatialMarkers = nonSpatialDedupe.markers;
   const nonSpatialImportantCoverage = countImportantCoverage(nonSpatialMarkers);
   const shouldApplySpatialBoost =
+    !hasStructuredQuestTrend &&
     spatialRows.length > 0 &&
     (nonSpatialImportantCoverage < 2 || nonSpatialMarkers.length < 8 || nonSpatialMarkers.length / Math.max(text.split("\n").length, 1) < 0.03);
 
@@ -5712,6 +6120,7 @@ export const __pdfParsingInternals = {
   parseTwoLineRow,
   parseLineRows,
   parseLifeLabsTableRows,
+  parseQuestTrendRows,
   parseColumnRows,
   parseSpatialRows,
   parseHistoryCurrentColumnRows,

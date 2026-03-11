@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { __pdfParsingInternals } from "../pdfParsing";
 import { ExtractionDraft } from "../types";
@@ -835,6 +837,39 @@ describe("pdfParsing fallback layers", () => {
     expect(parsedMarkerNames.some((name) => /informational purposes/.test(name))).toBe(false);
     expect(parsedMarkerNames.some((name) => /hypogonadism/.test(name))).toBe(false);
     expect(parsedMarkerNames.some((name) => /quest diagnostics marks/.test(name))).toBe(false);
+  });
+
+  it("parses flattened Quest/Quanum Nelson text with broad marker recall and collected date", () => {
+    const fixtureInputPath = path.resolve(
+      process.cwd(),
+      "tests/parser-fixtures/drafts/B04/quest-quanum-discountedlabs-nelson-20230320/input.txt"
+    );
+    const input = readFileSync(fixtureInputPath, "utf8");
+    const draft = __pdfParsingInternals.fallbackExtract(input, "quest-quanum-discountedlabs-nelson-20230320.txt");
+
+    const canonicalMarkers = new Set(draft.markers.map((marker) => marker.canonicalMarker));
+    const rawMarkerNames = draft.markers.map((marker) => marker.marker.toLowerCase());
+
+    expect(draft.testDate).toBe("2023-03-20");
+    expect(canonicalMarkers.size).toBeGreaterThanOrEqual(48);
+
+    [
+      "Leukocyten",
+      "Apolipoprotein B",
+      "Lipoprotein (a)",
+      "LDL Particle Number",
+      "Cholesterol/HDL Ratio",
+      "Non-HDL Cholesterol",
+      "Testosterone",
+      "Free Testosterone",
+      "eGFR"
+    ].forEach((marker) => {
+      expect(canonicalMarkers.has(marker), `Missing expected marker ${marker}`).toBe(true);
+    });
+
+    expect(rawMarkerNames.some((name) => name.includes("quest diagnostics marks"))).toBe(false);
+    expect(rawMarkerNames.some((name) => name.includes("for informational/educational purposes only"))).toBe(false);
+    expect(rawMarkerNames.some((name) => name.includes("low testosterone, or hypogonadism"))).toBe(false);
   });
 
   it("normalizes Quest/Cardio IQ aliases for ratio and particle markers", () => {
