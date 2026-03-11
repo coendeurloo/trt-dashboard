@@ -4444,7 +4444,28 @@ const dedupeRowsDetailed = (rows: ParsedFallbackRow[]): { markers: MarkerValue[]
     incrementReason(rejectionReasons, "duplicate_dropped");
   }
 
-  const markers = Array.from(byKey.values());
+  const referenceCompleteness = (marker: MarkerValue): number =>
+    (marker.referenceMin !== null ? 1 : 0) + (marker.referenceMax !== null ? 1 : 0);
+
+  const byMeasurement = new Map<string, MarkerValue>();
+  for (const marker of byKey.values()) {
+    const measurementKey = [marker.canonicalMarker, marker.value, marker.unit].join("|");
+    const existing = byMeasurement.get(measurementKey);
+    if (!existing) {
+      byMeasurement.set(measurementKey, marker);
+      continue;
+    }
+    const existingRefScore = referenceCompleteness(existing);
+    const candidateRefScore = referenceCompleteness(marker);
+    if (candidateRefScore > existingRefScore || (candidateRefScore === existingRefScore && marker.confidence > existing.confidence)) {
+      byMeasurement.set(measurementKey, marker);
+      incrementReason(rejectionReasons, "duplicate_measurement_replaced");
+    } else {
+      incrementReason(rejectionReasons, "duplicate_measurement_dropped");
+    }
+  }
+
+  const markers = Array.from(byMeasurement.values());
   return {
     markers,
     diagnostics: {

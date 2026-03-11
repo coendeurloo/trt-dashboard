@@ -867,6 +867,12 @@ describe("pdfParsing fallback layers", () => {
       expect(canonicalMarkers.has(marker), `Missing expected marker ${marker}`).toBe(true);
     });
 
+    const duplicateSensitiveMarkers = ["LDL Particle Number", "LDL Small", "LDL Medium", "HDL Large", "LDL Peak Size"];
+    duplicateSensitiveMarkers.forEach((marker) => {
+      const count = draft.markers.filter((item) => item.canonicalMarker === marker).length;
+      expect(count, `Unexpected duplicate rows for ${marker}`).toBe(1);
+    });
+
     expect(rawMarkerNames.some((name) => name.includes("quest diagnostics marks"))).toBe(false);
     expect(rawMarkerNames.some((name) => name.includes("for informational/educational purposes only"))).toBe(false);
     expect(rawMarkerNames.some((name) => name.includes("low testosterone, or hypogonadism"))).toBe(false);

@@ -57,6 +57,36 @@ describe("markerMatcher", () => {
     expect(te2.canonical?.id).toBe("testosterone-estradiol-ratio");
   });
 
+  it("matches Cardio IQ particle markers from Quest layouts", () => {
+    const ldlParticleNumber = matchMarker("LDL PARTICLE NUMBER");
+    expect(["exact", "alias", "normalized", "token"]).toContain(ldlParticleNumber.confidence);
+    expect(ldlParticleNumber.canonical?.id).toBe("ldl-particle-number");
+
+    const ldlSmall = matchMarker("LDL SMALL");
+    expect(["exact", "alias", "normalized", "token"]).toContain(ldlSmall.confidence);
+    expect(ldlSmall.canonical?.id).toBe("ldl-small");
+
+    const ldlMedium = matchMarker("LDL MEDIUM");
+    expect(["exact", "alias", "normalized", "token"]).toContain(ldlMedium.confidence);
+    expect(ldlMedium.canonical?.id).toBe("ldl-medium");
+
+    const hdlLarge = matchMarker("HDL LARGE");
+    expect(["exact", "alias", "normalized", "token"]).toContain(hdlLarge.confidence);
+    expect(hdlLarge.canonical?.id).toBe("hdl-large");
+
+    const ldlPeakSize = matchMarker("LDL PEAK SIZE");
+    expect(["exact", "alias", "normalized", "token"]).toContain(ldlPeakSize.confidence);
+    expect(ldlPeakSize.canonical?.id).toBe("ldl-peak-size");
+
+    const lpa = matchMarker("LIPOPROTEIN (a)");
+    expect(["exact", "alias", "normalized", "token"]).toContain(lpa.confidence);
+    expect(lpa.canonical?.id).toBe("lipoprotein-a");
+
+    const cholHdlcRatio = matchMarker("CHOL/HDLC RATIO");
+    expect(["exact", "alias", "normalized", "token"]).toContain(cholHdlcRatio.confidence);
+    expect(cholHdlcRatio.canonical?.id).toBe("total-cholesterol-hdl-ratio");
+  });
+
   it("falls back to fuzzy when typo is close enough", () => {
     const result = matchMarker("ferritne");
     expect(["fuzzy", "alias", "normalized"]).toContain(result.confidence);

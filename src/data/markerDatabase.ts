@@ -320,9 +320,17 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
   }),
   marker({
     id: "total-cholesterol-hdl-ratio",
-    canonicalName: "Total Cholesterol/HDL Ratio",
+    canonicalName: "Cholesterol/HDL Ratio",
     category: "Metabolic Health",
-    aliases: ["cholesterol/hdl ratio", "chol/hdl ratio", "cholesterol hdl ratio"],
+    aliases: [
+      "total cholesterol/hdl ratio",
+      "cholesterol/hdl ratio",
+      "chol/hdl ratio",
+      "cholesterol hdl ratio",
+      "chol/hdlc ratio",
+      "chol hdlc ratio",
+      "chol/hdlc"
+    ],
     preferredUnit: "ratio",
     alternateUnits: [],
     defaultRangeType: "max-only",
@@ -360,13 +368,63 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
   }),
   marker({
     id: "lipoprotein-a",
-    canonicalName: "Lipoprotein(a)",
+    canonicalName: "Lipoprotein (a)",
     category: "Metabolic Health",
-    aliases: ["lp(a)", "lpa", "lipoprotein a", "lipoproteine a"],
+    aliases: ["lipoprotein(a)", "lp(a)", "lpa", "lipoprotein a", "lipoproteine a"],
     preferredUnit: "nmol/L",
     alternateUnits: ["mg/dL"],
     defaultRangeType: "max-only",
     defaultRange: { max: 75 }
+  }),
+  marker({
+    id: "ldl-particle-number",
+    canonicalName: "LDL Particle Number",
+    category: "Metabolic Health",
+    aliases: ["ldl-p", "ldl particle number", "ldl particles number"],
+    preferredUnit: "nmol/L",
+    alternateUnits: [],
+    defaultRangeType: "max-only",
+    defaultRange: { max: 1138 }
+  }),
+  marker({
+    id: "ldl-small",
+    canonicalName: "LDL Small",
+    category: "Metabolic Health",
+    aliases: ["ldl small", "small ldl"],
+    preferredUnit: "nmol/L",
+    alternateUnits: [],
+    defaultRangeType: "max-only",
+    defaultRange: { max: 142 }
+  }),
+  marker({
+    id: "ldl-medium",
+    canonicalName: "LDL Medium",
+    category: "Metabolic Health",
+    aliases: ["ldl medium", "medium ldl"],
+    preferredUnit: "nmol/L",
+    alternateUnits: [],
+    defaultRangeType: "max-only",
+    defaultRange: { max: 215 }
+  }),
+  marker({
+    id: "hdl-large",
+    canonicalName: "HDL Large",
+    category: "Metabolic Health",
+    aliases: ["hdl large", "large hdl"],
+    preferredUnit: "nmol/L",
+    alternateUnits: [],
+    defaultRangeType: "min-only",
+    defaultRange: { min: 6729 }
+  }),
+  marker({
+    id: "ldl-peak-size",
+    canonicalName: "LDL Peak Size",
+    category: "Metabolic Health",
+    aliases: ["ldl peak size", "ldl peak"],
+    preferredUnit: "Angstrom",
+    alternateUnits: [],
+    defaultRangeType: "min-only",
+    defaultRange: { min: 222.9 }
   }),
   marker({
     id: "small-dense-ldl",
