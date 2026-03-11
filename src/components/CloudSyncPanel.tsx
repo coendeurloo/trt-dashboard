@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ArrowRight, Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppMode, ThemeMode } from "../types";
@@ -66,7 +66,7 @@ const CloudSyncPanel = ({
   onReplaceCloudWithLocal,
   onRefreshCloud
 }: CloudSyncPanelProps) => {
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
   const isLightTheme = theme === "light";
   const [isBusy, setIsBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);

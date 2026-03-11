@@ -141,7 +141,6 @@ const AppShell = ({
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
     isOnboardingLocked && key !== "dashboard";
-  const isProtocolProfile = userProfile === "trt" || userProfile === "enhanced";
   const isLightTheme = theme === "light";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);

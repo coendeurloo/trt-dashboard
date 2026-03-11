@@ -29,7 +29,7 @@ export const useAnalysis = ({
   settings,
   language,
   allReports,
-  visibleReports,
+  visibleReports: _visibleReports,
   checkIns,
   protocols,
   supplementTimeline,
