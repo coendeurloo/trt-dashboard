@@ -1,0 +1,151 @@
+{
+  "minimumConfidence": 0.6,
+  "expectedStrategy": "heuristic",
+  "expectedDate": "2018-07-23",
+  "maxMissingFields": 2,
+  "forbiddenMarkers": [
+    "patient report",
+    "laboratory corporation of america",
+    "if you have received this document in error"
+  ],
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Leukocyten",
+      "unit": "x10E3/uL",
+      "referenceMin": 3.4,
+      "referenceMax": 10.8
+    },
+    {
+      "canonicalMarker": "Red Blood Cells",
+      "unit": "x10E6/uL",
+      "referenceMin": 3.77,
+      "referenceMax": 5.28
+    },
+    {
+      "canonicalMarker": "Hemoglobin",
+      "unit": "g/dL",
+      "referenceMin": 11.1,
+      "referenceMax": 15.9
+    },
+    {
+      "canonicalMarker": "Hematocrit",
+      "unit": "%",
+      "referenceMin": 34,
+      "referenceMax": 46.6
+    },
+    {
+      "canonicalMarker": "MCV",
+      "unit": "fL",
+      "referenceMin": 79,
+      "referenceMax": 97
+    },
+    {
+      "canonicalMarker": "MCH",
+      "unit": "pg",
+      "referenceMin": 26.6,
+      "referenceMax": 33
+    },
+    {
+      "canonicalMarker": "MCHC",
+      "unit": "g/dL",
+      "referenceMin": 31.5,
+      "referenceMax": 35.7
+    },
+    {
+      "canonicalMarker": "RDW-CV",
+      "unit": "%",
+      "referenceMin": 12.3,
+      "referenceMax": 15.4
+    },
+    {
+      "canonicalMarker": "Platelets",
+      "unit": "x10E3/uL",
+      "referenceMin": 150,
+      "referenceMax": 379
+    },
+    {
+      "canonicalMarker": "Neutrophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Lymphocytes",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Monocytes",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Eosinophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Basophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Neutrophils Abs.",
+      "unit": "x10E3/uL",
+      "referenceMin": 1.4,
+      "referenceMax": 7
+    },
+    {
+      "canonicalMarker": "Lymphocytes Abs.",
+      "unit": "x10E3/uL",
+      "referenceMin": 0.7,
+      "referenceMax": 3.1
+    },
+    {
+      "canonicalMarker": "Monocytes Abs.",
+      "unit": "x10E3/uL",
+      "referenceMin": 0.1,
+      "referenceMax": 0.9
+    },
+    {
+      "canonicalMarker": "Eosinophils Abs.",
+      "unit": "x10E3/uL",
+      "referenceMin": 0,
+      "referenceMax": 0.4
+    },
+    {
+      "canonicalMarker": "Basophils Abs.",
+      "unit": "x10E3/uL",
+      "referenceMin": 0,
+      "referenceMax": 0.2
+    },
+    {
+      "canonicalMarker": "Immature Granulocytes",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Immature Grans (Abs)",
+      "unit": "x10E3/uL",
+      "referenceMin": 0,
+      "referenceMax": 0.1
+    },
+    {
+      "canonicalMarker": "Glucose Nuchter",
+      "unit": "mg/dL",
+      "referenceMin": 65,
+      "referenceMax": 99
+    },
+    {
+      "canonicalMarker": "Ureum",
+      "unit": "mg/dL",
+      "referenceMin": 6,
+      "referenceMax": 20
+    },
+    {
+      "canonicalMarker": "Creatinine",
+      "unit": "mg/dL",
+      "referenceMin": 0.57,
+      "referenceMax": 1
+    },
+    {
+      "canonicalMarker": "eGFR",
+      "unit": "mL/min/1.73",
+      "referenceMin": 59
+    }
+  ],
+  "notes": "LabCorp single-page table fixture. 'Not Estab.' rows intentionally omit explicit ref-range expectations so parser can rely on generic ranges."
+}

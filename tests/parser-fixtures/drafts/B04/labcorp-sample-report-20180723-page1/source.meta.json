@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "506f52d16162",
+  "label": "labcorp_sample_report_20180723_page1",
+  "source_type": "pdf_text",
+  "vendor": "labcorp",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_manual_contract"
+}

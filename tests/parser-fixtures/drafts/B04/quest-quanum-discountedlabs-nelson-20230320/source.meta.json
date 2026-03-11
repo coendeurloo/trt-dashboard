@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "d7165fec7ad2",
+  "label": "quest_quanum_discountedlabs_nelson_20230320",
+  "source_type": "pdf_text",
+  "vendor": "quest_quanum_discounted_labs",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_manual_contract"
+}

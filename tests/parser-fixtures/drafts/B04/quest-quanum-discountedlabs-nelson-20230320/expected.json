@@ -1,0 +1,302 @@
+{
+  "minimumConfidence": 0.55,
+  "expectedStrategy": "heuristic",
+  "expectedDate": "2023-03-20",
+  "maxMissingFields": 1,
+  "forbiddenMarkers": [
+    "for informational/educational purposes only",
+    "quest diagnostics marks",
+    "this faq is provided for informational purposes only",
+    "low testosterone, or hypogonadism"
+  ],
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Leukocyten",
+      "unit": "Thousand/uL",
+      "referenceMin": 3.8,
+      "referenceMax": 10.8
+    },
+    {
+      "canonicalMarker": "Red Blood Cells",
+      "unit": "Million/uL",
+      "referenceMin": 4.2,
+      "referenceMax": 5.8
+    },
+    {
+      "canonicalMarker": "Hemoglobin",
+      "unit": "g/dL",
+      "referenceMin": 13.2,
+      "referenceMax": 17.1
+    },
+    {
+      "canonicalMarker": "Hematocrit",
+      "unit": "%",
+      "referenceMin": 38.5,
+      "referenceMax": 50
+    },
+    {
+      "canonicalMarker": "MCV",
+      "unit": "fL",
+      "referenceMin": 80,
+      "referenceMax": 100
+    },
+    {
+      "canonicalMarker": "MCH",
+      "unit": "pg",
+      "referenceMin": 27,
+      "referenceMax": 33
+    },
+    {
+      "canonicalMarker": "MCHC",
+      "unit": "g/dL",
+      "referenceMin": 32,
+      "referenceMax": 36
+    },
+    {
+      "canonicalMarker": "RDW-CV",
+      "unit": "%",
+      "referenceMin": 11,
+      "referenceMax": 15
+    },
+    {
+      "canonicalMarker": "Platelets",
+      "unit": "Thousand/uL",
+      "referenceMin": 140,
+      "referenceMax": 400
+    },
+    {
+      "canonicalMarker": "MPV",
+      "unit": "fL",
+      "referenceMin": 7.5,
+      "referenceMax": 12.5
+    },
+    {
+      "canonicalMarker": "Neutrophils Abs.",
+      "unit": "cells/uL",
+      "referenceMin": 1500,
+      "referenceMax": 7800
+    },
+    {
+      "canonicalMarker": "Lymphocytes Abs.",
+      "unit": "cells/uL",
+      "referenceMin": 850,
+      "referenceMax": 3900
+    },
+    {
+      "canonicalMarker": "Monocytes Abs.",
+      "unit": "cells/uL",
+      "referenceMin": 200,
+      "referenceMax": 950
+    },
+    {
+      "canonicalMarker": "Eosinophils Abs.",
+      "unit": "cells/uL",
+      "referenceMin": 15,
+      "referenceMax": 500
+    },
+    {
+      "canonicalMarker": "Basophils Abs.",
+      "unit": "cells/uL",
+      "referenceMin": 0,
+      "referenceMax": 200
+    },
+    {
+      "canonicalMarker": "Neutrophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Lymphocytes",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Monocytes",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Eosinophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Basophils",
+      "unit": "%"
+    },
+    {
+      "canonicalMarker": "Estradiol",
+      "unit": "pg/mL",
+      "referenceMax": 29
+    },
+    {
+      "canonicalMarker": "Cholesterol",
+      "unit": "mg/dL"
+    },
+    {
+      "canonicalMarker": "HDL Cholesterol",
+      "unit": "mg/dL"
+    },
+    {
+      "canonicalMarker": "Triglyceriden",
+      "unit": "mg/dL"
+    },
+    {
+      "canonicalMarker": "LDL Cholesterol",
+      "unit": "mg/dL",
+      "referenceMax": 100
+    },
+    {
+      "canonicalMarker": "Cholesterol/HDL Ratio",
+      "unit": "ratio"
+    },
+    {
+      "canonicalMarker": "Non-HDL Cholesterol",
+      "unit": "mg/dL"
+    },
+    {
+      "canonicalMarker": "LDL Particle Number",
+      "unit": "nmol/L",
+      "referenceMax": 1138
+    },
+    {
+      "canonicalMarker": "LDL Small",
+      "unit": "nmol/L",
+      "referenceMax": 142
+    },
+    {
+      "canonicalMarker": "LDL Medium",
+      "unit": "nmol/L",
+      "referenceMax": 215
+    },
+    {
+      "canonicalMarker": "HDL Large",
+      "unit": "nmol/L",
+      "referenceMin": 6729
+    },
+    {
+      "canonicalMarker": "LDL Peak Size",
+      "unit": "Angstrom"
+    },
+    {
+      "canonicalMarker": "Apolipoprotein B",
+      "unit": "mg/dL",
+      "referenceMin": 90,
+      "referenceMax": 119
+    },
+    {
+      "canonicalMarker": "Lipoprotein (a)",
+      "unit": "nmol/L",
+      "referenceMin": 75,
+      "referenceMax": 125
+    },
+    {
+      "canonicalMarker": "Glucose Nuchter",
+      "unit": "mg/dL",
+      "referenceMin": 65,
+      "referenceMax": 99
+    },
+    {
+      "canonicalMarker": "Ureum",
+      "unit": "mg/dL",
+      "referenceMin": 7,
+      "referenceMax": 25
+    },
+    {
+      "canonicalMarker": "Creatinine",
+      "unit": "mg/dL",
+      "referenceMin": 0.7,
+      "referenceMax": 1.35
+    },
+    {
+      "canonicalMarker": "eGFR",
+      "unit": "mL/min/1.73m2",
+      "referenceMin": 60
+    },
+    {
+      "canonicalMarker": "Sodium",
+      "unit": "mmol/L",
+      "referenceMin": 135,
+      "referenceMax": 146
+    },
+    {
+      "canonicalMarker": "Potassium",
+      "unit": "mmol/L",
+      "referenceMin": 3.5,
+      "referenceMax": 5.3
+    },
+    {
+      "canonicalMarker": "Chloride",
+      "unit": "mmol/L",
+      "referenceMin": 98,
+      "referenceMax": 110
+    },
+    {
+      "canonicalMarker": "Carbon Dioxide",
+      "unit": "mmol/L",
+      "referenceMin": 20,
+      "referenceMax": 32
+    },
+    {
+      "canonicalMarker": "Calcium",
+      "unit": "mg/dL",
+      "referenceMin": 8.6,
+      "referenceMax": 10.3
+    },
+    {
+      "canonicalMarker": "Total Protein",
+      "unit": "g/dL",
+      "referenceMin": 6.1,
+      "referenceMax": 8.1
+    },
+    {
+      "canonicalMarker": "Albumine",
+      "unit": "g/dL",
+      "referenceMin": 3.6,
+      "referenceMax": 5.1
+    },
+    {
+      "canonicalMarker": "Globulin",
+      "unit": "g/dL",
+      "referenceMin": 1.9,
+      "referenceMax": 3.7
+    },
+    {
+      "canonicalMarker": "Albumin/Globulin Ratio",
+      "unit": "ratio",
+      "referenceMin": 1,
+      "referenceMax": 2.5
+    },
+    {
+      "canonicalMarker": "Total Bilirubin",
+      "unit": "mg/dL",
+      "referenceMin": 0.2,
+      "referenceMax": 1.2
+    },
+    {
+      "canonicalMarker": "Alkaline Phosphatase",
+      "unit": "U/L",
+      "referenceMin": 35,
+      "referenceMax": 144
+    },
+    {
+      "canonicalMarker": "AST",
+      "unit": "U/L",
+      "referenceMin": 10,
+      "referenceMax": 35
+    },
+    {
+      "canonicalMarker": "ALT",
+      "unit": "U/L",
+      "referenceMin": 9,
+      "referenceMax": 46
+    },
+    {
+      "canonicalMarker": "Testosterone",
+      "unit": "ng/dL",
+      "referenceMin": 250,
+      "referenceMax": 1100
+    },
+    {
+      "canonicalMarker": "Free Testosterone",
+      "unit": "pg/mL"
+    }
+  ],
+  "notes": "Quest Quanum/Discounted Labs fixture (Nelson, collected 2023-03-20). Numeric-only marker contract seeded from Nelson.md; pages 8-14 intentionally excluded."
+}

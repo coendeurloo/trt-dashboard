@@ -87,7 +87,17 @@ const RAW_ALIASES: Record<string, string[]> = {
     "vrij testosteron berekend",
     "vrij testosteron (berekend)"
   ],
-  Estradiol: ["estradiol", "e2", "oestradiol", "oestrodiol"],
+  Estradiol: [
+    "estradiol",
+    "e2",
+    "oestradiol",
+    "oestrodiol",
+    "estradiol ultrasensitive",
+    "estradiol, ultrasensitive",
+    "estradiol,ultrasensitive, lc/ms",
+    "estradiol ultrasensitive lc/ms",
+    "estradiol ultrasensitive lc/ms/ms"
+  ],
   Hematocrit: ["hematocrit", "hematokriet", "hematocriet", "hct"],
   SHBG: [
     "shbg",
@@ -121,8 +131,24 @@ const RAW_ALIASES: Record<string, string[]> = {
     "25-oh vitamin d",
     "vitamin d d3 d2"
   ],
-  "Red Blood Cells": ["red blood cells", "red blood cell", "erythrocyten", "erytrocyten", "rbc"],
-  eGFR: ["egfr", "e g f r", "ckd-epi", "ckd epi", "ckd-epi egfr", "ckd-epi, egfr"],
+  "Red Blood Cells": [
+    "red blood cells",
+    "red blood cell",
+    "red blood cell count",
+    "erythrocyten",
+    "erytrocyten",
+    "rbc"
+  ],
+  eGFR: [
+    "egfr",
+    "e g f r",
+    "ckd-epi",
+    "ckd epi",
+    "ckd-epi egfr",
+    "ckd-epi, egfr",
+    "egfr if nonafricn am",
+    "egfr if nonafrican am"
+  ],
   TSH: ["tsh", "thyrotropin", "thyroid stimulating hormone", "thyroïd stimulerend hormoon"],
   "Free T4": ["free t4", "ft4", "vrij t4", "vrije t4", "vrije thyroxine"],
   "Free T3": ["free t3", "ft3", "vrij t3", "vrije t3", "vrije trijodothyronine"],
@@ -134,13 +160,17 @@ const RAW_ALIASES: Record<string, string[]> = {
     "cholesterol/hdl-cholesterol ratio",
     "cholesterol/hdl cholesterol ratio",
     "cholesterol/hdl ratio",
-    "cholesterol hdl ratio"
+    "cholesterol hdl ratio",
+    "chol/hdlc ratio",
+    "chol hdlc ratio",
+    "chol/hdl ratio"
   ],
   "Non-HDL Cholesterol": ["non hdl cholesterol", "non-hdl cholesterol", "non-hdl-cholesterol", "non hdl"],
   Triglyceriden: ["triglyceriden", "triglycerides", "hoog risico triglyceriden", "high risk triglycerides"],
   "Vitamine B12": ["vitamine b12", "vitamin b12", "vit b12", "b12", "cobalamin", "cobalamine"],
   Foliumzuur: ["foliumzuur", "folate", "folic acid"],
   "Glucose Nuchter": [
+    "glucose",
     "glucose nuchter",
     "glucose nuchter veneus lab",
     "glucose nuchter veneus",
@@ -156,7 +186,7 @@ const RAW_ALIASES: Record<string, string[]> = {
   Transferrine: ["transferrine", "transferrin"],
   "Transferrine Saturatie": ["transferrine saturatie", "transferrin saturation", "transferrin saturatie"],
   Homocysteine: ["homocysteine", "homocysteïne"],
-  Ureum: ["ureum", "urea"],
+  Ureum: ["ureum", "urea", "bun", "urea nitrogen", "urea nitrogen (bun)"],
   Ferritine: ["ferritine", "ferritin", "serum ferritin", "ferritina"],
   PSA: ["psa", "prostaat specifiek antigeen", "prostaatspecifiek ag", "prostaatspecifiek ag psa"],
   "Albumine Urine": ["albumine urine", "albumine urine portie", "urine albumine"],
@@ -178,30 +208,60 @@ const RAW_ALIASES: Record<string, string[]> = {
   ],
   MCHC: ["mchc", "mean corpuscular hemoglobin concentration"],
   "RDW-CV": ["rdw-cv", "rdw cv", "rdw", "red cell distribution width", "erythrocyte distribution width"],
-  Platelets: ["platelets", "platelet", "thrombocytes", "thrombocyten", "trombocyten", "bloedplaatjes"],
+  Platelets: [
+    "platelets",
+    "platelet",
+    "platelet count",
+    "thrombocytes",
+    "thrombocyten",
+    "trombocyten",
+    "bloedplaatjes"
+  ],
   "Monocytes Abs.": ["monocytes abs", "monocytes abs.", "monocyten abs", "monocyten abs.", "absolute monocytes"],
-  "Basophils Abs.": ["basophils abs", "basophils abs.", "basofylen abs", "basofielen abs", "absolute basophils"],
+  "Basophils Abs.": [
+    "basophils abs",
+    "basophils abs.",
+    "basofylen abs",
+    "basofielen abs",
+    "absolute basophils",
+    "baso (absolute)"
+  ],
   "Lymphocytes Abs.": [
     "lymphocytes abs",
     "lymphocytes abs.",
     "lymfocyten abs",
     "lymfocyten abs.",
-    "absolute lymphocytes"
+    "absolute lymphocytes",
+    "lymphs (absolute)"
   ],
   "Eosinophils Abs.": [
     "eosinophils abs",
     "eosinophils abs.",
     "eosinofielen abs",
     "eosinofielen abs.",
-    "absolute eosinophils"
+    "absolute eosinophils",
+    "eos (absolute)"
   ],
   "Neutrophils Abs.": [
     "neutrophils abs",
     "neutrophils abs.",
     "neutrofielen abs",
     "neutrofielen abs.",
-    "absolute neutrophils"
+    "absolute neutrophils",
+    "neutrophils (absolute)"
   ],
+  "Immature Granulocytes": ["immature granulocytes"],
+  "Immature Grans (Abs)": [
+    "immature grans (abs)",
+    "immature grans abs",
+    "immature granulocytes absolute",
+    "immature granulocytes (absolute)"
+  ],
+  Neutrophils: ["neutrophils", "neutrophil percentage", "neutrophils %"],
+  Lymphocytes: ["lymphocytes", "lymphocyte percentage", "lymphocytes %", "lymphs"],
+  Monocytes: ["monocytes", "monocyte percentage", "monocytes %"],
+  Eosinophils: ["eosinophils", "eosinophil percentage", "eosinophils %", "eos"],
+  Basophils: ["basophils", "basophil percentage", "basophils %", "basos"],
   "Free Androgen Index": ["free androgen index", "free androgen index.", "fai", "vrije androgeen index"],
   "T/E2 Ratio": [
     "t/e2 ratio",
@@ -219,6 +279,7 @@ const RAW_ALIASES: Record<string, string[]> = {
     "leukocytes",
     "leucocytes",
     "white blood cells",
+    "white blood cell count",
     "wbc",
     "nuchter hematologie bloedbeeld klein leucocyten"
   ],
@@ -240,6 +301,25 @@ const RAW_ALIASES: Record<string, string[]> = {
     "apob",
     "apo-b100"
   ],
+  "Lipoprotein (a)": ["lipoprotein (a)", "lipoprotein(a)", "lipoprotein a", "lp(a)", "lpa"],
+  MPV: ["mpv", "mean platelet volume"],
+  "LDL Particle Number": ["ldl particle number"],
+  "LDL Small": ["ldl small"],
+  "LDL Medium": ["ldl medium"],
+  "HDL Large": ["hdl large"],
+  "LDL Peak Size": ["ldl peak size"],
+  Sodium: ["sodium"],
+  Potassium: ["potassium"],
+  Chloride: ["chloride"],
+  "Carbon Dioxide": ["carbon dioxide", "co2", "bicarbonate"],
+  Calcium: ["calcium"],
+  "Total Protein": ["total protein", "protein, total", "protein total", "serum protein"],
+  Globulin: ["globulin", "globulin, total", "globulin total"],
+  "Albumin/Globulin Ratio": ["albumin/globulin ratio", "albumin globulin ratio", "a/g ratio"],
+  "Total Bilirubin": ["total bilirubin", "bilirubin, total", "bilirubin total"],
+  "Alkaline Phosphatase": ["alkaline phosphatase", "alk phosphatase", "alp"],
+  AST: ["ast", "aspartate aminotransferase", "sgot", "ast (sgot)", "sgot (ast)"],
+  ALT: ["alt", "alanine aminotransferase", "sgpt", "alt (sgpt)", "sgpt (alt)"],
   Insuline: ["insuline", "insulin", "fasting insulin", "insuline nuchter", "insulin fasting"]
 };
 

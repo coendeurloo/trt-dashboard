@@ -1,0 +1,29 @@
+Date collected: 07/23/2018 0922 Local
+TESTS RESULT FLAG UNITS REFERENCE INTERVAL LAB
+CBC With Differential/Platelet
+WBC 6.4 x10E3/uL 3.4 - 10.8 01
+RBC 4.33 x10E6/uL 3.77 - 5.28 01
+Hemoglobin 12.7 g/dL 11.1 - 15.9 01
+Hematocrit 37.3 % 34.0 - 46.6 01
+MCV 86 fL 79 - 97 01
+MCH 29.3 pg 26.6 - 33.0 01
+MCHC 34.0 g/dL 31.5 - 35.7 01
+RDW 13.4 % 12.3 - 15.4 01
+Platelets 363 x10E3/uL 150 - 379 01
+Neutrophils 57 % Not Estab. 01
+Lymphs 34 % Not Estab. 01
+Monocytes 6 % Not Estab. 01
+Eos 2 % Not Estab. 01
+Basos 1 % Not Estab. 01
+Neutrophils (Absolute) 3.6 x10E3/uL 1.4 - 7.0 01
+Lymphs (Absolute) 2.2 x10E3/uL 0.7 - 3.1 01
+Monocytes(Absolute) 0.4 x10E3/uL 0.1 - 0.9 01
+Eos (Absolute) 0.1 x10E3/uL 0.0 - 0.4 01
+Baso (Absolute) 0.0 x10E3/uL 0.0 - 0.2 01
+Immature Granulocytes 0 % Not Estab. 01
+Immature Grans (Abs) 0.0 x10E3/uL 0.0 - 0.1 01
+Comp. Metabolic Panel (14)
+Glucose 90 mg/dL 65 - 99 01
+BUN 11 mg/dL 6 - 20 01
+Creatinine 0.70 mg/dL 0.57 - 1.00 01
+eGFR If NonAfricn Am 117 mL/min/1.73 >59

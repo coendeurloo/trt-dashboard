@@ -1,0 +1,10 @@
+{
+  "batch": "B04",
+  "file_id": "ad14f1ffbe95",
+  "label": "quest_qd_36170_testosterone_free_total",
+  "source_type": "pdf_text",
+  "vendor": "quest_diagnostics",
+  "status": "fixture_done",
+  "source_artifact": "local-only (not committed)",
+  "fixture_mode": "sanitized_text_manual_contract"
+}

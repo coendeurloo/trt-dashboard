@@ -163,7 +163,7 @@ const DASH_TOKEN_PATTERN = /^[-–]$/;
 const HORMONE_SIGNAL_PATTERN =
   /\b(?:testosterone|testosteron|free\s+testosterone|estradiol|shbg|dht|dihydrotestosterone|fsh|lh|hormone)\b/i;
 const MARKER_ANCHOR_PATTERN =
-  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|eosinophils?|basophils?|neutrophils?|monocytes?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine|homocysteine|transferrine|transferrin|transferrine saturatie|transferrin saturation|ijzer|iron)\b/i;
+  /\b(?:testosterone|testosteron|estradiol|shbg|hematocrit|hematocriet|lh|fsh|prolactin|prolactine|psa|tsh|cholesterol|hdl|ldl|non hdl|triglycerides?|triglyceriden|creatinine|urine creatinine|glucose|hemoglobine|hemoglobin|hematology|albumine|albumin|mchc|mch|mcv|wbc|platelets?|thrombocyten|leukocyten|leucocyten|lymphocytes?|lymphs|eosinophils?|eos|basophils?|basos?|neutrophils?|monocytes?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|free androgen index|dihydrotestosteron|dihydrotestosterone|vitamin b12|vitamine b12|urea|ureum|uric acid|calcium|bilirubin|alkaline phosphatase|gamma gt|alt|ast|ferritin|ferritine|egfr|ck|ckd-epi|acr|cortisol|dhea|dhea sulphate|dhea sulfate|sex hormone binding globulin|c reactive protein|crp|igf-?1(?:\s*sds)?|somatomedine|homocysteine|transferrine|transferrin|transferrine saturatie|transferrin saturation|ijzer|iron)\b/i;
 const COMMENTARY_FRAGMENT_PATTERN =
   /\b(?:for intermediate and high risk individuals|low risk individuals|please interpret results with caution|if dexamethasone has been given|for further information please contact|new method effective|shown to interfere|changes in serial psa levels|this high sensitivity crp method is sensitive to|in presence of significant hypoalbuminemia|is suitable for coronary artery disease assessment)\b/i;
 const GUIDANCE_RESULT_PATTERN =
@@ -173,7 +173,7 @@ const COMMENTARY_GUARD_PATTERN =
 const HISTORY_CALCULATOR_NOISE_PATTERN =
   /\b(?:balance\s*my\s*hormones|tru-?t\.org|issam|free-?testosterone-?calculator|free\s+testosterone\s*-\s*calculated|known\s+labcorp\s+unit\s+issue|labcorp\s+test|international\s+society\s+for\s+the\s+study\s+of\s+the\s+aging\s+male|roche\s*cobas\s*assay|calculated\s+value)\b|https?:\/\/|www\./i;
 const SPATIAL_PRIORITY_MARKER_PATTERN =
-  /\b(?:testosterone|testosteron|free\s+testosterone|bioavailable\s+testosterone|estradiol|oestradiol|shbg|hematocrit|hematocriet|haemoglobin|hemoglobin|rbc|wbc|platelets?|neutrophils?|lymphocytes?|monocytes?|eosinophils?|basophils?|lh|fsh|dht|dihydrotestosterone|prolactin|progesterone|psa|tsh|t3|t4|glucose|creatinine|egfr|bilirubin|alkaline\s+phosphatase|alt|ast|ggt|albumin|globulin|protein|cholesterol|hdl|ldl|triglycerides?|ferritin|transferrin|iron|vitamin\s*d|dhea|igf-?1)\b/i;
+  /\b(?:testosterone|testosteron|free\s+testosterone|bioavailable\s+testosterone|estradiol|oestradiol|shbg|hematocrit|hematocriet|haemoglobin|hemoglobin|rbc|wbc|platelets?|neutrophils?|lymphocytes?|lymphs|monocytes?|eosinophils?|eos|basophils?|basos?|immature granulocytes?|immature grans?(?:\s*\(abs\))?|lh|fsh|dht|dihydrotestosterone|prolactin|progesterone|psa|tsh|t3|t4|glucose|creatinine|egfr|bilirubin|alkaline\s+phosphatase|alt|ast|ggt|albumin|globulin|protein|cholesterol|hdl|ldl|triglycerides?|ferritin|transferrin|iron|vitamin\s*d|dhea|igf-?1)\b/i;
 const SINGLE_TOKEN_MARKER_STOPWORDS = new Set([
   "is",
   "to",
@@ -1522,9 +1522,9 @@ const isLikelyUnit = (token: string): boolean => {
 };
 
 const toIsoDate = (day: string, month: string, year: string): string | null => {
-  const d = Number(day);
-  const m = Number(month);
-  if (!Number.isFinite(d) || !Number.isFinite(m) || d < 1 || d > 31 || m < 1 || m > 12) {
+  const first = Number(day);
+  const second = Number(month);
+  if (!Number.isFinite(first) || !Number.isFinite(second) || first < 1 || first > 31 || second < 1 || second > 31) {
     return null;
   }
 
@@ -1541,13 +1541,25 @@ const toIsoDate = (day: string, month: string, year: string): string | null => {
     return null;
   }
 
-  const iso = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  const parsed = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
+  // Default to day-month-year, but when month is impossible and first token can be month
+  // (e.g. 03/20/2023), flip to month-day-year.
+  const candidates: Array<{ day: number; month: number }> = [];
+  if (second <= 12) {
+    candidates.push({ day: first, month: second });
+  }
+  if (first <= 12 && second > 12) {
+    candidates.push({ day: second, month: first });
   }
 
-  return iso;
+  for (const candidate of candidates) {
+    const iso = `${String(y).padStart(4, "0")}-${String(candidate.month).padStart(2, "0")}-${String(candidate.day).padStart(2, "0")}`;
+    const parsed = new Date(`${iso}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return iso;
+    }
+  }
+
+  return null;
 };
 
 const toIsoYmd = (year: string, month: string, day: string): string | null => {
@@ -1612,7 +1624,7 @@ const collectAllDates = (text: string): string[] => {
   }
 
   const dateMatches = text.matchAll(
-    /\b([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})\b/g
+    /\b([0-3]?\d)\s*[./-]\s*([0-3]?\d)\s*[./-]\s*(\d{2,4})\b/g
   );
 
   for (const match of dateMatches) {
@@ -1722,8 +1734,8 @@ const extractDateCandidate = (text: string): string => {
   const normalized = cleanWhitespace(text);
 
   const priorityPatterns = [
-    /(?:sample\s*draw|date\s*collected|monster\s*afname|monster\s*afname:|afname|sample\s*collection|collection\s*date)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})/i,
-    /(?:arrival\s*date,?\s*time|arrival\s*date|materiaal\s*ontvangst|ontvangst)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([01]?\d)\s*[./-]\s*(\d{2,4})/i
+    /(?:sample\s*draw|date\s*collected|monster\s*afname|monster\s*afname:|afname|sample\s*collection|collection\s*date)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([0-3]?\d)\s*[./-]\s*(\d{2,4})/i,
+    /(?:arrival\s*date,?\s*time|arrival\s*date|materiaal\s*ontvangst|ontvangst)[^0-9]{0,40}([0-3]?\d)\s*[./-]\s*([0-3]?\d)\s*[./-]\s*(\d{2,4})/i
   ];
 
   for (const pattern of priorityPatterns) {
@@ -2110,7 +2122,7 @@ const looksLikeNoiseMarker = (marker: string): boolean => {
     return true;
   }
 
-  if (isLikelyUnit(marker) || (/^[A-Za-z%µμ/().-]+$/.test(marker) && marker.includes("/"))) {
+  if (isLikelyUnit(marker) || (/^[A-Za-z%µμ/().-]+$/.test(marker) && marker.includes("/") && !ALLOWED_RATIO_MARKER_PATTERN.test(marker))) {
     return true;
   }
 
@@ -2857,11 +2869,14 @@ const isPlausibleSpatialMeasurement = (canonicalMarker: string, unit: string, va
 };
 
 const isPlausibleNonSpatialMeasurement = (canonicalMarker: string, unit: string, value: number): boolean => {
-  if (!Number.isFinite(value) || value <= 0 || value > 20000) {
+  if (!Number.isFinite(value) || value < 0 || value > 20000) {
     return false;
   }
 
   const normalizedUnit = normalizeUnit(unit);
+  if (value === 0 && !normalizedUnit) {
+    return false;
+  }
   if (!normalizedUnit) {
     return true;
   }

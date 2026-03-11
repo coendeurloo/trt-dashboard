@@ -1,0 +1,26 @@
+{
+  "minimumConfidence": 0.55,
+  "expectedStrategy": "heuristic",
+  "maxMissingFields": 3,
+  "forbiddenMarkers": [
+    "for informational/educational purposes only",
+    "quest diagnostics marks",
+    "this test was developed",
+    "performing site"
+  ],
+  "requiredMarkers": [
+    {
+      "canonicalMarker": "Testosterone",
+      "unit": "ng/dL",
+      "referenceMin": 250,
+      "referenceMax": 1100
+    },
+    {
+      "canonicalMarker": "Free Testosterone",
+      "unit": "pg/mL",
+      "referenceMin": 35,
+      "referenceMax": 155
+    }
+  ],
+  "notes": "Quest Diagnostics single-page (QD 36170). Source has no collection/report date in result block; fixture validates only the two numeric testosterone markers."
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { __pdfParsingInternals } from "../pdfParsing";
 import { ExtractionDraft } from "../types";
+import { resolveCanonicalMarker } from "../markerNormalization";
 
 const genericProfile = __pdfParsingInternals.detectParserProfile("", "random-report.pdf");
 
@@ -810,6 +811,126 @@ describe("pdfParsing fallback layers", () => {
     expect(igf1Sds).toBeDefined();
     expect(igf1Sds?.rawValue).toBeCloseTo(0.7, 2);
     expect(igf1Sds?.rawUnit ?? "").toBe("");
+  });
+
+  it("ignores Quest educational/disclaimer pages while keeping lab result markers", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Collected: 03/20/2023 08:52",
+        "CBC (INCLUDES DIFF/PLT)",
+        "WHITE BLOOD CELL COUNT 7.8 3.8-10.8 Thousand/uL",
+        "HEMATOCRIT 50.2 38.5-50.0 %",
+        "This FAQ is provided for informational purposes only and is not intended as medical advice.",
+        "Low testosterone, or hypogonadism, has been associated with reduced sexual desire.",
+        "Quest, Quest Diagnostics, the associated logo and all associated Quest Diagnostics marks are the registered trademarks of Quest Diagnostics."
+      ].join("\n"),
+      "quest-quanum-discounted-labs.pdf"
+    );
+
+    const canonicalMarkers = new Set(draft.markers.map((marker) => marker.canonicalMarker));
+    const parsedMarkerNames = draft.markers.map((marker) => marker.marker.toLowerCase());
+
+    expect(canonicalMarkers.has("Leukocyten")).toBe(true);
+    expect(canonicalMarkers.has("Hematocrit")).toBe(true);
+    expect(parsedMarkerNames.some((name) => /informational purposes/.test(name))).toBe(false);
+    expect(parsedMarkerNames.some((name) => /hypogonadism/.test(name))).toBe(false);
+    expect(parsedMarkerNames.some((name) => /quest diagnostics marks/.test(name))).toBe(false);
+  });
+
+  it("normalizes Quest/Cardio IQ aliases for ratio and particle markers", () => {
+    expect(resolveCanonicalMarker({ rawName: "CHOL/HDLC RATIO", unit: "ratio" }).canonicalMarker).toBe(
+      "Cholesterol/HDL Ratio"
+    );
+    expect(resolveCanonicalMarker({ rawName: "LIPOPROTEIN (a)", unit: "nmol/L" }).canonicalMarker).toBe("Lipoprotein (a)");
+    expect(resolveCanonicalMarker({ rawName: "LDL PARTICLE NUMBER", unit: "nmol/L" }).canonicalMarker).toBe(
+      "LDL Particle Number"
+    );
+  });
+
+  it("parses Quest one-page testosterone panel without explicit date", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Report Status: Final",
+        "Test Name In Range Out Of Range Reference Range Lab",
+        "TESTOSTERONE, FREE (DIALYSIS) AND TOTAL,MS",
+        "TESTOSTERONE, TOTAL, MS 117 L 250-1100 ng/dL",
+        "For additional information, please refer to https://education.questdiagnostics.com/faq/FAQ165",
+        "This test was developed and its analytical performance characteristics have been determined by medfusion.",
+        "TESTOSTERONE, FREE 31.3 L 35.0-155.0 pg/mL",
+        "PERFORMING SITE: PAGE 1 OF 1"
+      ].join("\n"),
+      "quest-qd-36170-testosterone-free-total.pdf"
+    );
+
+    const total = draft.markers.find((marker) => marker.canonicalMarker === "Testosterone");
+    const free = draft.markers.find((marker) => marker.canonicalMarker === "Free Testosterone");
+
+    expect(total).toBeDefined();
+    expect(total?.rawValue).toBeCloseTo(117, 1);
+    expect(total?.rawUnit).toBe("ng/dL");
+    expect(total?.rawReferenceMin).toBe(250);
+    expect(total?.rawReferenceMax).toBe(1100);
+
+    expect(free).toBeDefined();
+    expect(free?.rawValue).toBeCloseTo(31.3, 1);
+    expect(free?.rawUnit).toBe("pg/mL");
+    expect(free?.rawReferenceMin).toBe(35);
+    expect(free?.rawReferenceMax).toBe(155);
+
+    expect(draft.testDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("parses LabCorp one-page CBC/CMP and ignores 'Not Estab.' reference ranges", () => {
+    const draft = __pdfParsingInternals.fallbackExtract(
+      [
+        "Date collected: 07/23/2018 0922 Local",
+        "TESTS RESULT FLAG UNITS REFERENCE INTERVAL LAB",
+        "WBC 6.4 x10E3/uL 3.4 - 10.8",
+        "Neutrophils 57 % Not Estab.",
+        "Lymphs 34 % Not Estab.",
+        "Immature Granulocytes 0 % Not Estab.",
+        "Neutrophils (Absolute) 3.6 x10E3/uL 1.4 - 7.0",
+        "Immature Grans (Abs) 0.0 x10E3/uL 0.0 - 0.1",
+        "Glucose 90 mg/dL 65 - 99",
+        "BUN 11 mg/dL 6 - 20",
+        "Creatinine 0.70 mg/dL 0.57 - 1.00",
+        "eGFR If NonAfricn Am 117 mL/min/1.73 >59"
+      ].join("\n"),
+      "labcorp-sample-report.pdf"
+    );
+
+    const neutrophils = draft.markers.find((marker) => marker.canonicalMarker === "Neutrophils");
+    const lymphocytes = draft.markers.find((marker) => marker.canonicalMarker === "Lymphocytes");
+    const immaturePct = draft.markers.find((marker) => marker.canonicalMarker === "Immature Granulocytes");
+    const glucose = draft.markers.find((marker) => marker.canonicalMarker === "Glucose Nuchter");
+    const bun = draft.markers.find((marker) => marker.canonicalMarker === "Ureum");
+    const egfr = draft.markers.find((marker) => marker.canonicalMarker === "eGFR");
+
+    expect(draft.testDate).toBe("2018-07-23");
+
+    expect(neutrophils).toBeDefined();
+    expect(neutrophils?.rawReferenceMin).toBeNull();
+    expect(neutrophils?.rawReferenceMax).toBeNull();
+
+    expect(lymphocytes).toBeDefined();
+    expect(lymphocytes?.rawReferenceMin).toBeNull();
+    expect(lymphocytes?.rawReferenceMax).toBeNull();
+
+    expect(immaturePct).toBeDefined();
+    expect(immaturePct?.rawReferenceMin).toBeNull();
+    expect(immaturePct?.rawReferenceMax).toBeNull();
+
+    expect(glucose).toBeDefined();
+    expect(glucose?.rawReferenceMin).toBe(65);
+    expect(glucose?.rawReferenceMax).toBe(99);
+
+    expect(bun).toBeDefined();
+    expect(bun?.rawReferenceMin).toBe(6);
+    expect(bun?.rawReferenceMax).toBe(20);
+
+    expect(egfr).toBeDefined();
+    expect(egfr?.rawReferenceMin).toBe(59);
+    expect(egfr?.rawReferenceMax).toBeNull();
   });
 
   it("filters implausible unit-marker combinations during fallback dedupe", () => {
