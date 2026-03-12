@@ -191,9 +191,9 @@ const VisualRangeBar = ({ value, rangeType, min, max, optimalMin, optimalMax, un
   };
 
   return (
-    <div className="flex w-[190px] items-center justify-center">
+    <div className="mx-auto flex w-full min-w-[120px] max-w-[170px] items-center justify-center">
       <div
-        className="relative h-2 w-[180px] rounded-full"
+        className="relative h-2 w-full rounded-full"
         style={{
           background: barBackground,
           border: "1px solid rgba(148, 163, 184, 0.25)",

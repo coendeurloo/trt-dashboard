@@ -1009,8 +1009,19 @@ const ExtractionReviewTable = ({
       </div>
 
       <div className="mt-3 overflow-hidden rounded-xl border border-slate-700">
-        <div className="overflow-x-auto overflow-y-hidden">
-          <table className="min-w-full divide-y divide-slate-700 text-sm">
+        <div className="overflow-x-hidden overflow-y-hidden">
+          <table className="w-full table-fixed divide-y divide-slate-700 text-sm">
+            <colgroup>
+              <col style={{ width: "24%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+            </colgroup>
             <thead className="bg-slate-900/80 text-left text-slate-300">
               <tr>
                 <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
@@ -1020,8 +1031,8 @@ const ExtractionReviewTable = ({
                 <th className="px-3 py-2 text-right">{tr("Ref max", "Ref max")}</th>
                 <th className="px-3 py-2 text-right">{tr("Status", "Status")}</th>
                 <th className="px-3 py-2 text-center">{tr("Visual Range", "Visual Range")}</th>
-                <th className="px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
-                <th className="px-3 py-2 text-right">{tr("Review", "Review")}</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">{tr("Acties", "Actions")}</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right">{tr("Review", "Review")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
@@ -1039,11 +1050,11 @@ const ExtractionReviewTable = ({
 
                 return (
                   <tr key={row.id} className="bg-slate-900/35">
-                <td className="align-top px-3 py-2">
+                <td className="min-w-0 align-top px-3 py-2">
                   {isCanonicalNameMode ? (
                     <>
-                      <p className="text-sm text-slate-100">{resolveCanonicalDisplayName(row)}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
+                      <p className="break-words text-sm text-slate-100">{resolveCanonicalDisplayName(row)}</p>
+                      <p className="mt-1 break-words text-[11px] text-slate-500">
                         {tr("Uit rapport", "From report")}: {resolveSourceReportName(row)}
                       </p>
                     </>
@@ -1063,11 +1074,11 @@ const ExtractionReviewTable = ({
                         placeholder={tr("Markernaam", "Marker name")}
                         editLabel={tr("Markernaam bewerken", "Edit marker name")}
                       />
-                      <p className="mt-1 text-[11px] text-slate-500">
+                      <p className="mt-1 break-words text-[11px] text-slate-500">
                         {tr("Gekoppeld aan", "Mapped to")}: {resolveCanonicalDisplayName(row)}
                       </p>
                       {row.rawMarker && row.rawMarker !== row.marker ? (
-                        <p className="text-[11px] text-slate-500">
+                        <p className="break-words text-[11px] text-slate-500">
                           {tr("In rapport", "In report")}: {row.rawMarker}
                         </p>
                       ) : null}
@@ -1173,14 +1184,15 @@ const ExtractionReviewTable = ({
                     <span className="text-slate-500">-</span>
                   )}
                 </td>
-                <td className="align-top px-3 py-2 text-right">
+                <td className="align-top whitespace-nowrap px-3 py-2 text-right">
                   {isActionableAutoFix(row) ? (
                     <button
                       type="button"
-                      className="mr-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
+                      className="mr-1 inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
                       onClick={() => applyAutoFixToRow(row.id)}
                     >
-                      {tr("Auto-fix", "Auto-fix")}
+                      <Wrench className="h-3.5 w-3.5" />
+                      <span className="hidden 2xl:inline">{tr("Auto-fix", "Auto-fix")}</span>
                     </button>
                   ) : null}
                   <button
@@ -1192,7 +1204,7 @@ const ExtractionReviewTable = ({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </td>
-                <td className="align-top px-3 py-2 text-right">
+                <td className="align-top whitespace-nowrap px-3 py-2 text-right">
                   <div className="group relative inline-flex">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}

@@ -254,6 +254,32 @@ const buildPrompt = (fileName: string, pdfText: string): string =>
 
 const isTechnicalStatus = (status: number): boolean => status === 429 || status >= 500;
 
+const extractUpstreamErrorDetail = (responseText: string): string => {
+  const trimmed = responseText.trim();
+  if (!trimmed) {
+    return "Request failed";
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      error?: { message?: string; status?: string; details?: string };
+      message?: string;
+      detail?: string;
+      details?: string;
+    };
+    return (
+      parsed.error?.message?.trim() ||
+      parsed.error?.details?.trim() ||
+      parsed.error?.status?.trim() ||
+      parsed.message?.trim() ||
+      parsed.detail?.trim() ||
+      parsed.details?.trim() ||
+      trimmed.slice(0, 800)
+    );
+  } catch {
+    return trimmed.slice(0, 800);
+  }
+};
+
 const callGeminiModel = async (params: {
   model: string;
   apiKey: string;
@@ -290,7 +316,7 @@ const callGeminiModel = async (params: {
     return {
       ok: false,
       status: response.status,
-      detail: responseText.slice(0, 800),
+      detail: extractUpstreamErrorDetail(responseText),
       technical: isTechnicalStatus(response.status)
     };
   }

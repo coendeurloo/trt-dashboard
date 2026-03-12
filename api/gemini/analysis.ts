@@ -199,8 +199,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!response.ok) {
         let detail = responseText;
         try {
-          const parsed = JSON.parse(responseText) as { error?: { message?: string; status?: string } };
-          detail = parsed.error?.message ?? parsed.error?.status ?? responseText;
+          const parsed = JSON.parse(responseText) as {
+            error?: { message?: string; status?: string; details?: string };
+            message?: string;
+            detail?: string;
+            details?: string;
+          };
+          detail =
+            parsed.error?.message ??
+            parsed.error?.details ??
+            parsed.error?.status ??
+            parsed.message ??
+            parsed.detail ??
+            parsed.details ??
+            responseText;
         } catch {
           // keep raw text
         }

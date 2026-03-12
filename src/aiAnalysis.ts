@@ -2334,8 +2334,21 @@ export const analyzeLabDataWithClaude = async ({
           };
         }
 
-        const errorMeta = (result.body as { error?: { code?: string; detail?: string; message?: string } }).error;
-        const errorMessage = errorMeta?.message ?? errorMeta?.detail ?? "";
+        const errorBody = result.body as {
+          error?: { code?: string; detail?: string; message?: string; details?: string };
+          message?: string;
+          detail?: string;
+          details?: string;
+        };
+        const errorMeta = errorBody.error;
+        const errorMessage =
+          errorMeta?.message ??
+          errorMeta?.detail ??
+          errorMeta?.details ??
+          errorBody.message ??
+          errorBody.detail ??
+          errorBody.details ??
+          "";
         const errorCode = errorMeta?.code ?? "";
 
         if (result.status === 429) {
