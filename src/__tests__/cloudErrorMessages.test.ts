@@ -20,5 +20,14 @@ describe("cloud error message mapping", () => {
       "A sync conflict was detected. First choose whether to keep the cloud or local version."
     );
   });
-});
 
+  it("maps raw JSON bad-request sync errors to a friendly message", () => {
+    const message = mapCloudSyncErrorToMessage('{"detail":"Bad Request"}', tr);
+    expect(message).toBe("Cloud sync could not process the request. Please try again.");
+  });
+
+  it("maps raw JSON bad-request auth errors to a friendly message", () => {
+    const message = mapCloudAuthErrorToMessage('{"detail":"Bad Request"}', tr);
+    expect(message).toBe("The request could not be processed. Check your details and try again.");
+  });
+});

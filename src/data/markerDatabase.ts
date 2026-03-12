@@ -178,7 +178,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Complete Blood Count",
     aliases: ["neutrofielen abs", "absolute neutrophils", "neutrophils abs"],
     preferredUnit: "x10^9/L",
-    alternateUnits: ["10^9/L"],
+    alternateUnits: ["10^9/L", "cells/uL", "/uL", "cells/mm3", "/mm3"],
     defaultRangeType: "min-max",
     defaultRange: { min: 1.8, max: 7.5 }
   }),
@@ -198,7 +198,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Complete Blood Count",
     aliases: ["lymphocytes abs", "lymfocyten abs", "absolute lymphocytes"],
     preferredUnit: "x10^9/L",
-    alternateUnits: ["10^9/L"],
+    alternateUnits: ["10^9/L", "cells/uL", "/uL", "cells/mm3", "/mm3"],
     defaultRangeType: "min-max",
     defaultRange: { min: 1.0, max: 4.0 }
   }),
@@ -218,7 +218,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Complete Blood Count",
     aliases: ["monocytes abs", "monocyten abs", "absolute monocytes"],
     preferredUnit: "x10^9/L",
-    alternateUnits: ["10^9/L"],
+    alternateUnits: ["10^9/L", "cells/uL", "/uL", "cells/mm3", "/mm3"],
     defaultRangeType: "min-max",
     defaultRange: { min: 0.2, max: 1.0 }
   }),
@@ -238,7 +238,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Complete Blood Count",
     aliases: ["eosinophils abs", "eosinofielen abs", "absolute eosinophils"],
     preferredUnit: "x10^9/L",
-    alternateUnits: ["10^9/L"],
+    alternateUnits: ["10^9/L", "cells/uL", "/uL", "cells/mm3", "/mm3"],
     defaultRangeType: "min-max",
     defaultRange: { min: 0, max: 0.5 }
   }),
@@ -258,7 +258,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Complete Blood Count",
     aliases: ["basophils abs", "basofielen abs", "absolute basophils"],
     preferredUnit: "x10^9/L",
-    alternateUnits: ["10^9/L"],
+    alternateUnits: ["10^9/L", "cells/uL", "/uL", "cells/mm3", "/mm3"],
     defaultRangeType: "min-max",
     defaultRange: { min: 0, max: 0.2 }
   }),

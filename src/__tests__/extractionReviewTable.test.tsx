@@ -80,10 +80,11 @@ describe("ExtractionReviewTable", () => {
     expect(screen.queryByText(/GEMINI|FALLBACK|CLAUDE/i)).toBeNull();
   });
 
-  it("shows supplements, symptoms and notes without an expand toggle", () => {
+  it("hides supplement stack controls while keeping symptoms and notes", () => {
     renderTable();
 
-    expect(screen.getByText("Supplements at time of test")).toBeTruthy();
+    expect(screen.queryByText("Supplements at time of test")).toBeNull();
+    expect(screen.queryByText("Use your current active stack for this report?")).toBeNull();
     expect(screen.getByText("Symptoms")).toBeTruthy();
     expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /show extra context/i })).toBeNull();

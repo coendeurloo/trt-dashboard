@@ -195,4 +195,21 @@ describe("markerConfidence", () => {
     expect(plateletConfidence.unit).toBe("high");
     expect(erythrocyteConfidence.unit).toBe("high");
   });
+
+  it("accepts cells/uL for absolute differential markers", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Lymphocytes Abs.",
+        value: 3097,
+        unit: "cells/uL",
+        referenceMin: 850,
+        referenceMax: 3900
+      },
+      matchMarker("Lymphocytes Abs.")
+    );
+
+    expect(confidence.unit).toBe("medium");
+    expect(confidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+    expect(confidence.issues.some((issue) => /valid but not preferred/i.test(issue))).toBe(true);
+  });
 });

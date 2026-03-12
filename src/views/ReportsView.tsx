@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
@@ -132,7 +132,7 @@ const ReportsView = ({
   const markerReviewTooltip = (marker: ReviewMarker): string | undefined => {
     const issues = marker._confidence?.issues ?? [];
     if (issues.length > 0) {
-      return issues.map((issue) => `• ${issue}`).join("\n");
+      return issues.map((issue) => `- ${issue}`).join("\n");
     }
     const overall = markerReviewOverall(marker);
     if (overall === "review") {
@@ -478,7 +478,7 @@ const ReportsView = ({
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
               <CalendarDays className="h-4 w-4 text-cyan-400/70" />
               <span className="text-slate-400">{formatDate(reportStats.earliest)}</span>
-              <span className="text-slate-600">→</span>
+              <span className="text-slate-600">-&gt;</span>
               <span className="text-slate-400">{formatDate(reportStats.latest)}</span>
             </div>
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
@@ -687,7 +687,7 @@ const ReportsView = ({
           <article
             key={report.id}
             data-report-id={report.id}
-            className={`app-teal-glow-surface rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
+            className={`app-teal-glow-surface rounded-2xl border border-slate-700/65 border-l-2 ${cardHealthClass(report)} bg-slate-900/55 transition-colors hover:border-slate-500/60 hover:bg-slate-900/72`}
           >
             {/* ── Collapsed header ── */}
             <button
@@ -700,12 +700,23 @@ const ReportsView = ({
                   current.includes(report.id) ? current.filter((id) => id !== report.id) : [...current, report.id]
                 );
               }}
-              className="flex w-full min-w-0 items-stretch gap-0 rounded-2xl px-3 py-3 text-left"
+              className="flex w-full min-w-0 items-stretch gap-0 rounded-2xl px-3 py-3 text-left sm:px-4 sm:py-3.5"
               aria-label={isExpanded ? tr("Inklappen", "Collapse") : tr("Uitklappen", "Expand")}
             >
-              {/* Report number */}
-              <span className="mr-3 flex shrink-0 flex-col items-center justify-center">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-800/80 text-[11px] font-mono font-semibold text-slate-400">
+              {/* Left report identity */}
+              <span className="mr-3 flex shrink-0 flex-col items-center justify-start gap-2 pt-0.5">
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
+                    abnormalCount >= 3
+                      ? "border-rose-500/35 bg-rose-500/10 text-rose-200"
+                      : abnormalCount > 0
+                        ? "border-amber-500/35 bg-amber-500/10 text-amber-200"
+                        : "border-slate-700 bg-slate-800/75 text-slate-300"
+                  }`}
+                >
+                  <FileText className="h-4 w-4" />
+                </span>
+                <span className="flex h-6 min-w-[28px] items-center justify-center rounded-full border border-slate-700 bg-slate-800/70 px-1.5 text-[10px] font-mono font-semibold text-slate-400">
                   {String(displayNumber).padStart(2, "0")}
                 </span>
               </span>
@@ -714,7 +725,7 @@ const ReportsView = ({
               <div className="min-w-0 flex-1 space-y-2">
                 {/* Row 1: date + badges */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-base font-semibold tracking-tight text-slate-100">
+                  <span className="text-[1.65rem] font-semibold leading-none tracking-tight text-slate-100 sm:text-[1.7rem]">
                     {formatDate(report.testDate)}
                   </span>
                   {report.isBaseline && (
@@ -730,9 +741,9 @@ const ReportsView = ({
                   <span
                     className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                       supplementAnchorState === "anchor"
-                        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
                         : supplementAnchorState === "none"
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
                           : supplementAnchorState === "unknown"
                             ? "border-slate-500/60 bg-slate-800 text-slate-300"
                             : "border-slate-600 bg-slate-800 text-slate-300"
@@ -747,7 +758,7 @@ const ReportsView = ({
                 </div>
 
                 {/* Row 2: six marker preview cards */}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
                   {previewSlots.map((slot) => {
                     if (!slot.marker) {
                       return (
@@ -755,11 +766,14 @@ const ReportsView = ({
                           key={`${report.id}-${slot.canonicalMarker}`}
                           data-testid={`report-preview-slot-${report.id}`}
                           data-preview-marker={slot.canonicalMarker}
-                          className="rounded-lg border border-slate-700/70 bg-slate-900/30 px-2.5 py-2"
+                          className="rounded-xl border border-slate-800/85 bg-slate-900/28 px-3 py-2.5"
                         >
-                          <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
-                          <div className="mt-1 text-lg font-semibold leading-none text-slate-200">—</div>
-                          <div className="mt-0.5 truncate text-[10px] text-slate-500">{tr("Niet in rapport", "Not in report")}</div>
+                          <div className="mb-1.5 flex items-center justify-between gap-1">
+                            <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
+                          </div>
+                          <div className="text-[1.72rem] font-semibold leading-none tracking-tight text-slate-300">-</div>
+                          <div className="mt-1 truncate text-[10px] text-slate-500">{tr("Niet in rapport", "Not in report")}</div>
                         </div>
                       );
                     }
@@ -772,24 +786,33 @@ const ReportsView = ({
                         : abnormal === "low"
                           ? "text-amber-200"
                           : "text-slate-100";
+                    const markerDotClass =
+                      abnormal === "high"
+                        ? "bg-rose-400"
+                        : abnormal === "low"
+                          ? "bg-amber-400"
+                          : "bg-emerald-400/75";
                     const shellToneClass =
                       abnormal === "high"
-                        ? "border-rose-500/35 bg-rose-500/10"
+                        ? "border-rose-500/30 bg-slate-900/38"
                         : abnormal === "low"
-                          ? "border-amber-500/35 bg-amber-500/10"
-                          : "border-slate-700/80 bg-slate-900/40";
+                          ? "border-amber-500/30 bg-slate-900/38"
+                          : "border-slate-700/75 bg-slate-900/38";
                     return (
                       <div
                         key={slot.marker.id}
                         data-testid={`report-preview-slot-${report.id}`}
                         data-preview-marker={slot.canonicalMarker}
-                        className={`report-highlight-chip rounded-lg border px-2.5 py-2 ${shellToneClass}`}
+                        className={`report-highlight-chip rounded-xl border px-3 py-2.5 ${shellToneClass}`}
                       >
-                        <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
-                        <div className={`mt-1 text-lg font-semibold leading-none ${valueToneClass}`}>
+                        <div className="mb-1.5 flex items-center justify-between gap-1">
+                          <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
+                          <span className={`h-1.5 w-1.5 rounded-full ${markerDotClass}`} />
+                        </div>
+                        <div className={`text-[1.72rem] font-semibold leading-none tracking-tight ${valueToneClass}`}>
                           {formatPreviewValue(converted.value)}
                         </div>
-                        <div className={`mt-0.5 truncate text-[10px] ${isAbnormal ? "text-slate-300" : "text-slate-500"}`}>{converted.unit}</div>
+                        <div className={`mt-1 truncate text-[10px] ${isAbnormal ? "text-slate-300" : "text-slate-500"}`}>{converted.unit}</div>
                       </div>
                     );
                   })}

@@ -1,5 +1,54 @@
 type TranslateFn = (nl: string, en: string) => string;
 
+const extractJsonErrorDetail = (value: string): string | null => {
+  const candidates = [value];
+  const firstBrace = value.indexOf("{");
+  if (firstBrace > 0) {
+    candidates.push(value.slice(firstBrace));
+  }
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim();
+    if (!trimmed.startsWith("{")) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as
+        | string
+        | {
+            message?: string;
+            detail?: string;
+            details?: string;
+            error?: {
+              message?: string;
+              detail?: string;
+              details?: string;
+            };
+          };
+      if (typeof parsed === "string" && parsed.trim()) {
+        return parsed.trim();
+      }
+      if (parsed && typeof parsed === "object") {
+        const nested = parsed.error;
+        const message =
+          nested?.message ||
+          nested?.detail ||
+          nested?.details ||
+          parsed.message ||
+          parsed.detail ||
+          parsed.details;
+        if (typeof message === "string" && message.trim()) {
+          return message.trim();
+        }
+      }
+    } catch {
+      // ignore parse failures and continue with raw text
+    }
+  }
+
+  return null;
+};
+
 const extractErrorCode = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -101,19 +150,20 @@ export const mapCloudAuthErrorToMessage = (
       : typeof error === "string"
         ? error
         : "";
-  const message = raw.trim();
-  if (!message) {
+  const rawMessage = raw.trim();
+  if (!rawMessage) {
     return tr("Inloggen mislukt.", "Sign-in failed.");
   }
+  const message = extractJsonErrorDetail(rawMessage) ?? rawMessage;
 
-  if (isNetworkError(message)) {
+  if (isNetworkError(rawMessage) || isNetworkError(message)) {
     return tr(
       "Geen verbinding met de cloudservice. Controleer je internetverbinding en probeer opnieuw.",
       "Could not reach the cloud service. Check your internet connection and try again."
     );
   }
 
-  const mapped = mapKnownAuthCode(extractErrorCode(message), tr);
+  const mapped = mapKnownAuthCode(extractErrorCode(rawMessage), tr);
   if (mapped) {
     return mapped;
   }
@@ -143,6 +193,12 @@ export const mapCloudAuthErrorToMessage = (
       "Cloud auth failed. Please try again or sign in again later."
     );
   }
+  if (message.toLowerCase() === "bad request") {
+    return tr(
+      "De aanvraag kon niet worden verwerkt. Controleer je gegevens en probeer opnieuw.",
+      "The request could not be processed. Check your details and try again."
+    );
+  }
 
   return message;
 };
@@ -157,12 +213,13 @@ export const mapCloudSyncErrorToMessage = (
       : typeof error === "string"
         ? error
         : "";
-  const message = raw.trim();
-  if (!message) {
+  const rawMessage = raw.trim();
+  if (!rawMessage) {
     return tr("Cloud-sync mislukt.", "Cloud sync failed.");
   }
+  const message = extractJsonErrorDetail(rawMessage) ?? rawMessage;
 
-  if (isNetworkError(message)) {
+  if (isNetworkError(rawMessage) || isNetworkError(message)) {
     return tr(
       "Geen verbinding met de cloudservice. Controleer je internetverbinding en probeer opnieuw.",
       "Could not reach the cloud service. Check your internet connection and try again."
@@ -176,7 +233,7 @@ export const mapCloudSyncErrorToMessage = (
     );
   }
 
-  const code = extractErrorCode(message);
+  const code = extractErrorCode(rawMessage);
   if (code === "REVISION_MISMATCH" || code === "P0001") {
     return tr(
       "Er is een sync-conflict gevonden. Kies eerst of je de cloud- of lokale versie wilt gebruiken.",
@@ -211,7 +268,12 @@ export const mapCloudSyncErrorToMessage = (
   if (mappedAuth) {
     return mappedAuth;
   }
+  if (message.toLowerCase() === "bad request") {
+    return tr(
+      "Cloud-sync kon de aanvraag niet verwerken. Probeer het opnieuw.",
+      "Cloud sync could not process the request. Please try again."
+    );
+  }
 
   return message;
 };
-

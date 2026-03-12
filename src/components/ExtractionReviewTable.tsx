@@ -368,6 +368,7 @@ const ExtractionReviewTable = ({
     referenceCoveragePercent,
     warningCodes
   ]);
+  const showReviewSupplementSection = false;
 
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
     if (value === "high") {
@@ -1314,6 +1315,7 @@ const ExtractionReviewTable = ({
             </div>
           ) : null}
 
+          {showReviewSupplementSection ? (
           <div className="rounded-xl border border-slate-700 bg-slate-900/45 p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <label className="block text-xs uppercase tracking-wide text-slate-400">
@@ -1522,6 +1524,7 @@ const ExtractionReviewTable = ({
               </div>
             ) : null}
           </div>
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
