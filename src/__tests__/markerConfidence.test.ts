@@ -49,7 +49,7 @@ describe("markerConfidence", () => {
       {
         name: "eGFR",
         value: 78.4,
-        unit: "mL/min/1.73m²",
+        unit: "mL/min/1.73m\u00B2",
         referenceMin: 60,
         referenceMax: null
       },
@@ -115,7 +115,7 @@ describe("markerConfidence", () => {
       {
         name: "DHEA-S",
         value: 340.1,
-        unit: "μg/dL",
+        unit: "\u03BCg/dL",
         referenceMin: 34.5,
         referenceMax: 568.9
       },
@@ -138,5 +138,61 @@ describe("markerConfidence", () => {
     expect(dheaConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
     expect(egfrConfidence.unit).toBe("high");
     expect(egfrConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
+
+  it("recognizes Thousand/uL and Million/uL style CBC units", () => {
+    const leukocyteConfidence = scoreMarkerConfidence(
+      {
+        name: "Leukocytes",
+        value: 7.8,
+        unit: "Thousand/uL",
+        referenceMin: 3.8,
+        referenceMax: 10.8
+      },
+      matchMarker("Leukocytes")
+    );
+
+    const erythrocyteConfidence = scoreMarkerConfidence(
+      {
+        name: "Erythrocytes",
+        value: 5.6,
+        unit: "Million/uL",
+        referenceMin: 4.2,
+        referenceMax: 5.8
+      },
+      matchMarker("Erythrocytes")
+    );
+
+    expect(leukocyteConfidence.unit).toBe("high");
+    expect(leukocyteConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+    expect(erythrocyteConfidence.unit).toBe("high");
+    expect(erythrocyteConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
+
+  it("recognizes K/uL and M/uL aliases for CBC units", () => {
+    const plateletConfidence = scoreMarkerConfidence(
+      {
+        name: "Platelets",
+        value: 259,
+        unit: "K/uL",
+        referenceMin: 140,
+        referenceMax: 400
+      },
+      matchMarker("Platelets")
+    );
+
+    const erythrocyteConfidence = scoreMarkerConfidence(
+      {
+        name: "Erythrocytes",
+        value: 5.3,
+        unit: "M/uL",
+        referenceMin: 4.2,
+        referenceMax: 5.8
+      },
+      matchMarker("Erythrocytes")
+    );
+
+    expect(plateletConfidence.unit).toBe("high");
+    expect(erythrocyteConfidence.unit).toBe("high");
   });
 });

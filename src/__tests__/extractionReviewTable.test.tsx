@@ -246,6 +246,51 @@ describe("ExtractionReviewTable", () => {
     expect(screen.queryByText(/Canonical:/i)).toBeNull();
   });
 
+  it("shows report raw value/unit/reference as primary and canonical as secondary when they differ", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "HEMOGLOBIN",
+          rawMarker: "HEMOGLOBIN",
+          value: 10.426,
+          rawValue: 16.8,
+          unit: "mmol/L",
+          rawUnit: "g/dL",
+          referenceMin: 8.192,
+          rawReferenceMin: 13.2,
+          referenceMax: 10.612,
+          rawReferenceMax: 17.1
+        } as any
+      ]
+    });
+
+    expect(screen.getByText("Canonical/App: 10.426")).toBeTruthy();
+    expect(screen.getByText("Canonical/App unit: mmol/L")).toBeTruthy();
+    expect(screen.getByText("Canonical/App ref: 8.192")).toBeTruthy();
+    expect(screen.getByText("Canonical/App ref: 10.612")).toBeTruthy();
+    expect(screen.queryByText(/In report: g\/dL/i)).toBeNull();
+  });
+
+  it("does not show canonical/app secondary lines when report raw fields are not provided", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "Testosterone",
+          value: 20.7,
+          unit: "nmol/L",
+          referenceMin: 8.4,
+          referenceMax: 28.8
+        } as any
+      ]
+    });
+
+    expect(screen.queryByText(/Canonical\/App unit:/i)).toBeNull();
+    expect(screen.queryByText(/Canonical\/App ref:/i)).toBeNull();
+    expect(screen.queryByText(/Canonical\/App:/i)).toBeNull();
+  });
+
   it("lets users click marker name to edit and shows review reason tooltip", () => {
     renderTable({
       markers: [

@@ -382,10 +382,14 @@ const ExtractionReviewTable = ({
     return tr("Onbekend", "Unknown");
   };
 
-  const displayValue = (row: MarkerValue): number => row.value;
-  const displayUnit = (row: MarkerValue): string => row.unit;
-  const displayReferenceMin = (row: MarkerValue): number | null => row.referenceMin;
-  const displayReferenceMax = (row: MarkerValue): number | null => row.referenceMax;
+  const hasRawValue = (row: MarkerValue): boolean => typeof row.rawValue === "number" && Number.isFinite(row.rawValue);
+  const hasRawUnit = (row: MarkerValue): boolean => Boolean(row.rawUnit?.trim());
+  const hasRawReferenceMin = (row: MarkerValue): boolean => row.rawReferenceMin !== undefined;
+  const hasRawReferenceMax = (row: MarkerValue): boolean => row.rawReferenceMax !== undefined;
+  const displayValue = (row: MarkerValue): number => (hasRawValue(row) ? row.rawValue! : row.value);
+  const displayUnit = (row: MarkerValue): string => (hasRawUnit(row) ? row.rawUnit!.trim() : row.unit);
+  const displayReferenceMin = (row: MarkerValue): number | null => (hasRawReferenceMin(row) ? row.rawReferenceMin ?? null : row.referenceMin);
+  const displayReferenceMax = (row: MarkerValue): number | null => (hasRawReferenceMax(row) ? row.rawReferenceMax ?? null : row.referenceMax);
   const isCanonicalNameMode = markerNameDisplayMode === "canonical";
   const reportNameFallback = tr("Onbekende marker", "Unknown marker");
   const resolveCanonicalName = (row: ReviewMarker): string | null => {
@@ -451,7 +455,7 @@ const ExtractionReviewTable = ({
   const reviewTooltip = (row: ReviewMarker): string | undefined => {
     const issues = row._confidence?.issues ?? [];
     if (issues.length > 0) {
-      return issues.map((issue) => `â€¢ ${issue}`).join("\n");
+      return issues.map((issue) => `- ${issue}`).join("\n");
     }
     const overall = row._confidence?.overall ?? "ok";
     if (overall === "review") {
@@ -700,7 +704,7 @@ const ExtractionReviewTable = ({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">
-            {isManualEntry ? tr("Handmatig waarden invoeren", "Enter values manually") : tr("Controleer geÃ«xtraheerde data", "Review extracted data")}
+            {isManualEntry ? tr("Handmatig waarden invoeren", "Enter values manually") : tr("Controleer geextraheerde data", "Review extracted data")}
           </h2>
           {!isManualEntry ? (
             <>
@@ -923,7 +927,7 @@ const ExtractionReviewTable = ({
           </div>
           {!selectedProtocol && protocols.length === 0 ? (
             <p className="mt-1 text-xs text-slate-400">
-              {tr("Nog geen protocol opgeslagen. Klik op Nieuw om er Ã©Ã©n aan te maken.", "No saved protocol yet. Click New to create one.")}
+              {tr("Nog geen protocol opgeslagen. Klik op Nieuw om er een aan te maken.", "No saved protocol yet. Click New to create one.")}
             </p>
           ) : null}
         </div>
@@ -1098,9 +1102,9 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
-                  {typeof row.rawValue === "number" && row.rawValue !== row.value ? (
+                  {hasRawValue(row) && row.rawValue !== row.value ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawValue)}
+                      {tr("Canoniek/App", "Canonical/App")}: {formatMaybeNumber(row.value)}
                     </p>
                   ) : null}
                 </td>
@@ -1108,13 +1112,13 @@ const ExtractionReviewTable = ({
                   <EditableCell
                     value={displayUnit(row)}
                     clickToEdit
-                    editLabel={tr("Waarde bewerken", "Edit value")}
+                    editLabel={tr("Eenheid bewerken", "Edit unit")}
                     onCommit={(value) => updateRow(row.id, (current) => ({ ...current, rawUnit: value }))}
                     placeholder={tr("Eenheid", "Unit")}
                   />
-                  {row.rawUnit && row.rawUnit !== row.unit ? (
+                  {hasRawUnit(row) && displayUnit(row) !== row.unit ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("In rapport", "In report")}: {row.rawUnit}
+                      {tr("Canonieke/App-eenheid", "Canonical/App unit")}: {row.unit}
                     </p>
                   ) : null}
                 </td>
@@ -1131,9 +1135,9 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
-                  {row.rawReferenceMin !== undefined && row.rawReferenceMin !== row.referenceMin ? (
+                  {hasRawReferenceMin(row) && row.rawReferenceMin !== row.referenceMin ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawReferenceMin)}
+                      {tr("Canonieke/App ref", "Canonical/App ref")}: {formatMaybeNumber(row.referenceMin)}
                     </p>
                   ) : null}
                 </td>
@@ -1150,9 +1154,9 @@ const ExtractionReviewTable = ({
                       }))
                     }
                   />
-                  {row.rawReferenceMax !== undefined && row.rawReferenceMax !== row.referenceMax ? (
+                  {hasRawReferenceMax(row) && row.rawReferenceMax !== row.referenceMax ? (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {tr("In rapport", "In report")}: {formatMaybeNumber(row.rawReferenceMax)}
+                      {tr("Canonieke/App ref", "Canonical/App ref")}: {formatMaybeNumber(row.referenceMax)}
                     </p>
                   ) : null}
                 </td>
@@ -1172,13 +1176,13 @@ const ExtractionReviewTable = ({
                 <td className="align-top px-3 py-2 text-center">
                   {hasVisualRange ? (
                     <VisualRangeBar
-                      value={row.value}
+                      value={displayValue(row)}
                       rangeType={rangeType}
                       min={rangeMin === null ? undefined : rangeMin}
                       max={rangeMax === null ? undefined : rangeMax}
                       optimalMin={optimalMin}
                       optimalMax={optimalMax}
-                      unit={row.unit}
+                      unit={displayUnit(row)}
                     />
                   ) : (
                     <span className="text-slate-500">-</span>
@@ -1468,8 +1472,8 @@ const ExtractionReviewTable = ({
                   <div key={supplement.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2">
                     <p className="text-sm text-slate-200">
                       <span className="font-medium">{supplement.name}</span>
-                      {supplement.dose ? ` Â· ${supplement.dose}` : ""}
-                      {` Â· ${supplementFrequencyLabel(supplement.frequency, language)}`}
+                      {supplement.dose ? ` - ${supplement.dose}` : ""}
+                      {` - ${supplementFrequencyLabel(supplement.frequency, language)}`}
                     </p>
                     <button
                       type="button"

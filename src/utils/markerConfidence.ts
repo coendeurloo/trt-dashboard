@@ -24,16 +24,30 @@ export interface MarkerParseConfidence {
 
 export const UNIT_NORMALIZATION: Record<string, string> = {
   "10x9/l": "x10^9/L",
-  "10×9/l": "x10^9/L",
   "10^9/l": "x10^9/L",
   "10e9/l": "x10^9/L",
+  "10^3/ul": "x10^9/L",
+  "10e3/ul": "x10^9/L",
+  "x10^3/ul": "x10^9/L",
+  "x10e3/ul": "x10^9/L",
+  "k/ul": "x10^9/L",
+  "thousand/ul": "x10^9/L",
+  "k/mm3": "x10^9/L",
+  "thousand/mm3": "x10^9/L",
+  "10^3/mm3": "x10^9/L",
   "10x12/l": "x10^12/L",
-  "10×12/l": "x10^12/L",
   "10^12/l": "x10^12/L",
   "10e12/l": "x10^12/L",
-  "µmol/l": "umol/L",
+  "10^6/ul": "x10^12/L",
+  "10e6/ul": "x10^12/L",
+  "x10^6/ul": "x10^12/L",
+  "x10e6/ul": "x10^12/L",
+  "m/ul": "x10^12/L",
+  "million/ul": "x10^12/L",
+  "m/mm3": "x10^12/L",
+  "million/mm3": "x10^12/L",
+  "10^6/mm3": "x10^12/L",
   "umol/l": "umol/L",
-  "μmol/l": "umol/L",
   "nmol/l": "nmol/L",
   "pmol/l": "pmol/L",
   "mmol/l": "mmol/L",
@@ -63,7 +77,8 @@ const normalizeUnitUnicode = (value: string): string =>
   value
     .normalize("NFKC")
     .replace(/[μµ]/g, "u")
-    .replace(/[⁄∕]/g, "/");
+    .replace(/[⁄∕]/g, "/")
+    .replace(/[×*]/g, "x");
 
 const unitCompareToken = (value: string): string =>
   normalizeUnitUnicode(value)
@@ -74,17 +89,41 @@ const unitCompareToken = (value: string): string =>
 const unitSemanticToken = (value: string): string => {
   const token = unitCompareToken(value);
 
-  if (token === "/nl") {
+  if (
+    token === "/nl" ||
+    token === "x10^9/l" ||
+    token === "10^9/l" ||
+    token === "10e9/l" ||
+    token === "10x9/l" ||
+    token === "x10^3/ul" ||
+    token === "10^3/ul" ||
+    token === "10e3/ul" ||
+    token === "x10e3/ul" ||
+    token === "k/ul" ||
+    token === "thousand/ul" ||
+    token === "k/mm3" ||
+    token === "thousand/mm3" ||
+    token === "10^3/mm3"
+  ) {
     return "count-per-liter-1e9";
-  }
-  if (token === "/pl") {
-    return "count-per-liter-1e12";
   }
 
-  if (token === "x10^9/l" || token === "10^9/l" || token === "10e9/l" || token === "10x9/l") {
-    return "count-per-liter-1e9";
-  }
-  if (token === "x10^12/l" || token === "10^12/l" || token === "10e12/l" || token === "10x12/l") {
+  if (
+    token === "/pl" ||
+    token === "x10^12/l" ||
+    token === "10^12/l" ||
+    token === "10e12/l" ||
+    token === "10x12/l" ||
+    token === "x10^6/ul" ||
+    token === "10^6/ul" ||
+    token === "10e6/ul" ||
+    token === "x10e6/ul" ||
+    token === "m/ul" ||
+    token === "million/ul" ||
+    token === "m/mm3" ||
+    token === "million/mm3" ||
+    token === "10^6/mm3"
+  ) {
     return "count-per-liter-1e12";
   }
 
