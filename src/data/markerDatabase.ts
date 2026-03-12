@@ -153,6 +153,16 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     defaultRange: { min: 0.12, max: 0.39 }
   }),
   marker({
+    id: "mpv",
+    canonicalName: "MPV",
+    category: "Complete Blood Count",
+    aliases: ["m.p.v", "m p v", "mean platelet volume"],
+    preferredUnit: "fL",
+    alternateUnits: [],
+    defaultRangeType: "min-max",
+    defaultRange: { min: 7.5, max: 12.5 }
+  }),
+  marker({
     id: "neutrophils",
     canonicalName: "Neutrophils",
     category: "Complete Blood Count",
@@ -1342,10 +1352,10 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     defaultRange: { min: 98, max: 107 }
   }),
   marker({
-    id: "bicarbonate",
-    canonicalName: "Bicarbonate",
+    id: "carbon-dioxide",
+    canonicalName: "Carbon Dioxide",
     category: "Electrolytes",
-    aliases: ["carbon dioxide", "bicarbonaat", "hco3", "co2 total"],
+    aliases: ["co2", "total co2", "co2 total", "bicarbonate", "bicarbonaat", "hco3", "hco3-"],
     preferredUnit: "mmol/L",
     alternateUnits: [],
     defaultRangeType: "min-max",

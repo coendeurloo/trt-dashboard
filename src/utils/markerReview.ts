@@ -10,8 +10,6 @@ export type ReviewMarker = MarkerValue & {
   _matchResult?: MarkerMatchResult;
 };
 
-const shouldUseCanonicalName = (confidence: MatchConfidence): boolean => confidence === "exact" || confidence === "alias";
-
 const confidenceRank: Record<MatchConfidence, number> = {
   exact: 6,
   alias: 5,
@@ -82,17 +80,12 @@ export const enrichMarkerForReview = (marker: MarkerValue): ReviewMarker => {
   const matchResult = resolveBestMatch(marker);
   const confidence = scoreMarkerConfidence(toParsedMarker(marker), matchResult);
 
-  const resolvedName =
-    shouldUseCanonicalName(matchResult.confidence) && matchResult.canonical
-      ? matchResult.canonical.canonicalName
-      : marker.marker;
-
   const resolvedUnit = confidence.autoFix?.unit ?? marker.unit;
 
   return {
     ...marker,
     rawMarker: marker.rawMarker ?? marker.marker,
-    marker: resolvedName,
+    marker: marker.marker,
     unit: resolvedUnit,
     rawUnit: marker.rawUnit ?? marker.unit,
     category: matchResult.canonical?.category ?? "Other",

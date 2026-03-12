@@ -1,5 +1,6 @@
 import { format, subMonths, subWeeks } from "date-fns";
 import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod, SymptomCheckIn, UserProfile } from "./types";
+import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "./constants";
 import { createId, deriveAbnormalFlag } from "./utils";
 
 export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
@@ -677,13 +678,6 @@ export interface DemoSnapshot {
   primaryMarkersSelection: string[];
 }
 
-const DEMO_PRIMARY_MARKERS_BY_PROFILE: Record<UserProfile, string[]> = {
-  trt: ["Testosterone", "Free Testosterone", "Estradiol", "Hematocrit", "SHBG", "PSA"],
-  enhanced: ["Hematocrit", "ALT", "AST", "Creatinine", "LDL Cholesterol", "Apolipoprotein B"],
-  health: ["Glucose", "HbA1c", "TSH", "Free T4", "CRP", "LDL Cholesterol"],
-  biohacker: ["Apolipoprotein B", "Homocysteine", "CRP", "HbA1c", "IGF-1", "Vitamin D (D3+D2) OH"]
-};
-
 const buildProfileCheckIns = (
   profileKey: string,
   entries: Array<Omit<SymptomCheckIn, "id" | "date" | "profileAtEntry" | "values">>
@@ -1212,7 +1206,7 @@ export const getDemoSnapshot = (profile: UserProfile): DemoSnapshot => {
       protocols: getEnhancedDemoProtocols(),
       supplementTimeline: getEnhancedDemoSupplementTimeline(),
       checkIns: getEnhancedDemoCheckIns(),
-      primaryMarkersSelection: DEMO_PRIMARY_MARKERS_BY_PROFILE.enhanced
+      primaryMarkersSelection: [...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.enhanced]
     };
   }
   if (profile === "health") {
@@ -1221,7 +1215,7 @@ export const getDemoSnapshot = (profile: UserProfile): DemoSnapshot => {
       protocols: [],
       supplementTimeline: getHealthDemoSupplementTimeline(),
       checkIns: getHealthDemoCheckIns(),
-      primaryMarkersSelection: DEMO_PRIMARY_MARKERS_BY_PROFILE.health
+      primaryMarkersSelection: [...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.health]
     };
   }
   if (profile === "biohacker") {
@@ -1230,7 +1224,7 @@ export const getDemoSnapshot = (profile: UserProfile): DemoSnapshot => {
       protocols: getBiohackerDemoProtocols(),
       supplementTimeline: getBiohackerDemoSupplementTimeline(),
       checkIns: getBiohackerDemoCheckIns(),
-      primaryMarkersSelection: DEMO_PRIMARY_MARKERS_BY_PROFILE.biohacker
+      primaryMarkersSelection: [...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.biohacker]
     };
   }
   return {
@@ -1238,6 +1232,6 @@ export const getDemoSnapshot = (profile: UserProfile): DemoSnapshot => {
     protocols: getDemoProtocols(),
     supplementTimeline: getDemoSupplementTimeline(),
     checkIns: getDemoCheckIns(),
-    primaryMarkersSelection: DEMO_PRIMARY_MARKERS_BY_PROFILE.trt
+    primaryMarkersSelection: [...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.trt]
   };
 };

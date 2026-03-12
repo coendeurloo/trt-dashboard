@@ -226,7 +226,9 @@ const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
   "Eosinophils Abs.": { nl: "Eosinofielen abs.", en: "Eosinophils Abs." },
   "Neutrophils Abs.": { nl: "Neutrofielen abs.", en: "Neutrophils Abs." },
   "Free Testosterone (calculated)": { nl: "Vrij Testosteron (berekend)", en: "Free Testosterone (calculated)" },
-  Leukocyten: { nl: "Leukocyten", en: "Leukocytes" }
+  Leukocyten: { nl: "Leukocyten", en: "Leukocytes" },
+  MPV: { nl: "MPV", en: "MPV" },
+  "Carbon Dioxide": { nl: "Koolstofdioxide", en: "Carbon Dioxide" }
 };
 
 const MARKER_META: Record<string, MarkerMeta> = {
@@ -532,6 +534,44 @@ const MARKER_META: Record<string, MarkerMeta> = {
     high: {
       nl: "Hoog: past vaak bij infectie, ontsteking, stressrespons of corticosteroïdgebruik.",
       en: "High: often fits infection, inflammation, stress response, or corticosteroid use."
+    }
+  },
+  MPV: {
+    name: { nl: "MPV", en: "MPV" },
+    what: {
+      nl: "Mean Platelet Volume: gemiddelde grootte van bloedplaatjes.",
+      en: "Mean Platelet Volume: average size of platelets."
+    },
+    why: {
+      nl: "Geeft context bij bloedplaatjesactiviteit samen met trombocytenaantal.",
+      en: "Adds context on platelet activity together with platelet count."
+    },
+    low: {
+      nl: "Laag: kan passen bij kleinere bloedplaatjes of verminderde aanmaak.",
+      en: "Low: can fit smaller platelets or reduced production."
+    },
+    high: {
+      nl: "Hoog: kan passen bij grotere, actievere bloedplaatjes of herstel na verbruik.",
+      en: "High: can fit larger, more active platelets or recovery after consumption."
+    }
+  },
+  "Carbon Dioxide": {
+    name: { nl: "Koolstofdioxide", en: "Carbon Dioxide" },
+    what: {
+      nl: "Indirecte maat voor bicarbonaat/zuur-base balans in het bloed.",
+      en: "Indirect measure of bicarbonate and acid-base balance in blood."
+    },
+    why: {
+      nl: "Helpt bij beoordeling van zuur-base status in combinatie met elektrolyten en nierfunctie.",
+      en: "Helps evaluate acid-base status alongside electrolytes and kidney function."
+    },
+    low: {
+      nl: "Laag: kan passen bij metabole acidose of compensatie bij respiratoire alkalose.",
+      en: "Low: can fit metabolic acidosis or compensation for respiratory alkalosis."
+    },
+    high: {
+      nl: "Hoog: kan passen bij metabole alkalose of compensatie bij respiratoire acidose.",
+      en: "High: can fit metabolic alkalosis or compensation for respiratory acidosis."
     }
   },
   "Neutrophils Abs.": {
@@ -1292,7 +1332,16 @@ const MARKER_META_ALIAS_LOOKUP: Record<string, string> = {
   "albumin creatinine ratio": "Urine ACR",
   "albumin creatinine ratio urine": "Urine ACR",
   "alat (gpt)": "ALAT (GPT)",
-  "asat (got)": "ASAT (GOT)"
+  "asat (got)": "ASAT (GOT)",
+  mpv: "MPV",
+  "mean platelet volume": "MPV",
+  "m p v": "MPV",
+  "carbon dioxide": "Carbon Dioxide",
+  co2: "Carbon Dioxide",
+  "total co2": "Carbon Dioxide",
+  "co2 total": "Carbon Dioxide",
+  bicarbonate: "Carbon Dioxide",
+  hco3: "Carbon Dioxide"
 };
 
 const resolveMarkerMeta = (marker: string): MarkerMeta | undefined => {

@@ -236,3 +236,53 @@ it("preserves parser debug page count when present", () => {
   expect(coerced.reports[0]?.extraction.debug?.pageCount).toBe(3);
 });
 
+it("backfills raw marker and remaps legacy bicarbonate canonical markers", () => {
+  const coerced = coerceStoredAppData({
+    reports: [
+      {
+        id: "report-co2",
+        sourceFileName: "chemistry.pdf",
+        testDate: "2026-03-10",
+        createdAt: "2026-03-10T08:00:00.000Z",
+        annotations: {
+          protocolId: null,
+          protocol: "",
+          supplementOverrides: null,
+          symptoms: "",
+          notes: "",
+          samplingTiming: "unknown"
+        },
+        markers: [
+          {
+            id: "co2-1",
+            marker: "Carbon Dioxide",
+            canonicalMarker: "Bicarbonate",
+            value: 26,
+            unit: "mmol/L",
+            referenceMin: 22,
+            referenceMax: 29,
+            abnormal: "normal",
+            confidence: 0.8
+          },
+          {
+            id: "co2-2",
+            marker: "Bicarbonate",
+            canonicalMarker: "Bicarbonate",
+            value: 24,
+            unit: "mmol/L",
+            referenceMin: 22,
+            referenceMax: 29,
+            abnormal: "normal",
+            confidence: 0.8
+          }
+        ],
+        extraction: { provider: "fallback", model: "x", confidence: 0.8, needsReview: false }
+      }
+    ]
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.reports[0]?.markers[0]?.rawMarker).toBe("Carbon Dioxide");
+  expect(coerced.reports[0]?.markers[0]?.canonicalMarker).toBe("Carbon Dioxide");
+  expect(coerced.reports[0]?.markers[1]?.canonicalMarker).toBe("Carbon Dioxide");
+});
+

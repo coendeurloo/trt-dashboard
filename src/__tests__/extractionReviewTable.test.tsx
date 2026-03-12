@@ -241,7 +241,7 @@ describe("ExtractionReviewTable", () => {
     expect(screen.getByRole("button", { name: "Auto-fix 1 markers" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Auto-fix" })).toBeTruthy();
     expect(screen.getByText("In report: leucocyten")).toBeTruthy();
-    expect(screen.getByText("Recognized as: Leukocytes")).toBeTruthy();
+    expect(screen.getByText("Mapped to: Leukocytes")).toBeTruthy();
     expect(screen.queryByText(/PDF:/i)).toBeNull();
     expect(screen.queryByText(/Canonical:/i)).toBeNull();
   });
@@ -280,8 +280,30 @@ describe("ExtractionReviewTable", () => {
 
     fireEvent.blur(markerInput);
 
-    expect(screen.getByText("Recognized as: Leukocytes")).toBeTruthy();
-    expect(screen.queryByText("Recognized as: unknown")).toBeNull();
+    expect(screen.getByText("Mapped to: Leukocytes")).toBeTruthy();
+    expect(screen.queryByText("Mapped to: unknown")).toBeNull();
+  });
+
+  it("switches to canonical name mode with read-only marker names", () => {
+    renderTable({
+      markers: [
+        {
+          ...markerBase,
+          marker: "WBC",
+          rawMarker: "WBC",
+          canonicalMarker: "Leukocyten",
+          _matchResult: {
+            canonical: { canonicalName: "Leukocytes" }
+          }
+        } as any
+      ]
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Canonical names" }));
+
+    expect(screen.getByText("From report: WBC")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit marker name" })).toBeNull();
+    expect(screen.queryByText(/Mapped to:/i)).toBeNull();
   });
 
   it("shows rescue button progress state while AI rescue is running", () => {

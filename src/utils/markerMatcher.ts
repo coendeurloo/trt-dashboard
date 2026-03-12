@@ -36,14 +36,21 @@ const ALIAS_INDEX = MARKER_ALIAS_INDEX.map((entry) => ({
   tokens: tokenize(normalize(entry.alias))
 }));
 
+function collapseSpacedInitialisms(value: string): string {
+  return value.replace(/\b([a-z0-9])\s+(?=[a-z0-9]\b)/g, "$1");
+}
+
 function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[()[\]{}]/g, " ")
-    .replace(/[,;:\/\\]/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/[^a-z0-9\s\-\.]/g, "")
-    .trim();
+  return collapseSpacedInitialisms(
+    s
+      .toLowerCase()
+      .replace(/[()[\]{}]/g, " ")
+      .replace(/[,;:\/\\]/g, " ")
+      .replace(/\./g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/[^a-z0-9\s\-]/g, "")
+      .trim()
+  );
 }
 
 function tokenize(value: string): string[] {

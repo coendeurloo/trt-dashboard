@@ -12,7 +12,7 @@ import {
   UserProfile,
   WellbeingMetricId
 } from "./types";
-import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "./markerNormalization";
+import { normalizeMarkerAliasOverrides, normalizeMarkerLookupKey, setMarkerAliasOverrides } from "./markerNormalization";
 import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { inferDashboardChartPresetFromSettings } from "./chartHelpers";
@@ -350,7 +350,25 @@ const sanitizeMarker = (marker: Partial<MarkerValue>): MarkerValue | null => {
   }
 
   const markerLabel = String(marker.marker ?? marker.canonicalMarker ?? "").trim();
-  const canonicalMarker = canonicalizeMarker(markerLabel || "Unknown Marker");
+  const rawMarkerLabel = typeof marker.rawMarker === "string" ? marker.rawMarker.trim() : "";
+  const legacyCanonicalLabel = String(marker.canonicalMarker ?? "").trim();
+  const canonicalSourceLabel = rawMarkerLabel || markerLabel || legacyCanonicalLabel;
+
+  let canonicalMarker = canonicalizeMarker(canonicalSourceLabel || "Unknown Marker");
+  if (!canonicalMarker || canonicalMarker === "Unknown Marker") {
+    canonicalMarker = canonicalizeMarker(legacyCanonicalLabel || markerLabel || "Unknown Marker");
+  }
+
+  const normalizedCanonical = normalizeMarkerLookupKey(canonicalMarker);
+  if (
+    normalizedCanonical === "bicarbonate" ||
+    normalizedCanonical === "co2" ||
+    normalizedCanonical === "total co2" ||
+    normalizedCanonical === "co2 total" ||
+    normalizedCanonical === "hco3"
+  ) {
+    canonicalMarker = "Carbon Dioxide";
+  }
   const normalized = normalizeMarkerMeasurement({
     canonicalMarker,
     value: rawValue,
@@ -362,7 +380,7 @@ const sanitizeMarker = (marker: Partial<MarkerValue>): MarkerValue | null => {
   return {
     id: String(marker.id ?? createId()),
     marker: markerLabel || canonicalMarker,
-    rawMarker: typeof marker.rawMarker === "string" ? marker.rawMarker : markerLabel || canonicalMarker,
+    rawMarker: rawMarkerLabel || markerLabel || canonicalMarker,
     canonicalMarker,
     value: normalized.value,
     unit: normalized.unit,

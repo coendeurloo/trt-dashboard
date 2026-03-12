@@ -38,13 +38,18 @@ const NARRATIVE_NOISE_PATTERN =
 
 let localAliasOverrides: Record<string, string> = {};
 
+const collapseSpacedInitialisms = (value: string): string => value.replace(/\b([a-z0-9])\s+(?=[a-z0-9]\b)/g, "$1");
+
 export const normalizeMarkerLookupKey = (value: string): string =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  collapseSpacedInitialisms(
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/\./g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 
 const toTitleCase = (value: string): string =>
   value

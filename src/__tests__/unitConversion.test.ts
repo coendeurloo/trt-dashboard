@@ -15,6 +15,11 @@ describe("unitConversion", () => {
     expect(canonicalizeMarker("Cortisol (AM)")).toBe("Cortisol");
     expect(canonicalizeMarker("BUN/CREATININE RATIO")).toBe("BUN/Creatinine Ratio");
     expect(canonicalizeMarker("LDL PATTERN")).toBe("LDL Pattern");
+    expect(canonicalizeMarker("M.P.V.")).toBe("MPV");
+    expect(canonicalizeMarker("Mean Platelet Volume")).toBe("MPV");
+    expect(canonicalizeMarker("Carbon Dioxide")).toBe("Carbon Dioxide");
+    expect(canonicalizeMarker("Bicarbonate")).toBe("Carbon Dioxide");
+    expect(canonicalizeMarker("HCO3")).toBe("Carbon Dioxide");
   });
 
   it("convertBySystem converts key markers EU<->US", () => {

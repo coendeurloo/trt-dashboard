@@ -34,6 +34,6 @@ describe("markerReview", () => {
     });
 
     expect(reviewed.rawMarker).toBe("hematocriet");
-    expect(reviewed.marker).toBe("Hematocrit");
+    expect(reviewed.marker).toBe("hematocriet");
   });
 });

@@ -1,4 +1,4 @@
-import { AppSettings } from "./types";
+import { AppSettings, UserProfile } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
 export const APP_SCHEMA_VERSION = 6;
@@ -11,6 +11,13 @@ export const PRIMARY_MARKERS = [
   "Hematocrit",
   "SHBG"
 ] as const;
+
+export const REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE: Record<UserProfile, readonly string[]> = {
+  trt: ["Testosterone", "Free Testosterone", "Estradiol", "Hematocrit", "SHBG", "PSA"],
+  enhanced: ["Hematocrit", "ALT", "AST", "Creatinine", "LDL Cholesterol", "Apolipoprotein B"],
+  health: ["Glucose", "HbA1c", "TSH", "Free T4", "CRP", "LDL Cholesterol"],
+  biohacker: ["Apolipoprotein B", "Homocysteine", "CRP", "HbA1c", "IGF-1", "Vitamin D (D3+D2) OH"]
+};
 
 export const CARDIO_PRIORITY_MARKERS = [
   "Apolipoprotein B",
@@ -304,7 +311,7 @@ const RAW_ALIASES: Record<string, string[]> = {
     "apo-b100"
   ],
   "Lipoprotein (a)": ["lipoprotein (a)", "lipoprotein(a)", "lipoprotein a", "lp(a)", "lpa"],
-  MPV: ["mpv", "mean platelet volume"],
+  MPV: ["mpv", "m.p.v", "m p v", "mean platelet volume"],
   "LDL Particle Number": ["ldl particle number"],
   "LDL Small": ["ldl small"],
   "LDL Medium": ["ldl medium"],
@@ -314,7 +321,7 @@ const RAW_ALIASES: Record<string, string[]> = {
   Sodium: ["sodium"],
   Potassium: ["potassium"],
   Chloride: ["chloride"],
-  "Carbon Dioxide": ["carbon dioxide", "co2", "bicarbonate"],
+  "Carbon Dioxide": ["carbon dioxide", "co2", "total co2", "co2 total", "bicarbonate", "hco3", "hco3-"],
   "BUN/Creatinine Ratio": [
     "bun/creatinine ratio",
     "bun creatinine ratio",

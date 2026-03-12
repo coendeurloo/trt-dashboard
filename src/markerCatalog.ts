@@ -144,13 +144,18 @@ const MUST_NOT_CONTAIN_HINTS: Record<string, string[]> = {
   "Free Testosterone": ["bioavailable testosterone"]
 };
 
+const collapseSpacedInitialisms = (value: string): string => value.replace(/\b([a-z0-9])\s+(?=[a-z0-9]\b)/g, "$1");
+
 const normalizeAliasKey = (value: string): string =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  collapseSpacedInitialisms(
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/\./g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 
 const buildAliasesByCanonical = (): Record<string, string[]> => {
   const grouped: Record<string, string[]> = {};

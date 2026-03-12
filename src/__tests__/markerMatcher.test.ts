@@ -55,6 +55,18 @@ describe("markerMatcher", () => {
     const te2 = matchMarker("T/E2 ratio");
     expect(["exact", "alias", "normalized", "token"]).toContain(te2.confidence);
     expect(te2.canonical?.id).toBe("testosterone-estradiol-ratio");
+
+    const mpv = matchMarker("M.P.V.");
+    expect(["exact", "alias", "normalized", "token", "fuzzy"]).toContain(mpv.confidence);
+    expect(mpv.canonical?.id).toBe("mpv");
+
+    const carbonDioxide = matchMarker("CO2 Total");
+    expect(["exact", "alias", "normalized", "token"]).toContain(carbonDioxide.confidence);
+    expect(carbonDioxide.canonical?.id).toBe("carbon-dioxide");
+
+    const bicarbonate = matchMarker("Bicarbonate");
+    expect(["exact", "alias", "normalized", "token"]).toContain(bicarbonate.confidence);
+    expect(bicarbonate.canonical?.id).toBe("carbon-dioxide");
   });
 
   it("matches Cardio IQ particle markers from Quest layouts", () => {

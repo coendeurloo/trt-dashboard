@@ -1,8 +1,8 @@
 /* @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../constants";
+import { DEFAULT_SETTINGS, REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
 import ReportsView from "../views/ReportsView";
 import { AppSettings, LabReport, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 
@@ -29,6 +29,25 @@ const baseReport = (overrides: Partial<LabReport> = {}): LabReport => ({
     needsReview: false
   },
   ...overrides
+});
+
+const createMarker = (
+  id: string,
+  canonicalMarker: string,
+  value: number,
+  unit: string,
+  referenceMin: number | null,
+  referenceMax: number | null
+) => ({
+  id,
+  marker: canonicalMarker,
+  canonicalMarker,
+  value,
+  unit,
+  referenceMin,
+  referenceMax,
+  abnormal: "normal" as const,
+  confidence: 1
 });
 
 const buildProps = (report: LabReport) => {
@@ -123,5 +142,34 @@ describe("ReportsView alert logic", () => {
 
     fireEvent.click(screen.getByLabelText("Out-of-range markers in this report"));
     expect(screen.getByRole("button", { name: "Edit details" })).toBeTruthy();
+  });
+
+  it("renders six marker preview slots with placeholders for missing markers", () => {
+    const report = baseReport({
+      markers: [createMarker("m-1", "Testosterone", 21.5, "nmol/L", 8, 29)]
+    });
+    const props = buildProps(report);
+
+    const view = render(<ReportsView {...props} />);
+    const scoped = within(view.container);
+    const slots = scoped.getAllByTestId("report-preview-slot-r-1");
+    expect(slots).toHaveLength(6);
+    expect(slots.map((slot) => slot.getAttribute("data-preview-marker"))).toEqual([
+      ...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.trt
+    ]);
+    expect(scoped.getAllByText("Not in report").length).toBeGreaterThan(0);
+  });
+
+  it("uses plain-language supplement state label for inherited schedule", () => {
+    const report = baseReport({
+      markers: [createMarker("m-1", "Testosterone", 21.5, "nmol/L", 8, 29)]
+    });
+    const props = buildProps(report);
+
+    const view = render(<ReportsView {...props} />);
+    const scoped = within(view.container);
+    const [badge] = scoped.getAllByText("Supps: schedule");
+    expect(badge).toBeTruthy();
+    expect(badge.getAttribute("title")).toContain("Automatically inherited");
   });
 });

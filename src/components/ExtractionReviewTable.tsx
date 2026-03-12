@@ -2,7 +2,7 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Plus, Save, Trash2, X, XCircle, Wrench } from "lucide-react";
 import { FEEDBACK_EMAIL } from "../constants";
-import { trLocale } from "../i18n";
+import { getMarkerDisplayName, trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import {
@@ -96,6 +96,7 @@ const ExtractionReviewTable = ({
   const [addTimelineStartDate, setAddTimelineStartDate] = useState(draft.testDate);
   const [addTimelineEndDate, setAddTimelineEndDate] = useState("");
   const [showWarningDetails, setShowWarningDetails] = useState(false);
+  const [markerNameDisplayMode, setMarkerNameDisplayMode] = useState<"report" | "canonical">("report");
 
   const warningCodes = Array.from(new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])]));
   const configuredParserModeLabel = (() => {
@@ -249,7 +250,12 @@ const ExtractionReviewTable = ({
       : 0;
   const referenceCoveragePercent = Math.round(referenceCoverage * 100);
   const lowQualityReviewMessage =
-    draft.markers.length > 1
+    draft.markers.length > 3
+      ? tr(
+          "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
+          "Parser quality signals indicate this report needs extra review before saving."
+        )
+      : draft.markers.length > 1
       ? tr(
           "Er zijn maar {count} markers uit dit rapport gehaald. Controleer ze zorgvuldig voordat je opslaat.",
           "Only {count} markers were extracted from this report. Review them carefully before saving."
@@ -278,6 +284,10 @@ const ExtractionReviewTable = ({
   useEffect(() => {
     setAddTimelineStartDate(draft.testDate);
   }, [draft.testDate]);
+
+  useEffect(() => {
+    setMarkerNameDisplayMode("report");
+  }, [draft.sourceFileName]);
 
   const autoMatchedSupplements = useMemo(
     () => getActiveSupplementsAtDate(supplementTimeline, draft.testDate),
@@ -376,6 +386,27 @@ const ExtractionReviewTable = ({
   const displayUnit = (row: MarkerValue): string => row.unit;
   const displayReferenceMin = (row: MarkerValue): number | null => row.referenceMin;
   const displayReferenceMax = (row: MarkerValue): number | null => row.referenceMax;
+  const isCanonicalNameMode = markerNameDisplayMode === "canonical";
+  const reportNameFallback = tr("Onbekende marker", "Unknown marker");
+  const resolveCanonicalName = (row: ReviewMarker): string | null => {
+    const canonicalFromMatch = row._matchResult?.canonical?.canonicalName?.trim();
+    if (canonicalFromMatch) {
+      return canonicalFromMatch;
+    }
+    const canonicalFromRow = row.canonicalMarker?.trim();
+    return canonicalFromRow && canonicalFromRow !== "Unknown Marker" ? canonicalFromRow : null;
+  };
+  const resolveCanonicalDisplayName = (row: ReviewMarker): string => {
+    const canonicalName = resolveCanonicalName(row);
+    if (!canonicalName) {
+      return reportNameFallback;
+    }
+    return getMarkerDisplayName(canonicalName, language);
+  };
+  const resolveReportDisplayName = (row: ReviewMarker): string =>
+    row.marker?.trim() || row.rawMarker?.trim() || reportNameFallback;
+  const resolveSourceReportName = (row: ReviewMarker): string =>
+    row.rawMarker?.trim() || row.marker?.trim() || reportNameFallback;
   const formatMaybeNumber = (value: number | null | undefined): string =>
     value === null || value === undefined || !Number.isFinite(value) ? "-" : String(Number(value.toFixed(3)));
   const reviewMarkers = draft.markers as ReviewMarker[];
@@ -947,6 +978,36 @@ const ExtractionReviewTable = ({
         </div>
       ) : null}
 
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-700/80 bg-slate-900/45 p-2.5">
+        <p className="text-xs text-slate-300 sm:text-sm">
+          {tr("Markernaam weergave", "Marker name display")}
+        </p>
+        <div className="inline-flex rounded-md border border-slate-700 bg-slate-900/70 p-0.5">
+          <button
+            type="button"
+            className={`rounded px-2.5 py-1 text-xs font-medium sm:text-sm ${
+              markerNameDisplayMode === "report"
+                ? "bg-cyan-500/20 text-cyan-100"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+            onClick={() => setMarkerNameDisplayMode("report")}
+          >
+            {tr("Rapportlabels", "Report labels")}
+          </button>
+          <button
+            type="button"
+            className={`rounded px-2.5 py-1 text-xs font-medium sm:text-sm ${
+              markerNameDisplayMode === "canonical"
+                ? "bg-cyan-500/20 text-cyan-100"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+            onClick={() => setMarkerNameDisplayMode("canonical")}
+          >
+            {tr("Canonieke namen", "Canonical names")}
+          </button>
+        </div>
+      </div>
+
       <div className="mt-3 overflow-hidden rounded-xl border border-slate-700">
         <div className="overflow-x-auto overflow-y-hidden">
           <table className="min-w-full divide-y divide-slate-700 text-sm">
@@ -979,26 +1040,39 @@ const ExtractionReviewTable = ({
                 return (
                   <tr key={row.id} className="bg-slate-900/35">
                 <td className="align-top px-3 py-2">
-                  <EditableCell
-                    value={row.marker}
-                    clickToEdit
-                    inlineIcon
-                    onCommit={(value) =>
-                      updateRow(row.id, (current) => ({
-                        ...current,
-                        marker: value,
-                        canonicalMarker: canonicalizeMarker(value)
-                      }))
-                    }
-                    placeholder={tr("Markernaam", "Marker name")}
-                    editLabel={tr("Markernaam bewerken", "Edit marker name")}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {tr("In rapport", "In report")}: {row.rawMarker ?? row.marker}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {tr("Herkend als", "Recognized as")}: {row._matchResult?.canonical?.canonicalName ?? tr("onbekend", "unknown")}
-                  </p>
+                  {isCanonicalNameMode ? (
+                    <>
+                      <p className="text-sm text-slate-100">{resolveCanonicalDisplayName(row)}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {tr("Uit rapport", "From report")}: {resolveSourceReportName(row)}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <EditableCell
+                        value={resolveReportDisplayName(row)}
+                        clickToEdit
+                        inlineIcon
+                        onCommit={(value) =>
+                          updateRow(row.id, (current) => ({
+                            ...current,
+                            marker: value,
+                            canonicalMarker: canonicalizeMarker(value)
+                          }))
+                        }
+                        placeholder={tr("Markernaam", "Marker name")}
+                        editLabel={tr("Markernaam bewerken", "Edit marker name")}
+                      />
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {tr("Gekoppeld aan", "Mapped to")}: {resolveCanonicalDisplayName(row)}
+                      </p>
+                      {row.rawMarker && row.rawMarker !== row.marker ? (
+                        <p className="text-[11px] text-slate-500">
+                          {tr("In rapport", "In report")}: {row.rawMarker}
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </td>
                 <td className="align-top px-3 py-2 text-right">
                   <EditableCell
