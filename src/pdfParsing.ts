@@ -4574,12 +4574,14 @@ const buildMarkerOrderCandidates = (marker: MarkerValue): string[] => {
   const raw = cleanWhitespace(marker.marker);
   const cleaned = cleanMarkerName(raw);
   const profileFixed = applyProfileMarkerFixes(cleaned);
-  const canonical = cleanWhitespace(marker.canonicalMarker);
   const normalizedRawMarker = cleanMarkerName(rawMarker);
   const withoutParentheses = profileFixed.replace(/\([^)]*\)/g, " ");
   const uppercaseToken = profileFixed.toUpperCase();
 
-  const candidates = [rawMarker, normalizedRawMarker, raw, cleaned, profileFixed, canonical, withoutParentheses]
+  // Keep ordering anchored to labels as they appear in the source PDF.
+  // Using canonical names here can pull markers upward when the canonical token
+  // appears elsewhere in explanatory text.
+  const candidates = [rawMarker, normalizedRawMarker, raw, cleaned, profileFixed, withoutParentheses]
     .flatMap((candidate) => [normalizeMarkerOrderLookupText(candidate), normalizeMarkerOrderLookupTextLoose(candidate)])
     .filter((candidate) => {
       if (!candidate || looksLikeNoiseMarker(candidate)) {

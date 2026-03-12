@@ -64,6 +64,8 @@ const RAW_ALIASES: Record<string, string[]> = {
     "total testosterone",
     "testosteron",
     "testosterone total",
+    "testosterone, total, ms",
+    "testosterone total ms",
     "totale testosteron",
     "totaal testosteron"
   ],
@@ -308,10 +310,17 @@ const RAW_ALIASES: Record<string, string[]> = {
   "LDL Medium": ["ldl medium"],
   "HDL Large": ["hdl large"],
   "LDL Peak Size": ["ldl peak size"],
+  "LDL Pattern": ["ldl pattern", "ldl-pattern", "ldl pattern a", "ldl pattern b"],
   Sodium: ["sodium"],
   Potassium: ["potassium"],
   Chloride: ["chloride"],
   "Carbon Dioxide": ["carbon dioxide", "co2", "bicarbonate"],
+  "BUN/Creatinine Ratio": [
+    "bun/creatinine ratio",
+    "bun creatinine ratio",
+    "bun/creatinine ratio (calc)",
+    "bun creatinine ratio (calc)"
+  ],
   Calcium: ["calcium"],
   "Total Protein": ["total protein", "protein, total", "protein total", "serum protein"],
   Globulin: ["globulin", "globulin, total", "globulin total"],

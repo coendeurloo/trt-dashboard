@@ -78,6 +78,10 @@ describe("markerMatcher", () => {
     expect(["exact", "alias", "normalized", "token"]).toContain(ldlPeakSize.confidence);
     expect(ldlPeakSize.canonical?.id).toBe("ldl-peak-size");
 
+    const ldlPattern = matchMarker("LDL PATTERN");
+    expect(["exact", "alias", "normalized", "token"]).toContain(ldlPattern.confidence);
+    expect(ldlPattern.canonical?.id).toBe("ldl-pattern");
+
     const lpa = matchMarker("LIPOPROTEIN (a)");
     expect(["exact", "alias", "normalized", "token"]).toContain(lpa.confidence);
     expect(lpa.canonical?.id).toBe("lipoprotein-a");

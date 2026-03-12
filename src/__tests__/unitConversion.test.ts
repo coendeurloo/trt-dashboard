@@ -8,10 +8,13 @@ describe("unitConversion", () => {
     expect(canonicalizeMarker("glucose nuchter")).toBe("Glucose Nuchter");
     expect(canonicalizeMarker("testosteron, vrij (volgens ISSAM)")).toBe("Free Testosterone");
     expect(canonicalizeMarker("Testosterone, Free+Total LC/MS")).toBe("Testosterone");
+    expect(canonicalizeMarker("TESTOSTERONE, TOTAL, MS")).toBe("Testosterone");
     expect(canonicalizeMarker("Testosterone (Direct)")).toBe("Free Testosterone");
     expect(canonicalizeMarker("Sex Horm Binding Glob, Serum")).toBe("SHBG");
     expect(canonicalizeMarker("Bioavailable Testosterone")).toBe("Bioavailable Testosterone");
     expect(canonicalizeMarker("Cortisol (AM)")).toBe("Cortisol");
+    expect(canonicalizeMarker("BUN/CREATININE RATIO")).toBe("BUN/Creatinine Ratio");
+    expect(canonicalizeMarker("LDL PATTERN")).toBe("LDL Pattern");
   });
 
   it("convertBySystem converts key markers EU<->US", () => {

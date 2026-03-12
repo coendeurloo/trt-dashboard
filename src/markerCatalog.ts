@@ -48,6 +48,7 @@ const CATEGORY_HINTS: Record<string, string> = {
   "Creatinine Urine": "kidney",
   "Urine ACR": "kidney",
   "Albumine Urine": "kidney",
+  "BUN/Creatinine Ratio": "kidney",
   Sodium: "electrolytes",
   Potassium: "electrolytes",
   Chloride: "electrolytes",
@@ -72,6 +73,7 @@ const CATEGORY_HINTS: Record<string, string> = {
   "LDL Medium": "lipids",
   "HDL Large": "lipids",
   "LDL Peak Size": "lipids",
+  "LDL Pattern": "lipids",
   Ferritine: "iron",
   CRP: "inflammation",
   PSA: "prostate",
@@ -125,6 +127,8 @@ const UNIT_HINTS: Record<string, Partial<Record<UnitSystem, string>>> = {
   PSA: { eu: "ug/L", us: "ng/mL" },
   Creatinine: { eu: "umol/L", us: "mg/dL" },
   eGFR: { eu: "mL/min/1.73", us: "mL/min/1.73" },
+  "BUN/Creatinine Ratio": { eu: "ratio", us: "ratio" },
+  "LDL Pattern": { eu: "pattern", us: "pattern" },
   TSH: { eu: "mU/L", us: "uIU/mL" }
 };
 
