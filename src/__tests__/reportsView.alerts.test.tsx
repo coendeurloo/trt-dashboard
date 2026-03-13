@@ -1,8 +1,8 @@
 /* @vitest-environment jsdom */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
+import { DEFAULT_SETTINGS } from "../constants";
 import ReportsView from "../views/ReportsView";
 import { AppSettings, LabReport, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 
@@ -29,25 +29,6 @@ const baseReport = (overrides: Partial<LabReport> = {}): LabReport => ({
     needsReview: false
   },
   ...overrides
-});
-
-const createMarker = (
-  id: string,
-  canonicalMarker: string,
-  value: number,
-  unit: string,
-  referenceMin: number | null,
-  referenceMax: number | null
-) => ({
-  id,
-  marker: canonicalMarker,
-  canonicalMarker,
-  value,
-  unit,
-  referenceMin,
-  referenceMax,
-  abnormal: "normal" as const,
-  confidence: 1
 });
 
 const buildProps = (report: LabReport) => {
@@ -144,32 +125,94 @@ describe("ReportsView alert logic", () => {
     expect(screen.getByRole("button", { name: "Edit details" })).toBeTruthy();
   });
 
-  it("renders six marker preview slots with placeholders for missing markers", () => {
+  it("renders compact collapsed header with filename and marker cells while preserving expand controls", () => {
     const report = baseReport({
-      markers: [createMarker("m-1", "Testosterone", 21.5, "nmol/L", 8, 29)]
+      sourceFileName: "labrapport-compact.pdf",
+      markers: [
+        {
+          id: "m-1",
+          marker: "TSH",
+          canonicalMarker: "TSH",
+          value: 1.7,
+          unit: "mIU/L",
+          referenceMin: 0.5,
+          referenceMax: 4.5,
+          abnormal: "normal",
+          confidence: 1
+        },
+        {
+          id: "m-2",
+          marker: "Hematocrit",
+          canonicalMarker: "Hematocrit",
+          value: 53.1,
+          unit: "%",
+          referenceMin: 40,
+          referenceMax: 52,
+          abnormal: "high",
+          confidence: 1
+        },
+        {
+          id: "m-3",
+          marker: "Free Testosterone",
+          canonicalMarker: "Free Testosterone",
+          value: 61,
+          unit: "pg/mL",
+          referenceMin: 20,
+          referenceMax: 80,
+          abnormal: "normal",
+          confidence: 1
+        },
+        {
+          id: "m-4",
+          marker: "PSA",
+          canonicalMarker: "PSA",
+          value: 1.1,
+          unit: "ng/mL",
+          referenceMin: 0,
+          referenceMax: 4,
+          abnormal: "normal",
+          confidence: 1
+        },
+        {
+          id: "m-5",
+          marker: "Estradiol",
+          canonicalMarker: "Estradiol",
+          value: 66,
+          unit: "pg/mL",
+          referenceMin: 10,
+          referenceMax: 40,
+          abnormal: "high",
+          confidence: 1
+        },
+        {
+          id: "m-6",
+          marker: "Albumin",
+          canonicalMarker: "Albumin",
+          value: 44,
+          unit: "g/L",
+          referenceMin: 35,
+          referenceMax: 50,
+          abnormal: "normal",
+          confidence: 1
+        }
+      ]
     });
-    const props = buildProps(report);
 
-    const view = render(<ReportsView {...props} />);
-    const scoped = within(view.container);
-    const slots = scoped.getAllByTestId("report-preview-slot-r-1");
-    expect(slots).toHaveLength(6);
-    expect(slots.map((slot) => slot.getAttribute("data-preview-marker"))).toEqual([
-      ...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE.trt
-    ]);
-    expect(scoped.getAllByText("Not in report").length).toBeGreaterThan(0);
-  });
+    render(<ReportsView {...buildProps(report)} />);
 
-  it("uses plain-language supplement state label for inherited schedule", () => {
-    const report = baseReport({
-      markers: [createMarker("m-1", "Testosterone", 21.5, "nmol/L", 8, 29)]
-    });
-    const props = buildProps(report);
-
-    const view = render(<ReportsView {...props} />);
-    const scoped = within(view.container);
-    const [badge] = scoped.getAllByText("Supps: schedule");
-    expect(badge).toBeTruthy();
-    expect(badge.getAttribute("title")).toContain("Automatically inherited");
+    expect(screen.getByText("labrapport-compact.pdf")).toBeTruthy();
+    expect(screen.getAllByText("Hematocrit").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Estradiol").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Free Testosterone").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("PSA").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Albumin").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("6 markers").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Inherited")).toBeNull();
+    expect(screen.queryByText("Anchored")).toBeNull();
+    expect(screen.queryByText("No supps")).toBeNull();
+    expect(screen.queryByText("6 m")).toBeNull();
+    expect(screen.queryByText("TSH")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Expand" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText("Out-of-range markers in this report").length).toBeGreaterThan(0);
   });
 });

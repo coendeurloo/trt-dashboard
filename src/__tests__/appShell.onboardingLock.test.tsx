@@ -238,4 +238,22 @@ describe("AppShell onboarding lock", () => {
     fireEvent.click(accountButton);
     expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("settings");
   });
+
+  it("shows Local-only instead of pending when authenticated outside cloud mode", () => {
+    const props = buildProps({
+      cloudConfigured: true,
+      cloudAuthStatus: "authenticated",
+      cloudUserEmail: "alice@example.com",
+      appMode: "local",
+      syncStatus: "pending"
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.getByText("Local-only")).toBeTruthy();
+    expect(screen.queryByText("Sync pending")).toBeNull();
+  });
 });

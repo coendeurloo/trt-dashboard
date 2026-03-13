@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
-import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { canonicalizeSupplement, SUPPLEMENT_FREQUENCY_OPTIONS, SUPPLEMENT_OPTIONS, supplementFrequencyLabel } from "../protocolStandards";
@@ -20,7 +19,8 @@ import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
 
-const REPORT_PREVIEW_SLOT_COUNT = 6;
+// Priority markers for compact report header summary
+const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
 
 interface ReportsViewProps {
   reports: LabReport[];
@@ -132,7 +132,7 @@ const ReportsView = ({
   const markerReviewTooltip = (marker: ReviewMarker): string | undefined => {
     const issues = marker._confidence?.issues ?? [];
     if (issues.length > 0) {
-      return issues.map((issue) => `- ${issue}`).join("\n");
+      return issues.map((issue) => `• ${issue}`).join("\n");
     }
     const overall = markerReviewOverall(marker);
     if (overall === "review") {
@@ -415,41 +415,28 @@ const ReportsView = ({
     });
   };
 
-  const previewMarkerNames = useMemo(() => {
-    const availableMarkers = new Set<string>();
-    reports.forEach((report) => {
-      report.markers.forEach((marker) => {
-        availableMarkers.add(marker.canonicalMarker);
-      });
+  const getCompactHeaderMarkers = (report: LabReport): MarkerValue[] => {
+    const byCanonical = new Map<string, MarkerValue>();
+    report.markers.forEach((marker) => {
+      if (!byCanonical.has(marker.canonicalMarker)) {
+        byCanonical.set(marker.canonicalMarker, marker);
+      }
     });
-    const selectedFromSettings = Array.from(
-      new Set(settings.primaryMarkersSelection.filter((marker) => availableMarkers.has(marker)))
+
+    const chosen: MarkerValue[] = [];
+    HIGHLIGHT_MARKERS.forEach((name) => {
+      const match = byCanonical.get(name);
+      if (match) {
+        chosen.push(match);
+        byCanonical.delete(name);
+      }
+    });
+
+    const remaining = Array.from(byCanonical.values()).sort((left, right) =>
+      getMarkerDisplayName(left.canonicalMarker, language).localeCompare(getMarkerDisplayName(right.canonicalMarker, language))
     );
-    const profileDefaults = [...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE[settings.userProfile]];
-    const base = selectedFromSettings.length > 0 ? selectedFromSettings : profileDefaults;
-    return Array.from(new Set([...base, ...profileDefaults])).slice(0, REPORT_PREVIEW_SLOT_COUNT);
-  }, [reports, settings.primaryMarkersSelection, settings.userProfile]);
 
-  const getPreviewSlots = (report: LabReport): Array<{ canonicalMarker: string; marker: MarkerValue | null }> => {
-    const markerByCanonical = new Map(report.markers.map((marker) => [marker.canonicalMarker, marker]));
-    return previewMarkerNames.map((canonicalMarker) => ({
-      canonicalMarker,
-      marker: markerByCanonical.get(canonicalMarker) ?? null
-    }));
-  };
-
-  const formatPreviewValue = (value: number): string => {
-    if (!Number.isFinite(value)) {
-      return "—";
-    }
-    const abs = Math.abs(value);
-    if (abs >= 100) {
-      return Number(value.toFixed(0)).toString();
-    }
-    if (abs >= 10) {
-      return Number(value.toFixed(1)).toString();
-    }
-    return Number(value.toFixed(2)).toString();
+    return [...chosen, ...remaining].slice(0, 5);
   };
 
   // Left border + health indicator color based on abnormal count
@@ -478,7 +465,7 @@ const ReportsView = ({
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
               <CalendarDays className="h-4 w-4 text-cyan-400/70" />
               <span className="text-slate-400">{formatDate(reportStats.earliest)}</span>
-              <span className="text-slate-600">-&gt;</span>
+              <span className="text-slate-600">→</span>
               <span className="text-slate-400">{formatDate(reportStats.latest)}</span>
             </div>
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
@@ -588,7 +575,7 @@ const ReportsView = ({
         </div>
       ) : null}
 
-      {sortedReportsForList.map((report, reportIndex) => {
+      {sortedReportsForList.map((report) => {
         const isEditing = editingReportId === report.id;
         const isExpanded = expandedReportIds.includes(report.id);
         const protocol = getReportProtocol(report, protocols);
@@ -613,31 +600,6 @@ const ReportsView = ({
             : inheritedFallbackState === "none"
               ? tr("Geen supplementen", "No supplements")
               : supplementPeriodsToText(inheritedFallbackSupplements);
-        const supplementStateLabel =
-          supplementAnchorState === "anchor"
-            ? tr("Supps: aangepast", "Supps: custom")
-            : supplementAnchorState === "none"
-              ? tr("Supps: geen", "Supps: none")
-              : supplementAnchorState === "unknown"
-                ? tr("Supps: onbekend", "Supps: unknown")
-                : tr("Supps: schema", "Supps: schedule");
-        const supplementStateTitle =
-          supplementAnchorState === "anchor"
-            ? tr(
-                "Aangepast voor dit rapport; niet automatisch uit schema overgenomen.",
-                "Custom supplements for this report; not automatically inherited from schedule."
-              )
-            : supplementAnchorState === "none"
-              ? tr(
-                  "Expliciet gemarkeerd als geen supplementen op deze testdatum.",
-                  "Explicitly marked as no supplements on this test date."
-                )
-              : supplementAnchorState === "unknown"
-                ? tr("Supplementstatus voor deze testdatum is onbekend.", "Supplement status for this test date is unknown.")
-                : tr(
-                    "Automatisch overgenomen uit je supplementschema op de testdatum.",
-                    "Automatically inherited from your supplement schedule on the test date."
-                  );
         const editingSupplementState = normalizeAnchorState(editingAnnotations);
         const editingOverrideSupplements = editingAnnotations.supplementOverrides ?? [];
         const editingEffectiveSupplements =
@@ -647,8 +609,7 @@ const ReportsView = ({
               ? []
               : inheritedFallbackSupplements;
         const abnormalCount = abnormalCountForReport(report);
-        const previewSlots = getPreviewSlots(report);
-        const displayNumber = reportSortOrder === "asc" ? reportIndex + 1 : sortedReportsForList.length - reportIndex;
+        const compactHeaderMarkers = getCompactHeaderMarkers(report);
         const baselineOverlapMarkers = baselineOverlapByReportId.get(report.id) ?? [];
         const baselineSetBlocked = !report.isBaseline && baselineOverlapMarkers.length > 0;
         const overlapPreview =
@@ -687,7 +648,7 @@ const ReportsView = ({
           <article
             key={report.id}
             data-report-id={report.id}
-            className={`app-teal-glow-surface rounded-2xl border border-slate-700/65 border-l-2 ${cardHealthClass(report)} bg-slate-900/55 transition-colors hover:border-slate-500/60 hover:bg-slate-900/72`}
+            className={`app-teal-glow-surface rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
           >
             {/* ── Collapsed header ── */}
             <button
@@ -700,131 +661,75 @@ const ReportsView = ({
                   current.includes(report.id) ? current.filter((id) => id !== report.id) : [...current, report.id]
                 );
               }}
-              className="flex w-full min-w-0 items-stretch gap-0 rounded-2xl px-3 py-3 text-left sm:px-4 sm:py-3.5"
+              className="flex w-full min-w-0 rounded-2xl px-2.5 py-2 text-left"
               aria-label={isExpanded ? tr("Inklappen", "Collapse") : tr("Uitklappen", "Expand")}
             >
-              {/* Left report identity */}
-              <span className="mr-3 flex shrink-0 flex-col items-center justify-start gap-2 pt-0.5">
-                <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
-                    abnormalCount >= 3
-                      ? "border-rose-500/35 bg-rose-500/10 text-rose-200"
-                      : abnormalCount > 0
-                        ? "border-amber-500/35 bg-amber-500/10 text-amber-200"
-                        : "border-slate-700 bg-slate-800/75 text-slate-300"
-                  }`}
-                >
-                  <FileText className="h-4 w-4" />
-                </span>
-                <span className="flex h-6 min-w-[28px] items-center justify-center rounded-full border border-slate-700 bg-slate-800/70 px-1.5 text-[10px] font-mono font-semibold text-slate-400">
-                  {String(displayNumber).padStart(2, "0")}
-                </span>
-              </span>
-
-              {/* Main content */}
-              <div className="min-w-0 flex-1 space-y-2">
-                {/* Row 1: date + badges */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[1.65rem] font-semibold leading-none tracking-tight text-slate-100 sm:text-[1.7rem]">
-                    {formatDate(report.testDate)}
+              <span className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <span className="flex min-w-0 items-start gap-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/65 text-cyan-300/85">
+                    <FileText className="h-4.5 w-4.5" />
                   </span>
-                  {report.isBaseline && (
-                    <span className="rounded-full border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
-                      Baseline
+                  <span className="min-w-0">
+                    <span className="block text-[1.2rem] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[1.35rem]">
+                      {formatDate(report.testDate)}
                     </span>
-                  )}
-                  {protocol && (
-                    <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300">
-                      {protocol.name}
+                    <span className="mt-0.5 block truncate text-xs text-slate-400">{report.sourceFileName}</span>
+                    <span className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {report.isBaseline && (
+                        <span className="rounded-full border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
+                          Baseline
+                        </span>
+                      )}
+                      {protocol && (
+                        <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300">
+                          {protocol.name}
+                        </span>
+                      )}
+                      <span className="rounded-full border border-slate-600/90 bg-slate-800/75 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                        {report.markers.length} {tr("markers", "markers")}
+                      </span>
                     </span>
-                  )}
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                      supplementAnchorState === "anchor"
-                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
-                        : supplementAnchorState === "none"
-                          ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                          : supplementAnchorState === "unknown"
-                            ? "border-slate-500/60 bg-slate-800 text-slate-300"
-                            : "border-slate-600 bg-slate-800 text-slate-300"
-                    }`}
-                    title={supplementStateTitle}
-                  >
-                    {supplementStateLabel}
                   </span>
-                  {!protocol && dose === null && (
-                    <span className="text-xs text-slate-500">{tr("Geen protocol", "No protocol")}</span>
-                  )}
-                </div>
+                </span>
 
-                {/* Row 2: six marker preview cards */}
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
-                  {previewSlots.map((slot) => {
-                    if (!slot.marker) {
+                <span className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between lg:justify-end lg:gap-2">
+                  <span className="report-compact-marker-row flex min-w-0 flex-wrap items-stretch gap-1.5 lg:flex-nowrap lg:overflow-x-auto">
+                    {compactHeaderMarkers.map((marker) => {
+                      const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
+                      const abnormal = markerAbnormalStatus(marker);
+                      const isAbnormal = abnormal === "high" || abnormal === "low";
+                      const valueClassName =
+                        abnormal === "high" ? "text-rose-200" : abnormal === "low" ? "text-amber-200" : "text-slate-100";
+                      const showValue = Number.isFinite(converted.value);
+                      const valueText = showValue
+                        ? Math.abs(converted.value) >= 100
+                          ? converted.value.toFixed(0)
+                          : converted.value.toFixed(1)
+                        : "-";
                       return (
-                        <div
-                          key={`${report.id}-${slot.canonicalMarker}`}
-                          data-testid={`report-preview-slot-${report.id}`}
-                          data-preview-marker={slot.canonicalMarker}
-                          className="rounded-xl border border-slate-800/85 bg-slate-900/28 px-3 py-2.5"
+                        <span
+                          key={marker.id}
+                          className={`report-compact-marker-cell inline-flex min-w-[94px] flex-col rounded-lg border px-2 py-1.5 ${
+                            isAbnormal
+                              ? abnormal === "high"
+                                ? "border-rose-500/35 bg-rose-500/5"
+                                : "border-amber-500/35 bg-amber-500/5"
+                              : "border-slate-700/70 bg-slate-900/35"
+                          }`}
                         >
-                          <div className="mb-1.5 flex items-center justify-between gap-1">
-                            <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
-                          </div>
-                          <div className="text-[1.72rem] font-semibold leading-none tracking-tight text-slate-300">-</div>
-                          <div className="mt-1 truncate text-[10px] text-slate-500">{tr("Niet in rapport", "Not in report")}</div>
-                        </div>
+                          <span className="truncate text-[11px] font-medium text-slate-300">
+                            {getMarkerDisplayName(marker.canonicalMarker, language)}
+                          </span>
+                          <span className={`mt-0.5 text-xl font-semibold leading-none ${valueClassName}`}>
+                            {valueText}
+                          </span>
+                          <span className="mt-0.5 text-[11px] text-slate-400">{showValue ? converted.unit : ""}</span>
+                        </span>
                       );
-                    }
-                    const converted = convertBySystem(slot.canonicalMarker, slot.marker.value, slot.marker.unit, settings.unitSystem);
-                    const abnormal = markerAbnormalStatus(slot.marker);
-                    const isAbnormal = abnormal === "high" || abnormal === "low";
-                    const valueToneClass =
-                      abnormal === "high"
-                        ? "text-rose-200"
-                        : abnormal === "low"
-                          ? "text-amber-200"
-                          : "text-slate-100";
-                    const markerDotClass =
-                      abnormal === "high"
-                        ? "bg-rose-400"
-                        : abnormal === "low"
-                          ? "bg-amber-400"
-                          : "bg-emerald-400/75";
-                    const shellToneClass =
-                      abnormal === "high"
-                        ? "border-rose-500/30 bg-slate-900/38"
-                        : abnormal === "low"
-                          ? "border-amber-500/30 bg-slate-900/38"
-                          : "border-slate-700/75 bg-slate-900/38";
-                    return (
-                      <div
-                        key={slot.marker.id}
-                        data-testid={`report-preview-slot-${report.id}`}
-                        data-preview-marker={slot.canonicalMarker}
-                        className={`report-highlight-chip rounded-xl border px-3 py-2.5 ${shellToneClass}`}
-                      >
-                        <div className="mb-1.5 flex items-center justify-between gap-1">
-                          <div className="truncate text-[11px] text-slate-400">{getMarkerDisplayName(slot.canonicalMarker, language)}</div>
-                          <span className={`h-1.5 w-1.5 rounded-full ${markerDotClass}`} />
-                        </div>
-                        <div className={`text-[1.72rem] font-semibold leading-none tracking-tight ${valueToneClass}`}>
-                          {formatPreviewValue(converted.value)}
-                        </div>
-                        <div className={`mt-1 truncate text-[10px] ${isAbnormal ? "text-slate-300" : "text-slate-500"}`}>{converted.unit}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+                    })}
+                  </span>
 
-                {/* Row 3: filename */}
-                <div className="truncate text-[12px] text-slate-500">{report.sourceFileName}</div>
-              </div>
-
-              {/* Right: counts + chevron */}
-              <span className="ml-2 flex shrink-0 flex-col items-end justify-center gap-1.5">
-                <span className="flex items-center gap-1.5">
+                <span className="flex shrink-0 items-center justify-end gap-1">
                   {abnormalCount > 0 && (
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -839,11 +744,9 @@ const ReportsView = ({
                       {abnormalCount}
                     </span>
                   )}
-                  <span className="rounded-full bg-slate-800/70 px-2 py-0.5 text-[11px] text-slate-400">
-                    {report.markers.length} {tr("m", "m")}
-                  </span>
                   <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                 </span>
+              </span>
               </span>
             </button>
 

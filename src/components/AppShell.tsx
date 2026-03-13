@@ -332,7 +332,26 @@ const AppShell = ({
     const sidebarUploadPanel = !isShareMode && includeUploadPanel ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3") : null;
     const showAccountTools = !isShareMode && cloudConfigured;
     const isSynced = appMode === "cloud" && syncStatus === "idle";
-    const syncBadgeLabel = isSynced ? tr("Gesynct", "Synced") : tr("Sync wacht", "Sync pending");
+    const syncBadgeLabel =
+      appMode !== "cloud"
+        ? tr("Lokaal-only", "Local-only")
+        : syncStatus === "idle"
+          ? tr("Gesynct", "Synced")
+          : syncStatus === "syncing" || syncStatus === "loading"
+            ? tr("Synchroniseren", "Syncing")
+            : syncStatus === "error"
+              ? tr("Sync fout", "Sync error")
+              : tr("Actie nodig", "Action needed");
+    const syncDotClassName =
+      appMode !== "cloud"
+        ? "bg-slate-400"
+        : syncStatus === "idle"
+          ? "bg-emerald-300"
+          : syncStatus === "syncing" || syncStatus === "loading"
+            ? "bg-cyan-300"
+            : syncStatus === "error"
+              ? "bg-rose-300"
+              : "bg-amber-300";
     return (
       <>
         <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
@@ -352,7 +371,7 @@ const AppShell = ({
                   }}
                   className="flex w-full items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/65 px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:border-cyan-500/45 hover:text-cyan-100"
                 >
-                  <span className={`h-2 w-2 rounded-full ${isSynced ? "bg-emerald-300" : "bg-amber-300"}`} />
+                  <span className={`h-2 w-2 rounded-full ${syncDotClassName}`} />
                   <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
                   <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-1.5 py-0.5 text-[10px] text-slate-300">
                     {syncBadgeLabel}
