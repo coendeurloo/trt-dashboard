@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Plus, Save, Trash2, X, XCircle, Wrench } from "lucide-react";
-import { FEEDBACK_EMAIL } from "../constants";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
@@ -97,6 +97,51 @@ const ExtractionReviewTable = ({
   const [addTimelineEndDate, setAddTimelineEndDate] = useState("");
   const [showWarningDetails, setShowWarningDetails] = useState(false);
   const [markerNameDisplayMode, setMarkerNameDisplayMode] = useState<"report" | "canonical">("report");
+  const [isProtocolModalReady, setIsProtocolModalReady] = useState(false);
+
+  const closeCreateProtocolModal = useCallback(() => {
+    setShowCreateProtocol(false);
+    setProtocolDraft(blankProtocolDraft());
+    setProtocolFeedback("");
+  }, []);
+
+  useEffect(() => {
+    if (!showCreateProtocol) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeCreateProtocolModal();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showCreateProtocol, closeCreateProtocolModal]);
+
+  useEffect(() => {
+    if (!showCreateProtocol) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showCreateProtocol]);
+
+  useEffect(() => {
+    if (!showCreateProtocol) {
+      setIsProtocolModalReady(false);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      setIsProtocolModalReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showCreateProtocol]);
 
   const warningCodes = Array.from(new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])]));
   const configuredParserModeLabel = (() => {
@@ -244,11 +289,6 @@ const ExtractionReviewTable = ({
     })
     .filter((value): value is string => Boolean(value));
   const unknownLayoutDetected = warningCodes.includes("PDF_UNKNOWN_LAYOUT");
-  const referenceCoverage =
-    draft.markers.length > 0
-      ? draft.markers.filter((marker) => marker.referenceMin !== null || marker.referenceMax !== null).length / draft.markers.length
-      : 0;
-  const referenceCoveragePercent = Math.round(referenceCoverage * 100);
   const lowQualityReviewMessage =
     draft.markers.length > 3
       ? tr(
@@ -335,39 +375,6 @@ const ExtractionReviewTable = ({
     return SUPPLEMENT_OPTIONS.filter((option) => option.toLowerCase().includes(query)).slice(0, 8);
   }, [supplementNameInput]);
 
-  const parsingFeedbackMailto = useMemo(() => {
-    const warningSummary = warningCodes.length > 0 ? warningCodes.join(", ") : "none";
-    const subject = "PDF Parsing Feedback (anonymized)";
-    const body = [
-      "Hi,",
-      "",
-      "I uploaded a lab PDF and the extraction didn't work correctly.",
-      "",
-      "No personal identifiers included in this prefilled message.",
-      "",
-      `Route used: ${extractionRoute}`,
-      `Confidence: ${draft.extraction.confidence}`,
-      `Markers extracted: ${draft.markers.length}`,
-      `Reference coverage: ${referenceCoveragePercent}%`,
-      `Warning codes: ${warningSummary}`,
-      "",
-      "Lab / country: [user fills in]",
-      "What went wrong: [user fills in]",
-      "",
-      "---",
-      "Please attach your original lab PDF when possible so we can improve parsing.",
-      "Your privacy is respected: your PDF is used only for parsing optimization.",
-      "Your PDF is not used for any other purpose.",
-      "You can redact sensitive personal details (name/address) first if you prefer."
-    ].join("\n");
-    return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }, [
-    draft.extraction.confidence,
-    draft.markers.length,
-    extractionRoute,
-    referenceCoveragePercent,
-    warningCodes
-  ]);
   const showReviewSupplementSection = false;
 
   const abnormalLabel = (value: MarkerValue["abnormal"]): string => {
@@ -690,12 +697,83 @@ const ExtractionReviewTable = ({
 
     onProtocolCreate(protocol);
     onSelectedProtocolIdChange(protocol.id);
-    setShowCreateProtocol(false);
-    setProtocolDraft(blankProtocolDraft());
-    setProtocolFeedback("");
+    closeCreateProtocolModal();
   };
 
+  const createProtocolModal = showCreateProtocol ? (
+    <div
+      className="app-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-protocol-modal-title"
+      onClick={closeCreateProtocolModal}
+    >
+      <div className="app-modal-shell max-w-4xl" onClick={(event) => event.stopPropagation()}>
+        <div className="app-modal-header p-5 sm:p-6">
+          <div className="app-modal-header-glow" aria-hidden />
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
+                {tr("Protocol", "Protocol")}
+              </div>
+              <h3 id="create-protocol-modal-title" className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">
+                {tr("Nieuw protocol", "Create protocol")}
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                {tr(
+                  "Maak een protocol aan zonder je review-scherm te verlaten.",
+                  "Create a protocol without leaving the review screen."
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="app-modal-close-btn"
+              onClick={closeCreateProtocolModal}
+              aria-label={tr("Sluiten", "Close")}
+              title={tr("Sluiten", "Close")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="space-y-4 p-5 sm:p-6">
+          <div className="max-h-[56vh] overflow-y-auto pr-1">
+            {isProtocolModalReady ? (
+              <ProtocolEditor value={protocolDraft} language={language} onChange={setProtocolDraft} />
+            ) : (
+              <div className="animate-pulse space-y-3 rounded-xl border border-slate-800/80 bg-slate-950/45 p-4">
+                <div className="h-4 w-32 rounded bg-slate-800" />
+                <div className="h-10 rounded bg-slate-800/80" />
+                <div className="h-28 rounded bg-slate-800/70" />
+                <div className="h-20 rounded bg-slate-800/60" />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+              onClick={closeCreateProtocolModal}
+            >
+              <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-xl border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm font-semibold text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/22"
+              onClick={saveProtocolFromDraft}
+            >
+              <Save className="h-4 w-4" /> {tr("Opslaan en selecteren", "Save and select")}
+            </button>
+          </div>
+          {protocolFeedback ? <p className="text-sm text-amber-200">{protocolFeedback}</p> : null}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
+    <>
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
@@ -921,9 +999,9 @@ const ExtractionReviewTable = ({
             <button
               type="button"
               className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200"
-              onClick={() => setShowCreateProtocol((current) => !current)}
+              onClick={() => setShowCreateProtocol(true)}
             >
-              <Plus className="h-4 w-4" /> {showCreateProtocol ? tr("Sluit", "Close") : tr("Nieuw", "New")}
+              <Plus className="h-4 w-4" /> {tr("Nieuw", "New")}
             </button>
           </div>
           {!selectedProtocol && protocols.length === 0 ? (
@@ -1268,15 +1346,15 @@ const ExtractionReviewTable = ({
             {isImprovingWithAi ? tr("AI verbetert extractie...", "AI is improving extraction...") : tr("Verbeter extractie met AI", "Improve extraction with AI")}
           </button>
         ) : null}
-        <a
-          href={parsingFeedbackMailto}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300"
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:border-amber-500/50 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => onOpenParserImprovement?.()}
+          disabled={!onOpenParserImprovement || parserImprovementSubmitted}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
-          {tr("Meld een probleem", "Report an issue")}
-        </a>
+          {tr("Meld probleem + stuur PDF", "Report issue + send PDF")}
+        </button>
       </div>
       {onEnableAiRescue || onImproveWithAi ? (
         <p className="mt-2 rounded-md border border-slate-700/70 bg-slate-900/45 px-3 py-2 text-xs text-slate-300">
@@ -1288,33 +1366,6 @@ const ExtractionReviewTable = ({
       ) : null}
 
       <div className="review-context-card mt-3 space-y-3 rounded-xl border border-slate-700 bg-slate-900/45 p-3">
-          {showCreateProtocol ? (
-            <div className="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-3">
-              <ProtocolEditor value={protocolDraft} language={language} onChange={setProtocolDraft} />
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                  onClick={() => {
-                    setShowCreateProtocol(false);
-                    setProtocolDraft(blankProtocolDraft());
-                    setProtocolFeedback("");
-                  }}
-                >
-                  <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-                  onClick={saveProtocolFromDraft}
-                >
-                  <Save className="h-4 w-4" /> {tr("Opslaan en selecteren", "Save and select")}
-                </button>
-              </div>
-              {protocolFeedback ? <p className="mt-2 text-sm text-amber-200">{protocolFeedback}</p> : null}
-            </div>
-          ) : null}
-
           {showReviewSupplementSection ? (
           <div className="rounded-xl border border-slate-700 bg-slate-900/45 p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1564,8 +1615,12 @@ const ExtractionReviewTable = ({
             </button>
           </div>
       </div>
+
     </motion.div>
+    {createProtocolModal && typeof document !== "undefined" ? createPortal(createProtocolModal, document.body) : null}
+    </>
   );
 };
 
 export default ExtractionReviewTable;
+

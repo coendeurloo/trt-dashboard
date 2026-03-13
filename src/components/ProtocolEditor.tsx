@@ -13,7 +13,14 @@ import { ProtocolDraft } from "./protocolEditorModel";
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_MAX_OPTIONS = 8;
-const COMPOUND_DATALIST_ID = "protocol-compound-options";
+const PREFERRED_COMPOUNDS = [
+  "Testosterone Enanthate (Test E)",
+  "Testosterone Cypionate (Test C)",
+  "Human Chorionic Gonadotropin (hCG)",
+  "Nandrolone Decanoate (Deca)",
+  "Dehydroepiandrosterone (DHEA)",
+  "Pregnenolone"
+];
 
 const formatWeeklyDoseValue = (value: number): string => {
   const rounded = Math.round(value * 100) / 100;
@@ -74,6 +81,16 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
 
   const compoundSuggestions = useMemo(() => buildSuggestions(compoundNameInput, COMPOUND_OPTIONS), [compoundNameInput]);
+  const quickCompoundPicks = useMemo(() => {
+    const preferred = PREFERRED_COMPOUNDS.filter((option) => COMPOUND_OPTIONS.includes(option));
+    if (preferred.length >= 4) {
+      return preferred;
+    }
+    return COMPOUND_OPTIONS.slice(0, 6);
+  }, []);
+  const searchQuery = compoundNameInput.trim();
+  const shouldShowSuggestionMenu = showCompoundSuggestions && searchQuery.length >= AUTOCOMPLETE_MIN_CHARS;
+  const hasMatchingSuggestions = compoundSuggestions.length > 0;
 
   const addCompound = () => {
     const name = canonicalizeCompound(compoundNameInput);
@@ -120,6 +137,11 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
     onChange(syncDraftItems(value, base.filter((_, compoundIndex) => compoundIndex !== index)));
   };
 
+  const applyCompoundName = (nextName: string) => {
+    setCompoundNameInput(nextName);
+    setShowCompoundSuggestions(false);
+  };
+
   return (
     <div className="space-y-3">
       <label className="block text-xs uppercase tracking-wide text-slate-400">
@@ -143,13 +165,12 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                 setCompoundNameInput(event.target.value);
                 setShowCompoundSuggestions(true);
               }}
-              list={COMPOUND_DATALIST_ID}
               onFocus={() => setShowCompoundSuggestions(true)}
               onBlur={() => window.setTimeout(() => setShowCompoundSuggestions(false), 120)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
               placeholder={tr("Zoek of typ compound", "Search or type compound")}
             />
-            {showCompoundSuggestions && compoundSuggestions.length > 0 ? (
+            {shouldShowSuggestionMenu && hasMatchingSuggestions ? (
               <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md">
                 {compoundSuggestions.map((option) => (
                   <button
@@ -157,17 +178,39 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     type="button"
                     className="review-suggestion-item block w-full px-3 py-2 text-left text-sm"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setCompoundNameInput(option);
-                      setShowCompoundSuggestions(false);
-                    }}
+                    onClick={() => applyCompoundName(option)}
                   >
                     {option}
                   </button>
                 ))}
               </div>
             ) : null}
+            {shouldShowSuggestionMenu && !hasMatchingSuggestions ? (
+              <div className="review-suggestion-menu absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md px-3 py-2 text-sm text-slate-400">
+                {tr("Geen compound match gevonden", "No matching compound found")}
+              </div>
+            ) : null}
           </div>
+          {!shouldShowSuggestionMenu ? (
+            <div className="space-y-1">
+              <p className="text-[11px] text-slate-400">
+                {tr("Type minimaal 2 letters om gericht te zoeken.", "Type at least 2 letters to search precisely.")}
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-slate-500">{tr("Populair", "Popular")}:</span>
+                {quickCompoundPicks.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="rounded-full border border-slate-600/90 bg-slate-800/70 px-2 py-0.5 text-[11px] text-slate-300 transition hover:border-cyan-500/45 hover:text-cyan-200"
+                    onClick={() => applyCompoundName(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
             <input
@@ -229,7 +272,6 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
-                  list={COMPOUND_DATALIST_ID}
                   onChange={(event) => updateCompound(index, { name: event.target.value })}
                   onBlur={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
@@ -278,11 +320,6 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             ))
           )}
         </div>
-        <datalist id={COMPOUND_DATALIST_ID}>
-          {COMPOUND_OPTIONS.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
       </div>
 
       <label className="block text-xs uppercase tracking-wide text-slate-400">

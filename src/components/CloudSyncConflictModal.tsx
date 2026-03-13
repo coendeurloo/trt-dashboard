@@ -28,8 +28,8 @@ const CloudSyncConflictModal = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[91] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-2xl rounded-2xl border border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
+    <div className="app-modal-overlay z-[91]" role="dialog" aria-modal="true">
+      <div className="app-modal-shell w-full max-w-2xl border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
         <div className="flex items-start gap-3">
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
             <AlertTriangle className="h-5 w-5 text-amber-200" />

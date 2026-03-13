@@ -26,8 +26,8 @@ const ExtractionComparisonModal = ({ open, language, summary, onKeepLocal, onApp
   }
 
   return (
-    <div className="fixed inset-0 z-[89] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
+    <div className="app-modal-overlay z-[89]" role="dialog" aria-modal="true">
+      <div className="app-modal-shell w-full max-w-3xl border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
         <div className="flex items-start gap-3">
           <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
             <Sparkles className="h-5 w-5 text-cyan-300" />

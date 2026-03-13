@@ -539,6 +539,90 @@ body.light .settings-card {
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
 }
 
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+  background: rgba(2, 6, 23, 0.8);
+}
+
+.app-modal-shell {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  box-shadow: 0 30px 90px -45px rgba(34, 211, 238, 0.65);
+}
+
+.app-modal-header {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.16), transparent 45%),
+    linear-gradient(135deg, rgba(8, 47, 73, 0.92), rgba(2, 6, 23, 0.96));
+}
+
+.app-modal-header-glow {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 6rem;
+  background: rgba(56, 189, 248, 0.08);
+  filter: blur(40px);
+}
+
+.app-modal-close-btn {
+  border-radius: 9999px;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.5rem;
+  color: #cbd5e1;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+.app-modal-close-btn:hover {
+  border-color: rgba(100, 116, 139, 0.9);
+  color: #f8fafc;
+}
+
+body.light .app-modal-overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+body.light .app-modal-shell {
+  border-color: rgba(203, 213, 225, 0.86);
+  box-shadow: 0 28px 72px -42px rgba(15, 23, 42, 0.45);
+}
+
+body.light .app-modal-header {
+  border-bottom-color: rgba(203, 213, 225, 0.9);
+  background:
+    radial-gradient(circle at top right, rgba(6, 182, 212, 0.14), transparent 52%),
+    linear-gradient(145deg, rgba(240, 249, 255, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+body.light .app-modal-header-glow {
+  background: rgba(6, 182, 212, 0.08);
+}
+
+body.light .app-modal-close-btn {
+  border-color: rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: #475569;
+}
+
+body.light .app-modal-close-btn:hover {
+  border-color: rgba(148, 163, 184, 0.9);
+  color: #0f172a;
+}
+
 .app-teal-glow-surface {
   /* Keep glow inside the panel to avoid circular edge bleed into sidebar/menu */
   background:

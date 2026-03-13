@@ -43,8 +43,8 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
   });
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true">
-      <div className="ai-consent-modal w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-soft">
+    <div className="app-modal-overlay" role="dialog" aria-modal="true">
+      <div className="app-modal-shell ai-consent-modal w-full max-w-xl bg-slate-900 p-5 shadow-soft">
         <div className="flex items-start gap-3">
           <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
             <ShieldCheck className="h-5 w-5 text-cyan-300" />

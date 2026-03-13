@@ -183,6 +183,23 @@ const loadBackupPromptDismissed = (): boolean => {
   return window.localStorage.getItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY) === "1";
 };
 
+const buildFallbackParserAssessment = (draft: ExtractionDraft): ParserUncertaintyAssessment => {
+  const warningCodes = Array.from(
+    new Set([...(draft.extraction.warnings ?? []), ...(draft.extraction.warningCode ? [draft.extraction.warningCode] : [])])
+  ) as ParserUncertaintyAssessment["warnings"];
+  const markersWithUnit = draft.markers.filter((marker) => typeof marker.unit === "string" && marker.unit.trim().length > 0).length;
+  const unitCoverage = draft.markers.length > 0 ? markersWithUnit / draft.markers.length : 0;
+
+  return {
+    isUncertain: false,
+    reasons: [],
+    markerCount: draft.markers.length,
+    confidence: draft.extraction.confidence,
+    unitCoverage,
+    warnings: warningCodes
+  };
+};
+
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
   const [analystMemory, setAnalystMemory] = useState<AnalystMemory | null>(() => loadAnalystMemory());
@@ -330,7 +347,6 @@ const App = () => {
     "idle" | "submitting" | "success" | "error"
   >("idle");
   const [parserImprovementPromptError, setParserImprovementPromptError] = useState("");
-  const [isParserImprovementTriggerVisible, setIsParserImprovementTriggerVisible] = useState(false);
   const [isParserImprovementModalOpen, setIsParserImprovementModalOpen] = useState(false);
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
@@ -404,7 +420,6 @@ const App = () => {
     });
 
   const resetParserImprovementPrompt = () => {
-    setIsParserImprovementTriggerVisible(false);
     setIsParserImprovementModalOpen(false);
     setParserImprovementPromptState("idle");
     setParserImprovementPromptError("");
@@ -1799,8 +1814,15 @@ const App = () => {
     setActiveTab(nextTab);
   };
 
+  const parserImprovementAssessment = useMemo(() => {
+    if (!draft) {
+      return null;
+    }
+    return uncertaintyAssessment ?? buildFallbackParserAssessment(draft);
+  }, [draft, uncertaintyAssessment]);
+
   const handleParserImprovementSubmit = async (values: ParserImprovementFormValues) => {
-    if (!draft || !uncertaintyAssessment || !lastUploadedFile) {
+    if (!draft || !parserImprovementAssessment || !lastUploadedFile) {
       setParserImprovementPromptState("error");
       setParserImprovementPromptError(
         tr(
@@ -1818,7 +1840,7 @@ const App = () => {
       await submitParserImprovementSample({
         file: lastUploadedFile,
         draft,
-        assessment: uncertaintyAssessment,
+        assessment: parserImprovementAssessment,
         values
       });
       setParserImprovementPromptState("success");
@@ -1839,19 +1861,10 @@ const App = () => {
   const shouldShowLowQualityReviewBanner = Boolean(
     draft && uncertaintyAssessment && shouldOfferParserImprovementSubmission(uncertaintyAssessment)
   );
-  const parserImprovementAvailable = Boolean(shouldShowLowQualityReviewBanner && lastUploadedFile);
-
-  useEffect(() => {
-    if (parserImprovementAvailable && parserImprovementPromptState !== "success") {
-      setIsParserImprovementTriggerVisible(true);
-      return;
-    }
-    setIsParserImprovementTriggerVisible(false);
-    setIsParserImprovementModalOpen(false);
-  }, [parserImprovementAvailable, parserImprovementPromptState]);
+  const parserImprovementCanSubmit = Boolean(draft && lastUploadedFile);
 
   const openParserImprovementModal = (options?: { closeUploadSummary?: boolean }) => {
-    if (!parserImprovementAvailable || parserImprovementPromptState === "success") {
+    if (!parserImprovementCanSubmit || parserImprovementPromptState === "success") {
       return;
     }
     if (options?.closeUploadSummary) {
@@ -2055,12 +2068,12 @@ const App = () => {
                       </div>
                     </div>
                   ) : null}
-                  {draft && uncertaintyAssessment ? (
+                  {draft && parserImprovementAssessment ? (
                     <ParserImprovementSubmissionCard
                       open={isParserImprovementModalOpen}
                       language={appData.settings.language}
                       draft={draft}
-                      assessment={uncertaintyAssessment}
+                      assessment={parserImprovementAssessment}
                       status={parserImprovementPromptState}
                       errorMessage={parserImprovementPromptError}
                       onSubmit={handleParserImprovementSubmit}
@@ -2086,7 +2099,9 @@ const App = () => {
                     isImprovingWithAi={isImprovingExtraction}
                     showLowQualityReviewBanner={shouldShowLowQualityReviewBanner}
                     onOpenParserImprovement={
-                      isParserImprovementTriggerVisible ? () => openParserImprovementModal() : undefined
+                      parserImprovementCanSubmit && parserImprovementPromptState !== "success"
+                        ? () => openParserImprovementModal()
+                        : undefined
                     }
                     parserImprovementSubmitted={parserImprovementPromptState === "success"}
                     onImproveWithAi={
@@ -2450,6 +2465,13 @@ const App = () => {
                     onAddMarkerSuggestions={appendMarkerSuggestions}
                     onShareOptionsChange={setShareOptions}
                     onGenerateShareLink={generateShareLink}
+                    onReportIssue={() => {
+                      if (parserImprovementCanSubmit && parserImprovementPromptState !== "success") {
+                        openParserImprovementModal();
+                        return;
+                      }
+                      startSecondUpload();
+                    }}
                     cloudPanel={cloudPanel}
                   />
                 ) : null}
@@ -2499,14 +2521,14 @@ const App = () => {
       <AnimatePresence>
         {showSignupSuccessModal ? (
           <motion.div
-            className="fixed inset-0 z-[88] flex items-center justify-center bg-slate-950/75 p-4"
+            className="app-modal-overlay z-[88]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowSignupSuccessModal(false)}
           >
             <motion.div
-              className="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-900 p-5 shadow-soft"
+              className="app-modal-shell w-full max-w-lg bg-slate-900 p-5 shadow-soft"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 6 }}
@@ -2583,13 +2605,13 @@ const App = () => {
       <AnimatePresence>
         {isProcessing || isImprovingExtraction ? (
           <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"
+            className="app-modal-overlay z-[70]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-900/95 p-5 shadow-soft"
+              className="app-modal-shell w-full max-w-md border-cyan-500/40 bg-slate-900/95 p-5 shadow-soft"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 6 }}
@@ -2624,7 +2646,7 @@ const App = () => {
                     ...uploadSummary,
                     needsReview: uploadSummaryNeedsReview,
                     canSendPdf:
-                      parserImprovementAvailable &&
+                      parserImprovementCanSubmit &&
                       parserImprovementPromptState !== "success" &&
                       Boolean(lastUploadedFile)
                   }
@@ -2637,14 +2659,14 @@ const App = () => {
 
         {pendingTabChange ? (
           <motion.div
-            className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/70 p-4"
+            className="app-modal-overlay z-[68]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={cancelPendingTabChange}
           >
             <motion.div
-              className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900 p-4 shadow-soft"
+              className="app-modal-shell w-full max-w-md bg-slate-900 p-4 shadow-soft"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 6 }}
@@ -2681,14 +2703,14 @@ const App = () => {
 
         {expandedMarker ? (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6"
+            className="app-modal-overlay z-50 p-3 sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setExpandedMarker(null)}
           >
             <motion.div
-              className="max-h-[92vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-soft"
+              className="app-modal-shell max-h-[92vh] w-full max-w-6xl bg-slate-900 shadow-soft"
               initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 6 }}
@@ -2730,14 +2752,14 @@ const App = () => {
 
         {!isShareMode && markerSuggestions.length > 0 ? (
           <motion.div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-3 sm:p-6"
+            className="app-modal-overlay z-[60] p-3 sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setMarkerSuggestions([])}
           >
             <motion.div
-              className="w-full max-w-2xl rounded-2xl border border-slate-700/80 bg-slate-900 shadow-soft"
+              className="app-modal-shell w-full max-w-2xl bg-slate-900 shadow-soft"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 4 }}
@@ -2806,14 +2828,14 @@ const App = () => {
 
         {renameDialog ? (
           <motion.div
-            className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/75 p-3 sm:p-6"
+            className="app-modal-overlay z-[65] p-3 sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setRenameDialog(null)}
           >
             <motion.div
-              className="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-900 shadow-soft"
+              className="app-modal-shell w-full max-w-lg bg-slate-900 shadow-soft"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 4 }}

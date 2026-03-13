@@ -69,9 +69,9 @@ const ParserImprovementSubmissionCard = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true">
+    <div className="app-modal-overlay z-[92]" role="dialog" aria-modal="true">
       <form
-        className="w-full max-w-3xl rounded-2xl border border-amber-500/35 bg-slate-900 p-5 shadow-soft"
+        className="app-modal-shell w-full max-w-3xl border-amber-500/35 bg-slate-900 p-5 shadow-soft"
         onSubmit={handleSubmit}
       >
         <div className="flex items-start justify-between gap-3">

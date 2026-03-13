@@ -163,9 +163,9 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
   const profilePickerModal =
     pendingAction && typeof document !== "undefined"
       ? createPortal(
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="app-modal-overlay z-[80]">
             <div
-              className={`w-full max-w-3xl rounded-2xl p-4 sm:p-5 ${
+              className={`app-modal-shell w-full max-w-3xl p-4 sm:p-5 ${
                 isLightTheme
                   ? "border border-cyan-500/35 bg-white/95 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.45)]"
                   : "border border-cyan-500/40 bg-slate-900/95"

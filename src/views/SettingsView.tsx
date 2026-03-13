@@ -1,6 +1,5 @@
-import { type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
-import { FEEDBACK_EMAIL } from "../constants";
 import { USER_PROFILES } from "../data/userProfiles";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
@@ -39,6 +38,7 @@ interface SettingsViewProps {
   onAddMarkerSuggestions: (suggestions: MarkerMergeSuggestion[]) => void;
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
+  onReportIssue: () => void;
   cloudPanel?: ReactNode;
 }
 
@@ -100,6 +100,7 @@ const SettingsView = ({
   onAddMarkerSuggestions,
   onShareOptionsChange,
   onGenerateShareLink,
+  onReportIssue,
   cloudPanel
 }: SettingsViewProps) => {
   const isNl = language === "nl";
@@ -158,40 +159,6 @@ const SettingsView = ({
       return next.length > 0 ? next : allMarkers;
     });
   }, [allMarkers]);
-
-  const settingsFeedbackMailto = useMemo(() => {
-    const subject = tr("Feedback PDF-verwerking", "PDF Parsing Feedback");
-    const body = isNl
-      ? [
-          "Hoi,",
-          "",
-          "Ik loop tegen problemen aan met het verwerken van lab-PDF's.",
-          "",
-          "Lab / land: [vul in]",
-          "Wat ging er mis: [vul in]",
-          "",
-          "---",
-          "Voeg bij voorkeur je originele lab-PDF toe, zodat we parsing kunnen verbeteren.",
-          "Je privacy wordt gerespecteerd: je PDF wordt alleen gebruikt voor parse-optimalisatie.",
-          "Je PDF wordt niet voor andere doeleinden gebruikt.",
-          "Je kunt gevoelige persoonsgegevens (zoals naam/adres) desgewenst vooraf afschermen."
-        ].join("\n")
-      : [
-          "Hi,",
-          "",
-          "I'm having trouble with lab PDF parsing.",
-          "",
-          "Lab / country: [fill in]",
-          "What went wrong: [fill in]",
-          "",
-          "---",
-          "Please attach your original lab PDF when possible so we can improve parsing.",
-          "Your privacy is respected: your PDF is used only for parsing optimization.",
-          "Your PDF is not used for any other purpose.",
-          "You can redact sensitive personal details (name/address) first if you prefer."
-        ].join("\n");
-    return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }, [isNl, tr]);
 
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -676,15 +643,14 @@ const SettingsView = ({
             "Having trouble with PDF parsing? Let us know which lab formats don't work."
           )}
         </p>
-        <a
-          href={settingsFeedbackMailto}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm text-cyan-200 hover:text-cyan-100"
+        <button
+          type="button"
+          onClick={onReportIssue}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-cyan-500/45 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
         >
           <AlertTriangle className="h-4 w-4" />
-          {tr("Meld een probleem", "Report an issue")}
-        </a>
+          {tr("Meld probleem + stuur PDF", "Report issue + send PDF")}
+        </button>
       </div>
 
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">

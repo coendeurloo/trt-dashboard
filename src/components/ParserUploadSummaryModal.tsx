@@ -125,9 +125,9 @@ const ParserUploadSummaryModal = ({
         );
 
   return (
-    <div className="fixed inset-0 z-[91] flex items-center justify-center bg-slate-950/70 p-4" role="dialog" aria-modal="true">
+    <div className="app-modal-overlay z-[91]" role="dialog" aria-modal="true">
       <div
-        className="w-full max-w-2xl rounded-2xl border border-cyan-500/35 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-soft"
+        className="app-modal-shell w-full max-w-2xl border-cyan-500/35 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-soft"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">

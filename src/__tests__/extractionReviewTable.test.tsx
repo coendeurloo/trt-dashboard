@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ExtractionReviewTable, { type ExtractionReviewTableProps } from "../components/ExtractionReviewTable";
 import { ExtractionDraft, ReportAnnotations } from "../types";
@@ -95,6 +95,20 @@ describe("ExtractionReviewTable", () => {
     renderTable();
 
     expect(screen.getAllByRole("button", { name: /save report/i }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens protocol creation in a modal and keeps the review screen visible behind it", () => {
+    renderTable();
+
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+
+    const modal = screen.getByRole("dialog", { name: "Create protocol" });
+    expect(modal).toBeTruthy();
+    expect(screen.getByText("Review extracted data")).toBeTruthy();
+    expect(within(modal).getByText("Save and select")).toBeTruthy();
+
+    fireEvent.click(within(modal).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Create protocol" })).toBeNull();
   });
 
   it("renders specific message for AI text-only insufficient warning", () => {
