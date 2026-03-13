@@ -232,7 +232,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
       <div className="relative z-[1] grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,500px)]">
         <div>
           <div className="max-w-2xl">
-            <h3 className="text-xl font-semibold text-slate-100 sm:text-2xl">
+            <h3 className="text-balance text-2xl font-semibold leading-tight text-slate-100 sm:text-3xl">
               {tr("Begrijp wat je bloedwaarden je vertellen", "Understand what your blood work is telling you")}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">

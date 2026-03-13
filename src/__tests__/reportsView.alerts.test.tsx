@@ -201,16 +201,21 @@ describe("ReportsView alert logic", () => {
     render(<ReportsView {...buildProps(report)} />);
 
     expect(screen.getByText("labrapport-compact.pdf")).toBeTruthy();
+    const expandButton = screen.getAllByRole("button", { name: "Expand" })[0];
+    const compactCells = expandButton?.querySelectorAll(".report-compact-marker-cell") ?? [];
+    expect(compactCells.length).toBe(6);
+    expect(screen.getAllByText("Not in report").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("-").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Hematocrit").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Estradiol").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Free Testosterone").length).toBeGreaterThan(0);
     expect(screen.getAllByText("PSA").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Albumin").length).toBeGreaterThan(0);
     expect(screen.getAllByText("6 markers").length).toBeGreaterThan(0);
     expect(screen.queryByText("Inherited")).toBeNull();
     expect(screen.queryByText("Anchored")).toBeNull();
     expect(screen.queryByText("No supps")).toBeNull();
     expect(screen.queryByText("6 m")).toBeNull();
+    expect(screen.queryByText("Albumin")).toBeNull();
     expect(screen.queryByText("TSH")).toBeNull();
     expect(screen.getAllByRole("button", { name: "Expand" }).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Out-of-range markers in this report").length).toBeGreaterThan(0);

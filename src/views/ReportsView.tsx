@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
+import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -19,8 +20,7 @@ import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
 
-// Priority markers for compact report header summary
-const HIGHLIGHT_MARKERS = ["Testosterone", "Estradiol", "Hematocrit", "SHBG", "Hemoglobin", "LDL Cholesterol"];
+const COMPACT_HEADER_SLOT_COUNT = 6;
 
 interface ReportsViewProps {
   reports: LabReport[];
@@ -415,7 +415,7 @@ const ReportsView = ({
     });
   };
 
-  const getCompactHeaderMarkers = (report: LabReport): MarkerValue[] => {
+  const getCompactHeaderMarkerSlots = (report: LabReport): Array<{ canonicalMarker: string; marker: MarkerValue | null }> => {
     const byCanonical = new Map<string, MarkerValue>();
     report.markers.forEach((marker) => {
       if (!byCanonical.has(marker.canonicalMarker)) {
@@ -423,20 +423,29 @@ const ReportsView = ({
       }
     });
 
-    const chosen: MarkerValue[] = [];
-    HIGHLIGHT_MARKERS.forEach((name) => {
-      const match = byCanonical.get(name);
-      if (match) {
-        chosen.push(match);
-        byCanonical.delete(name);
-      }
-    });
+    const preferredSequence = Array.from(
+      new Set([
+        ...(settings.primaryMarkersSelection ?? []),
+        ...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE[settings.userProfile]
+      ])
+    )
+      .map((marker) => marker.trim())
+      .filter((marker) => marker.length > 0);
 
-    const remaining = Array.from(byCanonical.values()).sort((left, right) =>
-      getMarkerDisplayName(left.canonicalMarker, language).localeCompare(getMarkerDisplayName(right.canonicalMarker, language))
+    const remainingFromReport = Array.from(byCanonical.keys()).sort((left, right) =>
+      getMarkerDisplayName(left, language).localeCompare(getMarkerDisplayName(right, language))
     );
 
-    return [...chosen, ...remaining].slice(0, 5);
+    const slotNames = Array.from(new Set([...preferredSequence, ...remainingFromReport])).slice(0, COMPACT_HEADER_SLOT_COUNT);
+
+    while (slotNames.length < COMPACT_HEADER_SLOT_COUNT) {
+      slotNames.push(`__placeholder_${slotNames.length + 1}`);
+    }
+
+    return slotNames.map((canonicalMarker, index) => ({
+      canonicalMarker,
+      marker: byCanonical.get(canonicalMarker) ?? null
+    }));
   };
 
   // Left border + health indicator color based on abnormal count
@@ -609,7 +618,7 @@ const ReportsView = ({
               ? []
               : inheritedFallbackSupplements;
         const abnormalCount = abnormalCountForReport(report);
-        const compactHeaderMarkers = getCompactHeaderMarkers(report);
+        const compactHeaderSlots = getCompactHeaderMarkerSlots(report);
         const baselineOverlapMarkers = baselineOverlapByReportId.get(report.id) ?? [];
         const baselineSetBlocked = !report.isBaseline && baselineOverlapMarkers.length > 0;
         const overlapPreview =
@@ -661,20 +670,20 @@ const ReportsView = ({
                   current.includes(report.id) ? current.filter((id) => id !== report.id) : [...current, report.id]
                 );
               }}
-              className="flex w-full min-w-0 rounded-2xl px-2.5 py-2 text-left"
+              className="flex w-full min-w-0 rounded-2xl px-2 py-1.5 text-left"
               aria-label={isExpanded ? tr("Inklappen", "Collapse") : tr("Uitklappen", "Expand")}
             >
-              <span className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <span className="flex min-w-0 items-start gap-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/65 text-cyan-300/85">
-                    <FileText className="h-4.5 w-4.5" />
+              <span className="flex w-full min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+                <span className="flex min-w-0 items-start gap-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/65 text-cyan-300/85">
+                    <FileText className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[1.2rem] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[1.35rem]">
+                    <span className="block text-[1.05rem] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[1.16rem]">
                       {formatDate(report.testDate)}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-400">{report.sourceFileName}</span>
-                    <span className="mt-1.5 flex flex-wrap items-center gap-1">
+                    <span className="mt-0.5 block truncate text-[11px] text-slate-400">{report.sourceFileName}</span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
                       {report.isBaseline && (
                         <span className="rounded-full border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
                           Baseline
@@ -692,24 +701,26 @@ const ReportsView = ({
                   </span>
                 </span>
 
-                <span className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between lg:justify-end lg:gap-2">
-                  <span className="report-compact-marker-row flex min-w-0 flex-wrap items-stretch gap-1.5 lg:flex-nowrap lg:overflow-x-auto">
-                    {compactHeaderMarkers.map((marker) => {
-                      const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
-                      const abnormal = markerAbnormalStatus(marker);
+                <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-end sm:justify-between lg:justify-end lg:gap-2">
+                  <span className="report-compact-marker-grid grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+                    {compactHeaderSlots.map((slot, index) => {
+                      const marker = slot.marker;
+                      const converted = marker ? convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem) : null;
+                      const abnormal = marker ? markerAbnormalStatus(marker) : "unknown";
                       const isAbnormal = abnormal === "high" || abnormal === "low";
                       const valueClassName =
                         abnormal === "high" ? "text-rose-200" : abnormal === "low" ? "text-amber-200" : "text-slate-100";
-                      const showValue = Number.isFinite(converted.value);
+                      const convertedValue = converted?.value ?? Number.NaN;
+                      const showValue = Number.isFinite(convertedValue);
                       const valueText = showValue
-                        ? Math.abs(converted.value) >= 100
-                          ? converted.value.toFixed(0)
-                          : converted.value.toFixed(1)
+                        ? Math.abs(convertedValue) >= 100
+                          ? convertedValue.toFixed(0)
+                          : convertedValue.toFixed(1)
                         : "-";
                       return (
                         <span
-                          key={marker.id}
-                          className={`report-compact-marker-cell inline-flex min-w-[94px] flex-col rounded-lg border px-2 py-1.5 ${
+                          key={`${report.id}-${slot.canonicalMarker}-${index}`}
+                          className={`report-compact-marker-cell inline-flex w-full min-w-[90px] flex-col rounded-lg border px-2 py-1 ${
                             isAbnormal
                               ? abnormal === "high"
                                 ? "border-rose-500/35 bg-rose-500/5"
@@ -717,13 +728,15 @@ const ReportsView = ({
                               : "border-slate-700/70 bg-slate-900/35"
                           }`}
                         >
-                          <span className="truncate text-[11px] font-medium text-slate-300">
-                            {getMarkerDisplayName(marker.canonicalMarker, language)}
+                          <span className="report-compact-marker-label truncate">
+                            {slot.canonicalMarker.startsWith("__placeholder_")
+                              ? tr("Marker", "Marker")
+                              : getMarkerDisplayName(slot.canonicalMarker, language)}
                           </span>
-                          <span className={`mt-0.5 text-xl font-semibold leading-none ${valueClassName}`}>
+                          <span className={`report-compact-marker-value ${valueClassName}`}>
                             {valueText}
                           </span>
-                          <span className="mt-0.5 text-[11px] text-slate-400">{showValue ? converted.unit : ""}</span>
+                          <span className="report-compact-marker-unit">{showValue ? converted?.unit : tr("Not in report", "Not in report")}</span>
                         </span>
                       );
                     })}
