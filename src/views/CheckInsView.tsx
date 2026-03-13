@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { X } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, SymptomCheckIn, UserProfile, WellbeingMetricId } from "../types";
 import { getCheckInAverage, getCheckInMetricValue, WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
@@ -113,8 +115,8 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
   };
 
   return (
-    <div className="app-teal-glow-surface rounded-xl border border-slate-700/70 bg-slate-900/60 p-5">
-      <div className="mb-5">
+    <div className="space-y-5">
+      <div>
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Datum", "Date")}</label>
         <input
           type="date"
@@ -125,7 +127,7 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
         />
       </div>
 
-      <div className="mb-5 flex flex-col gap-5">
+      <div className="flex flex-col gap-5">
         {metrics.map((metricId) => {
           const metric = WELLBEING_METRICS[metricId];
           return (
@@ -141,7 +143,7 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
         })}
       </div>
 
-      <div className="mb-5">
+      <div>
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           {tr("Notities (optioneel)", "Notes (optional)")}
         </label>
@@ -154,18 +156,18 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 border-t border-slate-800 pt-2">
         <button
           type="button"
           onClick={handleSave}
-          className="rounded-lg bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/30"
+          className="rounded-lg border border-cyan-500/40 bg-cyan-500/14 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/24"
         >
           {tr("Opslaan", "Save check-in")}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-400 transition hover:bg-slate-700 hover:text-slate-200"
+          className="rounded-lg border border-slate-600 bg-slate-800/70 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
         >
           {tr("Annuleren", "Cancel")}
         </button>
@@ -177,22 +179,15 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
 interface CheckInCardProps {
   checkIn: SymptomCheckIn;
   language: AppLanguage;
-  isEditing: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onSaveEdit: (data: Omit<SymptomCheckIn, "id">) => void;
-  onCancelEdit: () => void;
 }
 
-const CheckInCard = ({ checkIn, language, isEditing, onEdit, onDelete, onSaveEdit, onCancelEdit }: CheckInCardProps) => {
+const CheckInCard = ({ checkIn, language, onEdit, onDelete }: CheckInCardProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const avg = getCheckInAverage(checkIn);
   const metrics = WELLBEING_PRESETS[checkIn.profileAtEntry ?? "trt"];
-
-  if (isEditing) {
-    return <CheckInForm userProfile={checkIn.profileAtEntry ?? "trt"} initial={checkIn} onSave={onSaveEdit} onCancel={onCancelEdit} language={language} />;
-  }
 
   return (
     <div className="checkins-history-card h-full rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-900/55 to-slate-900/35 p-3.5 shadow-soft">
@@ -260,6 +255,81 @@ const CheckInCard = ({ checkIn, language, isEditing, onEdit, onDelete, onSaveEdi
         )}
       </div>
     </div>
+  );
+};
+
+interface CheckInModalProps {
+  open: boolean;
+  title: string;
+  userProfile: UserProfile;
+  initial?: SymptomCheckIn;
+  language: AppLanguage;
+  onSave: (data: Omit<SymptomCheckIn, "id">) => void;
+  onClose: () => void;
+}
+
+const CheckInModal = ({ open, title, userProfile, initial, language, onSave, onClose }: CheckInModalProps) => {
+  const tr = (nl: string, en: string) => trLocale(language, nl, en);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="app-modal-overlay z-[92]" role="dialog" aria-modal="true" aria-labelledby="wellbeing-checkin-modal-title" onClick={onClose}>
+      <div className="app-modal-shell w-full max-w-3xl bg-slate-900 shadow-soft" onClick={(event) => event.stopPropagation()}>
+        <div className="app-modal-header p-5 sm:p-6">
+          <div className="app-modal-header-glow" aria-hidden />
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
+                {tr("Welzijn", "Wellbeing")}
+              </div>
+              <h3 id="wellbeing-checkin-modal-title" className="mt-3 text-xl font-semibold text-slate-50 sm:text-2xl">
+                {title}
+              </h3>
+            </div>
+            <button
+              type="button"
+              className="app-modal-close-btn"
+              onClick={onClose}
+              aria-label={tr("Sluiten", "Close")}
+              title={tr("Sluiten", "Close")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">
+          <CheckInForm userProfile={userProfile} initial={initial} onSave={onSave} onCancel={onClose} language={language} />
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
@@ -342,18 +412,22 @@ interface CheckInsViewProps {
 
 const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onUpdate, onDelete }: CheckInsViewProps) => {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
-  const [showForm, setShowForm] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
   const sorted = useMemo(() => [...checkIns].sort((left, right) => right.date.localeCompare(left.date)), [checkIns]);
   const displayedHistory = showAllHistory ? sorted : sorted.slice(0, 6);
+  const editingCheckIn = useMemo(
+    () => (editingId ? sorted.find((checkIn) => checkIn.id === editingId) ?? null : null),
+    [editingId, sorted]
+  );
   const lastCheckIn = sorted[0] ?? null;
   const daysSinceLast = lastCheckIn ? differenceInDays(new Date(), parseISO(lastCheckIn.date)) : null;
 
   const handleAdd = (data: Omit<SymptomCheckIn, "id">) => {
     onAdd(data);
-    setShowForm(false);
+    setIsCreateModalOpen(false);
   };
 
   const handleUpdate = (id: string, data: Omit<SymptomCheckIn, "id">) => {
@@ -387,10 +461,10 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
             <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
               {tr("Laatste gemiddelde", "Latest average")}: <span className="font-semibold text-slate-100">{recentAverage === null ? "—" : recentAverage.toFixed(1)}</span>
             </div>
-            {!isShareMode && !showForm ? (
+            {!isShareMode ? (
               <button
                 type="button"
-                onClick={() => setShowForm(true)}
+                onClick={() => setIsCreateModalOpen(true)}
                 className="checkin-primary-btn rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-sm font-semibold text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
               >
                 {tr("Inchecken", "Check in")}
@@ -399,11 +473,6 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
           </div>
         </div>
 
-        {showForm ? (
-          <div className="mt-4 border-t border-slate-700/60 pt-4">
-            <CheckInForm userProfile={userProfile} onSave={handleAdd} onCancel={() => setShowForm(false)} language={language} />
-          </div>
-        ) : null}
       </section>
 
       {sorted.length >= 2 ? <TrendChart checkIns={[...sorted].reverse()} language={language} /> : null}
@@ -425,14 +494,11 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
 
           <div className="grid gap-3 lg:grid-cols-2">
             {displayedHistory.map((checkIn) => (
-              <div key={checkIn.id} className={editingId === checkIn.id ? "lg:col-span-2" : ""}>
+              <div key={checkIn.id}>
                 <CheckInCard
                   checkIn={checkIn}
                   language={language}
-                  isEditing={editingId === checkIn.id}
                   onEdit={() => setEditingId(checkIn.id)}
-                  onCancelEdit={() => setEditingId(null)}
-                  onSaveEdit={(data) => handleUpdate(checkIn.id, data)}
                   onDelete={() => onDelete(checkIn.id)}
                 />
               </div>
@@ -441,7 +507,7 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
         </section>
       ) : null}
 
-      {sorted.length === 0 && !showForm ? (
+      {sorted.length === 0 && !isCreateModalOpen ? (
         <section className="rounded-xl border border-slate-700/50 bg-slate-900/30 px-6 py-10 text-center">
           <p className="text-3xl">🧘</p>
           <p className="mt-2 text-sm font-medium text-slate-300">{tr("Nog geen check-ins", "No check-ins yet")}</p>
@@ -453,6 +519,29 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
           </p>
         </section>
       ) : null}
+
+      <CheckInModal
+        open={isCreateModalOpen}
+        title={tr("Welzijns check-in", "Wellbeing check-in")}
+        userProfile={userProfile}
+        language={language}
+        onSave={handleAdd}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
+
+      <CheckInModal
+        open={Boolean(editingCheckIn)}
+        title={tr("Check-in bewerken", "Edit check-in")}
+        userProfile={editingCheckIn?.profileAtEntry ?? userProfile}
+        initial={editingCheckIn ?? undefined}
+        language={language}
+        onSave={(data) => {
+          if (editingCheckIn) {
+            handleUpdate(editingCheckIn.id, data);
+          }
+        }}
+        onClose={() => setEditingId(null)}
+      />
     </div>
   );
 };
