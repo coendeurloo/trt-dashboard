@@ -35,6 +35,7 @@ interface SettingsViewProps {
   onExportPdf: () => void;
   onImportData: (incoming: unknown, mode: "merge" | "replace") => ImportResult;
   onClearAllData: () => void;
+  onResetOnboarding: () => void;
   onAddMarkerSuggestions: (suggestions: MarkerMergeSuggestion[]) => void;
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
@@ -97,6 +98,7 @@ const SettingsView = ({
   onExportPdf,
   onImportData,
   onClearAllData,
+  onResetOnboarding,
   onAddMarkerSuggestions,
   onShareOptionsChange,
   onGenerateShareLink,
@@ -609,6 +611,23 @@ const SettingsView = ({
 
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
+
+        <div className="mt-4 rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
+          <h3 className="text-sm font-semibold text-slate-300">{tr("Onboarding wizard", "Onboarding wizard")}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr(
+              "Bekijk de introductiewizard opnieuw. Handig als je iets hebt geskipt of wil laten zien aan iemand anders.",
+              "Replay the intro wizard. Useful if you skipped something or want to show it to someone else."
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={onResetOnboarding}
+            className="mt-3 rounded-lg border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700/60 hover:text-slate-100"
+          >
+            {tr("Opnieuw bekijken", "Replay onboarding")}
+          </button>
+        </div>
 
         <div className="settings-danger-card mt-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
           <h3 className="text-sm font-semibold text-red-400">{tr("Verwijder alle data", "Delete all data")}</h3>

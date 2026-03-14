@@ -110,7 +110,8 @@ const makeSampleData = () =>
       aiCostMode: "balanced",
       aiAutoImproveEnabled: false,
       parserDebugMode: "text_ocr_ai",
-      primaryMarkersSelection: ["Testosterone"]
+      primaryMarkersSelection: ["Testosterone"],
+      onboardingCompleted: false
     }
   });
 

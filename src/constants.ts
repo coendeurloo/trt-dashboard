@@ -62,7 +62,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiCostMode: "balanced",
   aiAutoImproveEnabled: false,
   parserDebugMode: "text_ocr_ai",
-  primaryMarkersSelection: []
+  primaryMarkersSelection: [],
+  onboardingCompleted: false
 };
 
 const RAW_ALIASES: Record<string, string[]> = {

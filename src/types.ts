@@ -352,6 +352,7 @@ export interface AppSettings {
   aiAutoImproveEnabled: boolean;
   parserDebugMode: ParserDebugMode;
   primaryMarkersSelection: string[];
+  onboardingCompleted: boolean;
 }
 
 export interface StoredAppData {

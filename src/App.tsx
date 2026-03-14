@@ -104,6 +104,7 @@ const AIConsentModal = lazy(() => import("./components/AIConsentModal"));
 const ExtractionComparisonModal = lazy(() => import("./components/ExtractionComparisonModal"));
 const ParserImprovementSubmissionCard = lazy(() => import("./components/ParserImprovementSubmissionCard"));
 const ParserUploadSummaryModal = lazy(() => import("./components/ParserUploadSummaryModal"));
+const OnboardingWizard = lazy(() => import("./components/OnboardingWizard"));
 
 type UploadSummary =
   | {
@@ -273,6 +274,8 @@ const App = () => {
   const showAdvancedParserActions =
     import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [onboardingReport, setOnboardingReport] = useState<LabReport | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
@@ -1447,9 +1450,16 @@ const App = () => {
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));
     const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
+    const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
+
     addReport(report);
     upsertMarkerAliasOverrides(learnedAliasOverrides);
     appendMarkerSuggestions(suggestions);
+
+    if (isFirstReport) {
+      setOnboardingReport(report);
+      setShowOnboardingWizard(true);
+    }
 
     setUploadSummary(null);
     setDraft(null);
@@ -2462,6 +2472,11 @@ const App = () => {
                       clearAllData();
                       setAnalystMemory(null);
                     }}
+                    onResetOnboarding={() => {
+                      updateSettings({ onboardingCompleted: false });
+                      setOnboardingReport(reports[0] ?? null);
+                      setShowOnboardingWizard(true);
+                    }}
                     onAddMarkerSuggestions={appendMarkerSuggestions}
                     onShareOptionsChange={setShareOptions}
                     onGenerateShareLink={generateShareLink}
@@ -2882,6 +2897,29 @@ const App = () => {
               </div>
             </motion.div>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Onboarding wizard after first report upload */}
+      <AnimatePresence>
+        {showOnboardingWizard && onboardingReport ? (
+          <Suspense fallback={null}>
+            <OnboardingWizard
+              language={appData.settings.language}
+              userProfile={appData.settings.userProfile}
+              theme={appData.settings.theme}
+              report={onboardingReport}
+              onAddProtocol={addProtocol}
+              onAddSupplementPeriod={addSupplementPeriod}
+              onAddCheckIn={addCheckIn}
+              onComplete={() => {
+                setShowOnboardingWizard(false);
+                setOnboardingReport(null);
+                updateSettings({ onboardingCompleted: true });
+              }}
+              onNavigate={setActiveTab}
+            />
+          </Suspense>
         ) : null}
       </AnimatePresence>
     </>
