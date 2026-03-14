@@ -135,7 +135,8 @@ const buildLegacyShareToken = (data: StoredAppData, options: ShareOptions): stri
     settings: {
       ...DEFAULT_SETTINGS,
       ...data.settings
-    }
+    },
+    personalInfo: { name: "", dateOfBirth: "", biologicalSex: "prefer_not_to_say", heightCm: null, weightKg: null }
   };
 
   const payload: SharedSnapshotPayloadV1 = {

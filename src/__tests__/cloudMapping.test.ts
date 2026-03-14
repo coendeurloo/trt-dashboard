@@ -112,6 +112,13 @@ const makeSampleData = () =>
       parserDebugMode: "text_ocr_ai",
       primaryMarkersSelection: ["Testosterone"],
       onboardingCompleted: false
+    },
+    personalInfo: {
+      name: "",
+      dateOfBirth: "",
+      biologicalSex: "prefer_not_to_say",
+      heightCm: null,
+      weightKg: null
     }
   });
 

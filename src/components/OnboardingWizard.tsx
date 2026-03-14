@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { trLocale } from "../i18n";
 import { WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
 import { createId } from "../utils";
-import { COMPOUND_OPTIONS, SUPPLEMENT_OPTIONS } from "../protocolStandards";
 import type {
   AppLanguage,
   ThemeMode,
@@ -14,91 +13,10 @@ import type {
   SupplementPeriod,
   SymptomCheckIn,
   WellbeingMetricId,
-  InterventionItem
+  InterventionItem,
+  PersonalInfo,
+  BiologicalSex
 } from "../types";
-
-/* Autocomplete Component */
-interface AutocompleteProps {
-  value: string;
-  onChange: (val: string) => void;
-  options: string[];
-  placeholder: string;
-  className: string;
-  isDark: boolean;
-  onKeyDown?: (e: React.KeyboardEvent) => void;
-}
-
-function Autocomplete({
-  value,
-  onChange,
-  options,
-  placeholder,
-  className,
-  isDark,
-  onKeyDown
-}: AutocompleteProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filtered, setFiltered] = useState<string[]>([]);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const handleInputChange = (val: string) => {
-    onChange(val);
-    if (val.trim()) {
-      const matches = options.filter((opt) =>
-        opt.toLowerCase().includes(val.toLowerCase())
-      );
-      setFiltered(matches.slice(0, 8));
-      setIsOpen(true);
-    } else {
-      setFiltered([]);
-      setIsOpen(false);
-    }
-  };
-
-  const handleSelect = (opt: string) => {
-    onChange(opt);
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="relative">
-      <input
-        ref={inputRef}
-        className={className}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => handleInputChange(e.target.value)}
-        onFocus={() => value && setIsOpen(true)}
-        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-        onKeyDown={onKeyDown}
-        autoComplete="off"
-      />
-      {isOpen && filtered.length > 0 && (
-        <ul
-          className={`absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-50 max-h-48 overflow-y-auto ${
-            isDark
-              ? "bg-slate-800 border-slate-600"
-              : "bg-slate-50 border-slate-200"
-          }`}
-        >
-          {filtered.map((opt) => (
-            <li key={opt}>
-              <button
-                className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-cyan-500/20 ${
-                  isDark ? "text-slate-300" : "text-slate-700"
-                }`}
-                onClick={() => handleSelect(opt)}
-                type="button"
-              >
-                {opt}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -107,6 +25,8 @@ export interface OnboardingWizardProps {
   userProfile: UserProfile;
   theme: ThemeMode;
   report: LabReport;
+  personalInfo: PersonalInfo;
+  onUpdatePersonalInfo: (patch: Partial<PersonalInfo>) => void;
   onAddProtocol: (protocol: Protocol) => void;
   onAddSupplementPeriod: (supplement: SupplementPeriod) => void;
   onAddCheckIn: (checkIn: SymptomCheckIn) => void;
@@ -129,7 +49,7 @@ interface SupplementDraft {
 
 /* ── Constants ─────────────────────────────────────────── */
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 const FREQUENCIES: { value: string; nl: string; en: string }[] = [
   { value: "daily", nl: "Dagelijks", en: "Daily" },
@@ -314,7 +234,114 @@ function StepSuccess({
   );
 }
 
-/* Step 1: Protocol (simplified) */
+/* Step 1: Personal Info */
+function StepPersonalInfo({
+  language,
+  isDark,
+  personalInfo,
+  onChange
+}: {
+  language: AppLanguage;
+  isDark: boolean;
+  personalInfo: PersonalInfo;
+  onChange: (patch: Partial<PersonalInfo>) => void;
+}) {
+  const tr = (nl: string, en: string) => trLocale(language, nl, en);
+  const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition-colors focus:ring-2 focus:ring-cyan-500/40 ${
+    isDark
+      ? "bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+      : "bg-slate-50 border-slate-300 text-slate-800 placeholder:text-slate-400"
+  }`;
+  const labelCls = `block text-xs font-medium mb-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`;
+
+  return (
+    <div>
+      <h2 className={`text-lg font-bold mb-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+        {trLocale(language, "Even kennismaken", "Let's get to know you")}
+      </h2>
+      <p className={`text-sm mb-5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+        {trLocale(language, "Deze gegevens helpen ons om je resultaten beter te interpreteren.", "This info helps us interpret your results more accurately.")}
+      </p>
+
+      <div className="space-y-3">
+        {/* Name */}
+        <div>
+          <label className={labelCls}>{tr("Naam", "Name")}</label>
+          <input
+            type="text"
+            className={inputCls}
+            placeholder={tr("bijv. Jan de Vries", "e.g. John Smith")}
+            value={personalInfo.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+          />
+        </div>
+
+        {/* Date of Birth */}
+        <div>
+          <label className={labelCls}>{tr("Geboortedatum", "Date of birth")}</label>
+          <input
+            type="date"
+            className={inputCls}
+            value={personalInfo.dateOfBirth}
+            onChange={(e) => onChange({ dateOfBirth: e.target.value })}
+          />
+        </div>
+
+        {/* Biological Sex */}
+        <div>
+          <label className={labelCls}>{tr("Biologisch geslacht", "Biological sex")}</label>
+          <div className="space-y-2">
+            {[
+              { value: "male" as BiologicalSex, nl: "Man", en: "Male" },
+              { value: "female" as BiologicalSex, nl: "Vrouw", en: "Female" },
+              { value: "prefer_not_to_say" as BiologicalSex, nl: "Liever niet zeggen", en: "Prefer not to say" }
+            ].map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="biologicalSex"
+                  value={opt.value}
+                  checked={personalInfo.biologicalSex === opt.value}
+                  onChange={(e) => onChange({ biologicalSex: e.target.value as BiologicalSex })}
+                  className="h-4 w-4 accent-cyan-500"
+                />
+                <span className={`text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  {trLocale(language, opt.nl, opt.en)}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Height */}
+        <div>
+          <label className={labelCls}>{tr("Lengte (cm)", "Height (cm)")}</label>
+          <input
+            type="number"
+            className={inputCls}
+            placeholder={tr("bijv. 180", "e.g. 180")}
+            value={personalInfo.heightCm ?? ""}
+            onChange={(e) => onChange({ heightCm: e.target.value ? Number(e.target.value) : null })}
+          />
+        </div>
+
+        {/* Weight */}
+        <div>
+          <label className={labelCls}>{tr("Gewicht (kg)", "Weight (kg)")}</label>
+          <input
+            type="number"
+            className={inputCls}
+            placeholder={tr("bijv. 80", "e.g. 80")}
+            value={personalInfo.weightKg ?? ""}
+            onChange={(e) => onChange({ weightKg: e.target.value ? Number(e.target.value) : null })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Step 2: Protocol (simplified) */
 function StepProtocol({
   language,
   userProfile,
@@ -349,13 +376,11 @@ function StepProtocol({
       <div className="space-y-3">
         <div>
           <label className={labelCls}>{compoundLabel(userProfile, language)}</label>
-          <Autocomplete
-            value={draft.compound}
-            onChange={(val) => onChange({ ...draft, compound: val })}
-            options={COMPOUND_OPTIONS}
-            placeholder={compoundPlaceholder(userProfile, language)}
+          <input
             className={inputCls}
-            isDark={isDark}
+            placeholder={compoundPlaceholder(userProfile, language)}
+            value={draft.compound}
+            onChange={(e) => onChange({ ...draft, compound: e.target.value })}
           />
         </div>
 
@@ -417,7 +442,7 @@ function StepProtocol({
   );
 }
 
-/* Step 2: Wellbeing check-in */
+/* Step 3: Wellbeing check-in */
 function StepCheckin({
   language,
   userProfile,
@@ -490,7 +515,7 @@ function StepCheckin({
   );
 }
 
-/* Step 3: Supplements */
+/* Step 4: Supplements */
 function StepSupplements({
   language,
   isDark,
@@ -560,13 +585,11 @@ function StepSupplements({
       {/* Add form */}
       <div className="flex gap-2">
         <div className="flex-1">
-          <Autocomplete
-            value={currentDraft.name}
-            onChange={(val) => onDraftChange({ ...currentDraft, name: val })}
-            options={SUPPLEMENT_OPTIONS}
-            placeholder={tr("bijv. Vitamine D", "e.g. Vitamin D")}
+          <input
             className={inputCls}
-            isDark={isDark}
+            placeholder={tr("bijv. Vitamine D", "e.g. Vitamin D")}
+            value={currentDraft.name}
+            onChange={(e) => onDraftChange({ ...currentDraft, name: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Enter" && canAdd) onAdd();
             }}
@@ -610,19 +633,21 @@ function StepSupplements({
   );
 }
 
-/* Step 4: Summary / what's next */
+/* Step 5: Summary / what's next */
 function StepSummary({
   language,
   isDark,
   savedProtocol,
   savedSupplementCount,
-  savedCheckin
+  savedCheckin,
+  savedPersonalInfo
 }: {
   language: AppLanguage;
   isDark: boolean;
   savedProtocol: boolean;
   savedSupplementCount: number;
   savedCheckin: boolean;
+  savedPersonalInfo: boolean;
 }) {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
 
@@ -630,6 +655,10 @@ function StepSummary({
     {
       done: true,
       label: tr("Labrapport geüpload", "Lab report uploaded")
+    },
+    {
+      done: savedPersonalInfo,
+      label: tr("Persoonlijke info toegevoegd", "Personal info added")
     },
     {
       done: savedProtocol,
@@ -753,6 +782,8 @@ export default function OnboardingWizard({
   userProfile,
   theme,
   report,
+  personalInfo,
+  onUpdatePersonalInfo,
   onAddProtocol,
   onAddSupplementPeriod,
   onAddCheckIn,
@@ -783,7 +814,7 @@ export default function OnboardingWizard({
   /* Check-in form */
   const defaultCheckinValues = useMemo(() => {
     const metrics = WELLBEING_PRESETS[userProfile];
-    const vals = {} as Record<WellbeingMetricId, number>;
+    const vals: Record<WellbeingMetricId, number> = {} as any;
     for (const m of metrics) vals[m] = 5;
     return vals;
   }, [userProfile]);
@@ -869,13 +900,16 @@ export default function OnboardingWizard({
 
   const goNext = useCallback(() => {
     // Save data on leaving certain steps
-    if (step === 1 && protocolDraft.compound.trim() && !protocolSaved) {
+    if (step === 1 && personalInfo.name.trim()) {
+      onUpdatePersonalInfo(personalInfo);
+    }
+    if (step === 2 && protocolDraft.compound.trim() && !protocolSaved) {
       saveProtocol();
     }
-    if (step === 2 && !checkinSaved) {
+    if (step === 3 && !checkinSaved) {
       saveCheckin();
     }
-    if (step === 3 && supplements.length > 0 && !supplementsSaved) {
+    if (step === 4 && supplements.length > 0 && !supplementsSaved) {
       saveSupplements();
     }
 
@@ -886,7 +920,7 @@ export default function OnboardingWizard({
       onComplete();
       onNavigate("dashboard");
     }
-  }, [step, protocolDraft, protocolSaved, checkinSaved, supplements, supplementsSaved, saveProtocol, saveCheckin, saveSupplements, onComplete, onNavigate]);
+  }, [step, personalInfo, protocolDraft, protocolSaved, checkinSaved, supplements, supplementsSaved, onUpdatePersonalInfo, saveProtocol, saveCheckin, saveSupplements, onComplete, onNavigate]);
 
   const goBack = useCallback(() => {
     if (step > 0) {
@@ -905,13 +939,14 @@ export default function OnboardingWizard({
   const nextLabel = (): string => {
     if (step === 0) return tr("Aan de slag", "Let's go");
     if (step === TOTAL_STEPS - 1) return tr("Start verkennen", "Start exploring");
-    if (step === 1 && protocolDraft.compound.trim()) return tr("Opslaan en door", "Save & continue");
-    if (step === 2) return tr("Opslaan en door", "Save & continue");
-    if (step === 3 && supplements.length > 0) return tr("Opslaan en door", "Save & continue");
+    if (step === 1 && personalInfo.name.trim()) return tr("Opslaan en door", "Save & continue");
+    if (step === 2 && protocolDraft.compound.trim()) return tr("Opslaan en door", "Save & continue");
+    if (step === 3) return tr("Opslaan en door", "Save & continue");
+    if (step === 4 && supplements.length > 0) return tr("Opslaan en door", "Save & continue");
     return tr("Volgende", "Next");
   };
 
-  const showSkip = step === 1 || step === 3;
+  const showSkip = step === 2 || step === 4;
   const showBack = step > 0 && step < TOTAL_STEPS - 1;
 
   /* ── Render ── */
@@ -964,6 +999,14 @@ export default function OnboardingWizard({
                 <StepSuccess report={report} language={language} isDark={isDark} />
               )}
               {step === 1 && (
+                <StepPersonalInfo
+                  language={language}
+                  isDark={isDark}
+                  personalInfo={personalInfo}
+                  onChange={onUpdatePersonalInfo}
+                />
+              )}
+              {step === 2 && (
                 <StepProtocol
                   language={language}
                   userProfile={userProfile}
@@ -972,7 +1015,7 @@ export default function OnboardingWizard({
                   onChange={setProtocolDraft}
                 />
               )}
-              {step === 2 && (
+              {step === 3 && (
                 <StepCheckin
                   language={language}
                   userProfile={userProfile}
@@ -981,7 +1024,7 @@ export default function OnboardingWizard({
                   onChange={setCheckinValues}
                 />
               )}
-              {step === 3 && (
+              {step === 4 && (
                 <StepSupplements
                   language={language}
                   isDark={isDark}
@@ -992,13 +1035,14 @@ export default function OnboardingWizard({
                   onDraftChange={setSupplementDraft}
                 />
               )}
-              {step === 4 && (
+              {step === 5 && (
                 <StepSummary
                   language={language}
                   isDark={isDark}
                   savedProtocol={protocolSaved}
                   savedSupplementCount={supplements.length}
                   savedCheckin={checkinSaved}
+                  savedPersonalInfo={personalInfo.name.trim().length > 0}
                 />
               )}
             </motion.div>
@@ -1006,39 +1050,42 @@ export default function OnboardingWizard({
         </div>
 
         {/* Footer */}
-        <div className={`flex items-center justify-center gap-4 px-6 py-4 border-t ${
+        <div className={`flex items-center justify-between px-6 py-4 border-t ${
           isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-100 bg-slate-50/50"
         }`}>
-          {showBack && (
-            <button
-              onClick={goBack}
-              className={`text-sm px-3 py-2 rounded-lg transition-colors ${
-                isDark
-                  ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              {tr("Terug", "Back")}
-            </button>
-          )}
+          <div>
+            {showBack && (
+              <button
+                onClick={goBack}
+                className={`text-sm px-3 py-2 rounded-lg transition-colors ${
+                  isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {tr("Terug", "Back")}
+              </button>
+            )}
+          </div>
 
-          {showSkip && (
+          <div className="flex items-center gap-3">
+            {showSkip && (
+              <button
+                onClick={skip}
+                className={`text-sm transition-colors ${
+                  isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                {tr("Sla over", "Skip")}
+              </button>
+            )}
             <button
-              onClick={skip}
-              className={`text-sm transition-colors ${
-                isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
-              }`}
+              onClick={goNext}
+              className="rounded-xl bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-500 hover:shadow-cyan-500/30 active:scale-[0.97]"
             >
-              {tr("Sla over", "Skip")}
+              {nextLabel()}
             </button>
-          )}
-
-          <button
-            onClick={goNext}
-            className="rounded-xl bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-500 hover:shadow-cyan-500/30 active:scale-[0.97]"
-          >
-            {nextLabel()}
-          </button>
+          </div>
         </div>
       </motion.div>
     </div>

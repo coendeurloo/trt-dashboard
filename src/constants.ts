@@ -1,4 +1,4 @@
-import { AppSettings, UserProfile } from "./types";
+import { AppSettings, PersonalInfo, UserProfile } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
 export const APP_SCHEMA_VERSION = 6;
@@ -31,6 +31,14 @@ export const PROTOCOL_MARKER_CATEGORIES: Record<string, string[]> = {
   Lipids: ["LDL Cholesterol", "HDL Cholesterol", "Cholesterol", "Triglyceriden", "Apolipoprotein B", "Non-HDL Cholesterol"],
   Hematology: ["Hematocrit", "Hemoglobin", "Red Blood Cells", "Platelets", "Leukocyten"],
   Inflammation: ["CRP"]
+};
+
+export const DEFAULT_PERSONAL_INFO: PersonalInfo = {
+  name: "",
+  dateOfBirth: "",
+  biologicalSex: "prefer_not_to_say",
+  heightCm: null,
+  weightKg: null
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -337,27 +345,7 @@ const RAW_ALIASES: Record<string, string[]> = {
   "Alkaline Phosphatase": ["alkaline phosphatase", "alk phosphatase", "alp"],
   AST: ["ast", "aspartate aminotransferase", "sgot", "ast (sgot)", "sgot (ast)"],
   ALT: ["alt", "alanine aminotransferase", "sgpt", "alt (sgpt)", "sgpt (alt)"],
-  Insuline: ["insuline", "insulin", "fasting insulin", "insuline nuchter", "insulin fasting"],
-  "IGF-1": [
-    "igf-1",
-    "igf 1",
-    "igf1",
-    "insulin-like growth factor 1",
-    "insulin like growth factor 1",
-    "somatomedin c",
-    "somatomedine c",
-    "igf-1 (somatomedin c)",
-    "igf-1 (somatomedine c)",
-    "igf-1 (somatomedine c) clia"
-  ],
-  "IGF-1 SDS": [
-    "igf-1 sds",
-    "igf 1 sds",
-    "igf1 sds",
-    "igf-1 z-score",
-    "igf 1 z score",
-    "igf1 z score"
-  ]
+  Insuline: ["insuline", "insulin", "fasting insulin", "insuline nuchter", "insulin fasting"]
 };
 
 export const MARKER_ALIAS_LOOKUP = Object.entries(RAW_ALIASES).reduce(
@@ -382,4 +370,5 @@ export const TAB_ITEMS = [
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
 ] as const;
+
 

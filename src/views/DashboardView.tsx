@@ -14,9 +14,10 @@ import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
-import { AppLanguage, AppSettings, DashboardViewMode, LabReport, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
+import { AppLanguage, AppSettings, DashboardViewMode, LabReport, PersonalInfo, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
 
 interface DashboardViewProps {
+  personalInfo: PersonalInfo;
   reports: LabReport[];
   visibleReports: LabReport[];
   allMarkers: string[];
@@ -99,6 +100,7 @@ const ToggleSwitch = ({ checked, onChange, label, tooltip, disabled = false }: T
 );
 
 const DashboardView = ({
+  personalInfo,
   reports,
   visibleReports,
   allMarkers,
@@ -107,6 +109,7 @@ const DashboardView = ({
   trendByMarker,
   alertsByMarker,
   trtStability,
+  outOfRangeCount,
   settings,
   language,
   isShareMode,
@@ -263,8 +266,37 @@ const DashboardView = ({
     };
   }, [showChartSettings]);
 
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return tr("Goedemorgen", "Good morning");
+    if (hour < 18) return tr("Goedemiddag", "Good afternoon");
+    return tr("Goedenavond", "Good evening");
+  })();
+
   return (
     <section className="space-y-3 fade-in">
+      {/* ── Personalized greeting ── */}
+      {hasReports && personalInfo.name ? (
+        <div className="px-1 pt-1 pb-2">
+          <h2 className="text-lg font-semibold text-slate-100">
+            {greeting}, {personalInfo.name.split(" ")[0]}
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-400">
+            {outOfRangeCount > 0
+              ? tr(
+                  `Je hebt ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} buiten bereik.`,
+                  `You have ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} out of range.`
+                )
+              : daysSinceCheckIn !== null && daysSinceCheckIn >= 7
+                ? tr(
+                    `${daysSinceCheckIn} dagen geen check-in. Hoe voel je je?`,
+                    `${daysSinceCheckIn} days since your last check-in. How are you feeling?`
+                  )
+                : tr("Alles ziet er goed uit. Blijf je voortgang volgen.", "Everything looks good. Keep tracking your progress.")}
+          </p>
+        </div>
+      ) : null}
+
       {/* ── Wellbeing nudge ── */}
       {showWellbeingNudge && hasReports ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">

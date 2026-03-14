@@ -322,6 +322,16 @@ export interface ExtractionDebugInfo {
   };
 }
 
+export type BiologicalSex = "male" | "female" | "prefer_not_to_say";
+
+export interface PersonalInfo {
+  name: string;
+  dateOfBirth: string;
+  biologicalSex: BiologicalSex;
+  heightCm: number | null;
+  weightKg: number | null;
+}
+
 export interface AppSettings {
   theme: ThemeMode;
   unitSystem: UnitSystem;
@@ -367,6 +377,7 @@ export interface StoredAppData {
   checkIns: SymptomCheckIn[];
   markerAliasOverrides: Record<string, string>;
   settings: AppSettings;
+  personalInfo: PersonalInfo;
 }
 
 export interface ExtractionDraft {

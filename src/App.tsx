@@ -209,6 +209,7 @@ const App = () => {
     appData,
     setAppData,
     updateSettings,
+    updatePersonalInfo,
     isNl,
     samplingControlsEnabled,
     addReport,
@@ -2281,6 +2282,7 @@ const App = () => {
                 alertsByMarker={alertsByMarker}
                 trtStability={trtStability}
                 outOfRangeCount={outOfRangeCount}
+                personalInfo={appData.personalInfo}
                 settings={appData.settings}
                 language={appData.settings.language}
                 isShareMode={isShareMode}
@@ -2448,6 +2450,8 @@ const App = () => {
 
                 {activeTab === "settings" ? (
                   <SettingsView
+                    personalInfo={appData.personalInfo}
+                    onUpdatePersonalInfo={updatePersonalInfo}
                     settings={appData.settings}
                     language={appData.settings.language}
                     reports={reports}
@@ -2909,6 +2913,8 @@ const App = () => {
               userProfile={appData.settings.userProfile}
               theme={appData.settings.theme}
               report={onboardingReport}
+              personalInfo={appData.personalInfo}
+              onUpdatePersonalInfo={updatePersonalInfo}
               onAddProtocol={addProtocol}
               onAddSupplementPeriod={addSupplementPeriod}
               onAddCheckIn={addCheckIn}

@@ -1,4 +1,4 @@
-import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_SETTINGS } from "./constants";
+import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_PERSONAL_INFO, DEFAULT_SETTINGS } from "./constants";
 import {
   AppSettings,
   CompoundEntry,
@@ -6,6 +6,7 @@ import {
   MarkerValue,
   Protocol,
   ReportAnnotations,
+  PersonalInfo,
   StoredAppData,
   SupplementPeriod,
   SymptomCheckIn,
@@ -54,7 +55,8 @@ const createDefaultData = (): StoredAppData => ({
   wellbeingEntries: [],
   checkIns: [],
   markerAliasOverrides: {},
-  settings: DEFAULT_SETTINGS
+  settings: DEFAULT_SETTINGS,
+  personalInfo: DEFAULT_PERSONAL_INFO
 });
 
 const ANALYST_MEMORY_KEY = "analyst-memory";
@@ -826,7 +828,11 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
     wellbeingEntries,
     checkIns: wellbeingEntries,
     markerAliasOverrides,
-    settings: normalizeSettings(raw.settings)
+    settings: normalizeSettings(raw.settings),
+    personalInfo: {
+      ...DEFAULT_PERSONAL_INFO,
+      ...(raw.personalInfo && typeof raw.personalInfo === "object" ? raw.personalInfo : {})
+    }
   };
 };
 

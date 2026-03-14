@@ -5,6 +5,7 @@ import { inferDashboardChartPresetFromSettings } from "../chartHelpers";
 import {
   AppSettings,
   LabReport,
+  PersonalInfo,
   Protocol,
   ReportAnnotations,
   StoredAppData,
@@ -677,10 +678,18 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     URL.revokeObjectURL(url);
   }, [appData]);
 
+  const updatePersonalInfo = (patch: Partial<PersonalInfo>) => {
+    setAppData((prev) => ({
+      ...prev,
+      personalInfo: { ...prev.personalInfo, ...patch }
+    }));
+  };
+
   return {
     appData,
     setAppData,
     updateSettings,
+    updatePersonalInfo,
     isNl,
     samplingControlsEnabled,
     addReport,

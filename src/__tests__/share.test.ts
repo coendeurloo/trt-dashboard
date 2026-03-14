@@ -109,7 +109,14 @@ const makeSampleData = (): StoredAppData => ({
         needsReview: false
       }
     }
-  ]
+  ],
+  personalInfo: {
+    name: "",
+    dateOfBirth: "",
+    biologicalSex: "prefer_not_to_say",
+    heightCm: null,
+    weightKg: null
+  }
 });
 
 const LEGACY_OPTIONS: ShareOptions = {

@@ -106,7 +106,8 @@ const buildProps = () => {
       onOpenCloudAuth: vi.fn(),
       isProcessing: false,
       checkIns: [],
-      onNavigateToCheckIns: vi.fn()
+      onNavigateToCheckIns: vi.fn(),
+      personalInfo: { name: "", dateOfBirth: "", biologicalSex: "prefer_not_to_say" as const, heightCm: null, weightKg: null }
     },
     onUpdateSettings,
     onUploadClick
