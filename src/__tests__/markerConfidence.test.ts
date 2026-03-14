@@ -212,4 +212,33 @@ describe("markerConfidence", () => {
     expect(confidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
     expect(confidence.issues.some((issue) => /valid but not preferred/i.test(issue))).toBe(true);
   });
+
+  it("treats 'index' and 'ratio' as equivalent dimensionless units for index markers", () => {
+    const faiConfidence = scoreMarkerConfidence(
+      {
+        name: "Free Androgen Index",
+        value: 61.42,
+        unit: "index",
+        referenceMin: null,
+        referenceMax: null
+      },
+      matchMarker("Free Androgen Index")
+    );
+
+    const homaConfidence = scoreMarkerConfidence(
+      {
+        name: "HOMA-IR",
+        value: 1.45,
+        unit: "ratio",
+        referenceMin: null,
+        referenceMax: null
+      },
+      matchMarker("HOMA-IR")
+    );
+
+    expect(faiConfidence.unit).toBe("high");
+    expect(homaConfidence.unit).toBe("high");
+    expect(faiConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
+    expect(homaConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
+  });
 });

@@ -127,6 +127,11 @@ const unitSemanticToken = (value: string): string => {
     return "count-per-liter-1e12";
   }
 
+  // Treat common dimensionless labels as equivalent semantics.
+  if (token === "ratio" || token === "index") {
+    return "dimensionless-ratio";
+  }
+
   return token;
 };
 

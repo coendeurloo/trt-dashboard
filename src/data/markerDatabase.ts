@@ -889,8 +889,8 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     canonicalName: "Free Androgen Index",
     category: "Hormones - Sex",
     aliases: ["fai", "vrije androgeen index", "free androgen index"],
-    preferredUnit: "ratio",
-    alternateUnits: ["%"],
+    preferredUnit: "index",
+    alternateUnits: ["ratio", "%"],
     defaultRangeType: "min-max",
     defaultRange: { min: 24, max: 104 }
   }),
@@ -1262,8 +1262,8 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     canonicalName: "HOMA-IR",
     category: "Blood Glucose",
     aliases: ["homa ir", "insulin resistance index"],
-    preferredUnit: "ratio",
-    alternateUnits: [],
+    preferredUnit: "index",
+    alternateUnits: ["ratio"],
     defaultRangeType: "max-only",
     defaultRange: { max: 2.0 }
   }),
