@@ -81,7 +81,9 @@ const CATEGORY_HINTS: Record<string, string> = {
   "Vitamine B12": "vitamins",
   Foliumzuur: "vitamins",
   "Glucose Nuchter": "metabolic",
-  Insuline: "metabolic"
+  Insuline: "metabolic",
+  "IGF-1": "hormones",
+  "IGF-1 SDS": "hormones"
 };
 
 const UNIT_HINTS: Record<string, Partial<Record<UnitSystem, string>>> = {
@@ -129,7 +131,9 @@ const UNIT_HINTS: Record<string, Partial<Record<UnitSystem, string>>> = {
   eGFR: { eu: "mL/min/1.73", us: "mL/min/1.73" },
   "BUN/Creatinine Ratio": { eu: "ratio", us: "ratio" },
   "LDL Pattern": { eu: "pattern", us: "pattern" },
-  TSH: { eu: "mU/L", us: "uIU/mL" }
+  TSH: { eu: "mU/L", us: "uIU/mL" },
+  "IGF-1": { eu: "nmol/L", us: "ng/mL" },
+  "IGF-1 SDS": { eu: "score", us: "score" }
 };
 
 const MUST_CONTAIN_HINTS: Record<string, string[]> = {

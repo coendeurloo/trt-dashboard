@@ -67,6 +67,14 @@ describe("markerMatcher", () => {
     const bicarbonate = matchMarker("Bicarbonate");
     expect(["exact", "alias", "normalized", "token"]).toContain(bicarbonate.confidence);
     expect(bicarbonate.canonical?.id).toBe("carbon-dioxide");
+
+    const igf1 = matchMarker("IGF-1 (somatomedine C)");
+    expect(["exact", "alias", "normalized", "token"]).toContain(igf1.confidence);
+    expect(igf1.canonical?.id).toBe("igf-1");
+
+    const igf1Sds = matchMarker("IGF-1 SDS");
+    expect(["exact", "alias", "normalized", "token"]).toContain(igf1Sds.confidence);
+    expect(igf1Sds.canonical?.id).toBe("igf-1-sds");
   });
 
   it("matches Cardio IQ particle markers from Quest layouts", () => {

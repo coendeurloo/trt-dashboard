@@ -337,7 +337,27 @@ const RAW_ALIASES: Record<string, string[]> = {
   "Alkaline Phosphatase": ["alkaline phosphatase", "alk phosphatase", "alp"],
   AST: ["ast", "aspartate aminotransferase", "sgot", "ast (sgot)", "sgot (ast)"],
   ALT: ["alt", "alanine aminotransferase", "sgpt", "alt (sgpt)", "sgpt (alt)"],
-  Insuline: ["insuline", "insulin", "fasting insulin", "insuline nuchter", "insulin fasting"]
+  Insuline: ["insuline", "insulin", "fasting insulin", "insuline nuchter", "insulin fasting"],
+  "IGF-1": [
+    "igf-1",
+    "igf 1",
+    "igf1",
+    "insulin-like growth factor 1",
+    "insulin like growth factor 1",
+    "somatomedin c",
+    "somatomedine c",
+    "igf-1 (somatomedin c)",
+    "igf-1 (somatomedine c)",
+    "igf-1 (somatomedine c) clia"
+  ],
+  "IGF-1 SDS": [
+    "igf-1 sds",
+    "igf 1 sds",
+    "igf1 sds",
+    "igf-1 z-score",
+    "igf 1 z score",
+    "igf1 z score"
+  ]
 };
 
 export const MARKER_ALIAS_LOOKUP = Object.entries(RAW_ALIASES).reduce(
@@ -362,5 +382,4 @@ export const TAB_ITEMS = [
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
 ] as const;
-
 

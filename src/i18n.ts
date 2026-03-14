@@ -228,7 +228,9 @@ const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
   "Free Testosterone (calculated)": { nl: "Vrij Testosteron (berekend)", en: "Free Testosterone (calculated)" },
   Leukocyten: { nl: "Leukocyten", en: "Leukocytes" },
   MPV: { nl: "MPV", en: "MPV" },
-  "Carbon Dioxide": { nl: "Koolstofdioxide", en: "Carbon Dioxide" }
+  "Carbon Dioxide": { nl: "Koolstofdioxide", en: "Carbon Dioxide" },
+  "IGF-1": { nl: "IGF-1", en: "IGF-1" },
+  "IGF-1 SDS": { nl: "IGF-1 SDS", en: "IGF-1 SDS" }
 };
 
 const MARKER_META: Record<string, MarkerMeta> = {
@@ -1295,6 +1297,44 @@ const MARKER_META: Record<string, MarkerMeta> = {
       nl: "Hoog: kan passen bij hyperthyreoïdie of overmatige schildklieractiviteit.",
       en: "High: can fit hyperthyroidism or excessive thyroid activity."
     }
+  },
+  "IGF-1": {
+    name: { nl: "IGF-1", en: "IGF-1" },
+    what: {
+      nl: "Insulin-like Growth Factor 1 is een marker van de groeihormoon-as.",
+      en: "Insulin-like Growth Factor 1 is a marker of growth hormone axis activity."
+    },
+    why: {
+      nl: "Wordt gevolgd om GH-respons, herstel, en metabole context beter te duiden.",
+      en: "Tracked to better interpret GH response, recovery, and metabolic context."
+    },
+    low: {
+      nl: "Laag: kan passen bij lagere GH-signaalactiviteit of verminderde anabole drive.",
+      en: "Low: can fit lower GH signaling or reduced anabolic drive."
+    },
+    high: {
+      nl: "Hoog: kan passen bij hogere GH-activiteit of exogene stimulatie; beoordeel in klinische context.",
+      en: "High: can fit higher GH activity or exogenous stimulation; interpret in clinical context."
+    }
+  },
+  "IGF-1 SDS": {
+    name: { nl: "IGF-1 SDS", en: "IGF-1 SDS" },
+    what: {
+      nl: "SDS is de leeftijd- en geslachtgecorrigeerde z-score van IGF-1.",
+      en: "SDS is the age- and sex-adjusted z-score of IGF-1."
+    },
+    why: {
+      nl: "Helpt IGF-1 eerlijk te vergelijken tussen personen en over tijd ondanks leeftijdseffecten.",
+      en: "Helps compare IGF-1 fairly across people and over time despite age effects."
+    },
+    low: {
+      nl: "Laag: wijst op een relatief lage IGF-1-positie ten opzichte van leeftijd/geslacht.",
+      en: "Low: indicates a relatively low IGF-1 position versus age/sex peers."
+    },
+    high: {
+      nl: "Hoog: wijst op een relatief hoge IGF-1-positie ten opzichte van leeftijd/geslacht.",
+      en: "High: indicates a relatively high IGF-1 position versus age/sex peers."
+    }
   }
 };
 
@@ -1341,7 +1381,18 @@ const MARKER_META_ALIAS_LOOKUP: Record<string, string> = {
   "total co2": "Carbon Dioxide",
   "co2 total": "Carbon Dioxide",
   bicarbonate: "Carbon Dioxide",
-  hco3: "Carbon Dioxide"
+  hco3: "Carbon Dioxide",
+  igf1: "IGF-1",
+  "igf 1": "IGF-1",
+  "igf 1 somatomedine c": "IGF-1",
+  "igf 1 somatomedin c": "IGF-1",
+  "igf 1 somatomedine c clia": "IGF-1",
+  "somatomedine c": "IGF-1",
+  "somatomedin c": "IGF-1",
+  "igf 1 sds": "IGF-1 SDS",
+  "igf1 sds": "IGF-1 SDS",
+  "igf 1 z score": "IGF-1 SDS",
+  "igf 1 zscore": "IGF-1 SDS"
 };
 
 const resolveMarkerMeta = (marker: string): MarkerMeta | undefined => {

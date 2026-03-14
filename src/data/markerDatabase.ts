@@ -1500,11 +1500,31 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "igf-1",
     canonicalName: "IGF-1",
     category: "Other",
-    aliases: ["insulin-like growth factor 1", "somatomedin c", "igf1"],
+    aliases: [
+      "insulin-like growth factor 1",
+      "insulin like growth factor 1",
+      "somatomedin c",
+      "somatomedine c",
+      "igf1",
+      "igf-1 (somatomedin c)",
+      "igf-1 (somatomedine c)",
+      "igf-1 (somatomedine c) clia"
+    ],
     preferredUnit: "ug/L",
-    alternateUnits: ["ng/mL"],
+    alternateUnits: ["ng/mL", "nmol/L"],
     defaultRangeType: "min-max",
-    defaultRange: { min: 80, max: 250 }
+    defaultRange: { min: 80, max: 250 },
+    description: "Insulin-like Growth Factor 1 reflects growth hormone axis activity."
+  }),
+  marker({
+    id: "igf-1-sds",
+    canonicalName: "IGF-1 SDS",
+    category: "Other",
+    aliases: ["igf-1 sds", "igf 1 sds", "igf1 sds", "igf-1 z-score", "igf 1 z score", "igf1 z score"],
+    preferredUnit: "score",
+    alternateUnits: ["z-score"],
+    defaultRangeType: "none",
+    description: "Standard deviation score of IGF-1 adjusted for age and sex."
   }),
   marker({
     id: "pth",

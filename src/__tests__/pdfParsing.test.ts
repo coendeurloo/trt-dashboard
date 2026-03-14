@@ -809,10 +809,12 @@ describe("pdfParsing fallback layers", () => {
     expect(igf1).toBeDefined();
     expect(igf1?.rawValue).toBeCloseTo(21.0, 1);
     expect(igf1?.rawUnit).toBe("nmol/L");
+    expect(igf1?.canonicalMarker).toBe("IGF-1");
 
     expect(igf1Sds).toBeDefined();
     expect(igf1Sds?.rawValue).toBeCloseTo(0.7, 2);
     expect(igf1Sds?.rawUnit ?? "").toBe("");
+    expect(igf1Sds?.canonicalMarker).toBe("IGF-1 SDS");
   });
 
   it("ignores Quest educational/disclaimer pages while keeping lab result markers", () => {

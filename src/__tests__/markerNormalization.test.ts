@@ -21,6 +21,8 @@ describe("markerNormalization", () => {
     expect(resolveCanonicalMarker({ rawName: "Cortisol AM Cortisol" }).canonicalMarker).toBe("Cortisol");
     expect(resolveCanonicalMarker({ rawName: "Testosterone, Free and Total" }).canonicalMarker).toBe("Testosterone");
     expect(resolveCanonicalMarker({ rawName: "free testosterone calculated" }).canonicalMarker).toBe("Free Testosterone");
+    expect(resolveCanonicalMarker({ rawName: "IGF-1 (somatomedine C)" }).canonicalMarker).toBe("IGF-1");
+    expect(resolveCanonicalMarker({ rawName: "IGF-1 SDS" }).canonicalMarker).toBe("IGF-1 SDS");
   });
 
   it("rejects narrative noise as Unknown Marker", () => {
