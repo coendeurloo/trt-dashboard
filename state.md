@@ -13,7 +13,9 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
-- Onboarding wizard shipped: 5-step progressive disclosure modal on first PDF upload with autocomplete inputs for compounds/supplements, wellbeing check-in, and feature tour
+- Personal info system shipped: name, DOB, biological sex, height, weight stored in personalInfo with dashboard greeting ("Good morning, Coen") and contextual nudges
+- Settings redesigned with 6-tab layout: Profile, Appearance, Analysis, Data, Markers, Account (replaces flat scroll)
+- Onboarding wizard expanded to 6 steps: success, personal info, protocol, wellbeing check-in, supplements, summary with autocomplete inputs
 - User profile system shipped end-to-end: onboarding + settings selector, profile-aware labels, profile-based tab visibility, and profile-aware analytics/AI persona behavior
 - Schema moved to v6 with `userProfile` in app settings and safe normalization on load
 - External AI consent flow hardened: explicit consent modal, per-run sharing choices, local-first defaults, and sanitized AI payloads (`sanitizeForAI`)
