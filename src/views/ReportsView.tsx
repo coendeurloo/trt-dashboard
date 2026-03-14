@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import { buildMarkerSeries } from "../analytics";
@@ -21,6 +22,111 @@ import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
 
 const COMPACT_HEADER_SLOT_COUNT = 6;
+const REVIEW_TOOLTIP_EDGE_PADDING = 10;
+const REVIEW_TOOLTIP_MIN_WIDTH = 240;
+const REVIEW_TOOLTIP_MAX_WIDTH = 520;
+const REVIEW_TOOLTIP_GAP = 10;
+
+interface MarkerReviewBadgeProps {
+  label: string;
+  className: string;
+  icon: ReactNode;
+  tooltip?: string;
+  tooltipId: string;
+}
+
+const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId }: MarkerReviewBadgeProps) => {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!tooltip || !isOpen || !triggerRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    const lineCount = tooltip
+      .split("\n")
+      .map((line) => Math.max(1, Math.ceil(line.trim().length / 56)))
+      .reduce((total, value) => total + value, 0);
+    const tooltipHeightEstimate = Math.min(360, 84 + lineCount * 18);
+
+    const updatePosition = () => {
+      if (!triggerRef.current) {
+        return;
+      }
+      const rect = triggerRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const width = Math.min(
+        REVIEW_TOOLTIP_MAX_WIDTH,
+        Math.max(REVIEW_TOOLTIP_MIN_WIDTH, viewportWidth - REVIEW_TOOLTIP_EDGE_PADDING * 2)
+      );
+      const maxLeft = Math.max(REVIEW_TOOLTIP_EDGE_PADDING, viewportWidth - width - REVIEW_TOOLTIP_EDGE_PADDING);
+      const clampedLeft = Math.max(
+        REVIEW_TOOLTIP_EDGE_PADDING,
+        Math.min(rect.left + rect.width / 2 - width / 2, maxLeft)
+      );
+      const placeBelow = rect.bottom + REVIEW_TOOLTIP_GAP + tooltipHeightEstimate <= viewportHeight - REVIEW_TOOLTIP_EDGE_PADDING;
+      const top = placeBelow
+        ? rect.bottom + REVIEW_TOOLTIP_GAP
+        : Math.max(REVIEW_TOOLTIP_EDGE_PADDING, rect.top - tooltipHeightEstimate - REVIEW_TOOLTIP_GAP);
+      setTooltipPosition({ top, left: clampedLeft, width });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen, tooltip]);
+
+  const tooltipOverlay =
+    tooltip && isOpen && tooltipPosition && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            id={tooltipId}
+            role="tooltip"
+            className="pointer-events-none fixed z-[120] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 shadow-lg"
+            style={{ top: tooltipPosition.top, left: tooltipPosition.left, width: tooltipPosition.width }}
+          >
+            {tooltip}
+          </div>,
+          document.body
+        )
+      : null;
+
+  return (
+    <span className="inline-flex">
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${className}`}
+        aria-describedby={tooltip ? tooltipId : undefined}
+        aria-expanded={tooltip ? isOpen : undefined}
+        tabIndex={tooltip ? 0 : -1}
+        onMouseEnter={() => {
+          if (tooltip) {
+            setIsOpen(true);
+          }
+        }}
+        onMouseLeave={() => setIsOpen(false)}
+        onFocus={() => {
+          if (tooltip) {
+            setIsOpen(true);
+          }
+        }}
+        onBlur={() => setIsOpen(false)}
+      >
+        {icon}
+        {label}
+      </button>
+      {tooltipOverlay}
+    </span>
+  );
+};
 
 interface ReportsViewProps {
   reports: LabReport[];
@@ -1259,25 +1365,13 @@ const ReportsView = ({
                                     {min === null || max === null ? "-" : `${Number(min.toFixed(2))} - ${Number(max.toFixed(2))}`}
                                   </td>
                                   <td className="px-3 py-2 text-right">
-                                    <div className="group relative inline-flex">
-                                      <span
-                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${markerReviewClassName(marker)}`}
-                                        aria-describedby={issuesTitle ? issuesTooltipId : undefined}
-                                        tabIndex={issuesTitle ? 0 : -1}
-                                      >
-                                        {markerReviewIcon(marker)}
-                                        {markerReviewLabel(marker)}
-                                      </span>
-                                      {issuesTitle ? (
-                                        <div
-                                          id={issuesTooltipId}
-                                          role="tooltip"
-                                          className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[320px] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-                                        >
-                                          {issuesTitle}
-                                        </div>
-                                      ) : null}
-                                    </div>
+                                    <MarkerReviewBadge
+                                      className={markerReviewClassName(marker)}
+                                      icon={markerReviewIcon(marker)}
+                                      label={markerReviewLabel(marker)}
+                                      tooltip={issuesTitle}
+                                      tooltipId={issuesTooltipId}
+                                    />
                                   </td>
                                   <td className="px-3 py-2 text-right">
                                     <span
