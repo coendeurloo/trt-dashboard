@@ -1,6 +1,8 @@
 # state.md
 
-Last updated: March 14, 2026
+Last updated: March 15, 2026
+
+**Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
 ## Current status
 
@@ -11,6 +13,7 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Onboarding wizard shipped: 5-step progressive disclosure modal on first PDF upload with autocomplete inputs for compounds/supplements, wellbeing check-in, and feature tour
 - User profile system shipped end-to-end: onboarding + settings selector, profile-aware labels, profile-based tab visibility, and profile-aware analytics/AI persona behavior
 - Schema moved to v6 with `userProfile` in app settings and safe normalization on load
 - External AI consent flow hardened: explicit consent modal, per-run sharing choices, local-first defaults, and sanitized AI payloads (`sanitizeForAI`)
