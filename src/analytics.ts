@@ -916,6 +916,8 @@ const buildCalculatedMarker = (
   };
 };
 
+const T_E2_RATIO_FALLBACK_RANGE = { min: 120, max: 320 } as const;
+
 interface DerivedMarkerOptions {
   enableCalculatedFreeTestosterone?: boolean;
   logCalculatedFreeTestosteroneDebug?: boolean;
@@ -1186,7 +1188,15 @@ export const deriveCalculatedMarkers = (
   const testosterone = getEuMeasurement({ ...report, markers: rawMarkers }, "Testosterone");
   const estradiol = getEuMeasurement({ ...report, markers: rawMarkers }, "Estradiol");
   if (testosterone && estradiol && estradiol.value > 0.000001) {
-    addDerived(buildCalculatedMarker("T/E2 Ratio", (testosterone.value * 1000) / estradiol.value, "ratio"));
+    addDerived(
+      buildCalculatedMarker(
+        "T/E2 Ratio",
+        (testosterone.value * 1000) / estradiol.value,
+        "ratio",
+        T_E2_RATIO_FALLBACK_RANGE.min,
+        T_E2_RATIO_FALLBACK_RANGE.max
+      )
+    );
   }
 
   const ldl = getEuMeasurement({ ...report, markers: rawMarkers }, "LDL Cholesterol");

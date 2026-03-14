@@ -901,7 +901,8 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     aliases: ["t/e2 ratio", "t e2 ratio", "te2 ratio", "testosterone/estradiol ratio", "testosterone estradiol ratio"],
     preferredUnit: "ratio",
     alternateUnits: [],
-    defaultRangeType: "none"
+    defaultRangeType: "min-max",
+    defaultRange: { min: 120, max: 320 }
   }),
 
   // Hormones - Adrenal
@@ -1522,8 +1523,9 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Other",
     aliases: ["igf-1 sds", "igf 1 sds", "igf1 sds", "igf-1 z-score", "igf 1 z score", "igf1 z score"],
     preferredUnit: "score",
-    alternateUnits: ["z-score"],
-    defaultRangeType: "none",
+    alternateUnits: ["z-score", "sds"],
+    defaultRangeType: "min-max",
+    defaultRange: { min: -2, max: 2 },
     description: "Standard deviation score of IGF-1 adjusted for age and sex."
   }),
   marker({

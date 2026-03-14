@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAlerts, buildMarkerSeries, calculatePercentChange, getTargetZone } from "../analytics";
+import { buildAlerts, buildMarkerSeries, calculatePercentChange, deriveCalculatedMarkers, getTargetZone } from "../analytics";
 import { LabReport } from "../types";
 
 const mkReport = (id: string, date: string, dose: number, markers: Array<{ marker: string; value: number; unit: string }>): LabReport => ({
@@ -119,5 +119,21 @@ describe("analytics", () => {
     expect(estradiolLongevity).not.toBeNull();
     expect(estradiolLongevity?.min).toBe(60);
     expect(estradiolLongevity?.max).toBe(130);
+  });
+
+  it("adds fallback range to calculated T/E2 Ratio", () => {
+    const report = mkReport("r-te2", "2025-03-01", 120, [
+      { marker: "Testosterone", value: 25, unit: "nmol/L" },
+      { marker: "Estradiol", value: 125, unit: "pmol/L" }
+    ]);
+
+    const derived = deriveCalculatedMarkers(report);
+    const ratio = derived.find((marker) => marker.canonicalMarker === "T/E2 Ratio");
+
+    expect(ratio).toBeDefined();
+    expect(ratio?.unit).toBe("ratio");
+    expect(ratio?.referenceMin).toBe(120);
+    expect(ratio?.referenceMax).toBe(320);
+    expect(ratio?.abnormal).toBe("normal");
   });
 });

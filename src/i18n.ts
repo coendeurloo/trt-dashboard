@@ -1073,8 +1073,8 @@ const MARKER_META: Record<string, MarkerMeta> = {
   "T/E2 Ratio": {
     name: { nl: "T/E2-ratio", en: "T/E2 ratio" },
     what: {
-      nl: "Verhouding tussen totaal testosteron en estradiol.",
-      en: "Ratio between total testosterone and estradiol."
+      nl: "Verhouding tussen totaal testosteron en estradiol, weergegeven als getal (bijv. 200 betekent ~200:1).",
+      en: "Ratio between total testosterone and estradiol, shown as a single number (e.g. 200 means ~200:1)."
     },
     why: {
       nl: "Handige samenvatting van androgenen-oestrogenenbalans tijdens hormoonbehandeling.",

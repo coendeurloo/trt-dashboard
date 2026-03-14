@@ -132,6 +132,10 @@ const unitSemanticToken = (value: string): string => {
     return "dimensionless-ratio";
   }
 
+  if (token === "score" || token === "z-score" || token === "zscore" || token === "sds") {
+    return "dimensionless-score";
+  }
+
   return token;
 };
 
@@ -172,6 +176,17 @@ const hasDefaultRange = (matchResult: MarkerMatchResult): boolean => {
     return false;
   }
   return marker.defaultRange.min !== undefined || marker.defaultRange.max !== undefined;
+};
+
+const markerAllowsMissingUnit = (matchResult: MarkerMatchResult): boolean => {
+  const marker = matchResult.canonical;
+  if (!marker) {
+    return false;
+  }
+  const semanticTokens = [marker.preferredUnit, ...marker.alternateUnits]
+    .map((unit) => unitSemanticToken(unit))
+    .filter(Boolean);
+  return semanticTokens.includes("dimensionless-ratio") || semanticTokens.includes("dimensionless-score");
 };
 
 const parseRange = (parsed: ParsedMarker): { min: number | null; max: number | null } => {
@@ -245,8 +260,12 @@ export function scoreMarkerConfidence(parsed: ParsedMarker, matchResult: MarkerM
 
   if (matchResult.canonical) {
     if (!rawUnit) {
-      unitConfidence = "low";
-      addIssue("Unit is missing.", false);
+      if (markerAllowsMissingUnit(matchResult)) {
+        unitConfidence = "high";
+      } else {
+        unitConfidence = "low";
+        addIssue("Unit is missing.", false);
+      }
     } else if (preferredUnit && areUnitsEquivalent(normalizedUnit.normalized, preferredUnit)) {
       unitConfidence = "high";
     } else if (alternateUnits.some((unit) => areUnitsEquivalent(normalizedUnit.normalized, unit))) {

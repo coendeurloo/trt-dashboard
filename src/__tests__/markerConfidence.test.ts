@@ -241,4 +241,22 @@ describe("markerConfidence", () => {
     expect(faiConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
     expect(homaConfidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
   });
+
+  it("allows missing unit for dimensionless score markers like IGF-1 SDS", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "IGF-1 SDS",
+        value: 0.7,
+        unit: "",
+        referenceMin: null,
+        referenceMax: null
+      },
+      matchMarker("IGF-1 SDS")
+    );
+
+    expect(confidence.unit).toBe("high");
+    expect(confidence.range).toBe("low");
+    expect(confidence.issues.some((issue) => /unit is missing/i.test(issue))).toBe(false);
+    expect(confidence.overall).toBe("ok");
+  });
 });
