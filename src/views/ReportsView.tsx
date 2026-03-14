@@ -442,7 +442,7 @@ const ReportsView = ({
       slotNames.push(`__placeholder_${slotNames.length + 1}`);
     }
 
-    return slotNames.map((canonicalMarker, index) => ({
+    return slotNames.map((canonicalMarker) => ({
       canonicalMarker,
       marker: byCanonical.get(canonicalMarker) ?? null
     }));

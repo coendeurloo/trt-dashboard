@@ -331,7 +331,6 @@ const AppShell = ({
   }) => {
     const sidebarUploadPanel = !isShareMode && includeUploadPanel ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3") : null;
     const showAccountTools = !isShareMode && cloudConfigured;
-    const isSynced = appMode === "cloud" && syncStatus === "idle";
     const syncBadgeLabel =
       appMode !== "cloud"
         ? tr("Lokaal-only", "Local-only")

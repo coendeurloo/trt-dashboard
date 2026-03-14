@@ -783,7 +783,7 @@ export default function OnboardingWizard({
   /* Check-in form */
   const defaultCheckinValues = useMemo(() => {
     const metrics = WELLBEING_PRESETS[userProfile];
-    const vals: Record<WellbeingMetricId, number> = {} as any;
+    const vals = {} as Record<WellbeingMetricId, number>;
     for (const m of metrics) vals[m] = 5;
     return vals;
   }, [userProfile]);
