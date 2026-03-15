@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
+import ProtocolEditor from "../components/ProtocolEditor";
+import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { buildMarkerSeries } from "../analytics";
 import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
@@ -15,6 +17,7 @@ import {
   getProtocolDisplayLabel,
   getReportProtocol
 } from "../protocolUtils";
+import { cloneCompoundEntries, normalizeInterventionSnapshot, todayIsoDate } from "../protocolVersions";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 import { ResolvedReportSupplementContext, getActiveSupplementsAtDate, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
 import { convertBySystem } from "../unitConversion";
@@ -27,6 +30,19 @@ const REVIEW_TOOLTIP_EDGE_PADDING = 10;
 const REVIEW_TOOLTIP_MIN_WIDTH = 240;
 const REVIEW_TOOLTIP_MAX_WIDTH = 520;
 const REVIEW_TOOLTIP_GAP = 10;
+
+const canonicalizeProtocolDraftForCompare = (draft: ProtocolDraft): string =>
+  JSON.stringify({
+    name: draft.name.trim(),
+    effectiveFrom: draft.effectiveFrom.trim(),
+    notes: draft.notes.trim(),
+    compounds: draft.compounds.map((compound) => ({
+      name: compound.name.trim(),
+      dose: (compound.dose ?? compound.doseMg ?? "").trim(),
+      frequency: compound.frequency.trim(),
+      route: compound.route.trim()
+    }))
+  });
 
 interface MarkerReviewBadgeProps {
   label: string;
@@ -173,6 +189,11 @@ const ReportsView = ({
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingAnnotations, setEditingAnnotations] = useState<ReportAnnotations>(blankAnnotations());
+  const [protocolVersionEditorReportId, setProtocolVersionEditorReportId] = useState<string | null>(null);
+  const [protocolVersionDraft, setProtocolVersionDraft] = useState<ProtocolDraft>(blankProtocolDraft());
+  const [protocolVersionInitialDraft, setProtocolVersionInitialDraft] = useState<ProtocolDraft>(blankProtocolDraft());
+  const [protocolVersionLinkedInterventionId, setProtocolVersionLinkedInterventionId] = useState<string | null>(null);
+  const [protocolVersionFeedback, setProtocolVersionFeedback] = useState("");
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
   const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("daily");
@@ -290,7 +311,14 @@ const ReportsView = ({
       setEditingReportId(null);
       setEditingAnnotations(blankAnnotations());
     }
-  }, [reports, editingReportId]);
+    if (protocolVersionEditorReportId && !ids.has(protocolVersionEditorReportId)) {
+      setProtocolVersionEditorReportId(null);
+      setProtocolVersionDraft(blankProtocolDraft());
+      setProtocolVersionInitialDraft(blankProtocolDraft());
+      setProtocolVersionLinkedInterventionId(null);
+      setProtocolVersionFeedback("");
+    }
+  }, [reports, editingReportId, protocolVersionEditorReportId]);
 
   useEffect(() => {
     if (!editingReportId) {
@@ -405,6 +433,128 @@ const ReportsView = ({
     setSupplementNameInput("");
     setSupplementDoseInput("");
     setSupplementFrequencyInput("daily");
+  };
+
+  const hasUnsavedProtocolVersionChanges =
+    protocolVersionEditorReportId !== null &&
+    canonicalizeProtocolDraftForCompare(protocolVersionDraft) !== canonicalizeProtocolDraftForCompare(protocolVersionInitialDraft);
+
+  const closeProtocolVersionEditor = () => {
+    setProtocolVersionEditorReportId(null);
+    const emptyDraft = blankProtocolDraft();
+    setProtocolVersionDraft(emptyDraft);
+    setProtocolVersionInitialDraft(emptyDraft);
+    setProtocolVersionLinkedInterventionId(null);
+    setProtocolVersionFeedback("");
+  };
+
+  const requestCloseProtocolVersionEditor = () => {
+    if (
+      hasUnsavedProtocolVersionChanges &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        tr(
+          "Je hebt niet-opgeslagen wijzigingen voor deze rapportversie. Weet je zeker dat je wilt sluiten?",
+          "You have unsaved changes for this report version. Are you sure you want to close?"
+        )
+      )
+    ) {
+      return;
+    }
+    closeProtocolVersionEditor();
+  };
+
+  const openProtocolVersionEditor = (report: LabReport) => {
+    if (isShareMode) {
+      return;
+    }
+    const resolvedProtocol = getReportProtocol(report, protocols);
+    const snapshot = normalizeInterventionSnapshot(report.annotations.interventionSnapshot);
+    const linkedInterventionId =
+      report.annotations.interventionId ??
+      report.annotations.protocolId ??
+      snapshot?.interventionId ??
+      resolvedProtocol?.id ??
+      null;
+    const baseName =
+      snapshot?.name ??
+      resolvedProtocol?.name ??
+      report.annotations.interventionLabel ??
+      report.annotations.protocol ??
+      "";
+    const baseCompounds = cloneCompoundEntries(
+      snapshot?.compounds ??
+        (resolvedProtocol
+          ? resolvedProtocol.compounds.length > 0
+            ? resolvedProtocol.compounds
+            : resolvedProtocol.items
+          : [])
+    );
+    const nextDraft: ProtocolDraft = {
+      name: baseName,
+      effectiveFrom: snapshot?.effectiveFrom ?? report.testDate ?? todayIsoDate(),
+      items: baseCompounds,
+      compounds: baseCompounds,
+      notes: snapshot?.notes ?? resolvedProtocol?.notes ?? ""
+    };
+    setProtocolVersionEditorReportId(report.id);
+    setProtocolVersionDraft(nextDraft);
+    setProtocolVersionInitialDraft(nextDraft);
+    setProtocolVersionLinkedInterventionId(linkedInterventionId);
+    setProtocolVersionFeedback("");
+  };
+
+  const saveReportProtocolVersion = () => {
+    if (!protocolVersionEditorReportId) {
+      return;
+    }
+    const report = reports.find((entry) => entry.id === protocolVersionEditorReportId);
+    if (!report) {
+      return;
+    }
+    const name = protocolVersionDraft.name.trim();
+    const effectiveFrom = protocolVersionDraft.effectiveFrom.trim() || report.testDate || todayIsoDate();
+    const compounds = cloneCompoundEntries(protocolVersionDraft.compounds);
+    if (!name) {
+      setProtocolVersionFeedback(tr("Geef een protocolnaam op.", "Please enter a protocol name."));
+      return;
+    }
+    if (compounds.length === 0) {
+      setProtocolVersionFeedback(tr("Voeg minimaal 1 compound toe.", "Add at least 1 compound."));
+      return;
+    }
+    const existingSnapshot = normalizeInterventionSnapshot(report.annotations.interventionSnapshot);
+    const snapshotVersionId =
+      existingSnapshot?.versionId ??
+      report.annotations.interventionVersionId ??
+      report.annotations.protocolVersionId ??
+      createId();
+    const linkedInterventionId =
+      protocolVersionLinkedInterventionId ??
+      report.annotations.interventionId ??
+      report.annotations.protocolId ??
+      existingSnapshot?.interventionId ??
+      null;
+    const nextAnnotations: ReportAnnotations = {
+      ...report.annotations,
+      interventionId: linkedInterventionId,
+      interventionLabel: name,
+      interventionVersionId: snapshotVersionId,
+      interventionSnapshot: {
+        interventionId: linkedInterventionId,
+        versionId: snapshotVersionId,
+        name,
+        items: compounds,
+        compounds,
+        notes: protocolVersionDraft.notes,
+        effectiveFrom
+      },
+      protocolId: linkedInterventionId,
+      protocolVersionId: snapshotVersionId,
+      protocol: name
+    };
+    onUpdateReportAnnotations(report.id, nextAnnotations);
+    closeProtocolVersionEditor();
   };
 
   const saveEditedReport = () => {
@@ -776,7 +926,15 @@ const ReportsView = ({
             {/* ── Collapsed header ── */}
             <button
               type="button"
-              onClick={() => {
+              onClick={(event) => {
+                const target = event.target as HTMLElement | null;
+                const clickedProtocolChip = target?.closest("[data-report-protocol-chip='true']");
+                if (clickedProtocolChip && protocol && !isShareMode) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openProtocolVersionEditor(report);
+                  return;
+                }
                 if (isExpanded && isEditing) {
                   cancelEditingReport();
                 }
@@ -804,7 +962,20 @@ const ReportsView = ({
                         </span>
                       )}
                       {protocolLabel && (
-                        <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300">
+                        <span
+                          data-report-protocol-chip="true"
+                          title={
+                            !isShareMode && protocol
+                              ? tr(
+                                  "Klik om protocolversie voor dit rapport te bewerken",
+                                  "Click to edit protocol version for this report"
+                                )
+                              : undefined
+                          }
+                          className={`rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300 ${
+                            !isShareMode && protocol ? "cursor-pointer hover:border-violet-400/60 hover:bg-violet-500/20" : ""
+                          }`}
+                        >
                           {protocolLabel}
                         </span>
                       )}
@@ -1264,7 +1435,7 @@ const ReportsView = ({
                         <button
                           type="button"
                           className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-left text-xs text-cyan-200 hover:border-cyan-400"
-                          onClick={onOpenProtocolTab}
+                          onClick={() => openProtocolVersionEditor(report)}
                         >
                           {protocolLabel}
                         </button>
@@ -1419,6 +1590,69 @@ const ReportsView = ({
           </article>
         );
       })}
+
+      {protocolVersionEditorReportId
+        ? createPortal(
+            <div
+              className="app-modal-overlay z-[96]"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="report-protocol-version-modal-title"
+            >
+              <div className="app-modal-shell relative w-full max-w-5xl bg-slate-900" onClick={(event) => event.stopPropagation()}>
+                <div className="app-modal-header p-5">
+                  <div className="app-modal-header-glow" aria-hidden />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div>
+                      <h4 id="report-protocol-version-modal-title" className="text-lg font-semibold text-slate-50">
+                        {tr("Bewerk protocolversie voor dit rapport", "Edit protocol version for this report")}
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-300">
+                        {tr(
+                          "Deze wijziging geldt alleen voor dit rapport en verandert geen protocolgeschiedenis.",
+                          "This change only applies to this report and does not change protocol history."
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="app-modal-close-btn"
+                      onClick={requestCloseProtocolVersionEditor}
+                      aria-label={tr("Sluiten", "Close")}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-[calc(100vh-18rem)] overflow-y-auto p-5">
+                  <ProtocolEditor value={protocolVersionDraft} language={language} onChange={setProtocolVersionDraft} />
+                  {protocolVersionFeedback ? (
+                    <p className="mt-3 text-sm text-rose-300">{protocolVersionFeedback}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-700/60 p-4">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={requestCloseProtocolVersionEditor}
+                  >
+                    <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/70 hover:bg-emerald-500/22"
+                    onClick={saveReportProtocolVersion}
+                  >
+                    <Save className="h-4 w-4" /> {tr("Sla rapportversie op", "Save report version")}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </section>
   );
 };

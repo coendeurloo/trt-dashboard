@@ -18,6 +18,7 @@ import { withResolvedInterventionAnnotations } from "../protocolUtils";
 import {
   createProtocolVersion,
   ensureProtocolVersions,
+  normalizeInterventionSnapshot,
   normalizeProtocolMirrors,
   todayIsoDate
 } from "../protocolVersions";
@@ -269,9 +270,40 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
                   report.testDate,
                   resolveProtocols(prev)
                 );
+                const explicitSnapshot = normalizeInterventionSnapshot(
+                  (annotations as ReportAnnotations & { interventionSnapshot?: unknown }).interventionSnapshot
+                );
+                if (!explicitSnapshot) {
+                  return {
+                    ...report,
+                    annotations: resolved
+                  };
+                }
+                const explicitInterventionId =
+                  selectedInterventionId ?? explicitSnapshot.interventionId ?? resolved.interventionId ?? null;
+                const explicitVersionRaw =
+                  annotations.interventionVersionId ?? annotations.protocolVersionId ?? explicitSnapshot.versionId;
+                const explicitVersionId =
+                  typeof explicitVersionRaw === "string" && explicitVersionRaw.trim().length > 0
+                    ? explicitVersionRaw
+                    : explicitSnapshot.versionId ?? null;
+                const explicitLabel = (
+                  annotations.interventionLabel ??
+                  annotations.protocol ??
+                  explicitSnapshot.name
+                ).trim() || explicitSnapshot.name;
                 return {
                   ...report,
-                  annotations: resolved
+                  annotations: {
+                    ...resolved,
+                    interventionId: explicitInterventionId,
+                    interventionLabel: explicitLabel,
+                    interventionVersionId: explicitVersionId,
+                    interventionSnapshot: explicitSnapshot,
+                    protocolId: explicitInterventionId,
+                    protocolVersionId: explicitVersionId,
+                    protocol: explicitLabel
+                  }
                 };
               })()
             : report
