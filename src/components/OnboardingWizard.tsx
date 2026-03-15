@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trLocale } from "../i18n";
 import { WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
+import { createProtocolVersion } from "../protocolVersions";
 import { createId } from "../utils";
 import type {
   AppLanguage,
@@ -831,6 +832,7 @@ export default function OnboardingWizard({
   const saveProtocol = useCallback(() => {
     if (!protocolDraft.compound.trim()) return;
     const now = new Date().toISOString();
+    const effectiveFrom = protocolDraft.startDate.trim() || now.slice(0, 10);
     const item: InterventionItem = {
       name: protocolDraft.compound.trim(),
       dose: protocolDraft.dose.trim(),
@@ -838,12 +840,19 @@ export default function OnboardingWizard({
       frequency: protocolDraft.frequency,
       route: protocolDraft.route
     };
+    const version = createProtocolVersion({
+      effectiveFrom,
+      items: [item],
+      notes: "",
+      createdAt: now
+    });
     const protocol: Protocol = {
       id: createId(),
       name: protocolDraft.compound.trim(),
-      items: [item],
-      compounds: [item],
-      notes: "",
+      items: version.items,
+      compounds: version.compounds,
+      versions: [version],
+      notes: version.notes,
       createdAt: now,
       updatedAt: now
     };

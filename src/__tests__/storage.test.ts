@@ -286,3 +286,62 @@ it("backfills raw marker and remaps legacy bicarbonate canonical markers", () =>
   expect(coerced.reports[0]?.markers[1]?.canonicalMarker).toBe("Carbon Dioxide");
 });
 
+it("backfills legacy protocols to one version and preserves report intervention snapshot", () => {
+  const coerced = coerceStoredAppData({
+    interventions: [
+      {
+        id: "protocol-1",
+        name: "TRT Base",
+        items: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+        compounds: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+        notes: "legacy protocol",
+        createdAt: "2025-01-01T08:00:00.000Z",
+        updatedAt: "2025-01-01T08:00:00.000Z"
+      }
+    ],
+    reports: [
+      {
+        id: "report-1",
+        sourceFileName: "lab.pdf",
+        testDate: "2025-02-01",
+        createdAt: "2025-02-01T08:00:00.000Z",
+        annotations: {
+          interventionId: "protocol-1",
+          interventionVersionId: "protocol-1-v1",
+          interventionSnapshot: {
+            interventionId: "protocol-1",
+            versionId: "protocol-1-v1",
+            name: "TRT Base",
+            items: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+            compounds: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+            notes: "legacy protocol",
+            effectiveFrom: "2025-01-01"
+          },
+          supplementOverrides: null,
+          symptoms: "",
+          notes: "",
+          samplingTiming: "trough"
+        },
+        markers: [
+          {
+            id: "marker-1",
+            marker: "Testosterone",
+            canonicalMarker: "Testosterone",
+            value: 20,
+            unit: "nmol/L",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "normal",
+            confidence: 1
+          }
+        ],
+        extraction: { provider: "fallback", model: "unit-test", confidence: 1, needsReview: false }
+      }
+    ]
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.protocols[0]?.versions).toHaveLength(1);
+  expect(coerced.protocols[0]?.versions?.[0]?.effectiveFrom).toBe("2025-01-01");
+  expect(coerced.reports[0]?.annotations.interventionSnapshot?.versionId).toBe("protocol-1-v1");
+});
+

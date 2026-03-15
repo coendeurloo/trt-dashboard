@@ -564,6 +564,8 @@ const AppShell = ({
                       <button
                         type="button"
                         onClick={scrollToStabilityIndex}
+                        aria-label={tr("Open stabiliteitsindex", "Open Stability Index")}
+                        title={tr("Open stabiliteitsindex", "Open Stability Index")}
                         className="stability-header-pill inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1 text-xs transition hover:border-slate-500/80 hover:bg-slate-800/90"
                       >
                         <span className="stability-pill-label text-slate-300">{stabilityLabel}</span>

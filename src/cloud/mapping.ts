@@ -1,5 +1,6 @@
 import { APP_SCHEMA_VERSION, DEFAULT_PERSONAL_INFO } from "../constants";
 import { coerceStoredAppData } from "../storage";
+import { normalizeInterventionSnapshot, normalizeProtocolMirrors } from "../protocolVersions";
 import {
   AppSettings,
   LabReport,
@@ -146,6 +147,13 @@ const coerceReportAnnotations = (
   value: unknown
 ): ReportAnnotations => {
   const row = value as Partial<ReportAnnotations> | null;
+  const linkedVersionId =
+    typeof row?.interventionVersionId === "string"
+      ? row.interventionVersionId
+      : typeof row?.protocolVersionId === "string"
+        ? row.protocolVersionId
+        : null;
+  const snapshot = normalizeInterventionSnapshot(row?.interventionSnapshot);
   return {
     interventionId:
       typeof row?.interventionId === "string"
@@ -159,12 +167,15 @@ const coerceReportAnnotations = (
         : typeof row?.protocol === "string"
           ? row.protocol
           : "",
+    interventionVersionId: linkedVersionId,
+    interventionSnapshot: snapshot,
     protocolId:
       typeof row?.protocolId === "string"
         ? row.protocolId
         : typeof row?.interventionId === "string"
           ? row.interventionId
           : null,
+    protocolVersionId: linkedVersionId,
     protocol:
       typeof row?.protocol === "string"
         ? row.protocol
@@ -291,7 +302,9 @@ export const toCloudSyncPayload = (data: StoredAppData): CloudSyncPayload => {
     }))
   );
 
-  const protocols = data.protocols.map((protocol) => ({
+  const protocols = data.protocols.map((entry) => {
+    const protocol = normalizeProtocolMirrors(entry);
+    return {
     local_id: protocol.id,
     name: protocol.name,
     description: protocol.notes,
@@ -301,13 +314,15 @@ export const toCloudSyncPayload = (data: StoredAppData): CloudSyncPayload => {
     details: {
       items: protocol.items,
       compounds: protocol.compounds,
+      versions: protocol.versions ?? [],
       notes: protocol.notes,
       createdAt: protocol.createdAt,
       updatedAt: protocol.updatedAt
     },
     created_at: protocol.createdAt,
     updated_at: protocol.updatedAt
-  }));
+    };
+  });
 
   const supplements = data.supplementTimeline.map((supplement) => ({
     local_id: supplement.id,
@@ -377,6 +392,7 @@ export const fromCloudSyncPayload = (payload: CloudSyncPayload): StoredAppData =
     const details = protocol.details as {
       items?: Protocol["items"];
       compounds?: Protocol["compounds"];
+      versions?: Protocol["versions"];
       notes?: string;
       createdAt?: string;
       updatedAt?: string;
@@ -386,15 +402,16 @@ export const fromCloudSyncPayload = (payload: CloudSyncPayload): StoredAppData =
       : Array.isArray(details.compounds)
         ? details.compounds
         : [];
-    return {
+    return normalizeProtocolMirrors({
       id: protocol.local_id,
       name: protocol.name,
       items,
       compounds: items,
+      versions: Array.isArray(details.versions) ? details.versions : undefined,
       notes: typeof details.notes === "string" ? details.notes : protocol.description ?? "",
       createdAt: asIsoDate(details.createdAt ?? protocol.created_at, new Date().toISOString()),
       updatedAt: asIsoDate(details.updatedAt ?? protocol.updated_at, new Date().toISOString())
-    };
+    });
   });
 
   const supplementTimeline: SupplementPeriod[] = payload.supplements.map((supplement) => {

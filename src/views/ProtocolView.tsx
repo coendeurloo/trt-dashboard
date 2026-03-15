@@ -5,6 +5,7 @@ import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
 import { getProtocolCompoundsText, getReportProtocol } from "../protocolUtils";
+import { createProtocolVersion, ensureProtocolVersions, getLatestProtocolVersion, todayIsoDate } from "../protocolVersions";
 import { AppLanguage, LabReport, Protocol, UserProfile } from "../types";
 import { createId } from "../utils";
 
@@ -15,17 +16,39 @@ interface ProtocolViewProps {
   userProfile: UserProfile;
   isShareMode: boolean;
   onAddProtocol: (protocol: Protocol) => void;
-  onUpdateProtocol: (id: string, updates: Partial<Protocol>) => void;
+  onUpdateProtocol: (id: string, updates: Partial<Protocol> & { effectiveFrom?: string }) => void;
   onDeleteProtocol: (id: string) => boolean;
   getProtocolUsageCount: (id: string) => number;
 }
 
-const protocolToDraft = (protocol: Protocol): ProtocolDraft => ({
-  name: protocol.name,
-  items: protocol.items,
-  compounds: protocol.compounds,
-  notes: protocol.notes
-});
+const protocolToDraft = (protocol: Protocol): ProtocolDraft => {
+  const latestVersion = getLatestProtocolVersion(protocol);
+  const compounds = latestVersion
+    ? latestVersion.compounds
+    : protocol.compounds.length > 0
+      ? protocol.compounds
+      : protocol.items;
+  return {
+    name: protocol.name,
+    effectiveFrom: todayIsoDate(),
+    items: compounds,
+    compounds,
+    notes: latestVersion?.notes ?? protocol.notes
+  };
+};
+
+const canonicalizeDraftForCompare = (draft: ProtocolDraft): string =>
+  JSON.stringify({
+    name: draft.name.trim(),
+    effectiveFrom: draft.effectiveFrom.trim(),
+    notes: draft.notes.trim(),
+    compounds: draft.compounds.map((compound) => ({
+      name: compound.name.trim(),
+      dose: (compound.dose ?? compound.doseMg ?? "").trim(),
+      frequency: compound.frequency.trim(),
+      route: compound.route.trim()
+    }))
+  });
 
 const ProtocolView = ({
   protocols,
@@ -65,6 +88,7 @@ const ProtocolView = ({
   const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ProtocolDraft>(blankProtocolDraft());
+  const [initialDraft, setInitialDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [feedback, setFeedback] = useState("");
 
   const activeProtocolId = useMemo(() => {
@@ -80,40 +104,77 @@ const ProtocolView = ({
   }, [reports, protocols]);
 
   const startCreate = () => {
+    const nextDraft = blankProtocolDraft();
     setEditorMode("create");
     setEditingId(null);
-    setDraft(blankProtocolDraft());
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
     setFeedback("");
   };
 
   const startEdit = (protocol: Protocol) => {
+    const normalizedProtocol: Protocol = {
+      ...protocol,
+      versions: ensureProtocolVersions(protocol)
+    };
+    const nextDraft = protocolToDraft(normalizedProtocol);
     setEditorMode("edit");
     setEditingId(protocol.id);
-    setDraft(protocolToDraft(protocol));
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
     setFeedback("");
   };
 
   const duplicateAndEdit = (protocol: Protocol) => {
+    const nextDraft: ProtocolDraft = {
+      ...protocolToDraft(protocol),
+      effectiveFrom: todayIsoDate(),
+      name: `${tr("Kopie van", "Copy of")} ${protocol.name}`
+    };
     setEditorMode("create");
     setEditingId(null);
-    setDraft({
-      ...protocolToDraft(protocol),
-      name: `${tr("Kopie van", "Copy of")} ${protocol.name}`
-    });
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
     setFeedback("");
   };
 
-  const cancelEditor = () => {
+  const hasUnsavedChanges =
+    editorMode !== null && canonicalizeDraftForCompare(draft) !== canonicalizeDraftForCompare(initialDraft);
+
+  const closeEditor = () => {
     setEditorMode(null);
     setEditingId(null);
-    setDraft(blankProtocolDraft());
+    const nextDraft = blankProtocolDraft();
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
     setFeedback("");
+  };
+
+  const requestCloseEditor = () => {
+    if (
+      hasUnsavedChanges &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        tr(
+          "Je hebt niet-opgeslagen wijzigingen. Weet je zeker dat je wilt sluiten?",
+          "You have unsaved changes. Are you sure you want to close?"
+        )
+      )
+    ) {
+      return;
+    }
+    closeEditor();
   };
 
   const saveEditor = () => {
     const name = draft.name.trim();
+    const effectiveFrom = draft.effectiveFrom.trim() || todayIsoDate();
     if (!name) {
       setFeedback(tr(`Geef een naam voor dit ${entitySingular}.`, `Please enter a name for this ${entitySingular}.`));
+      return;
+    }
+    if (!effectiveFrom) {
+      setFeedback(tr("Kies een geldige ingangsdatum.", "Choose a valid effective date."));
       return;
     }
     if (draft.compounds.length === 0) {
@@ -124,31 +185,33 @@ const ProtocolView = ({
     if (editorMode === "edit" && editingId) {
       onUpdateProtocol(editingId, {
         name,
+        effectiveFrom,
         items: draft.compounds,
         compounds: draft.compounds,
         notes: draft.notes
       });
-      setEditorMode(null);
-      setEditingId(null);
-      setDraft(blankProtocolDraft());
-      setFeedback("");
+      closeEditor();
       return;
     }
 
     const now = new Date().toISOString();
+    const version = createProtocolVersion({
+      effectiveFrom,
+      items: draft.compounds,
+      notes: draft.notes,
+      createdAt: now
+    });
     onAddProtocol({
       id: createId(),
       name,
-      items: draft.compounds,
-      compounds: draft.compounds,
-      notes: draft.notes,
+      items: version.items,
+      compounds: version.compounds,
+      versions: [version],
+      notes: version.notes,
       createdAt: now,
       updatedAt: now
     });
-    setEditorMode(null);
-    setEditingId(null);
-    setDraft(blankProtocolDraft());
-    setFeedback("");
+    closeEditor();
   };
 
   const modalTitle = editorMode === "edit"
@@ -264,7 +327,6 @@ const ProtocolView = ({
               role="dialog"
               aria-modal="true"
               aria-labelledby="protocol-editor-modal-title"
-              onClick={cancelEditor}
             >
               <div
                 className="app-modal-shell w-full max-w-5xl bg-slate-900"
@@ -283,7 +345,7 @@ const ProtocolView = ({
                     <button
                       type="button"
                       className="app-modal-close-btn"
-                      onClick={cancelEditor}
+                      onClick={requestCloseEditor}
                       aria-label={tr("Sluiten", "Close")}
                     >
                       <X className="h-4 w-4" />
@@ -314,7 +376,7 @@ const ProtocolView = ({
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
-                    onClick={cancelEditor}
+                    onClick={requestCloseEditor}
                   >
                     <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
                   </button>

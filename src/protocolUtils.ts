@@ -1,5 +1,22 @@
 import { frequencyPerWeekFromSelectionOrProtocol, injectionFrequencyLabel } from "./protocolStandards";
-import { AppLanguage, CompoundEntry, LabReport, Protocol, SupplementPeriod } from "./types";
+import {
+  AppLanguage,
+  CompoundEntry,
+  InterventionSnapshot,
+  LabReport,
+  Protocol,
+  ReportAnnotations,
+  SupplementPeriod
+} from "./types";
+import {
+  buildInterventionSnapshot,
+  buildProtocolWithVersion,
+  getLinkedInterventionId,
+  getLinkedInterventionVersionId,
+  normalizeInterventionSnapshot,
+  resolveProtocolVersionByDate,
+  resolveProtocolVersionById
+} from "./protocolVersions";
 import { getEffectiveSupplements, supplementPeriodsToText } from "./supplementUtils";
 
 export const PROTOCOL_ROUTE_OPTIONS = ["", "IM", "SubQ", "Oral", "Other"] as const;
@@ -21,12 +38,113 @@ const getEntryDoseText = (entry: CompoundEntry | null | undefined): string => {
   return (entry.dose ?? entry.doseMg ?? "").trim();
 };
 
+const protocolFromSnapshot = (
+  report: LabReport,
+  snapshot: InterventionSnapshot
+): Protocol => {
+  const versionId = snapshot.versionId ?? `snapshot-version-${report.id}`;
+  return {
+    id: snapshot.interventionId ?? `snapshot-protocol-${report.id}`,
+    name: snapshot.name,
+    items: snapshot.items,
+    compounds: snapshot.compounds,
+    versions: [
+      {
+        id: versionId,
+        effectiveFrom: snapshot.effectiveFrom,
+        items: snapshot.items,
+        compounds: snapshot.compounds,
+        notes: snapshot.notes,
+        createdAt: report.createdAt
+      }
+    ],
+    notes: snapshot.notes,
+    createdAt: report.createdAt,
+    updatedAt: report.createdAt
+  };
+};
+
+export interface ResolvedInterventionLink {
+  interventionId: string | null;
+  interventionLabel: string;
+  interventionVersionId: string | null;
+  interventionSnapshot: InterventionSnapshot | null;
+}
+
+export const resolveInterventionLinkForReport = (
+  protocolId: string | null,
+  reportDate: string,
+  protocols: Protocol[]
+): ResolvedInterventionLink => {
+  if (!protocolId) {
+    return {
+      interventionId: null,
+      interventionLabel: "",
+      interventionVersionId: null,
+      interventionSnapshot: null
+    };
+  }
+  const protocol = protocols.find((entry) => entry.id === protocolId) ?? null;
+  if (!protocol) {
+    return {
+      interventionId: protocolId,
+      interventionLabel: "",
+      interventionVersionId: null,
+      interventionSnapshot: null
+    };
+  }
+  const resolvedVersion = resolveProtocolVersionByDate(protocol, reportDate);
+  return {
+    interventionId: protocol.id,
+    interventionLabel: protocol.name,
+    interventionVersionId: resolvedVersion?.id ?? null,
+    interventionSnapshot: resolvedVersion ? buildInterventionSnapshot(protocol, resolvedVersion) : null
+  };
+};
+
+export const withResolvedInterventionAnnotations = (
+  annotations: ReportAnnotations,
+  protocolId: string | null,
+  reportDate: string,
+  protocols: Protocol[]
+): ReportAnnotations => {
+  const resolved = resolveInterventionLinkForReport(protocolId, reportDate, protocols);
+  const existingLabel = (annotations.interventionLabel ?? annotations.protocol ?? "").trim();
+  const resolvedLabel = existingLabel || resolved.interventionLabel;
+  return {
+    ...annotations,
+    interventionId: resolved.interventionId,
+    interventionLabel: resolvedLabel,
+    interventionVersionId: resolved.interventionVersionId,
+    interventionSnapshot: resolved.interventionSnapshot,
+    protocolId: resolved.interventionId,
+    protocolVersionId: resolved.interventionVersionId,
+    protocol: resolvedLabel
+  };
+};
+
 export const getReportProtocol = (report: LabReport, protocols: Protocol[]): Protocol | null => {
-  const linkedId = report.annotations.interventionId ?? report.annotations.protocolId;
+  const snapshot = normalizeInterventionSnapshot(report.annotations.interventionSnapshot);
+  if (snapshot) {
+    return protocolFromSnapshot(report, snapshot);
+  }
+
+  const linkedId = getLinkedInterventionId(report.annotations);
   if (!linkedId) {
     return null;
   }
-  return protocols.find((protocol) => protocol.id === linkedId) ?? null;
+  const linkedProtocol = protocols.find((protocol) => protocol.id === linkedId) ?? null;
+  if (!linkedProtocol) {
+    return null;
+  }
+  const versionId = getLinkedInterventionVersionId(report.annotations);
+  const resolvedVersion =
+    resolveProtocolVersionById(linkedProtocol, versionId) ??
+    resolveProtocolVersionByDate(linkedProtocol, report.testDate);
+  if (!resolvedVersion) {
+    return linkedProtocol;
+  }
+  return buildProtocolWithVersion(linkedProtocol, resolvedVersion);
 };
 
 export const getPrimaryProtocolCompound = (protocol: Protocol | null): CompoundEntry | null => {

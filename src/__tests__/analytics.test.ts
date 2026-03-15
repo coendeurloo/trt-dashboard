@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildAlerts, buildMarkerSeries, calculatePercentChange, deriveCalculatedMarkers, getTargetZone } from "../analytics";
-import { LabReport } from "../types";
+import {
+  buildAlerts,
+  buildMarkerSeries,
+  buildProtocolImpactDoseEvents,
+  calculatePercentChange,
+  deriveCalculatedMarkers,
+  getTargetZone
+} from "../analytics";
+import { LabReport, Protocol } from "../types";
 
 const mkReport = (id: string, date: string, dose: number, markers: Array<{ marker: string; value: number; unit: string }>): LabReport => ({
   id,
@@ -135,5 +142,62 @@ describe("analytics", () => {
     expect(ratio?.referenceMin).toBe(120);
     expect(ratio?.referenceMax).toBe(320);
     expect(ratio?.abnormal).toBe("normal");
+  });
+
+  it("detects compound change only when version effective date is reached", () => {
+    const reports = [
+      mkReport("r1", "2026-02-01", 120, [{ marker: "Testosterone", value: 18, unit: "nmol/L" }]),
+      mkReport("r2", "2026-02-20", 120, [{ marker: "Testosterone", value: 19, unit: "nmol/L" }]),
+      mkReport("r3", "2026-03-10", 120, [{ marker: "Testosterone", value: 21, unit: "nmol/L" }])
+    ];
+    reports.forEach((report) => {
+      report.annotations.interventionId = "p-120";
+      report.annotations.interventionLabel = "TRT";
+      report.annotations.protocolId = "p-120";
+      report.annotations.protocol = "TRT";
+    });
+
+    const protocols: Protocol[] = [
+      {
+        id: "p-120",
+        name: "TRT",
+        items: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+        compounds: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+        versions: [
+          {
+            id: "v1",
+            effectiveFrom: "2026-01-01",
+            items: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+            compounds: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
+            notes: "",
+            createdAt: "2026-01-01T08:00:00.000Z"
+          },
+          {
+            id: "v2",
+            effectiveFrom: "2026-03-01",
+            items: [
+              { name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" },
+              { name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }
+            ],
+            compounds: [
+              { name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" },
+              { name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }
+            ],
+            notes: "",
+            createdAt: "2026-03-01T08:00:00.000Z"
+          }
+        ],
+        notes: "",
+        createdAt: "2026-01-01T08:00:00.000Z",
+        updatedAt: "2026-03-01T08:00:00.000Z"
+      }
+    ];
+
+    const events = buildProtocolImpactDoseEvents(reports, "eu", 42, protocols, []);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.changeDate).toBe("2026-03-10");
+    expect(events[0]?.eventType).toBe("compound");
+    expect(events[0]?.fromCompounds.some((item) => item.includes("HGH"))).toBe(false);
+    expect(events[0]?.toCompounds.some((item) => item.includes("HGH"))).toBe(true);
   });
 });

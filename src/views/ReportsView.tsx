@@ -987,13 +987,22 @@ const ReportsView = ({
                       <span className="mb-1 block text-slate-400">{tr("Protocol koppelen", "Link protocol")}</span>
                       <select
                         className="w-full rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100"
-                        value={editingAnnotations.protocolId ?? ""}
-                        onChange={(event) =>
+                        value={editingAnnotations.interventionId ?? editingAnnotations.protocolId ?? ""}
+                        onChange={(event) => {
+                          const nextId = event.target.value ? event.target.value : null;
+                          const nextProtocol = protocols.find((item) => item.id === nextId);
+                          const nextLabel = nextProtocol?.name ?? "";
                           setEditingAnnotations((current) => ({
                             ...current,
-                            protocolId: event.target.value ? event.target.value : null
-                          }))
-                        }
+                            interventionId: nextId,
+                            interventionLabel: nextLabel,
+                            protocolId: nextId,
+                            protocolVersionId: null,
+                            interventionVersionId: null,
+                            interventionSnapshot: null,
+                            protocol: nextLabel
+                          }));
+                        }}
                       >
                         <option value="">{tr("Geen gekoppeld protocol", "No linked protocol")}</option>
                         {protocols.map((item) => (

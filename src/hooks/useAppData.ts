@@ -13,10 +13,14 @@ import {
   SymptomCheckIn
 } from "../types";
 import { clearAnalystMemory, coerceStoredAppData, loadAppData, saveAppData } from "../storage";
+import { withResolvedInterventionAnnotations } from "../protocolUtils";
 import {
-  normalizeMarkerAliasOverrides,
-  setMarkerAliasOverrides
-} from "../markerNormalization";
+  createProtocolVersion,
+  ensureProtocolVersions,
+  normalizeProtocolMirrors,
+  todayIsoDate
+} from "../protocolVersions";
+import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "../markerNormalization";
 import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { deriveAbnormalFlag, sortReportsChronological } from "../utils";
@@ -44,8 +48,8 @@ const normalizeBaselineFlags = (reportsToNormalize: LabReport[]): LabReport[] =>
 
 const mergeProtocolsById = (existing: Protocol[], incoming: Protocol[]): Protocol[] => {
   const byId = new Map<string, Protocol>();
-  existing.forEach((protocol) => byId.set(protocol.id, protocol));
-  incoming.forEach((protocol) => byId.set(protocol.id, protocol));
+  existing.forEach((protocol) => byId.set(protocol.id, normalizeProtocolMirrors(protocol)));
+  incoming.forEach((protocol) => byId.set(protocol.id, normalizeProtocolMirrors(protocol)));
   return Array.from(byId.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 };
 
@@ -237,31 +241,38 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
             : annotations.supplementOverrides.length > 0
               ? "anchor"
               : "none";
-      const selectedInterventionId = annotations.interventionId ?? annotations.protocolId ?? null;
-      const selectedInterventionLabel = annotations.interventionLabel ?? annotations.protocol ?? "";
-      const normalizedAnnotations: ReportAnnotations = {
-        ...annotations,
-        interventionId: selectedInterventionId,
-        interventionLabel: selectedInterventionLabel,
-        protocolId: selectedInterventionId,
-        protocol: selectedInterventionLabel,
-        supplementAnchorState: normalizedAnchorState,
-        supplementOverrides:
-          normalizedAnchorState === "anchor"
-            ? annotations.supplementOverrides ?? []
-            : normalizedAnchorState === "none"
-              ? []
-              : null
-      };
-
       setAppData((prev) => ({
         ...prev,
         reports: prev.reports.map((report) =>
           report.id === reportId
-            ? {
-                ...report,
-                annotations: normalizedAnnotations
-              }
+            ? (() => {
+                const selectedInterventionId = annotations.interventionId ?? annotations.protocolId ?? null;
+                const selectedInterventionLabel = annotations.interventionLabel ?? annotations.protocol ?? "";
+                const normalizedAnnotations: ReportAnnotations = {
+                  ...annotations,
+                  interventionId: selectedInterventionId,
+                  interventionLabel: selectedInterventionLabel,
+                  protocolId: selectedInterventionId,
+                  protocol: selectedInterventionLabel,
+                  supplementAnchorState: normalizedAnchorState,
+                  supplementOverrides:
+                    normalizedAnchorState === "anchor"
+                      ? annotations.supplementOverrides ?? []
+                      : normalizedAnchorState === "none"
+                        ? []
+                        : null
+                };
+                const resolved = withResolvedInterventionAnnotations(
+                  normalizedAnnotations,
+                  selectedInterventionId,
+                  report.testDate,
+                  resolveProtocols(prev)
+                );
+                return {
+                  ...report,
+                  annotations: resolved
+                };
+              })()
             : report
         )
       }));
@@ -274,13 +285,15 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) => withProtocols(prev, mergeProtocolsById(resolveProtocols(prev), [protocol])));
+      setAppData((prev) =>
+        withProtocols(prev, mergeProtocolsById(resolveProtocols(prev), [normalizeProtocolMirrors(protocol)]))
+      );
     },
     [isShareMode]
   );
 
   const updateProtocol = useCallback(
-    (protocolId: string, updates: Partial<Protocol>) => {
+    (protocolId: string, updates: Partial<Protocol> & { effectiveFrom?: string }) => {
       if (isShareMode) {
         return;
       }
@@ -289,12 +302,30 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
           prev,
           resolveProtocols(prev).map((protocol) =>
           protocol.id === protocolId
-            ? {
-                ...protocol,
-                ...updates,
-                id: protocol.id,
-                updatedAt: new Date().toISOString()
-              }
+            ? (() => {
+                const now = new Date().toISOString();
+                const nextName = typeof updates.name === "string" ? updates.name : protocol.name;
+                const nextItems = Array.isArray(updates.items)
+                  ? updates.items
+                  : Array.isArray(updates.compounds)
+                    ? updates.compounds
+                    : protocol.compounds;
+                const nextNotes = typeof updates.notes === "string" ? updates.notes : protocol.notes;
+                const nextVersion = createProtocolVersion({
+                  effectiveFrom: updates.effectiveFrom ?? todayIsoDate(),
+                  items: nextItems,
+                  notes: nextNotes,
+                  createdAt: now
+                });
+                const existingVersions = ensureProtocolVersions(protocol);
+                return normalizeProtocolMirrors({
+                  ...protocol,
+                  id: protocol.id,
+                  name: nextName,
+                  versions: [...existingVersions, nextVersion],
+                  updatedAt: now
+                });
+              })()
             : protocol
           )
         )

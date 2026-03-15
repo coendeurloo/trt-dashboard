@@ -2,9 +2,11 @@ import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_PERSONAL_INFO, DEFAULT_SET
 import {
   AppSettings,
   CompoundEntry,
+  InterventionSnapshot,
   LabReport,
   MarkerValue,
   Protocol,
+  ProtocolVersion,
   ReportAnnotations,
   StoredAppData,
   SupplementPeriod,
@@ -14,6 +16,7 @@ import {
 } from "./types";
 import { normalizeMarkerAliasOverrides, normalizeMarkerLookupKey, setMarkerAliasOverrides } from "./markerNormalization";
 import { canonicalizeSupplement, normalizeSupplementFrequency } from "./protocolStandards";
+import { createProtocolVersion, normalizeInterventionSnapshot, normalizeProtocolMirrors, todayIsoDate } from "./protocolVersions";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import { inferDashboardChartPresetFromSettings } from "./chartHelpers";
 import { createId, deriveAbnormalFlag } from "./utils";
@@ -228,6 +231,52 @@ const normalizeCompoundEntry = (value: unknown): CompoundEntry | null => {
   };
 };
 
+const toIsoDateFromDateTime = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const directIso = normalizeIsoDate(trimmed);
+  if (directIso) {
+    return directIso;
+  }
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return new Date(parsed).toISOString().slice(0, 10);
+};
+
+const normalizeProtocolVersion = (
+  value: unknown,
+  fallbackEffectiveFrom: string,
+  fallbackCreatedAt: string,
+  fallbackNotes: string
+): ProtocolVersion | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<ProtocolVersion>;
+  const rawItems = Array.isArray((row as Partial<ProtocolVersion> & { items?: unknown[] }).items)
+    ? ((row as Partial<ProtocolVersion> & { items?: unknown[] }).items ?? [])
+    : Array.isArray(row.compounds)
+      ? row.compounds
+      : [];
+  const items = rawItems
+    .map((entry) => normalizeCompoundEntry(entry))
+    .filter((entry): entry is CompoundEntry => entry !== null);
+  return createProtocolVersion({
+    id: typeof row.id === "string" ? row.id : undefined,
+    effectiveFrom: normalizeIsoDate(row.effectiveFrom) ?? fallbackEffectiveFrom,
+    items,
+    notes: typeof row.notes === "string" ? row.notes : fallbackNotes,
+    createdAt: typeof row.createdAt === "string" && row.createdAt ? row.createdAt : fallbackCreatedAt
+  });
+};
+
 const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protocol | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -250,16 +299,39 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
     .filter((entry): entry is CompoundEntry => entry !== null);
 
   const compounds = items;
+  const createdAt = typeof value.createdAt === "string" && value.createdAt ? value.createdAt : new Date().toISOString();
+  const updatedAt = typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : new Date().toISOString();
+  const fallbackEffectiveFrom = toIsoDateFromDateTime(updatedAt) ?? toIsoDateFromDateTime(createdAt) ?? todayIsoDate();
+  const notes = String(value.notes ?? "");
+  const rawVersions = Array.isArray((value as Partial<Protocol> & { versions?: unknown[] }).versions)
+    ? ((value as Partial<Protocol> & { versions?: unknown[] }).versions ?? [])
+    : [];
+  const versions = rawVersions
+    .map((version) => normalizeProtocolVersion(version, fallbackEffectiveFrom, createdAt, notes))
+    .filter((version): version is ProtocolVersion => version !== null);
 
-  return {
+  const normalizedVersions =
+    versions.length > 0
+      ? versions
+      : [
+          createProtocolVersion({
+            effectiveFrom: fallbackEffectiveFrom,
+            items,
+            notes,
+            createdAt
+          })
+        ];
+
+  return normalizeProtocolMirrors({
     id,
     name,
     items,
     compounds,
-    notes: String(value.notes ?? ""),
-    createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : new Date().toISOString(),
-    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : new Date().toISOString()
-  };
+    versions: normalizedVersions,
+    notes,
+    createdAt,
+    updatedAt
+  });
 };
 
 const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportAnnotations => {
@@ -270,6 +342,15 @@ const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportA
   const interventionLabelRaw = (annotations as Partial<ReportAnnotations> & { interventionLabel?: unknown })?.interventionLabel;
   const selectedLabel = interventionLabelRaw ?? annotations?.protocol;
   const interventionLabel = String(selectedLabel ?? "");
+  const interventionVersionIdRaw =
+    (annotations as Partial<ReportAnnotations> & { interventionVersionId?: unknown })?.interventionVersionId ??
+    annotations?.protocolVersionId;
+  const interventionSnapshot = normalizeInterventionSnapshot(
+    (annotations as Partial<ReportAnnotations> & { interventionSnapshot?: unknown })?.interventionSnapshot
+  );
+  const selectedVersionId = interventionVersionIdRaw ?? interventionSnapshot?.versionId ?? null;
+  const interventionVersionId =
+    typeof selectedVersionId === "string" && selectedVersionId.trim().length > 0 ? selectedVersionId : null;
   const normalizedOverrides = normalizeSupplementOverrides(annotations?.supplementOverrides);
   const supplementAnchorState = normalizeSupplementAnchorState(annotations?.supplementAnchorState, normalizedOverrides);
   const supplementOverrides =
@@ -284,7 +365,10 @@ const normalizeAnnotations = (annotations?: Partial<ReportAnnotations>): ReportA
   return {
     interventionId,
     interventionLabel,
+    interventionVersionId,
+    interventionSnapshot: interventionSnapshot as InterventionSnapshot | null,
     protocolId: interventionId,
+    protocolVersionId: interventionVersionId,
     protocol: interventionLabel,
     supplementAnchorState,
     supplementOverrides,

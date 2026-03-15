@@ -675,6 +675,7 @@ const ExtractionReviewTable = ({
 
   const saveProtocolFromDraft = () => {
     const name = protocolDraft.name.trim();
+    const effectiveFrom = protocolDraft.effectiveFrom.trim() || new Date().toISOString().slice(0, 10);
     if (!name) {
       setProtocolFeedback(tr("Geef een protocolnaam op.", "Please enter a protocol name."));
       return;
@@ -685,11 +686,20 @@ const ExtractionReviewTable = ({
     }
 
     const now = new Date().toISOString();
+    const version = {
+      id: createId(),
+      effectiveFrom,
+      items: protocolDraft.compounds,
+      compounds: protocolDraft.compounds,
+      notes: protocolDraft.notes,
+      createdAt: now
+    };
     const protocol: Protocol = {
       id: createId(),
       name,
       items: protocolDraft.compounds,
       compounds: protocolDraft.compounds,
+      versions: [version],
       notes: protocolDraft.notes,
       createdAt: now,
       updatedAt: now

@@ -144,15 +144,26 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
   return (
     <div className="space-y-3">
-      <label className="block text-xs uppercase tracking-wide text-slate-400">
-        {tr("Protocolnaam", "Protocol name")}
-        <input
-          value={value.name}
-          onChange={(event) => onChange({ ...value, name: event.target.value })}
-          className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-          placeholder={tr("Bijv. TRT Cruise 125mg", "e.g. TRT Cruise 125mg")}
-        />
-      </label>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <label className="block text-xs uppercase tracking-wide text-slate-400">
+          {tr("Protocolnaam", "Protocol name")}
+          <input
+            value={value.name}
+            onChange={(event) => onChange({ ...value, name: event.target.value })}
+            className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            placeholder={tr("Bijv. TRT Cruise 125mg", "e.g. TRT Cruise 125mg")}
+          />
+        </label>
+        <label className="block text-xs uppercase tracking-wide text-slate-400">
+          {tr("Ingangsdatum", "Effective from")}
+          <input
+            type="date"
+            value={value.effectiveFrom}
+            onChange={(event) => onChange({ ...value, effectiveFrom: event.target.value })}
+            className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+          />
+        </label>
+      </div>
 
       <div className="review-context-card rounded-xl border border-slate-700 bg-slate-900/40 p-3">
         <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">{tr("Compounds", "Compounds")}</label>

@@ -122,8 +122,11 @@ export interface MarkerValue {
 export interface ReportAnnotations {
   interventionId?: string | null;
   interventionLabel?: string;
+  interventionVersionId?: string | null;
+  interventionSnapshot?: InterventionSnapshot | null;
   // Backward-compatible aliases for older snapshots/imports.
   protocolId?: string | null;
+  protocolVersionId?: string | null;
   protocol?: string;
   supplementAnchorState?: SupplementAnchorState;
   supplementOverrides: SupplementPeriod[] | null;
@@ -132,12 +135,34 @@ export interface ReportAnnotations {
   samplingTiming: SamplingTiming;
 }
 
+export interface ProtocolVersion {
+  id: string;
+  effectiveFrom: string;
+  items: InterventionItem[];
+  // Legacy alias; keep in sync with `items`.
+  compounds: CompoundEntry[];
+  notes: string;
+  createdAt: string;
+}
+
+export interface InterventionSnapshot {
+  interventionId: string | null;
+  versionId: string | null;
+  name: string;
+  items: InterventionItem[];
+  // Legacy alias; keep in sync with `items`.
+  compounds: CompoundEntry[];
+  notes: string;
+  effectiveFrom: string;
+}
+
 export interface InterventionPlan {
   id: string;
   name: string;
   items: InterventionItem[];
   // Legacy alias; keep in sync with `items`.
   compounds: CompoundEntry[];
+  versions?: ProtocolVersion[];
   // Legacy key retained for older imports/snapshots.
   supplements?: SupplementEntry[];
   notes: string;
@@ -397,5 +422,4 @@ export interface ExtractionDraft {
     aiReason?: ExtractionAIReason;
   };
 }
-
 

@@ -1,6 +1,7 @@
 import { format, subMonths, subWeeks } from "date-fns";
 import { LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod, SymptomCheckIn, UserProfile } from "./types";
 import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "./constants";
+import { createProtocolVersion } from "./protocolVersions";
 import { createId, deriveAbnormalFlag } from "./utils";
 
 export const DEMO_PROTOCOL_CRUISE_ID = "demo-protocol-cruise-125";
@@ -126,7 +127,10 @@ const makeMarker = (canonicalMarker: string, value: number): MarkerValue => {
 const defaultAnnotations = (): ReportAnnotations => ({
   interventionId: null,
   interventionLabel: "",
+  interventionVersionId: null,
+  interventionSnapshot: null,
   protocolId: null,
+  protocolVersionId: null,
   protocol: "",
   supplementAnchorState: "inherit",
   supplementOverrides: null,
@@ -161,10 +165,18 @@ const normalizeDemoCompound = (compound: Protocol["compounds"][number]): Protoco
 
 const createDemoProtocol = (input: Omit<Protocol, "items" | "compounds"> & { compounds: Protocol["compounds"] }): Protocol => {
   const compounds = input.compounds.map((compound) => normalizeDemoCompound(compound));
+  const effectiveFrom = input.updatedAt.slice(0, 10);
+  const version = createProtocolVersion({
+    effectiveFrom,
+    items: compounds,
+    notes: input.notes,
+    createdAt: input.updatedAt
+  });
   return {
     ...input,
-    items: compounds,
-    compounds
+    items: version.items,
+    compounds: version.compounds,
+    versions: [version]
   };
 };
 
@@ -184,7 +196,9 @@ const makeReport = (input: {
     ...input.annotations,
     interventionId,
     interventionLabel,
+    interventionVersionId: input.annotations.interventionVersionId ?? input.annotations.protocolVersionId ?? null,
     protocolId: interventionId,
+    protocolVersionId: input.annotations.protocolVersionId ?? input.annotations.interventionVersionId ?? null,
     protocol: interventionLabel
   };
   return {

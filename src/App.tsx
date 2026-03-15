@@ -28,7 +28,8 @@ import {
   getPrimaryProtocolCompound,
   getProtocolDisplayLabel,
   getProtocolDoseMgPerWeek,
-  getReportProtocol
+  getReportProtocol,
+  withResolvedInterventionAnnotations
 } from "./protocolUtils";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion";
 import useAnalysis from "./hooks/useAnalysis";
@@ -1435,16 +1436,24 @@ const App = () => {
             : null
     };
 
+    const resolvedDraftAnnotations = withResolvedInterventionAnnotations(
+      {
+        ...normalizedDraftAnnotations,
+        interventionId: selectedProtocolId,
+        protocolId: selectedProtocolId
+      },
+      selectedProtocolId,
+      draft.testDate,
+      appData.protocols
+    );
+
     const report: LabReport = {
       id: createId(),
       sourceFileName: draft.sourceFileName,
       testDate: draft.testDate,
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
-      annotations: {
-        ...normalizedDraftAnnotations,
-        protocolId: selectedProtocolId
-      },
+      annotations: resolvedDraftAnnotations,
       extraction: draft.extraction
     };
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));

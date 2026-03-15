@@ -31,7 +31,18 @@ const makeSampleData = () =>
         annotations: {
           interventionId: "protocol-1",
           interventionLabel: "TRT",
+          interventionVersionId: "protocol-1-v1",
+          interventionSnapshot: {
+            interventionId: "protocol-1",
+            versionId: "protocol-1-v1",
+            name: "TRT",
+            items: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
+            compounds: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
+            notes: "baseline protocol",
+            effectiveFrom: "2025-12-30"
+          },
           protocolId: "protocol-1",
+          protocolVersionId: "protocol-1-v1",
           protocol: "TRT",
           supplementAnchorState: "inherit",
           supplementOverrides: null,
@@ -54,6 +65,16 @@ const makeSampleData = () =>
         name: "TRT",
         items: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
         compounds: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
+        versions: [
+          {
+            id: "protocol-1-v1",
+            effectiveFrom: "2025-12-30",
+            items: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
+            compounds: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
+            notes: "baseline protocol",
+            createdAt: "2025-12-30T10:00:00.000Z"
+          }
+        ],
         notes: "baseline protocol",
         createdAt: "2025-12-30T10:00:00.000Z",
         updatedAt: "2026-01-10T10:00:00.000Z"
@@ -130,10 +151,13 @@ describe("cloud mapping", () => {
 
     expect(roundtrip.reports).toHaveLength(1);
     expect(roundtrip.protocols).toHaveLength(1);
+    expect(roundtrip.protocols[0]?.versions?.length ?? 0).toBeGreaterThan(0);
     expect(roundtrip.supplementTimeline).toHaveLength(1);
     expect(roundtrip.checkIns).toHaveLength(1);
     expect(roundtrip.reports[0].markers[0].canonicalMarker).toBe("Testosterone");
     expect(roundtrip.reports[0].isBaseline).toBe(true);
+    expect(roundtrip.reports[0].annotations.interventionVersionId).toBe("protocol-1-v1");
+    expect(roundtrip.reports[0].annotations.interventionSnapshot?.versionId).toBe("protocol-1-v1");
     expect(roundtrip.markerAliasOverrides.testo).toBe("Testosterone");
     expect(roundtrip.personalInfo).toEqual({
       name: "Coen",
