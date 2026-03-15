@@ -143,9 +143,7 @@ describe("DashboardView first-report UX", () => {
     render(<DashboardView {...{ ...props, visibleReports: [report] }} />);
 
     expect(
-      screen.getByText(
-        /Great start: your first report is saved\. Add one more report to unlock trend charts and over-time comparisons\./i
-      )
+      screen.getByText(/Upload one more report to unlock trends\./i)
     ).toBeTruthy();
   });
 });
@@ -205,9 +203,9 @@ describe("DashboardView chart controls", () => {
       />
     );
 
-    expect(screen.getByText("Stability Index")).toBeTruthy();
+    expect(screen.getByText("Hormone stability")).toBeTruthy();
     expect(screen.queryByText("Changed")).toBeNull();
-    const stabilitySection = screen.getByText("Stability Index").closest("#dashboard-stability-index");
+    const stabilitySection = screen.getByText("Hormone stability").closest("#dashboard-stability-index");
     expect(stabilitySection).toBeTruthy();
     expect(within(stabilitySection as HTMLElement).getAllByText("66").length).toBeGreaterThan(0);
   });
@@ -230,7 +228,7 @@ describe("DashboardView chart controls", () => {
     expect(screen.getByTestId("dashboard-filter-divider")).toBeTruthy();
 
     const months12 = screen.getByRole("button", { name: "12 months" });
-    const primaryMarkers = screen.getByRole("button", { name: "Primary markers" });
+    const primaryMarkers = screen.getByRole("button", { name: "Primary" });
     expect(months12.className).toContain("dashboard-filter-chip-active");
     expect(primaryMarkers.className).toContain("dashboard-filter-chip-active");
   });
