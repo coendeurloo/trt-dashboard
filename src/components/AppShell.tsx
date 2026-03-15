@@ -19,6 +19,7 @@ import labtrackerLogoDark from "../assets/labtracker-logo-dark.svg";
 import labtrackerLogoLight from "../assets/labtracker-logo-light.svg";
 import { APP_LANGUAGE_OPTIONS, getTabLabel, t } from "../i18n";
 import { getPersonaNavSectionLabel, getPersonaSidebarCurrentLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
+import { stabilityColor } from "../chartHelpers";
 import { formatDate } from "../utils";
 import { AppMode, AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
 import MobileNavDrawer from "./MobileNavDrawer";
@@ -549,16 +550,6 @@ const AppShell = ({
                           <span>
                             <strong className={outOfRangeCount === 0 ? "text-emerald-300" : "text-amber-300"}>{outOfRangeCount}</strong> {t(language, "outOfRange")}
                           </span>
-                          <span className="text-slate-600">·</span>
-                          <button
-                            type="button"
-                            onClick={scrollToStabilityIndex}
-                            aria-label={tr("Open Stabiliteitsindex", "Open Stability Index")}
-                            className="inline-flex items-center gap-2 rounded-full border border-slate-600/75 bg-slate-800/70 px-3 py-1 text-slate-200 transition hover:border-slate-500/80 hover:bg-slate-800/90"
-                          >
-                            <span className="text-xs font-medium sm:text-sm">{stabilityLabel}</span>
-                            <strong className="text-base font-semibold leading-none text-amber-400 sm:text-lg">{stabilityScore ?? "—"}</strong>
-                          </button>
                         </div>
                       ) : null}
                     </div>
@@ -568,6 +559,30 @@ const AppShell = ({
                   <div className="hidden lg:block" />
                 )}
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  {showDashboardHeaderStats && stabilityScore !== null ? (
+                    <div className="group relative">
+                      <button
+                        type="button"
+                        onClick={scrollToStabilityIndex}
+                        className="stability-header-pill inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1 text-xs transition hover:border-slate-500/80 hover:bg-slate-800/90"
+                      >
+                        <span className="stability-pill-label text-slate-300">{stabilityLabel}</span>
+                        <span className="font-semibold" style={{ color: stabilityColor(stabilityScore) }}>{stabilityScore}</span>
+                      </button>
+                      <div className="stability-header-tooltip pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-700/80 bg-slate-900/97 p-3 text-xs leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                        <p className="stability-tooltip-title font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
+                        <p className="mt-1.5">
+                          {tr(
+                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling — een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
+                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation — a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
+                          )}
+                        </p>
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          {tr("80-100: stabiel · 60-79: matig · onder 60: wisselend", "80-100: stable · 60-79: moderate · below 60: variable")}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                   <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
                     <span>{tr("Taal", "Language")}:</span>
                     <select
