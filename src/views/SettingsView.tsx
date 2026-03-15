@@ -44,6 +44,8 @@ interface SettingsViewProps {
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
   onReportIssue: () => void;
+  cloudUserEmail?: string | null;
+  onSignOut?: () => void;
 }
 
 interface ToggleSwitchProps {
@@ -107,7 +109,9 @@ const SettingsView = ({
   onAddMarkerSuggestions,
   onShareOptionsChange,
   onGenerateShareLink,
-  onReportIssue
+  onReportIssue,
+  cloudUserEmail,
+  onSignOut
 }: SettingsViewProps) => {
   const isNl = language === "nl";
   const isLightTheme = settings.theme === "light";
@@ -771,7 +775,21 @@ const SettingsView = ({
               </p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
+            {cloudUserEmail && onSignOut ? (
+              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
+                <h3 className="text-sm font-semibold text-slate-300">{tr("Ingelogd account", "Signed-in account")}</h3>
+                <p className="mt-1 text-sm text-slate-400">{cloudUserEmail}</p>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="mt-3 rounded-lg border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700/60 hover:text-slate-100"
+                >
+                  {tr("Uitloggen", "Sign out")}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
               <h3 className="text-sm font-semibold text-slate-300">{tr("Onboarding wizard", "Onboarding wizard")}</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {tr(
