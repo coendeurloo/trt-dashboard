@@ -763,6 +763,31 @@ body.light .chart-settings-panel .text-slate-500 {
   color: #64748b !important;
 }
 
+/* Stability header pill — light mode */
+body.light .stability-header-pill {
+  border-color: rgba(148, 163, 184, 0.5) !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body.light .stability-header-pill:hover {
+  background-color: #fff !important;
+  border-color: rgba(100, 116, 139, 0.6) !important;
+}
+
+body.light .stability-pill-label {
+  color: #475569 !important;
+}
+
+body.light .stability-header-tooltip {
+  background-color: #fff !important;
+  border-color: rgba(203, 213, 225, 0.9) !important;
+  color: #475569 !important;
+}
+
+body.light .stability-tooltip-title {
+  color: #0f172a !important;
+}
+
 .welcome-hero-halo {
   position: absolute;
   top: -160px;
