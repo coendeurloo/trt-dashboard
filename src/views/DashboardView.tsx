@@ -294,31 +294,43 @@ const DashboardView = ({
           <div className="flex items-center gap-3">
             {/* Compact stability badge */}
             {trtStability.score !== null ? (
-              <div className="flex items-center gap-2 rounded-lg bg-slate-800/60 px-3 py-1.5">
-                <div className="relative h-8 w-8">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: "score", value: trtStability.score },
-                          { name: "rest", value: 100 - trtStability.score }
-                        ]}
-                        dataKey="value"
-                        innerRadius={10}
-                        outerRadius={15}
-                        stroke="none"
-                        startAngle={90}
-                        endAngle={-270}
-                      >
-                        <Cell fill={stabilityColor(trtStability.score)} />
-                        <Cell fill="#334155" />
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
+              <div className="group relative">
+                <div className="flex cursor-default items-center gap-1.5 rounded-full border border-slate-700/50 bg-slate-800/50 px-2.5 py-1 text-xs">
+                  <div className="relative h-5 w-5 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: "score", value: trtStability.score },
+                            { name: "rest", value: 100 - trtStability.score }
+                          ]}
+                          dataKey="value"
+                          innerRadius={6}
+                          outerRadius={9}
+                          stroke="none"
+                          startAngle={90}
+                          endAngle={-270}
+                        >
+                          <Cell fill={stabilityColor(trtStability.score)} />
+                          <Cell fill="#334155" />
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <span className="text-slate-300">{tr("Hormoonestabiliteit", "Hormone stability")}</span>
+                  <span className="font-semibold" style={{ color: stabilityColor(trtStability.score) }}>{trtStability.score}</span>
                 </div>
-                <div className="text-xs">
-                  <span className="font-semibold text-slate-100">{trtStability.score}</span>
-                  <span className="ml-1 text-slate-400">{tr("stabiliteit", "stability")}</span>
+                <div className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-64 rounded-xl border border-slate-700/80 bg-slate-900/97 p-3 text-xs leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                  <p className="font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
+                  <p className="mt-1.5">
+                    {tr(
+                      "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling — een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
+                      "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation — a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
+                    )}
+                  </p>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    {tr("80-100: stabiel · 60-79: matig · onder 60: wisselend", "80-100: stable · 60-79: moderate · below 60: variable")}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -937,11 +949,11 @@ const DashboardView = ({
                 </div>
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-200">{tr("Stabiliteitsindex", "Stability Index")}</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">
+                <p className="text-xs font-medium text-slate-200">{tr("Hormoonestabiliteit", "Hormone stability")}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
                   {tr(
-                    "Rust-score hormoonmarkers. 80-100 = stabiel, 60-79 = matig, <60 = wisselend.",
-                    "Hormone steadiness score. 80-100 = stable, 60-79 = moderate, <60 = variable."
+                    "Meet hoe consistent je markers zijn over je recente rapporten. Weinig schommeling betekent een hoge score — een goed teken dat je protocol zijn werk doet. 80-100: stabiel · 60-79: matig · onder 60: wisselend.",
+                    "Measures how consistent your markers have been across your recent reports. Little fluctuation means a high score — a good sign your protocol is working. 80-100: stable · 60-79: moderate · below 60: variable."
                   )}
                 </p>
               </div>
