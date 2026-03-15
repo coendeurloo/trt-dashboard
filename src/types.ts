@@ -137,6 +137,7 @@ export interface ReportAnnotations {
 
 export interface ProtocolVersion {
   id: string;
+  name: string;
   effectiveFrom: string;
   items: InterventionItem[];
   // Legacy alias; keep in sync with `items`.
@@ -144,6 +145,8 @@ export interface ProtocolVersion {
   notes: string;
   createdAt: string;
 }
+
+export type ProtocolSaveMode = "new_version" | "overwrite_history";
 
 export interface InterventionSnapshot {
   interventionId: string | null;
@@ -422,4 +425,3 @@ export interface ExtractionDraft {
     aiReason?: ExtractionAIReason;
   };
 }
-

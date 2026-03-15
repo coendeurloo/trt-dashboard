@@ -840,7 +840,9 @@ export default function OnboardingWizard({
       frequency: protocolDraft.frequency,
       route: protocolDraft.route
     };
+    const protocolName = protocolDraft.compound.trim();
     const version = createProtocolVersion({
+      name: protocolName,
       effectiveFrom,
       items: [item],
       notes: "",
@@ -848,7 +850,7 @@ export default function OnboardingWizard({
     });
     const protocol: Protocol = {
       id: createId(),
-      name: protocolDraft.compound.trim(),
+      name: protocolName,
       items: version.items,
       compounds: version.compounds,
       versions: [version],

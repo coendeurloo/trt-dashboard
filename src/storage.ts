@@ -254,7 +254,8 @@ const normalizeProtocolVersion = (
   value: unknown,
   fallbackEffectiveFrom: string,
   fallbackCreatedAt: string,
-  fallbackNotes: string
+  fallbackNotes: string,
+  fallbackName: string
 ): ProtocolVersion | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -270,6 +271,7 @@ const normalizeProtocolVersion = (
     .filter((entry): entry is CompoundEntry => entry !== null);
   return createProtocolVersion({
     id: typeof row.id === "string" ? row.id : undefined,
+    name: typeof row.name === "string" && row.name.trim().length > 0 ? row.name : fallbackName,
     effectiveFrom: normalizeIsoDate(row.effectiveFrom) ?? fallbackEffectiveFrom,
     items,
     notes: typeof row.notes === "string" ? row.notes : fallbackNotes,
@@ -303,11 +305,12 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
   const updatedAt = typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : new Date().toISOString();
   const fallbackEffectiveFrom = toIsoDateFromDateTime(updatedAt) ?? toIsoDateFromDateTime(createdAt) ?? todayIsoDate();
   const notes = String(value.notes ?? "");
+  const versionName = name;
   const rawVersions = Array.isArray((value as Partial<Protocol> & { versions?: unknown[] }).versions)
     ? ((value as Partial<Protocol> & { versions?: unknown[] }).versions ?? [])
     : [];
   const versions = rawVersions
-    .map((version) => normalizeProtocolVersion(version, fallbackEffectiveFrom, createdAt, notes))
+    .map((version) => normalizeProtocolVersion(version, fallbackEffectiveFrom, createdAt, notes, versionName))
     .filter((version): version is ProtocolVersion => version !== null);
 
   const normalizedVersions =
@@ -315,6 +318,7 @@ const normalizeProtocol = (value: Partial<Protocol> | null | undefined): Protoco
       ? versions
       : [
           createProtocolVersion({
+            name: versionName,
             effectiveFrom: fallbackEffectiveFrom,
             items,
             notes,

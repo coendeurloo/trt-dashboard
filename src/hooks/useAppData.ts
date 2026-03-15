@@ -7,6 +7,7 @@ import {
   LabReport,
   PersonalInfo,
   Protocol,
+  ProtocolSaveMode,
   ReportAnnotations,
   StoredAppData,
   SupplementPeriod,
@@ -293,18 +294,25 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   );
 
   const updateProtocol = useCallback(
-    (protocolId: string, updates: Partial<Protocol> & { effectiveFrom?: string }) => {
+    (
+      protocolId: string,
+      updates: Partial<Protocol> & { effectiveFrom?: string; saveMode?: ProtocolSaveMode }
+    ) => {
       if (isShareMode) {
         return;
       }
-      setAppData((prev) =>
-        withProtocols(
-          prev,
-          resolveProtocols(prev).map((protocol) =>
+      setAppData((prev) => {
+        const currentProtocols = resolveProtocols(prev);
+        let didOverwriteHistory = false;
+        let overwrittenProtocolName = "";
+        const nextProtocols = currentProtocols.map((protocol) =>
           protocol.id === protocolId
             ? (() => {
                 const now = new Date().toISOString();
-                const nextName = typeof updates.name === "string" ? updates.name : protocol.name;
+                const normalizedMode: ProtocolSaveMode =
+                  updates.saveMode === "overwrite_history" ? "overwrite_history" : "new_version";
+                const requestedName = typeof updates.name === "string" ? updates.name.trim() : "";
+                const nextName = requestedName || protocol.name;
                 const nextItems = Array.isArray(updates.items)
                   ? updates.items
                   : Array.isArray(updates.compounds)
@@ -312,24 +320,67 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
                     : protocol.compounds;
                 const nextNotes = typeof updates.notes === "string" ? updates.notes : protocol.notes;
                 const nextVersion = createProtocolVersion({
+                  name: nextName,
                   effectiveFrom: updates.effectiveFrom ?? todayIsoDate(),
                   items: nextItems,
                   notes: nextNotes,
                   createdAt: now
                 });
                 const existingVersions = ensureProtocolVersions(protocol);
+                const nextVersions =
+                  normalizedMode === "overwrite_history"
+                    ? [nextVersion]
+                    : [...existingVersions, nextVersion];
+                if (normalizedMode === "overwrite_history") {
+                  didOverwriteHistory = true;
+                  overwrittenProtocolName = nextName;
+                }
                 return normalizeProtocolMirrors({
                   ...protocol,
                   id: protocol.id,
                   name: nextName,
-                  versions: [...existingVersions, nextVersion],
+                  versions: nextVersions,
                   updatedAt: now
                 });
               })()
             : protocol
-          )
-        )
-      );
+        );
+        if (!didOverwriteHistory) {
+          return withProtocols(prev, nextProtocols);
+        }
+        const nextReports = prev.reports.map((report) => {
+          const linkedId = report.annotations.interventionId ?? report.annotations.protocolId ?? null;
+          if (linkedId !== protocolId) {
+            return report;
+          }
+          const rewrittenAnnotations = withResolvedInterventionAnnotations(
+            {
+              ...report.annotations,
+              interventionId: protocolId,
+              interventionLabel: overwrittenProtocolName,
+              interventionVersionId: null,
+              interventionSnapshot: null,
+              protocolId: protocolId,
+              protocolVersionId: null,
+              protocol: overwrittenProtocolName
+            },
+            protocolId,
+            report.testDate,
+            nextProtocols
+          );
+          return {
+            ...report,
+            annotations: rewrittenAnnotations
+          };
+        });
+        return withProtocols(
+          {
+            ...prev,
+            reports: nextReports
+          },
+          nextProtocols
+        );
+      });
     },
     [isShareMode]
   );

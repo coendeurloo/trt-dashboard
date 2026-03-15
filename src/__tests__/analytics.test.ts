@@ -166,6 +166,7 @@ describe("analytics", () => {
         versions: [
           {
             id: "v1",
+            name: "TRT",
             effectiveFrom: "2026-01-01",
             items: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
             compounds: [{ name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" }],
@@ -174,6 +175,7 @@ describe("analytics", () => {
           },
           {
             id: "v2",
+            name: "TRT",
             effectiveFrom: "2026-03-01",
             items: [
               { name: "Testosterone Enanthate", dose: "120 mg/week", frequency: "2x_week", route: "SubQ" },

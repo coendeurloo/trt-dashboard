@@ -68,6 +68,7 @@ const makeSampleData = () =>
         versions: [
           {
             id: "protocol-1-v1",
+            name: "TRT",
             effectiveFrom: "2025-12-30",
             items: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],
             compounds: [{ name: "Test C", dose: "120mg", frequency: "weekly", route: "IM" }],

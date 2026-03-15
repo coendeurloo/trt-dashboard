@@ -5,8 +5,16 @@ import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
 import { getProtocolCompoundsText, getReportProtocol } from "../protocolUtils";
-import { createProtocolVersion, ensureProtocolVersions, getLatestProtocolVersion, todayIsoDate } from "../protocolVersions";
-import { AppLanguage, LabReport, Protocol, UserProfile } from "../types";
+import {
+  createProtocolVersion,
+  ensureProtocolVersions,
+  getLatestProtocolVersion,
+  getLinkedInterventionId,
+  getLinkedInterventionVersionId,
+  resolveProtocolVersionByDate,
+  todayIsoDate
+} from "../protocolVersions";
+import { AppLanguage, LabReport, Protocol, ProtocolSaveMode, UserProfile } from "../types";
 import { createId } from "../utils";
 
 interface ProtocolViewProps {
@@ -16,10 +24,43 @@ interface ProtocolViewProps {
   userProfile: UserProfile;
   isShareMode: boolean;
   onAddProtocol: (protocol: Protocol) => void;
-  onUpdateProtocol: (id: string, updates: Partial<Protocol> & { effectiveFrom?: string }) => void;
+  onUpdateProtocol: (
+    id: string,
+    updates: Partial<Protocol> & { effectiveFrom?: string; saveMode?: ProtocolSaveMode }
+  ) => void;
   onDeleteProtocol: (id: string) => boolean;
   getProtocolUsageCount: (id: string) => number;
 }
+
+interface VersionRangeRow {
+  versionId: string;
+  name: string;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  itemCount: number;
+  reportCount: number;
+}
+
+const formatDateLabel = (value: string, language: AppLanguage): string => {
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(language === "nl" ? "nl-NL" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  }).format(new Date(parsed));
+};
+
+const previousIsoDate = (value: string): string | null => {
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  const previous = new Date(parsed - 24 * 60 * 60 * 1000);
+  return previous.toISOString().slice(0, 10);
+};
 
 const protocolToDraft = (protocol: Protocol): ProtocolDraft => {
   const latestVersion = getLatestProtocolVersion(protocol);
@@ -90,6 +131,8 @@ const ProtocolView = ({
   const [draft, setDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [initialDraft, setInitialDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [feedback, setFeedback] = useState("");
+  const [showSaveModeDialog, setShowSaveModeDialog] = useState(false);
+  const [saveMode, setSaveMode] = useState<ProtocolSaveMode>("new_version");
 
   const activeProtocolId = useMemo(() => {
     const sorted = [...reports].sort((left, right) => {
@@ -103,6 +146,35 @@ const ProtocolView = ({
     return latestWithProtocol?.annotations.interventionId ?? latestWithProtocol?.annotations.protocolId ?? null;
   }, [reports, protocols]);
 
+  const versionUsageByProtocol = useMemo(() => {
+    const usage = new Map<string, Map<string, number>>();
+    const protocolById = new Map(protocols.map((protocol) => [protocol.id, protocol]));
+    reports.forEach((report) => {
+      const protocolId = getLinkedInterventionId(report.annotations);
+      if (!protocolId) {
+        return;
+      }
+      const protocol = protocolById.get(protocolId);
+      if (!protocol) {
+        return;
+      }
+      const linkedVersionId = getLinkedInterventionVersionId(report.annotations);
+      const resolvedVersionId = linkedVersionId ?? resolveProtocolVersionByDate(protocol, report.testDate)?.id ?? null;
+      if (!resolvedVersionId) {
+        return;
+      }
+      if (!usage.has(protocolId)) {
+        usage.set(protocolId, new Map<string, number>());
+      }
+      const protocolUsage = usage.get(protocolId);
+      if (!protocolUsage) {
+        return;
+      }
+      protocolUsage.set(resolvedVersionId, (protocolUsage.get(resolvedVersionId) ?? 0) + 1);
+    });
+    return usage;
+  }, [protocols, reports]);
+
   const startCreate = () => {
     const nextDraft = blankProtocolDraft();
     setEditorMode("create");
@@ -110,6 +182,8 @@ const ProtocolView = ({
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
+    setShowSaveModeDialog(false);
+    setSaveMode("new_version");
   };
 
   const startEdit = (protocol: Protocol) => {
@@ -123,6 +197,8 @@ const ProtocolView = ({
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
+    setShowSaveModeDialog(false);
+    setSaveMode("new_version");
   };
 
   const duplicateAndEdit = (protocol: Protocol) => {
@@ -136,6 +212,8 @@ const ProtocolView = ({
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
+    setShowSaveModeDialog(false);
+    setSaveMode("new_version");
   };
 
   const hasUnsavedChanges =
@@ -148,6 +226,8 @@ const ProtocolView = ({
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
+    setShowSaveModeDialog(false);
+    setSaveMode("new_version");
   };
 
   const requestCloseEditor = () => {
@@ -166,7 +246,7 @@ const ProtocolView = ({
     closeEditor();
   };
 
-  const saveEditor = () => {
+  const saveEditor = (mode: ProtocolSaveMode = "new_version") => {
     const name = draft.name.trim();
     const effectiveFrom = draft.effectiveFrom.trim() || todayIsoDate();
     if (!name) {
@@ -183,12 +263,25 @@ const ProtocolView = ({
     }
 
     if (editorMode === "edit" && editingId) {
+      if (
+        mode === "overwrite_history" &&
+        typeof window !== "undefined" &&
+        !window.confirm(
+          tr(
+            "Historie overschrijven vervangt alle versies en werkt door in gekoppelde rapporten. Weet je het zeker?",
+            "Overwrite history replaces all versions and updates linked reports. Are you sure?"
+          )
+        )
+      ) {
+        return;
+      }
       onUpdateProtocol(editingId, {
         name,
         effectiveFrom,
         items: draft.compounds,
         compounds: draft.compounds,
-        notes: draft.notes
+        notes: draft.notes,
+        saveMode: mode
       });
       closeEditor();
       return;
@@ -196,6 +289,7 @@ const ProtocolView = ({
 
     const now = new Date().toISOString();
     const version = createProtocolVersion({
+      name,
       effectiveFrom,
       items: draft.compounds,
       notes: draft.notes,
@@ -212,6 +306,15 @@ const ProtocolView = ({
       updatedAt: now
     });
     closeEditor();
+  };
+
+  const requestSaveEditor = () => {
+    if (editorMode === "edit") {
+      setShowSaveModeDialog(true);
+      setSaveMode("new_version");
+      return;
+    }
+    saveEditor("new_version");
   };
 
   const modalTitle = editorMode === "edit"
@@ -250,6 +353,22 @@ const ProtocolView = ({
           {protocols.map((protocol) => {
             const usageCount = getProtocolUsageCount(protocol.id);
             const canDelete = usageCount === 0;
+            const versions = ensureProtocolVersions(protocol);
+            const latestVersion = versions[versions.length - 1] ?? null;
+            const usageByVersion = versionUsageByProtocol.get(protocol.id) ?? new Map<string, number>();
+            const activeVersionReportCount = latestVersion ? usageByVersion.get(latestVersion.id) ?? 0 : 0;
+            const versionRows: VersionRangeRow[] = versions.map((version, index) => {
+              const nextVersion = versions[index + 1] ?? null;
+              return {
+                versionId: version.id,
+                name: version.name || protocol.name,
+                effectiveFrom: version.effectiveFrom,
+                effectiveUntil: nextVersion ? previousIsoDate(nextVersion.effectiveFrom) : null,
+                itemCount: version.compounds.length,
+                reportCount: usageByVersion.get(version.id) ?? 0
+              };
+            });
+            const visibleHistoryRows = [...versionRows].reverse().slice(0, 4);
             return (
               <article
                 key={protocol.id}
@@ -260,10 +379,14 @@ const ProtocolView = ({
                     <h4 className="text-base font-semibold text-slate-100">{protocol.name}</h4>
                     <p className="mt-1 text-sm text-slate-300">{getProtocolCompoundsText(protocol) || "-"}</p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {tr("Rapporten", "Reports")}: {usageCount}
+                      {tr("Rapporten", "Reports")}: {usageCount} ({tr("actieve versie", "active version")}: {activeVersionReportCount})
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {tr("Items", "Items")}: {protocol.compounds.length}
+                      {tr("Actief sinds", "Active since")}:{" "}
+                      {latestVersion ? formatDateLabel(latestVersion.effectiveFrom, language) : "-"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {tr("Items", "Items")}: {latestVersion?.compounds.length ?? protocol.compounds.length}
                     </p>
                   </div>
                   {activeProtocolId === protocol.id ? (
@@ -272,6 +395,38 @@ const ProtocolView = ({
                     </span>
                   ) : null}
                 </div>
+
+                {visibleHistoryRows.length > 0 ? (
+                  <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-900/40 p-2.5">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                      {tr("Versiehistorie", "Version history")}
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {visibleHistoryRows.map((row) => (
+                        <div key={row.versionId} className="rounded-lg border border-slate-700/60 bg-slate-800/50 px-2.5 py-2">
+                          <p className="text-xs font-medium text-slate-100">{row.name}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">
+                            {formatDateLabel(row.effectiveFrom, language)}{" "}
+                            {row.effectiveUntil
+                              ? `${tr("tot", "to")} ${formatDateLabel(row.effectiveUntil, language)}`
+                              : tr("tot nu", "to present")}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">
+                            {tr("Rapporten", "Reports")}: {row.reportCount} | {tr("Items", "Items")}: {row.itemCount}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {versionRows.length > visibleHistoryRows.length ? (
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        {tr(
+                          `Laatste ${visibleHistoryRows.length} van ${versionRows.length} versies zichtbaar.`,
+                          `Showing latest ${visibleHistoryRows.length} of ${versionRows.length} versions.`
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -329,7 +484,7 @@ const ProtocolView = ({
               aria-labelledby="protocol-editor-modal-title"
             >
               <div
-                className="app-modal-shell w-full max-w-5xl bg-slate-900"
+                className="app-modal-shell relative w-full max-w-5xl bg-slate-900"
                 onClick={(event) => event.stopPropagation()}
               >
                 {/* Header */}
@@ -358,8 +513,8 @@ const ProtocolView = ({
                   {editorMode === "edit" && editingId && getProtocolUsageCount(editingId) > 0 ? (
                     <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                       {tr(
-                        `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Wijzigingen gelden voor toekomstig gebruik.`,
-                        `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. Changes apply to future use.`
+                        `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Kies bij opslaan voor Nieuwe versie (veilig) of Historie overschrijven (retroactief).`,
+                        `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. On save choose New version (safe) or Overwrite history (retroactive).`
                       )}
                     </div>
                   ) : null}
@@ -383,12 +538,86 @@ const ProtocolView = ({
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/70 hover:bg-emerald-500/22"
-                    onClick={saveEditor}
+                    onClick={requestSaveEditor}
                   >
                     <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
                   </button>
                 </div>
               </div>
+
+              {showSaveModeDialog ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 p-4">
+                  <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+                    <h5 className="text-base font-semibold text-slate-100">
+                      {tr("Hoe wil je opslaan?", "How do you want to save?")}
+                    </h5>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {tr(
+                        "Standaard is Nieuwe versie. Historie overschrijven past ook bestaande rapportcontext aan.",
+                        "Default is New version. Overwrite history also updates existing report context."
+                      )}
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 p-2 text-sm text-slate-100">
+                        <input
+                          type="radio"
+                          name="protocol-save-mode"
+                          checked={saveMode === "new_version"}
+                          onChange={() => setSaveMode("new_version")}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="block font-medium">{tr("Nieuwe versie", "New version")}</span>
+                          <span className="block text-xs text-slate-300">
+                            {tr(
+                              "Veilig: oude rapporten blijven zoals ze waren, nieuwe datum start een nieuwe versie.",
+                              "Safe: old reports stay as they were, this creates a new version from the chosen date."
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-rose-500/35 bg-rose-500/10 p-2 text-sm text-slate-100">
+                        <input
+                          type="radio"
+                          name="protocol-save-mode"
+                          checked={saveMode === "overwrite_history"}
+                          onChange={() => setSaveMode("overwrite_history")}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="block font-medium">{tr("Historie overschrijven", "Overwrite history")}</span>
+                          <span className="block text-xs text-slate-300">
+                            {tr(
+                              "Expert: vervangt alle bestaande versies en werkt door in gekoppelde rapporten.",
+                              "Expert: replaces all existing versions and updates linked reports."
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                        onClick={() => setShowSaveModeDialog(false)}
+                      >
+                        <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/70 hover:bg-emerald-500/22"
+                        onClick={() => {
+                          saveEditor(saveMode);
+                        }}
+                      >
+                        <Save className="h-4 w-4" /> {tr("Bevestig opslaan", "Confirm save")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>,
             document.body
           )

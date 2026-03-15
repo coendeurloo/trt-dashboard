@@ -10,6 +10,7 @@ const protocol: Protocol = {
   versions: [
     {
       id: "version-1",
+      name: "TRT base",
       effectiveFrom: "2026-01-01",
       items: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
       compounds: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
@@ -18,6 +19,7 @@ const protocol: Protocol = {
     },
     {
       id: "version-2",
+      name: "TRT base + HGH",
       effectiveFrom: "2026-03-01",
       items: [
         { name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" },
@@ -85,6 +87,8 @@ describe("protocolUtils version resolution", () => {
     const beforeProtocol = getReportProtocol(reportBefore, [protocol]);
     const afterProtocol = getReportProtocol(reportAfter, [protocol]);
 
+    expect(beforeProtocol?.name).toBe("TRT base");
+    expect(afterProtocol?.name).toBe("TRT base + HGH");
     expect(beforeProtocol?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
     expect(afterProtocol?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
   });

@@ -688,6 +688,7 @@ const ExtractionReviewTable = ({
     const now = new Date().toISOString();
     const version = {
       id: createId(),
+      name,
       effectiveFrom,
       items: protocolDraft.compounds,
       compounds: protocolDraft.compounds,

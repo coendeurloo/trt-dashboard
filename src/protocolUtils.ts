@@ -51,6 +51,7 @@ const protocolFromSnapshot = (
     versions: [
       {
         id: versionId,
+        name: snapshot.name,
         effectiveFrom: snapshot.effectiveFrom,
         items: snapshot.items,
         compounds: snapshot.compounds,
@@ -94,9 +95,10 @@ export const resolveInterventionLinkForReport = (
     };
   }
   const resolvedVersion = resolveProtocolVersionByDate(protocol, reportDate);
+  const resolvedLabel = resolvedVersion?.name?.trim() ? resolvedVersion.name : protocol.name;
   return {
     interventionId: protocol.id,
-    interventionLabel: protocol.name,
+    interventionLabel: resolvedLabel,
     interventionVersionId: resolvedVersion?.id ?? null,
     interventionSnapshot: resolvedVersion ? buildInterventionSnapshot(protocol, resolvedVersion) : null
   };

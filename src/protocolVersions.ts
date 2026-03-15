@@ -57,7 +57,8 @@ export const cloneCompoundEntries = (values: CompoundEntry[]): CompoundEntry[] =
 const normalizeProtocolVersion = (
   value: Partial<ProtocolVersion>,
   fallbackEffectiveFrom: string,
-  fallbackCreatedAt: string
+  fallbackCreatedAt: string,
+  fallbackName: string
 ): ProtocolVersion | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -74,6 +75,7 @@ const normalizeProtocolVersion = (
   const effectiveFrom = normalizeIsoDate(value.effectiveFrom, fallbackEffectiveFrom);
   return {
     id: typeof value.id === "string" && value.id.trim().length > 0 ? value.id : createId(),
+    name: typeof value.name === "string" && value.name.trim().length > 0 ? value.name.trim() : fallbackName,
     effectiveFrom,
     items,
     compounds: items,
@@ -101,9 +103,10 @@ export const ensureProtocolVersions = (protocol: Partial<Protocol>): ProtocolVer
       ? protocol.createdAt
       : new Date().toISOString();
   const baseEffectiveFrom = fallbackEffectiveFrom(protocol);
+  const baseName = typeof protocol.name === "string" ? protocol.name.trim() : "";
   const explicitVersions = Array.isArray(protocol.versions) ? protocol.versions : [];
   const normalizedVersions = explicitVersions
-    .map((version) => normalizeProtocolVersion(version, baseEffectiveFrom, baseCreatedAt))
+    .map((version) => normalizeProtocolVersion(version, baseEffectiveFrom, baseCreatedAt, baseName))
     .filter((version): version is ProtocolVersion => version !== null);
 
   if (normalizedVersions.length > 0) {
@@ -119,6 +122,7 @@ export const ensureProtocolVersions = (protocol: Partial<Protocol>): ProtocolVer
   return [
     {
       id: createId(),
+      name: baseName,
       effectiveFrom: baseEffectiveFrom,
       items,
       compounds: items,
@@ -159,6 +163,7 @@ export const buildProtocolWithVersion = (protocol: Protocol, version: ProtocolVe
   const items = cloneCompoundEntries(Array.isArray(version.items) ? version.items : version.compounds);
   return {
     ...protocol,
+    name: version.name || protocol.name,
     items,
     compounds: items,
     notes: version.notes,
@@ -167,6 +172,7 @@ export const buildProtocolWithVersion = (protocol: Protocol, version: ProtocolVe
 };
 
 export const createProtocolVersion = (input: {
+  name?: string;
   effectiveFrom: string;
   items: CompoundEntry[];
   notes: string;
@@ -177,6 +183,7 @@ export const createProtocolVersion = (input: {
   const items = cloneCompoundEntries(input.items);
   return {
     id: input.id && input.id.trim().length > 0 ? input.id : createId(),
+    name: typeof input.name === "string" && input.name.trim().length > 0 ? input.name.trim() : "",
     effectiveFrom: normalizeIsoDate(input.effectiveFrom, todayIsoDate()),
     items,
     compounds: items,
@@ -188,6 +195,7 @@ export const createProtocolVersion = (input: {
 export const normalizeProtocolMirrors = (protocol: Protocol): Protocol => {
   const versions = ensureProtocolVersions(protocol);
   const latest = versions[versions.length - 1] ?? createProtocolVersion({
+    name: protocol.name,
     effectiveFrom: todayIsoDate(),
     items: protocol.compounds,
     notes: protocol.notes,
@@ -195,6 +203,7 @@ export const normalizeProtocolMirrors = (protocol: Protocol): Protocol => {
   });
   return {
     ...protocol,
+    name: latest.name || protocol.name,
     items: cloneCompoundEntries(latest.items),
     compounds: cloneCompoundEntries(latest.compounds),
     notes: latest.notes,
@@ -219,7 +228,7 @@ export const buildInterventionSnapshot = (protocol: Protocol, version: ProtocolV
   return {
     interventionId: protocol.id,
     versionId: version.id,
-    name: protocol.name,
+    name: version.name || protocol.name,
     items: compounds,
     compounds,
     notes: version.notes,

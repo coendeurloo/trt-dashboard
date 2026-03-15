@@ -12,6 +12,7 @@ import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
   getProtocolFrequencyLabel,
+  getProtocolDisplayLabel,
   getReportProtocol
 } from "../protocolUtils";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
@@ -694,6 +695,13 @@ const ReportsView = ({
         const isEditing = editingReportId === report.id;
         const isExpanded = expandedReportIds.includes(report.id);
         const protocol = getReportProtocol(report, protocols);
+        const annotationProtocolLabel = (report.annotations.interventionLabel ?? report.annotations.protocol ?? "").trim();
+        const snapshotProtocolLabel =
+          report.annotations.interventionSnapshot && typeof report.annotations.interventionSnapshot.name === "string"
+            ? report.annotations.interventionSnapshot.name.trim()
+            : "";
+        const protocolLabel =
+          getProtocolDisplayLabel(protocol).trim() || snapshotProtocolLabel || annotationProtocolLabel;
         const dose = getProtocolDoseMgPerWeek(protocol);
         const supplementContext = reportSupplementContexts[report.id];
         const supplementAnchorState = normalizeAnchorState(report.annotations);
@@ -795,9 +803,9 @@ const ReportsView = ({
                           Baseline
                         </span>
                       )}
-                      {protocol && (
+                      {protocolLabel && (
                         <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300">
-                          {protocol.name}
+                          {protocolLabel}
                         </span>
                       )}
                       <span className="rounded-full border border-slate-600/90 bg-slate-800/75 px-2 py-0.5 text-[10px] font-medium text-slate-300">
@@ -1258,10 +1266,10 @@ const ReportsView = ({
                           className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-left text-xs text-cyan-200 hover:border-cyan-400"
                           onClick={onOpenProtocolTab}
                         >
-                          {protocol.name}
+                          {protocolLabel}
                         </button>
                       ) : (
-                        <strong className="text-sm text-slate-100">-</strong>
+                        <strong className="text-sm text-slate-100">{protocolLabel || "-"}</strong>
                       )}
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">

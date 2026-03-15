@@ -167,6 +167,7 @@ const createDemoProtocol = (input: Omit<Protocol, "items" | "compounds"> & { com
   const compounds = input.compounds.map((compound) => normalizeDemoCompound(compound));
   const effectiveFrom = input.updatedAt.slice(0, 10);
   const version = createProtocolVersion({
+    name: input.name,
     effectiveFrom,
     items: compounds,
     notes: input.notes,
