@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
@@ -127,13 +128,10 @@ const ProtocolView = ({
         compounds: draft.compounds,
         notes: draft.notes
       });
-      setFeedback(tr(
-        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} bijgewerkt.`,
-        `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} updated.`
-      ));
       setEditorMode(null);
       setEditingId(null);
       setDraft(blankProtocolDraft());
+      setFeedback("");
       return;
     }
 
@@ -147,14 +145,15 @@ const ProtocolView = ({
       createdAt: now,
       updatedAt: now
     });
-    setFeedback(tr(
-      `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} opgeslagen.`,
-      `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} saved.`
-    ));
     setEditorMode(null);
     setEditingId(null);
     setDraft(blankProtocolDraft());
+    setFeedback("");
   };
+
+  const modalTitle = editorMode === "edit"
+    ? tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} bewerken`, `Edit ${entitySingular}`)
+    : tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} aanmaken`, `Create ${entitySingular}`);
 
   return (
     <section className="space-y-3 fade-in">
@@ -175,62 +174,8 @@ const ProtocolView = ({
         </div>
       </div>
 
-      {editorMode ? (
-        <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-3 shadow-soft">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h4 className="text-sm font-semibold text-slate-100">
-              {editorMode === "edit"
-                ? tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} bewerken`, `Edit ${entitySingular}`)
-                : tr(`${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} aanmaken`, `Create ${entitySingular}`)}
-            </h4>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                onClick={cancelEditor}
-              >
-                <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-                onClick={saveEditor}
-              >
-                <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
-              </button>
-            </div>
-          </div>
-
-          {editorMode === "edit" && editingId && getProtocolUsageCount(editingId) > 0 ? (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              {tr(
-                `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Wijzigingen gelden voor toekomstig gebruik.`,
-                `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. Changes apply to future use.`
-              )}
-            </div>
-          ) : null}
-
-          <ProtocolEditor value={draft} language={language} onChange={setDraft} />
-
-          <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-700/60 pt-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-              onClick={cancelEditor}
-            >
-              <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
-              onClick={saveEditor}
-            >
-              <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
-            </button>
-          </div>
-
-          {feedback ? <p className="mt-2 text-sm text-cyan-200">{feedback}</p> : null}
-        </div>
+      {feedback ? (
+        <p className="px-1 text-sm text-cyan-300">{feedback}</p>
       ) : null}
 
       {protocols.length === 0 ? (
@@ -311,6 +256,81 @@ const ProtocolView = ({
           })}
         </div>
       )}
+
+      {editorMode
+        ? createPortal(
+            <div
+              className="app-modal-overlay z-[92]"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="protocol-editor-modal-title"
+              onClick={cancelEditor}
+            >
+              <div
+                className="app-modal-shell w-full max-w-2xl bg-slate-900"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="app-modal-header p-5">
+                  <div className="app-modal-header-glow" aria-hidden />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <h4
+                      id="protocol-editor-modal-title"
+                      className="text-lg font-semibold text-slate-50"
+                    >
+                      {modalTitle}
+                    </h4>
+                    <button
+                      type="button"
+                      className="app-modal-close-btn"
+                      onClick={cancelEditor}
+                      aria-label={tr("Sluiten", "Close")}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="max-h-[calc(100vh-18rem)] overflow-y-auto p-5">
+                  {editorMode === "edit" && editingId && getProtocolUsageCount(editingId) > 0 ? (
+                    <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                      {tr(
+                        `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Wijzigingen gelden voor toekomstig gebruik.`,
+                        `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. Changes apply to future use.`
+                      )}
+                    </div>
+                  ) : null}
+
+                  <ProtocolEditor value={draft} language={language} onChange={setDraft} />
+
+                  {feedback ? (
+                    <p className="mt-3 text-sm text-rose-300">{feedback}</p>
+                  ) : null}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 border-t border-slate-700/60 p-4">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={cancelEditor}
+                  >
+                    <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/70 hover:bg-emerald-500/22"
+                    onClick={saveEditor}
+                  >
+                    <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </section>
   );
 };
