@@ -143,7 +143,9 @@ describe("DashboardView first-report UX", () => {
     render(<DashboardView {...{ ...props, visibleReports: [report] }} />);
 
     expect(
-      screen.getByText(/Upload one more report to unlock trends\./i)
+      screen.getByText(
+        /Great start: your first report is saved\. Add one more report to unlock trend charts and over-time comparisons\./i
+      )
     ).toBeTruthy();
   });
 });
