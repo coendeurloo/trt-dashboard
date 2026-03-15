@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
-import { Check, ChevronDown, ChevronUp, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { Check, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
