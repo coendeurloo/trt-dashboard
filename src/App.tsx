@@ -15,7 +15,6 @@ import {
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
 import AppShell from "./components/AppShell";
 import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
-import CloudSyncPanel from "./components/CloudSyncPanel";
 import {
   CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
   CLOUD_PRIVACY_POLICY_VERSION
@@ -1933,40 +1932,6 @@ const App = () => {
     cloudAuth.status !== "authenticated" &&
     !backupPromptDismissed;
   const quickUploadDisabled = isShareMode || isProcessing;
-  const cloudPanel = (
-    <CloudSyncPanel
-      language={appData.settings.language}
-      theme={appData.settings.theme}
-      appMode={appMode}
-      configured={cloudAuth.configured}
-      authStatus={cloudAuth.status}
-      consentStatus={cloudAuth.consentStatus}
-      cloudEnabled={cloudAuth.cloudEnabled}
-      userEmail={cloudAuth.session?.user.email ?? null}
-      schemaVersionCompatible={cloudSync.schemaVersionCompatible}
-      syncStatus={cloudSync.syncStatus}
-      lastSyncedAt={cloudSync.lastSyncedAt}
-      authError={cloudAuth.error}
-      syncError={cloudSync.error}
-      actionRequired={cloudSync.actionRequired}
-      conflictDetected={cloudSync.conflictDetected}
-      onEnableCloud={() => cloudAuth.setCloudEnabled(true)}
-      onDisableCloud={() => cloudAuth.setCloudEnabled(false)}
-      onOpenAuthModal={openCloudAuthModal}
-      onCompleteConsent={() => openCloudAuthModal("signup")}
-      onSignOut={cloudAuth.signOut}
-      onDeleteAccount={async () => {
-        await cloudAuth.deleteAccount();
-        clearAllData();
-        setAnalystMemory(null);
-      }}
-      onExportData={exportJson}
-      onUploadLocalData={cloudSync.uploadLocalData}
-      onUseCloudCopy={cloudSync.useCloudCopy}
-      onReplaceCloudWithLocal={cloudSync.replaceCloudWithLocal}
-      onRefreshCloud={cloudSync.refreshFromCloud}
-    />
-  );
 
   if (isShareResolving) {
     return (
