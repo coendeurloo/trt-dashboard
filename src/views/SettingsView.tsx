@@ -118,6 +118,8 @@ const SettingsView = ({
   const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("profile");
+  const [draftPersonalInfo, setDraftPersonalInfo] = useState<PersonalInfo>(personalInfo);
+  const [profileSaved, setProfileSaved] = useState(false);
   const [mergeFromMarker, setMergeFromMarker] = useState("");
   const [mergeIntoMarker, setMergeIntoMarker] = useState("");
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
@@ -171,6 +173,12 @@ const SettingsView = ({
     });
   }, [allMarkers]);
 
+  const handleSavePersonalInfo = () => {
+    onUpdatePersonalInfo(draftPersonalInfo);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2000);
+  };
+
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -219,7 +227,7 @@ const SettingsView = ({
     <section className="space-y-3 fade-in">
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         {/* Tab Bar */}
-        <div className="sticky top-0 -mx-4 -mt-4 flex overflow-x-auto border-b border-slate-700 bg-slate-900/60 px-4 py-3">
+        <div className="sticky top-0 -mx-4 -mt-4 flex overflow-x-auto rounded-t-2xl border-b border-slate-700 bg-slate-900/60 px-4 py-3">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -251,8 +259,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Naam", "Name")}</span>
                 <input
                   type="text"
-                  value={personalInfo.name}
-                  onChange={(event) => onUpdatePersonalInfo({ name: event.target.value })}
+                  value={draftPersonalInfo.name}
+                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, name: event.target.value }))}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder={tr("Jouw voornaam", "Your name")}
                 />
@@ -262,8 +270,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Geboortedatum", "Date of birth")}</span>
                 <input
                   type="date"
-                  value={personalInfo.dateOfBirth}
-                  onChange={(event) => onUpdatePersonalInfo({ dateOfBirth: event.target.value })}
+                  value={draftPersonalInfo.dateOfBirth}
+                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, dateOfBirth: event.target.value }))}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                 />
               </label>
@@ -277,9 +285,9 @@ const SettingsView = ({
                         type="radio"
                         name="biologicalSex"
                         value={option}
-                        checked={personalInfo.biologicalSex === option}
-                        onChange={(event) => onUpdatePersonalInfo({ biologicalSex: event.target.value as BiologicalSex })}
-                        className="h-4 w-4"
+                        checked={draftPersonalInfo.biologicalSex === option}
+                        onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, biologicalSex: event.target.value as BiologicalSex }))}
+                        className="h-4 w-4 accent-cyan-500"
                       />
                       <span className="text-sm text-slate-300">
                         {option === "male"
@@ -297,8 +305,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Lengte (cm)", "Height (cm)")}</span>
                 <input
                   type="number"
-                  value={personalInfo.heightCm ?? ""}
-                  onChange={(event) => onUpdatePersonalInfo({ heightCm: event.target.value ? Number(event.target.value) : null })}
+                  value={draftPersonalInfo.heightCm ?? ""}
+                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, heightCm: event.target.value ? Number(event.target.value) : null }))}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder="180"
                 />
@@ -308,12 +316,25 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Gewicht (kg)", "Weight (kg)")}</span>
                 <input
                   type="number"
-                  value={personalInfo.weightKg ?? ""}
-                  onChange={(event) => onUpdatePersonalInfo({ weightKg: event.target.value ? Number(event.target.value) : null })}
+                  value={draftPersonalInfo.weightKg ?? ""}
+                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, weightKg: event.target.value ? Number(event.target.value) : null }))}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder="80"
                 />
               </label>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSavePersonalInfo}
+                className="rounded-lg border border-cyan-500/45 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-400/70 hover:bg-cyan-500/22"
+              >
+                {tr("Opslaan", "Save")}
+              </button>
+              {profileSaved && (
+                <span className="text-sm text-emerald-400">{tr("Opgeslagen", "Saved")}</span>
+              )}
             </div>
 
             <div className="mt-6 border-t border-slate-800 pt-6">
@@ -767,143 +788,151 @@ const SettingsView = ({
 
         {/* Account Tab */}
         {activeSettingsTab === "account" && (
-          <div className="space-y-4 pt-4">
-            <div>
+          <div className="pt-4">
+            <div className="mb-4">
               <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
               <p className="mt-1 text-sm text-slate-400">
                 {tr("Onboarding, data verwijdering en feedback.", "Onboarding, data deletion and feedback.")}
               </p>
             </div>
 
-            {cloudUserEmail && onSignOut ? (
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
-                <h3 className="text-sm font-semibold text-slate-300">{tr("Ingelogd account", "Signed-in account")}</h3>
-                <p className="mt-1 text-sm text-slate-400">{cloudUserEmail}</p>
+            <div className="divide-y divide-slate-700/50">
+              {cloudUserEmail && onSignOut ? (
+                <div className="flex items-center justify-between gap-4 py-4 first:pt-0">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">{tr("Ingelogd account", "Signed-in account")}</p>
+                    <p className="mt-0.5 text-sm text-slate-400">{cloudUserEmail}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onSignOut}
+                    className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+                  >
+                    {tr("Uitloggen", "Sign out")}
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="flex items-start justify-between gap-4 py-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">{tr("Onboarding wizard", "Onboarding wizard")}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {tr(
+                      "Bekijk de introductiewizard opnieuw.",
+                      "Replay the intro wizard. Useful if you skipped something."
+                    )}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={onSignOut}
-                  className="mt-3 rounded-lg border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700/60 hover:text-slate-100"
+                  onClick={onResetOnboarding}
+                  className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
                 >
-                  {tr("Uitloggen", "Sign out")}
+                  {tr("Bekijk opnieuw", "Replay")}
                 </button>
               </div>
-            ) : null}
 
-            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <h3 className="text-sm font-semibold text-slate-300">{tr("Onboarding wizard", "Onboarding wizard")}</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr(
-                  "Bekijk de introductiewizard opnieuw. Handig als je iets hebt geskipt of wil laten zien aan iemand anders.",
-                  "Replay the intro wizard. Useful if you skipped something or want to show it to someone else."
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={onResetOnboarding}
-                className="mt-3 rounded-lg border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700/60 hover:text-slate-100"
-              >
-                {tr("Opnieuw bekijken", "Replay onboarding")}
-              </button>
-            </div>
+              <div className="flex items-start justify-between gap-4 py-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">{tr("Feedback", "Feedback")}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {tr(
+                      "Problemen met PDF's? Laat ons weten welke labformaten niet werken.",
+                      "Having trouble with PDF parsing? Let us know which lab formats don't work."
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onReportIssue}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {tr("Meld probleem", "Report issue")}
+                </button>
+              </div>
 
-            <div className="settings-danger-card rounded-2xl border border-red-900/40 bg-red-950/20 p-4">
-              <h3 className="text-sm font-semibold text-red-400">{tr("Verwijder alle data", "Delete all data")}</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr(
-                  "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
-                  "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="settings-danger-btn mt-3 rounded-lg border border-red-800/60 bg-red-900/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
-              >
-                {tr("Verwijder alle data", "Delete all data")}
-              </button>
-            </div>
+              <div className="py-4">
+                <p className="text-sm font-medium text-slate-200">{tr("Export", "Export")}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {tr(
+                    "Exporteer data als JSON, markers als CSV, of grafieken als PDF.",
+                    "Export data as JSON, markers as CSV, or charts as PDF."
+                  )}
+                </p>
 
-            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <h3 className="text-sm font-semibold text-slate-300">{tr("Feedback", "Feedback")}</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr(
-                  "Problemen met het verwerken van PDF's? Laat ons weten welke labformaten niet werken.",
-                  "Having trouble with PDF parsing? Let us know which lab formats don't work."
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={onReportIssue}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-cyan-500/45 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
-              >
-                <AlertTriangle className="h-4 w-4" />
-                {tr("Meld probleem + stuur PDF", "Report issue + send PDF")}
-              </button>
-            </div>
+                <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {allMarkers.map((marker) => {
+                      const selected = csvMarkerSelection.includes(marker);
+                      return (
+                        <button
+                          key={marker}
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
+                          }`}
+                          onClick={() => {
+                            setCsvMarkerSelection((current) => {
+                              if (current.includes(marker)) {
+                                return current.filter((item) => item !== marker);
+                              }
+                              return [...current, marker];
+                            });
+                          }}
+                        >
+                          {getMarkerDisplayName(marker, language)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4">
-              <h3 className="text-sm font-semibold text-slate-300">{tr("Export", "Export")}</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr(
-                  "Exporteer alle opgeslagen data als JSON, geselecteerde markers als CSV, of grafieken als PDF.",
-                  "Export all stored data as JSON, selected markers as CSV, or charts as PDF."
-                )}
-              </p>
-
-              <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {allMarkers.map((marker) => {
-                    const selected = csvMarkerSelection.includes(marker);
-                    return (
-                      <button
-                        key={marker}
-                        type="button"
-                        className={`rounded-full border px-3 py-1 text-xs ${
-                          selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
-                        }`}
-                        onClick={() => {
-                          setCsvMarkerSelection((current) => {
-                            if (current.includes(marker)) {
-                              return current.filter((item) => item !== marker);
-                            }
-                            return [...current, marker];
-                          });
-                        }}
-                      >
-                        {getMarkerDisplayName(marker, language)}
-                      </button>
-                    );
-                  })}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={onExportJson}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Export JSON", "Export JSON")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={() => onExportCsv(csvMarkerSelection)}
+                  >
+                    <Download className="h-4 w-4" /> {tr("Export CSV", "Export CSV")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={onExportPdf}
+                  >
+                    <FileText className="h-4 w-4" /> {tr("Export PDF", "Export PDF")}
+                  </button>
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="py-4">
+                <p className="text-sm font-medium text-red-400">{tr("Verwijder alle data", "Delete all data")}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {tr(
+                    "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
+                    "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
+                  )}
+                </p>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                  onClick={onExportJson}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="settings-danger-btn mt-3 rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/40 hover:text-red-300"
                 >
-                  <FileText className="h-4 w-4" /> {tr("Exporteer JSON", "Export JSON")}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                  onClick={() => onExportCsv(csvMarkerSelection)}
-                >
-                  <Download className="h-4 w-4" /> {tr("Exporteer CSV", "Export CSV")}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-                  onClick={onExportPdf}
-                >
-                  <FileText className="h-4 w-4" /> {tr("Exporteer PDF-rapport", "Export PDF report")}
+                  {tr("Verwijder alle data", "Delete all data")}
                 </button>
               </div>
             </div>
 
-            <p className="mt-6 text-xs text-slate-600">
+            <p className="mt-4 text-xs text-slate-600">
               {tr(
                 "Deze tool is alleen voor persoonlijke tracking en geeft geen medisch advies.",
                 "This tool is for personal tracking only and does not provide medical advice."
