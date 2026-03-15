@@ -6,7 +6,6 @@ import {
   MarkerValue,
   Protocol,
   ReportAnnotations,
-  PersonalInfo,
   StoredAppData,
   SupplementPeriod,
   SymptomCheckIn,
