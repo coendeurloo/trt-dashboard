@@ -78,7 +78,6 @@ export const useCloudSync = ({
   const lastSyncedPayloadRef = useRef<CloudSyncPayload | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoUploadAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled || !session) {
@@ -96,7 +95,6 @@ export const useCloudSync = ({
       lastSyncedHashRef.current = "";
       lastSyncedPayloadRef.current = null;
       lastRevisionRef.current = null;
-      autoUploadAttemptedRef.current = false;
       return;
     }
     if (!localAtInitRef.current) {
@@ -160,11 +158,15 @@ export const useCloudSync = ({
       }
 
       if (cloudHasData && localHasData && cloudHash !== localHash) {
+        // Auto-resolve: cloud is the authoritative source for signed-in users.
+        // Silently adopt the cloud copy, matching how most sync services behave.
+        setAppData(cloudData);
+        lastSyncedHashRef.current = cloudHash;
         lastSyncedPayloadRef.current = snapshot.rawPayload;
+        setActionRequired("none");
+        setSyncStatus("idle");
+        setBootstrapped(true);
         setCloudCandidateData(cloudData);
-        setActionRequired("choose_source");
-        setSyncStatus("pending");
-        setBootstrapped(false);
         setInitialized(true);
         return;
       }
@@ -249,7 +251,6 @@ export const useCloudSync = ({
   const refreshFromCloud = useCallback(async () => {
     setInitialized(false);
     setBootstrapped(false);
-    autoUploadAttemptedRef.current = false;
     localAtInitRef.current = coerceStoredAppData(appData);
     await loadFromCloud();
   }, [appData, loadFromCloud]);
@@ -258,11 +259,10 @@ export const useCloudSync = ({
     if (!adapter || !enabled || isShareMode) {
       return;
     }
-    if (actionRequired !== "upload_local" || autoUploadAttemptedRef.current) {
+    if (actionRequired !== "upload_local") {
       return;
     }
 
-    autoUploadAttemptedRef.current = true;
     void uploadLocalData();
   }, [actionRequired, adapter, enabled, isShareMode, uploadLocalData]);
 
