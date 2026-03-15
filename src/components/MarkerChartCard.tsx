@@ -77,24 +77,24 @@ const MarkerChartCard = ({
     <motion.div
       layout
       data-testid={`marker-card-${marker}`}
-      className={`rounded-2xl border p-4 shadow-soft ${
-        hasAlerts ? "marker-card-alert" : "border-slate-700/70 bg-slate-900/60"
+      className={`rounded-xl p-3 ${
+        hasAlerts ? "marker-card-alert" : "bg-slate-800/40"
       }`}
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-100">{markerLabel}</h3>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-medium text-slate-100">{markerLabel}</h3>
           <MarkerInfoBadge marker={marker} language={language} />
           {isCalculatedMarker ? (
-            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-200">fx</span>
+            <span className="rounded bg-cyan-500/10 px-1 py-0.5 text-[10px] text-cyan-300">fx</span>
           ) : null}
           {alertCount > 0 ? (
             <button
               type="button"
               onClick={onOpenAlerts}
-              className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-[10px] leading-none text-rose-200 transition hover:border-rose-300/70 hover:bg-rose-500/20 hover:text-rose-100"
+              className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] leading-none text-rose-300 transition hover:bg-rose-500/20"
               aria-label={`${tr("Open alerts voor", "Open alerts for")} ${markerLabel}`}
             >
               {alertCount} {tr("alert", `alert${alertCount > 1 ? "s" : ""}`)}
@@ -102,10 +102,10 @@ const MarkerChartCard = ({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">{points[0]?.unit ?? ""}</span>
+          <span className="text-[11px] text-slate-500">{points[0]?.unit ?? ""}</span>
           <button
             type="button"
-            className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+            className="rounded px-1.5 py-0.5 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
             onClick={onOpenLarge}
           >
             {tr("Vergroot", "Enlarge")}
@@ -113,7 +113,7 @@ const MarkerChartCard = ({
         </div>
       </div>
 
-      <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
         <span className="inline-flex items-center gap-1" title={trendExplanation}>
           {trend.icon}
           {trendText}
@@ -147,7 +147,7 @@ const MarkerChartCard = ({
           settings={settings}
           language={language}
           phaseBlocks={phaseBlocks}
-          height={230}
+          height={200}
           showSeriesGradientFill
           checkIns={checkIns}
         />
