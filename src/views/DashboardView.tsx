@@ -274,66 +274,83 @@ const DashboardView = ({
   })();
 
   return (
-    <section className="space-y-3 fade-in">
-      {/* ── Personalized greeting ── */}
+    <section className="space-y-4 fade-in">
+      {/* ── Greeting + summary row ── */}
       {hasReports && personalInfo.name ? (
-        <div className="px-1 pt-1 pb-2">
-          <h2 className="text-lg font-semibold text-slate-100">
-            {greeting}, {personalInfo.name.split(" ")[0]}
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-400">
-            {outOfRangeCount > 0
-              ? tr(
-                  `Je hebt ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} buiten bereik.`,
-                  `You have ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} out of range.`
-                )
-              : daysSinceCheckIn !== null && daysSinceCheckIn >= 7
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-slate-100">
+              {greeting}, {personalInfo.name.split(" ")[0]}
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-400">
+              {outOfRangeCount > 0
                 ? tr(
-                    `${daysSinceCheckIn} dagen geen check-in. Hoe voel je je?`,
-                    `${daysSinceCheckIn} days since your last check-in. How are you feeling?`
+                    `Je hebt ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} buiten bereik.`,
+                    `You have ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} out of range.`
                   )
                 : tr("Alles ziet er goed uit. Blijf je voortgang volgen.", "Everything looks good. Keep tracking your progress.")}
-          </p>
-        </div>
-      ) : null}
-
-      {/* ── Wellbeing nudge ── */}
-      {showWellbeingNudge && hasReports ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">🧘</span>
-            <span className="text-sm text-amber-200">
-              {daysSinceCheckIn === null
-                ? tr("Start je welzijnsmonitoring — doe een eerste check-in", "Start tracking your wellbeing — do your first check-in")
-                : tr(`${daysSinceCheckIn} dagen geen check-in — hoe voel je je?`, `${daysSinceCheckIn} days since your last check-in — how are you feeling?`)}
-            </span>
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={onNavigateToCheckIns}
-            className="shrink-0 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/30"
-          >
-            {tr("Check-in", "Check in")}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Compact stability badge */}
+            {trtStability.score !== null ? (
+              <div className="flex items-center gap-2 rounded-lg bg-slate-800/60 px-3 py-1.5">
+                <div className="relative h-8 w-8">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: "score", value: trtStability.score },
+                          { name: "rest", value: 100 - trtStability.score }
+                        ]}
+                        dataKey="value"
+                        innerRadius={10}
+                        outerRadius={15}
+                        stroke="none"
+                        startAngle={90}
+                        endAngle={-270}
+                      >
+                        <Cell fill={stabilityColor(trtStability.score)} />
+                        <Cell fill="#334155" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-xs">
+                  <span className="font-semibold text-slate-100">{trtStability.score}</span>
+                  <span className="ml-1 text-slate-400">{tr("stabiliteit", "stability")}</span>
+                </div>
+              </div>
+            ) : null}
+            {/* Inline wellbeing nudge */}
+            {showWellbeingNudge ? (
+              <button
+                type="button"
+                onClick={onNavigateToCheckIns}
+                className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 transition hover:bg-amber-500/15"
+              >
+                {daysSinceCheckIn === null
+                  ? tr("Eerste check-in", "First check-in")
+                  : tr(`Check-in (${daysSinceCheckIn}d)`, `Check in (${daysSinceCheckIn}d)`)}
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
       {hasReports ? (
-        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div className="rounded-xl bg-slate-800/40 px-3 py-2.5">
           <div ref={chartSettingsRef} className="relative space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center whitespace-nowrap px-1 text-xs font-medium text-slate-400 sm:text-sm">
-                  {tr("Periode:", "Range:")}
-                </span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1">
                 {timeRangeOptions.map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
                       settings.timeRange === value
-                        ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
-                        : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
+                        ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
+                        : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
                     }`}
                     onClick={() => onUpdateSettings({ timeRange: value })}
                   >
@@ -341,42 +358,42 @@ const DashboardView = ({
                   </button>
                 ))}
               </div>
-              <span data-testid="dashboard-filter-divider" className="hidden h-6 w-px bg-slate-700/70 lg:block" />
-              <div data-testid="marker-scope-filter-group" className="flex flex-wrap items-center gap-1.5">
+              <span data-testid="dashboard-filter-divider" className="hidden h-4 w-px bg-slate-700/50 sm:block" />
+              <div data-testid="marker-scope-filter-group" className="flex items-center gap-1">
                 <button
                   type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
                     dashboardView === "primary"
-                      ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
-                      : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
+                      ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
+                      : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
                   }`}
                   onClick={() => onDashboardViewChange("primary")}
                 >
-                  {tr("Primaire markers", "Primary markers")}
+                  {tr("Primair", "Primary")}
                 </button>
                 <button
                   type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs sm:text-sm ${
+                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
                     dashboardView === "all"
-                      ? "dashboard-filter-chip-active bg-cyan-500/20 text-cyan-200"
-                      : "dashboard-filter-chip-inactive bg-slate-800 text-slate-300 hover:text-slate-100"
+                      ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
+                      : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
                   }`}
                   onClick={() => onDashboardViewChange("all")}
                 >
-                  {tr("Alle markers", "All markers")}
+                  {tr("Alle", "All")}
                 </button>
               </div>
               {settings.timeRange === "custom" ? (
-                <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="date"
-                    className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
+                    className="rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
                     value={settings.customRangeStart}
                     onChange={(event) => onUpdateSettings({ customRangeStart: event.target.value })}
                   />
                   <input
                     type="date"
-                    className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm"
+                    className="rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
                     value={settings.customRangeEnd}
                     onChange={(event) => onUpdateSettings({ customRangeEnd: event.target.value })}
                   />
@@ -386,14 +403,13 @@ const DashboardView = ({
                 <button
                   type="button"
                   onClick={() => setShowChartSettings((current) => !current)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition sm:text-sm ${
-                    showChartSettings ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                  className={`inline-flex items-center gap-1 rounded-md p-1.5 text-xs transition-colors ${
+                    showChartSettings ? "text-slate-100" : "text-slate-500 hover:text-slate-300"
                   }`}
                   aria-expanded={showChartSettings}
+                  aria-label={tr("Grafiekinstellingen", "Chart settings")}
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5" />
-                  {tr("Grafiekinstellingen", "Chart settings")}
-                  {showChartSettings ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 </button>
               </div>
             </div>
@@ -707,7 +723,7 @@ const DashboardView = ({
       ) : null}
 
       {hasReports && isCompareMode ? (
-        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div className="rounded-xl bg-slate-800/30 p-3">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select
               className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
@@ -744,40 +760,37 @@ const DashboardView = ({
       ) : null}
 
       {!isCompareMode || !hasReports ? (
-        <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-2.5">
+        <div>
         {hasReports ? (
           <>
-            {dashboardView === "primary" ? <div className="mb-1" /> : null}
 
             {firstReportVisible ? (
-              <div className="mb-3 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p>
-                    {tr(
-                      "Sterke start: je eerste rapport staat erin. Voeg nog 1 rapport toe om trendgrafieken en vergelijkingen over tijd te zien.",
-                      "Great start: your first report is saved. Add one more report to unlock trend charts and over-time comparisons."
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 px-3 py-2">
+                <p className="text-xs text-slate-400">
+                  {tr(
+                    "Upload nog 1 rapport voor trendgrafieken.",
+                    "Upload one more report to unlock trends."
+                  )}
+                </p>
+                {!isShareMode ? (
+                  <button
+                    type="button"
+                    onClick={onUploadClick}
+                    disabled={isProcessing}
+                    className={`shrink-0 rounded-md px-2.5 py-1 text-xs text-cyan-300 transition-colors ${
+                      isProcessing ? "cursor-not-allowed opacity-70" : "hover:text-cyan-200"
+                    }`}
+                  >
+                    {isProcessing ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {tr("Uploaden...", "Uploading...")}
+                      </span>
+                    ) : (
+                      tr("Upload", "Upload")
                     )}
-                  </p>
-                  {!isShareMode ? (
-                    <button
-                      type="button"
-                      onClick={onUploadClick}
-                      disabled={isProcessing}
-                      className={`rounded-md border border-cyan-400/50 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-cyan-100 sm:text-sm ${
-                        isProcessing ? "cursor-not-allowed opacity-70" : "hover:border-cyan-300 hover:text-cyan-50"
-                      }`}
-                    >
-                      {isProcessing ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          {tr("Bezig met upload...", "Uploading...")}
-                        </span>
-                      ) : (
-                        tr("Upload tweede rapport", "Upload second report")
-                      )}
-                    </button>
-                  ) : null}
-                </div>
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -866,7 +879,7 @@ const DashboardView = ({
             )}
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(dashboardView === "primary" ? primaryMarkers : allMarkers).map((marker, index) => {
               const points = chartPointsForMarker(marker);
               return (
@@ -896,10 +909,10 @@ const DashboardView = ({
           <div
             id="dashboard-stability-index"
             tabIndex={-1}
-            className="mt-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+            className="mt-4 rounded-lg bg-slate-800/40 px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
           >
-            <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
-              <div className="relative mx-auto h-28 w-28">
+            <div className="flex items-center gap-3">
+              <div className="relative h-12 w-12 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -908,8 +921,8 @@ const DashboardView = ({
                         { name: "rest", value: 100 - (trtStability.score ?? 0) }
                       ]}
                       dataKey="value"
-                      innerRadius={34}
-                      outerRadius={48}
+                      innerRadius={16}
+                      outerRadius={22}
                       stroke="none"
                       startAngle={90}
                       endAngle={-270}
@@ -920,32 +933,15 @@ const DashboardView = ({
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <span className="text-xl font-semibold text-slate-100">{trtStability.score === null ? "-" : trtStability.score}</span>
+                  <span className="text-xs font-semibold text-slate-100">{trtStability.score === null ? "-" : trtStability.score}</span>
                 </div>
               </div>
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-100">{tr("Stabiliteitsindex", "Stability Index")}</p>
-                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-200">
-                    {trtStability.score === null ? "-" : `${trtStability.score}`}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-slate-300">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-200">{tr("Stabiliteitsindex", "Stability Index")}</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
                   {tr(
-                    "Dit is een rust-score van je kern hormoonmarkers over tijd (Testosteron, Estradiol, Hematocriet, SHBG).",
-                    "This is a steadiness score of your core hormone markers over time (Testosterone, Estradiol, Hematocrit, SHBG)."
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {tr(
-                    "Belangrijk: het zegt niets over ‘goed’ of ‘slecht’, alleen hoe stabiel je patroon is.",
-                    "Important: it does not mean 'good' or 'bad'; it only reflects how stable your pattern is."
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {tr(
-                    "Snelle interpretatie: 80-100 = vrij stabiel, 60-79 = matig stabiel, <60 = duidelijk wisselend.",
-                    "Quick interpretation: 80-100 = fairly stable, 60-79 = moderately stable, <60 = clearly variable."
+                    "Rust-score hormoonmarkers. 80-100 = stabiel, 60-79 = matig, <60 = wisselend.",
+                    "Hormone steadiness score. 80-100 = stable, 60-79 = moderate, <60 = variable."
                   )}
                 </p>
               </div>
