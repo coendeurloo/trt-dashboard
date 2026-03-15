@@ -156,7 +156,9 @@ body.light .bg-slate-950\/30 {
 
 body.light .bg-slate-800,
 body.light .bg-slate-800\/80,
+body.light .bg-slate-800\/75,
 body.light .bg-slate-800\/70,
+body.light .bg-slate-800\/65,
 body.light .bg-slate-800\/60,
 body.light .bg-slate-800\/40 {
   background-color: rgba(233, 242, 250, 0.9) !important;
@@ -174,6 +176,10 @@ body.light .border-slate-700\/80,
 body.light .border-slate-600,
 body.light .border-slate-600\/50 {
   border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+body.light .text-slate-50 {
+  color: #0b1220 !important;
 }
 
 body.light .text-slate-100 {
@@ -194,6 +200,14 @@ body.light .text-slate-400 {
 
 body.light .text-slate-500 {
   color: #64748b !important;
+}
+
+body.light .text-violet-200 {
+  color: #6d28d9 !important;
+}
+
+body.light .text-violet-300 {
+  color: #5b21b6 !important;
 }
 
 body.light .text-cyan-100 {
