@@ -1,9 +1,10 @@
-import { APP_SCHEMA_VERSION } from "../constants";
+import { APP_SCHEMA_VERSION, DEFAULT_PERSONAL_INFO } from "../constants";
 import { coerceStoredAppData } from "../storage";
 import {
   AppSettings,
   LabReport,
   MarkerValue,
+  PersonalInfo,
   Protocol,
   ReportAnnotations,
   StoredAppData,
@@ -75,6 +76,7 @@ export interface CloudSyncPayload {
   schemaVersion: number;
   settings: AppSettings;
   markerAliasOverrides: Record<string, string>;
+  personalInfo: PersonalInfo;
   reports: CloudReportRow[];
   markers: CloudMarkerRow[];
   protocols: CloudProtocolRow[];
@@ -92,12 +94,53 @@ export interface CloudIncrementalPatch {
   settingsChanged: boolean;
   settings: AppSettings;
   markerAliasOverrides: Record<string, string>;
+  personalInfo: PersonalInfo;
   reports: CloudTablePatch<CloudReportRow>;
   markers: CloudTablePatch<CloudMarkerRow>;
   protocols: CloudTablePatch<CloudProtocolRow>;
   supplements: CloudTablePatch<CloudSupplementRow>;
   checkIns: CloudTablePatch<CloudCheckInRow>;
 }
+
+const normalizeBiologicalSex = (value: unknown): PersonalInfo["biologicalSex"] =>
+  value === "male" || value === "female" || value === "prefer_not_to_say"
+    ? value
+    : DEFAULT_PERSONAL_INFO.biologicalSex;
+
+const normalizeNullableNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const normalizeIsoDateString = (value: unknown): string =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : "";
+
+const normalizePersonalInfo = (value: unknown): PersonalInfo => {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_PERSONAL_INFO };
+  }
+  const row = value as Partial<PersonalInfo>;
+  return {
+    name: typeof row.name === "string" ? row.name : DEFAULT_PERSONAL_INFO.name,
+    dateOfBirth: normalizeIsoDateString(row.dateOfBirth),
+    biologicalSex: normalizeBiologicalSex(row.biologicalSex),
+    heightCm: normalizeNullableNumber(row.heightCm),
+    weightKg: normalizeNullableNumber(row.weightKg)
+  };
+};
+
+export const isPersonalInfoEmpty = (personalInfo: PersonalInfo): boolean =>
+  personalInfo.name.trim().length === 0 &&
+  personalInfo.dateOfBirth.trim().length === 0 &&
+  personalInfo.biologicalSex === "prefer_not_to_say" &&
+  personalInfo.heightCm === null &&
+  personalInfo.weightKg === null;
 
 const coerceReportAnnotations = (
   value: unknown
@@ -297,6 +340,7 @@ export const toCloudSyncPayload = (data: StoredAppData): CloudSyncPayload => {
     schemaVersion: APP_SCHEMA_VERSION,
     settings: data.settings,
     markerAliasOverrides: data.markerAliasOverrides,
+    personalInfo: normalizePersonalInfo(data.personalInfo),
     reports,
     markers,
     protocols,
@@ -398,7 +442,8 @@ export const fromCloudSyncPayload = (payload: CloudSyncPayload): StoredAppData =
     wellbeingEntries: checkIns,
     checkIns,
     markerAliasOverrides: payload.markerAliasOverrides ?? {},
-    settings: payload.settings
+    settings: payload.settings,
+    personalInfo: normalizePersonalInfo(payload.personalInfo)
   });
 };
 
@@ -441,9 +486,11 @@ export const buildIncrementalPatch = (
   schemaVersion: next.schemaVersion,
   settingsChanged:
     !areSameJson(previous.settings, next.settings) ||
-    !areSameJson(previous.markerAliasOverrides, next.markerAliasOverrides),
+    !areSameJson(previous.markerAliasOverrides, next.markerAliasOverrides) ||
+    !areSameJson(previous.personalInfo, next.personalInfo),
   settings: next.settings,
   markerAliasOverrides: next.markerAliasOverrides,
+  personalInfo: next.personalInfo,
   reports: buildTablePatch(previous.reports, next.reports),
   markers: buildTablePatch(previous.markers, next.markers),
   protocols: buildTablePatch(previous.protocols, next.protocols),
@@ -470,4 +517,5 @@ export const hasMeaningfulData = (data: StoredAppData): boolean =>
   data.reports.length > 0 ||
   data.protocols.length > 0 ||
   data.supplementTimeline.length > 0 ||
-  data.checkIns.length > 0;
+  data.checkIns.length > 0 ||
+  !isPersonalInfoEmpty(normalizePersonalInfo(data.personalInfo));

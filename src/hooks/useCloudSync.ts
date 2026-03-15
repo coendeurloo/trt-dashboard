@@ -6,6 +6,7 @@ import {
   buildIncrementalPatch,
   hasIncrementalPatchOperations,
   hasMeaningfulData,
+  isPersonalInfoEmpty,
   toCloudSyncPayload
 } from "../cloud/mapping";
 import { SupabaseCloudAdapter } from "../cloud/syncAdapter";
@@ -45,7 +46,7 @@ const detectRevisionConflict = (error: unknown): boolean => {
   return /REVISION_MISMATCH|P0001|409/.test(error.message);
 };
 
-const hashData = (data: StoredAppData): string => JSON.stringify(data);
+const hashPayload = (payload: CloudSyncPayload): string => JSON.stringify(payload);
 
 export const useCloudSync = ({
   enabled,
@@ -132,8 +133,10 @@ export const useCloudSync = ({
       const cloudData = snapshot.data;
       const localHasData = hasMeaningfulData(localData);
       const cloudHasData = hasMeaningfulData(cloudData);
-      const localHash = hashData(localData);
-      const cloudHash = hashData(cloudData);
+      const localPayload = toCloudSyncPayload(localData);
+      const cloudPayload = snapshot.rawPayload;
+      const localHash = hashPayload(localPayload);
+      const cloudHash = hashPayload(cloudPayload);
 
       if (!cloudHasData && localHasData) {
         lastSyncedPayloadRef.current = snapshot.rawPayload;
@@ -148,7 +151,7 @@ export const useCloudSync = ({
       if (cloudHasData && !localHasData) {
         setAppData(cloudData);
         lastSyncedHashRef.current = cloudHash;
-        lastSyncedPayloadRef.current = snapshot.rawPayload;
+        lastSyncedPayloadRef.current = cloudPayload;
         setActionRequired("none");
         setSyncStatus("idle");
         setBootstrapped(true);
@@ -158,11 +161,28 @@ export const useCloudSync = ({
       }
 
       if (cloudHasData && localHasData && cloudHash !== localHash) {
+        const cloudPersonalInfoIsEmpty = isPersonalInfoEmpty(cloudData.personalInfo);
+        const localPersonalInfoIsEmpty = isPersonalInfoEmpty(localData.personalInfo);
+        if (cloudPersonalInfoIsEmpty && !localPersonalInfoIsEmpty) {
+          const mergedData: StoredAppData = {
+            ...cloudData,
+            personalInfo: { ...localData.personalInfo }
+          };
+          setAppData(mergedData);
+          lastSyncedHashRef.current = cloudHash;
+          lastSyncedPayloadRef.current = cloudPayload;
+          setActionRequired("none");
+          setSyncStatus("idle");
+          setBootstrapped(true);
+          setCloudCandidateData(mergedData);
+          setInitialized(true);
+          return;
+        }
         // Auto-resolve: cloud is the authoritative source for signed-in users.
         // Silently adopt the cloud copy, matching how most sync services behave.
         setAppData(cloudData);
         lastSyncedHashRef.current = cloudHash;
-        lastSyncedPayloadRef.current = snapshot.rawPayload;
+        lastSyncedPayloadRef.current = cloudPayload;
         setActionRequired("none");
         setSyncStatus("idle");
         setBootstrapped(true);
@@ -172,7 +192,7 @@ export const useCloudSync = ({
       }
 
       lastSyncedHashRef.current = localHash;
-      lastSyncedPayloadRef.current = snapshot.rawPayload;
+      lastSyncedPayloadRef.current = cloudPayload;
       setActionRequired("none");
       setSyncStatus("idle");
       setBootstrapped(true);
@@ -205,7 +225,7 @@ export const useCloudSync = ({
       setLastRevision(result.revision);
       lastRevisionRef.current = result.revision;
       setLastSyncedAt(result.lastSyncedAt);
-      lastSyncedHashRef.current = hashData(nextData);
+      lastSyncedHashRef.current = hashPayload(nextPayload);
       lastSyncedPayloadRef.current = nextPayload;
       setConflictDetected(false);
       setActionRequired("none");
@@ -236,8 +256,9 @@ export const useCloudSync = ({
       return;
     }
     setAppData(cloudCandidateData);
-    lastSyncedHashRef.current = hashData(cloudCandidateData);
-    lastSyncedPayloadRef.current = toCloudSyncPayload(cloudCandidateData);
+    const nextPayload = toCloudSyncPayload(cloudCandidateData);
+    lastSyncedHashRef.current = hashPayload(nextPayload);
+    lastSyncedPayloadRef.current = nextPayload;
     setActionRequired("none");
     setConflictDetected(false);
     setSyncStatus("idle");
@@ -275,7 +296,8 @@ export const useCloudSync = ({
     }
 
     const normalizedData = coerceStoredAppData(appData);
-    const currentHash = hashData(normalizedData);
+    const nextPayload = toCloudSyncPayload(normalizedData);
+    const currentHash = hashPayload(nextPayload);
     if (currentHash === lastSyncedHashRef.current) {
       return;
     }
@@ -285,7 +307,6 @@ export const useCloudSync = ({
       return;
     }
 
-    const nextPayload = toCloudSyncPayload(normalizedData);
     const patch = buildIncrementalPatch(previousPayload, nextPayload);
     if (!hasIncrementalPatchOperations(patch)) {
       lastSyncedHashRef.current = currentHash;

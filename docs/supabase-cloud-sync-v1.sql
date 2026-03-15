@@ -5,6 +5,21 @@
 -- - Revision check (optimistic concurrency)
 -- - Atomic revision increment on success
 
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS personal_name text NOT NULL DEFAULT '';
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS date_of_birth date;
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS biological_sex text NOT NULL DEFAULT 'prefer_not_to_say';
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS height_cm numeric;
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS weight_kg numeric;
+
 CREATE OR REPLACE FUNCTION public.cloud_replace_user_data(
   p_user_id uuid,
   p_device_id text,
@@ -48,6 +63,39 @@ BEGIN
        'settings', COALESCE(p_payload->'settings', '{}'::jsonb),
        'markerAliasOverrides', COALESCE(p_payload->'markerAliasOverrides', '{}'::jsonb)
      ),
+         personal_name = CASE
+           WHEN p_payload ? 'personalInfo'
+             THEN COALESCE(p_payload->'personalInfo'->>'name', '')
+           ELSE personal_name
+         END,
+         date_of_birth = CASE
+           WHEN NOT (p_payload ? 'personalInfo')
+             THEN date_of_birth
+           WHEN COALESCE(p_payload->'personalInfo'->>'dateOfBirth', '') ~ '^\d{4}-\d{2}-\d{2}$'
+             THEN (p_payload->'personalInfo'->>'dateOfBirth')::date
+           ELSE NULL
+         END,
+         biological_sex = CASE
+           WHEN NOT (p_payload ? 'personalInfo')
+             THEN biological_sex
+           WHEN p_payload->'personalInfo'->>'biologicalSex' IN ('male', 'female', 'prefer_not_to_say')
+             THEN p_payload->'personalInfo'->>'biologicalSex'
+           ELSE 'prefer_not_to_say'
+         END,
+         height_cm = CASE
+           WHEN NOT (p_payload ? 'personalInfo')
+             THEN height_cm
+           WHEN COALESCE(p_payload->'personalInfo'->>'heightCm', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+             THEN (p_payload->'personalInfo'->>'heightCm')::numeric
+           ELSE NULL
+         END,
+         weight_kg = CASE
+           WHEN NOT (p_payload ? 'personalInfo')
+             THEN weight_kg
+           WHEN COALESCE(p_payload->'personalInfo'->>'weightKg', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+             THEN (p_payload->'personalInfo'->>'weightKg')::numeric
+           ELSE NULL
+         END,
          schema_version = COALESCE((p_payload->>'schemaVersion')::integer, 6),
          updated_at = now()
    WHERE id = p_user_id;
@@ -295,6 +343,39 @@ BEGIN
          'settings', COALESCE(p_patch->'settings', '{}'::jsonb),
          'markerAliasOverrides', COALESCE(p_patch->'markerAliasOverrides', '{}'::jsonb)
        ),
+           personal_name = CASE
+             WHEN p_patch ? 'personalInfo'
+               THEN COALESCE(p_patch->'personalInfo'->>'name', '')
+             ELSE personal_name
+           END,
+           date_of_birth = CASE
+             WHEN NOT (p_patch ? 'personalInfo')
+               THEN date_of_birth
+             WHEN COALESCE(p_patch->'personalInfo'->>'dateOfBirth', '') ~ '^\d{4}-\d{2}-\d{2}$'
+               THEN (p_patch->'personalInfo'->>'dateOfBirth')::date
+             ELSE NULL
+           END,
+           biological_sex = CASE
+             WHEN NOT (p_patch ? 'personalInfo')
+               THEN biological_sex
+             WHEN p_patch->'personalInfo'->>'biologicalSex' IN ('male', 'female', 'prefer_not_to_say')
+               THEN p_patch->'personalInfo'->>'biologicalSex'
+             ELSE 'prefer_not_to_say'
+           END,
+           height_cm = CASE
+             WHEN NOT (p_patch ? 'personalInfo')
+               THEN height_cm
+             WHEN COALESCE(p_patch->'personalInfo'->>'heightCm', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+               THEN (p_patch->'personalInfo'->>'heightCm')::numeric
+             ELSE NULL
+           END,
+           weight_kg = CASE
+             WHEN NOT (p_patch ? 'personalInfo')
+               THEN weight_kg
+             WHEN COALESCE(p_patch->'personalInfo'->>'weightKg', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+               THEN (p_patch->'personalInfo'->>'weightKg')::numeric
+             ELSE NULL
+           END,
            schema_version = COALESCE((p_patch->>'schemaVersion')::integer, 6),
            updated_at = now()
      WHERE id = p_user_id;

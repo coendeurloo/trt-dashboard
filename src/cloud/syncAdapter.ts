@@ -1,4 +1,4 @@
-import { AppSettings } from "../types";
+import { AppSettings, PersonalInfo } from "../types";
 import { getSupabaseAnonKey, getSupabaseUrl } from "./constants";
 import {
   CloudIncrementalPatch,
@@ -73,6 +73,23 @@ const fetchRows = async <T>(
 
 const escapeFilterValue = (value: string): string => encodeURIComponent(value);
 
+const normalizeBiologicalSex = (value: unknown): PersonalInfo["biologicalSex"] =>
+  value === "male" || value === "female" || value === "prefer_not_to_say" ? value : "prefer_not_to_say";
+
+const normalizeNullableNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const normalizeIsoDate = (value: unknown): string =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : "";
+
 export class SupabaseCloudAdapter {
   constructor(
     private readonly accessToken: string,
@@ -87,9 +104,16 @@ export class SupabaseCloudAdapter {
         markerAliasOverrides?: Record<string, string>;
       } | null;
       schema_version: number | null;
+      personal_name: string | null;
+      date_of_birth: string | null;
+      biological_sex: string | null;
+      height_cm: number | string | null;
+      weight_kg: number | string | null;
     }>(
       "profiles",
-      `select=settings,schema_version&id=eq.${escapeFilterValue(this.userId)}&limit=1`,
+      `select=settings,schema_version,personal_name,date_of_birth,biological_sex,height_cm,weight_kg&id=eq.${escapeFilterValue(
+        this.userId
+      )}&limit=1`,
       this.accessToken
     );
 
@@ -188,11 +212,19 @@ export class SupabaseCloudAdapter {
     const profileSettings = profile?.settings ?? null;
     const schemaVersion = Number(profile?.schema_version ?? 0) || 0;
     const revision = Number(syncStateRows[0]?.last_revision ?? 0) || 0;
+    const personalInfo: PersonalInfo = {
+      name: typeof profile?.personal_name === "string" ? profile.personal_name : "",
+      dateOfBirth: normalizeIsoDate(profile?.date_of_birth),
+      biologicalSex: normalizeBiologicalSex(profile?.biological_sex),
+      heightCm: normalizeNullableNumber(profile?.height_cm),
+      weightKg: normalizeNullableNumber(profile?.weight_kg)
+    };
 
     const payload: CloudSyncPayload = {
       schemaVersion,
       settings: (profileSettings?.settings ?? {}) as AppSettings,
       markerAliasOverrides: profileSettings?.markerAliasOverrides ?? {},
+      personalInfo,
       reports: reportRows.map((row) => ({
         local_id: row.local_id,
         report_date: row.report_date,

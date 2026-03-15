@@ -82,6 +82,18 @@ const makeLocalDataWithReport = () =>
     ]
   });
 
+const withPersonalInfo = (
+  data: ReturnType<typeof makeLocalDataWithReport>,
+  overrides: Partial<ReturnType<typeof makeLocalDataWithReport>["personalInfo"]>
+) =>
+  coerceStoredAppData({
+    ...data,
+    personalInfo: {
+      ...data.personalInfo,
+      ...overrides
+    }
+  });
+
 describe("useCloudSync", () => {
   beforeEach(() => {
     fetchSnapshotMock.mockReset();
@@ -176,5 +188,96 @@ describe("useCloudSync", () => {
       expect(result.current.syncStatus).toBe("idle");
       expect(result.current.lastRevision).toBe(3);
     });
+  });
+
+  it("keeps local personal info when cloud personal info is empty and syncs it back", async () => {
+    const localData = withPersonalInfo(makeLocalDataWithReport(), {
+      name: "Coen",
+      dateOfBirth: "1983-06-02",
+      biologicalSex: "male",
+      heightCm: 177,
+      weightKg: 90
+    });
+    const cloudData = makeLocalDataWithReport();
+    fetchSnapshotMock.mockResolvedValue({
+      data: cloudData,
+      rawPayload: toCloudSyncPayload(cloudData),
+      schemaVersion: APP_SCHEMA_VERSION,
+      revision: 7
+    });
+    applyPatchMock.mockResolvedValue({
+      revision: 8,
+      lastSyncedAt: "2026-03-10T10:00:00.000Z"
+    });
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(localData);
+      const sync = useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+      return { data, sync };
+    });
+
+    await waitFor(() => {
+      expect(result.current.data.personalInfo.name).toBe("Coen");
+    });
+
+    await waitFor(
+      () => {
+        expect(applyPatchMock).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 4000 }
+    );
+
+    const patch = applyPatchMock.mock.calls[0]?.[0];
+    expect(patch.settingsChanged).toBe(true);
+    expect(patch.personalInfo.name).toBe("Coen");
+  });
+
+  it("keeps cloud personal info as source of truth when both sides are filled and differ", async () => {
+    const localData = withPersonalInfo(makeLocalDataWithReport(), {
+      name: "Local Coen",
+      dateOfBirth: "1983-06-02",
+      biologicalSex: "male",
+      heightCm: 177,
+      weightKg: 90
+    });
+    const cloudData = withPersonalInfo(makeLocalDataWithReport(), {
+      name: "Cloud Coen",
+      dateOfBirth: "1983-06-03",
+      biologicalSex: "male",
+      heightCm: 178,
+      weightKg: 91
+    });
+    fetchSnapshotMock.mockResolvedValue({
+      data: cloudData,
+      rawPayload: toCloudSyncPayload(cloudData),
+      schemaVersion: APP_SCHEMA_VERSION,
+      revision: 11
+    });
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(localData);
+      const sync = useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+      return { data, sync };
+    });
+
+    await waitFor(() => {
+      expect(result.current.data.personalInfo.name).toBe("Cloud Coen");
+      expect(result.current.sync.syncStatus).toBe("idle");
+    });
+
+    expect(applyPatchMock).not.toHaveBeenCalled();
+    expect(replaceAllMock).not.toHaveBeenCalled();
   });
 });

@@ -114,11 +114,11 @@ const makeSampleData = () =>
       onboardingCompleted: false
     },
     personalInfo: {
-      name: "",
-      dateOfBirth: "",
-      biologicalSex: "prefer_not_to_say",
-      heightCm: null,
-      weightKg: null
+      name: "Coen",
+      dateOfBirth: "1983-06-02",
+      biologicalSex: "male",
+      heightCm: 177,
+      weightKg: 90
     }
   });
 
@@ -135,6 +135,13 @@ describe("cloud mapping", () => {
     expect(roundtrip.reports[0].markers[0].canonicalMarker).toBe("Testosterone");
     expect(roundtrip.reports[0].isBaseline).toBe(true);
     expect(roundtrip.markerAliasOverrides.testo).toBe("Testosterone");
+    expect(roundtrip.personalInfo).toEqual({
+      name: "Coen",
+      dateOfBirth: "1983-06-02",
+      biologicalSex: "male",
+      heightCm: 177,
+      weightKg: 90
+    });
   });
 
   it("is idempotent across two consecutive payload conversions", () => {
@@ -176,5 +183,20 @@ describe("cloud mapping", () => {
     expect(hasIncrementalPatchOperations(patch)).toBe(true);
     expect(patch.markers.upserts).toHaveLength(1);
     expect(patch.supplements.deleteLocalIds).toEqual(["supp-1"]);
+  });
+
+  it("marks settingsChanged when only personal info changed", () => {
+    const sample = makeSampleData();
+    const payloadA = toCloudSyncPayload(sample);
+    const next = makeSampleData();
+    next.personalInfo.name = "Cornelis";
+    const payloadB = toCloudSyncPayload(next);
+
+    const patch = buildIncrementalPatch(payloadA, payloadB);
+    expect(hasIncrementalPatchOperations(patch)).toBe(true);
+    expect(patch.settingsChanged).toBe(true);
+    expect(patch.personalInfo.name).toBe("Cornelis");
+    expect(patch.reports.upserts).toHaveLength(0);
+    expect(patch.markers.upserts).toHaveLength(0);
   });
 });
