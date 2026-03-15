@@ -42,6 +42,7 @@ body.light {
     radial-gradient(circle at 54% 82%, rgba(37, 99, 235, 0.1), transparent 52%),
     linear-gradient(180deg, #eaf4fb 0%, #f4f9fc 50%, #eff6fb 100%);
   color: #0f172a;
+  color-scheme: light;
   --chart-tooltip-bg: #f8fbff;
   --chart-tooltip-border: #94a3b8;
   --chart-tooltip-label: #334155;
@@ -195,6 +196,14 @@ body.light .text-slate-500 {
   color: #64748b !important;
 }
 
+body.light .text-cyan-100 {
+  color: #0e7490 !important;
+}
+
+body.light .hover\:text-cyan-100:hover {
+  color: #0369a1 !important;
+}
+
 body.light .text-cyan-200 {
   color: #0e7490 !important;
 }
@@ -243,16 +252,48 @@ body.light .hover\:bg-slate-800\/70:hover {
   background-color: rgba(220, 232, 244, 0.95) !important;
 }
 
+body.light .hover\:bg-cyan-500\/22:hover {
+  background-color: rgba(6, 182, 212, 0.2) !important;
+}
+
+body.light .hover\:bg-cyan-500\/20:hover {
+  background-color: rgba(6, 182, 212, 0.18) !important;
+}
+
 body.light .hover\:text-slate-100:hover {
   color: #0f172a !important;
+}
+
+body.light .bg-cyan-500\/24 {
+  background-color: rgba(6, 182, 212, 0.22) !important;
+}
+
+body.light .bg-cyan-500\/22 {
+  background-color: rgba(6, 182, 212, 0.2) !important;
 }
 
 body.light .bg-cyan-500\/20 {
   background-color: rgba(6, 182, 212, 0.18) !important;
 }
 
+body.light .bg-cyan-500\/15 {
+  background-color: rgba(6, 182, 212, 0.14) !important;
+}
+
+body.light .bg-cyan-500\/14 {
+  background-color: rgba(6, 182, 212, 0.13) !important;
+}
+
+body.light .bg-cyan-500\/12 {
+  background-color: rgba(6, 182, 212, 0.11) !important;
+}
+
 body.light .bg-cyan-500\/10 {
-  background-color: rgba(6, 182, 212, 0.12) !important;
+  background-color: rgba(6, 182, 212, 0.1) !important;
+}
+
+body.light .bg-cyan-500\/5 {
+  background-color: rgba(6, 182, 212, 0.07) !important;
 }
 
 body.light .bg-emerald-500\/10 {
