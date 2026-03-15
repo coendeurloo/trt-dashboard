@@ -738,8 +738,8 @@ const DashboardView = ({
               <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 px-3 py-2">
                 <p className="text-xs text-slate-400">
                   {tr(
-                    "Upload nog 1 rapport voor trendgrafieken.",
-                    "Upload one more report to unlock trends."
+                    "Goed begin: je eerste rapport is opgeslagen. Upload nog een rapport voor trendgrafieken en vergelijkingen.",
+                    "Great start: your first report is saved. Add one more report to unlock trend charts and over-time comparisons."
                   )}
                 </p>
                 {!isShareMode ? (
