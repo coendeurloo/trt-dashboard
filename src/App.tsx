@@ -2491,7 +2491,6 @@ const App = () => {
                       }
                       startSecondUpload();
                     }}
-                    cloudPanel={cloudPanel}
                   />
                 ) : null}
               </Suspense>
