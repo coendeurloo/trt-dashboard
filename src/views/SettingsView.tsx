@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { USER_PROFILES } from "../data/userProfiles";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
@@ -44,7 +44,6 @@ interface SettingsViewProps {
   onShareOptionsChange: Dispatch<SetStateAction<ShareOptions>>;
   onGenerateShareLink: () => void;
   onReportIssue: () => void;
-  cloudPanel?: ReactNode;
 }
 
 interface ToggleSwitchProps {
@@ -108,8 +107,7 @@ const SettingsView = ({
   onAddMarkerSuggestions,
   onShareOptionsChange,
   onGenerateShareLink,
-  onReportIssue,
-  cloudPanel
+  onReportIssue
 }: SettingsViewProps) => {
   const isNl = language === "nl";
   const isLightTheme = settings.theme === "light";
@@ -215,7 +213,6 @@ const SettingsView = ({
 
   return (
     <section className="space-y-3 fade-in">
-      {cloudPanel ?? null}
       <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
         {/* Tab Bar */}
         <div className="sticky top-0 -mx-4 -mt-4 flex overflow-x-auto border-b border-slate-700 bg-slate-900/60 px-4 py-3">
@@ -509,8 +506,6 @@ const SettingsView = ({
                 {tr("Backup, herstel, delen en synchronisatie.", "Backup, restore, sharing and synchronization.")}
               </p>
             </div>
-
-            {cloudPanel ? <div className="mt-4">{cloudPanel}</div> : null}
 
             <div className="mt-4 border-t border-slate-800 pt-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Backup & Herstel", "Backup & Restore")}</h3>
