@@ -115,39 +115,18 @@ describe("ProtocolView modal behavior", () => {
     confirmSpy.mockRestore();
   });
 
-  it("sends default effectiveFrom=today with saveMode=new_version when saving an edit", () => {
+  it("sends default effectiveFrom=today when saving an edit", () => {
     const onUpdateProtocol = vi.fn();
     renderProtocolView(onUpdateProtocol);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByRole("heading", { name: "How do you want to save?" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm save" }));
 
     expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
     expect(onUpdateProtocol.mock.calls[0]?.[0]).toBe("protocol-1");
     expect(onUpdateProtocol.mock.calls[0]?.[1]).toMatchObject({
-      effectiveFrom: todayIsoDate(),
-      saveMode: "new_version"
+      effectiveFrom: todayIsoDate()
     });
-  });
-
-  it("asks confirmation when overwrite_history is selected", () => {
-    const onUpdateProtocol = vi.fn();
-    renderProtocolView(onUpdateProtocol);
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    fireEvent.click(screen.getByRole("radio", { name: /Overwrite history/i }));
-
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm save" }));
-
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
-    expect(onUpdateProtocol.mock.calls[0]?.[1]).toMatchObject({
-      saveMode: "overwrite_history"
-    });
-    confirmSpy.mockRestore();
+    expect(screen.queryByRole("heading", { name: "How do you want to save?" })).toBeNull();
   });
 });

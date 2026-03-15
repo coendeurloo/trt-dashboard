@@ -7,7 +7,6 @@ import {
   LabReport,
   PersonalInfo,
   Protocol,
-  ProtocolSaveMode,
   ReportAnnotations,
   StoredAppData,
   SupplementPeriod,
@@ -17,7 +16,6 @@ import { clearAnalystMemory, coerceStoredAppData, loadAppData, saveAppData } fro
 import { withResolvedInterventionAnnotations } from "../protocolUtils";
 import {
   createProtocolVersion,
-  ensureProtocolVersions,
   normalizeInterventionSnapshot,
   normalizeProtocolMirrors,
   todayIsoDate
@@ -25,7 +23,7 @@ import {
 import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "../markerNormalization";
 import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
-import { deriveAbnormalFlag, sortReportsChronological } from "../utils";
+import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
 import { findBaselineOverlapMarkers, normalizeBaselineFlagsByMarkerOverlap } from "../baselineUtils";
 
 export interface MarkerMergeSuggestion {
@@ -328,90 +326,64 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   const updateProtocol = useCallback(
     (
       protocolId: string,
-      updates: Partial<Protocol> & { effectiveFrom?: string; saveMode?: ProtocolSaveMode }
+      updates: Partial<Protocol> & { effectiveFrom?: string }
     ) => {
       if (isShareMode) {
         return;
       }
       setAppData((prev) => {
         const currentProtocols = resolveProtocols(prev);
-        let didOverwriteHistory = false;
-        let overwrittenProtocolName = "";
+        const target = currentProtocols.find((protocol) => protocol.id === protocolId);
+        if (!target) {
+          return prev;
+        }
+        const now = new Date().toISOString();
+        const requestedName = typeof updates.name === "string" ? updates.name.trim() : "";
+        const nextName = requestedName || target.name;
+        const nextItems = Array.isArray(updates.items)
+          ? updates.items
+          : Array.isArray(updates.compounds)
+            ? updates.compounds
+            : target.compounds;
+        const nextNotes = typeof updates.notes === "string" ? updates.notes : target.notes;
+        const nextVersion = createProtocolVersion({
+          name: nextName,
+          effectiveFrom: updates.effectiveFrom ?? todayIsoDate(),
+          items: nextItems,
+          notes: nextNotes,
+          createdAt: now
+        });
+        const usageCount = prev.reports.filter(
+          (report) => (report.annotations.interventionId ?? report.annotations.protocolId ?? null) === protocolId
+        ).length;
+        if (usageCount > 0) {
+          const forkedProtocol = normalizeProtocolMirrors({
+            ...target,
+            id: createId(),
+            name: nextName,
+            items: nextVersion.items,
+            compounds: nextVersion.compounds,
+            versions: [nextVersion],
+            notes: nextVersion.notes,
+            createdAt: now,
+            updatedAt: now
+          });
+          return withProtocols(prev, mergeProtocolsById(currentProtocols, [forkedProtocol]));
+        }
         const nextProtocols = currentProtocols.map((protocol) =>
           protocol.id === protocolId
-            ? (() => {
-                const now = new Date().toISOString();
-                const normalizedMode: ProtocolSaveMode =
-                  updates.saveMode === "overwrite_history" ? "overwrite_history" : "new_version";
-                const requestedName = typeof updates.name === "string" ? updates.name.trim() : "";
-                const nextName = requestedName || protocol.name;
-                const nextItems = Array.isArray(updates.items)
-                  ? updates.items
-                  : Array.isArray(updates.compounds)
-                    ? updates.compounds
-                    : protocol.compounds;
-                const nextNotes = typeof updates.notes === "string" ? updates.notes : protocol.notes;
-                const nextVersion = createProtocolVersion({
-                  name: nextName,
-                  effectiveFrom: updates.effectiveFrom ?? todayIsoDate(),
-                  items: nextItems,
-                  notes: nextNotes,
-                  createdAt: now
-                });
-                const existingVersions = ensureProtocolVersions(protocol);
-                const nextVersions =
-                  normalizedMode === "overwrite_history"
-                    ? [nextVersion]
-                    : [...existingVersions, nextVersion];
-                if (normalizedMode === "overwrite_history") {
-                  didOverwriteHistory = true;
-                  overwrittenProtocolName = nextName;
-                }
-                return normalizeProtocolMirrors({
-                  ...protocol,
-                  id: protocol.id,
-                  name: nextName,
-                  versions: nextVersions,
-                  updatedAt: now
-                });
-              })()
+            ? normalizeProtocolMirrors({
+                ...protocol,
+                name: nextName,
+                items: nextVersion.items,
+                compounds: nextVersion.compounds,
+                versions: [nextVersion],
+                notes: nextVersion.notes,
+                updatedAt: now
+              })
             : protocol
         );
-        if (!didOverwriteHistory) {
-          return withProtocols(prev, nextProtocols);
-        }
-        const nextReports = prev.reports.map((report) => {
-          const linkedId = report.annotations.interventionId ?? report.annotations.protocolId ?? null;
-          if (linkedId !== protocolId) {
-            return report;
-          }
-          const rewrittenAnnotations = withResolvedInterventionAnnotations(
-            {
-              ...report.annotations,
-              interventionId: protocolId,
-              interventionLabel: overwrittenProtocolName,
-              interventionVersionId: null,
-              interventionSnapshot: null,
-              protocolId: protocolId,
-              protocolVersionId: null,
-              protocol: overwrittenProtocolName
-            },
-            protocolId,
-            report.testDate,
-            nextProtocols
-          );
-          return {
-            ...report,
-            annotations: rewrittenAnnotations
-          };
-        });
-        return withProtocols(
-          {
-            ...prev,
-            reports: nextReports
-          },
-          nextProtocols
-        );
+        return withProtocols(prev, nextProtocols);
       });
     },
     [isShareMode]

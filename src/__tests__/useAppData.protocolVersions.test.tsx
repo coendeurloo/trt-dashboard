@@ -2,8 +2,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import useAppData from "../hooks/useAppData";
-import { coerceStoredAppData } from "../storage";
 import { getReportProtocol } from "../protocolUtils";
+import { coerceStoredAppData } from "../storage";
 import { todayIsoDate } from "../protocolVersions";
 
 const makeMarker = (id: string) => ({
@@ -18,8 +18,8 @@ const makeMarker = (id: string) => ({
   confidence: 1
 });
 
-describe("useAppData protocol versions", () => {
-  it("creates a new protocol version on edit with default effectiveFrom=today and keeps history date-aware", () => {
+describe("useAppData protocol editing", () => {
+  it("creates a new protocol id when editing a protocol linked to reports", () => {
     const today = todayIsoDate();
     const initial = coerceStoredAppData({
       interventions: [
@@ -94,10 +94,12 @@ describe("useAppData protocol versions", () => {
       });
     });
 
-    const updatedProtocol = result.current.appData.protocols.find((protocol) => protocol.id === "protocol-1");
-    expect(updatedProtocol?.versions).toHaveLength(2);
-    expect(updatedProtocol?.versions?.[1]?.effectiveFrom).toBe(today);
-    expect(updatedProtocol?.versions?.[1]?.name).toBe("TRT base");
+    expect(result.current.appData.protocols).toHaveLength(2);
+    const oldProtocol = result.current.appData.protocols.find((protocol) => protocol.id === "protocol-1");
+    const newProtocol = result.current.appData.protocols.find((protocol) => protocol.id !== "protocol-1");
+    expect(oldProtocol?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
+    expect(newProtocol?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
+    expect(newProtocol?.versions?.[0]?.effectiveFrom).toBe(today);
 
     const oldReport = result.current.appData.reports.find((report) => report.id === "report-old");
     const todayReport = result.current.appData.reports.find((report) => report.id === "report-today");
@@ -105,10 +107,10 @@ describe("useAppData protocol versions", () => {
     const todayResolved = todayReport ? getReportProtocol(todayReport, result.current.appData.protocols) : null;
 
     expect(oldResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
-    expect(todayResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
+    expect(todayResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
   });
 
-  it("overwrites history when saveMode=overwrite_history and rewrites linked report context", () => {
+  it("updates protocol in place when no reports are linked", () => {
     const initial = coerceStoredAppData({
       interventions: [
         {
@@ -121,26 +123,7 @@ describe("useAppData protocol versions", () => {
           updatedAt: "2025-01-01T08:00:00.000Z"
         }
       ],
-      reports: [
-        {
-          id: "report-old",
-          sourceFileName: "old.pdf",
-          testDate: "2025-02-01",
-          createdAt: "2025-02-01T08:00:00.000Z",
-          markers: [makeMarker("m-old")],
-          annotations: {
-            interventionId: "protocol-1",
-            interventionLabel: "TRT base",
-            protocolId: "protocol-1",
-            protocol: "TRT base",
-            supplementOverrides: null,
-            symptoms: "",
-            notes: "",
-            samplingTiming: "trough"
-          },
-          extraction: { provider: "fallback", model: "unit-test", confidence: 1, needsReview: false }
-        }
-      ]
+      reports: []
     });
 
     const { result } = renderHook(() =>
@@ -152,23 +135,18 @@ describe("useAppData protocol versions", () => {
 
     act(() => {
       result.current.updateProtocol("protocol-1", {
-        name: "TRT revised",
+        name: "TRT updated",
         items: [{ name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }],
         compounds: [{ name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }],
-        notes: "rewritten",
-        effectiveFrom: "2025-02-01",
-        saveMode: "overwrite_history"
+        notes: "updated",
+        effectiveFrom: "2025-02-01"
       });
     });
 
+    expect(result.current.appData.protocols).toHaveLength(1);
     const updatedProtocol = result.current.appData.protocols.find((protocol) => protocol.id === "protocol-1");
     expect(updatedProtocol?.versions).toHaveLength(1);
-    expect(updatedProtocol?.versions?.[0]?.name).toBe("TRT revised");
-
-    const oldReport = result.current.appData.reports.find((report) => report.id === "report-old");
-    const oldResolved = oldReport ? getReportProtocol(oldReport, result.current.appData.protocols) : null;
-    expect(oldResolved?.name).toBe("TRT revised");
-    expect(oldResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
-    expect(oldReport?.annotations.interventionSnapshot?.name).toBe("TRT revised");
+    expect(updatedProtocol?.name).toBe("TRT updated");
+    expect(updatedProtocol?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
   });
 });

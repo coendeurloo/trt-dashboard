@@ -146,8 +146,6 @@ export interface ProtocolVersion {
   createdAt: string;
 }
 
-export type ProtocolSaveMode = "new_version" | "overwrite_history";
-
 export interface InterventionSnapshot {
   interventionId: string | null;
   versionId: string | null;
