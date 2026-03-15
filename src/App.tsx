@@ -2491,6 +2491,8 @@ const App = () => {
                       }
                       startSecondUpload();
                     }}
+                    cloudUserEmail={cloudAuth.session?.user.email ?? null}
+                    onSignOut={cloudAuth.signOut}
                   />
                 ) : null}
               </Suspense>
