@@ -267,7 +267,7 @@ const ProtocolView = ({
               onClick={cancelEditor}
             >
               <div
-                className="app-modal-shell w-full max-w-2xl bg-slate-900"
+                className="app-modal-shell w-full max-w-5xl bg-slate-900"
                 onClick={(event) => event.stopPropagation()}
               >
                 {/* Header */}
