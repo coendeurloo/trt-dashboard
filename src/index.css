@@ -322,7 +322,19 @@ body.light .bg-amber-500\/10 {
   background-color: rgba(245, 158, 11, 0.16) !important;
 }
 
+body.light .bg-emerald-500\/22 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
 body.light .bg-emerald-500\/20 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+body.light .bg-emerald-500\/15 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+body.light .hover\:bg-emerald-500\/22:hover {
   background-color: rgba(16, 185, 129, 0.2) !important;
 }
 
