@@ -339,7 +339,7 @@ const DashboardView = ({
       ) : null}
 
       {hasReports ? (
-        <div className="rounded-xl bg-slate-800/40 px-3 py-2.5">
+        <div className="dashboard-filter-bar rounded-xl bg-slate-800/40 px-3 py-2.5">
           <div ref={chartSettingsRef} className="relative space-y-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1">
@@ -415,7 +415,7 @@ const DashboardView = ({
             </div>
 
             {showChartSettings ? (
-            <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+            <div className="chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
               <div className="flex items-center justify-between px-0.5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Grafiekinstellingen", "Chart settings")}</p>
                 <button
