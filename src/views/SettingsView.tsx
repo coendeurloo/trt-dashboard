@@ -173,6 +173,10 @@ const SettingsView = ({
     });
   }, [allMarkers]);
 
+  useEffect(() => {
+    setDraftPersonalInfo(personalInfo);
+  }, [personalInfo]);
+
   const handleSavePersonalInfo = () => {
     onUpdatePersonalInfo(draftPersonalInfo);
     setProfileSaved(true);
