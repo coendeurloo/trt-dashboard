@@ -24,7 +24,7 @@ import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
 import {
-  getMostRecentlyUsedProtocolId,
+  getMostRecentlyUpdatedProtocolId,
   getPrimaryProtocolCompound,
   getProtocolDisplayLabel,
   getProtocolDoseMgPerWeek,
@@ -717,7 +717,7 @@ const App = () => {
     setUploadSummary(null);
     setAiAttemptedForCurrentUpload(false);
     setDraftAnnotations(blankAnnotations());
-    setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
+    setSelectedProtocolId(getMostRecentlyUpdatedProtocolId(appData.protocols));
     setLastUploadedFile(null);
     setIsImprovingExtraction(false);
     setShowComparisonModal(false);
@@ -1071,7 +1071,7 @@ const App = () => {
       captureOriginalDraftMarkerLabels(finalDraft);
       setLastUploadedFile(file);
       setDraftAnnotations(blankAnnotations());
-      setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
+      setSelectedProtocolId(getMostRecentlyUpdatedProtocolId(appData.protocols));
       setActiveTab("dashboard");
       scrollPageToTop();
       setUploadSummary({
@@ -1331,7 +1331,7 @@ const App = () => {
       resetParserImprovementPrompt();
       captureOriginalDraftMarkerLabels(enrichedDraft);
       setDraftAnnotations(blankAnnotations());
-      setSelectedProtocolId(getMostRecentlyUsedProtocolId(appData.reports));
+      setSelectedProtocolId(getMostRecentlyUpdatedProtocolId(appData.protocols));
       setActiveTab("dashboard");
       scrollPageToTop();
       const routeSummary = getExtractionRouteSummary(enrichedDraft);
@@ -1581,7 +1581,7 @@ const App = () => {
       .sort((left, right) => right.testDate.localeCompare(left.testDate) || right.createdAt.localeCompare(left.createdAt))[0]
       ?.testDate ?? null;
   }, [reports]);
-  const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
+  const activeProtocolId = useMemo(() => getMostRecentlyUpdatedProtocolId(appData.protocols), [appData.protocols]);
   const activeProtocol = useMemo(
     () => appData.protocols.find((protocol) => protocol.id === activeProtocolId) ?? null,
     [appData.protocols, activeProtocolId]

@@ -228,3 +228,30 @@ export const getMostRecentlyUsedProtocolId = (reports: LabReport[]): string | nu
   const withProtocol = sorted.find((report) => (report.annotations.interventionId ?? report.annotations.protocolId) !== null);
   return withProtocol?.annotations.interventionId ?? withProtocol?.annotations.protocolId ?? null;
 };
+
+const getProtocolRecency = (protocol: Protocol): string => {
+  const updatedAt = typeof protocol.updatedAt === "string" ? protocol.updatedAt.trim() : "";
+  if (updatedAt) {
+    return updatedAt;
+  }
+  const createdAt = typeof protocol.createdAt === "string" ? protocol.createdAt.trim() : "";
+  return createdAt;
+};
+
+export const getMostRecentlyUpdatedProtocolId = (protocols: Protocol[]): string | null => {
+  if (!Array.isArray(protocols) || protocols.length === 0) {
+    return null;
+  }
+  const sorted = [...protocols].sort((left, right) => {
+    const byRecency = getProtocolRecency(right).localeCompare(getProtocolRecency(left));
+    if (byRecency !== 0) {
+      return byRecency;
+    }
+    const byCreatedAt = right.createdAt.localeCompare(left.createdAt);
+    if (byCreatedAt !== 0) {
+      return byCreatedAt;
+    }
+    return right.id.localeCompare(left.id);
+  });
+  return sorted[0]?.id ?? null;
+};

@@ -4,7 +4,7 @@ import { AlertTriangle, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
-import { getMostRecentlyUsedProtocolId, getProtocolCompoundsText } from "../protocolUtils";
+import { getMostRecentlyUpdatedProtocolId, getProtocolCompoundsText } from "../protocolUtils";
 import {
   createProtocolVersion,
   ensureProtocolVersions,
@@ -101,7 +101,7 @@ const ProtocolView = ({
   const [feedback, setFeedback] = useState("");
   const [showSaveChoiceDialog, setShowSaveChoiceDialog] = useState(false);
 
-  const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
+  const activeProtocolId = useMemo(() => getMostRecentlyUpdatedProtocolId(protocols), [protocols]);
   const sortedProtocols = useMemo(
     () =>
       [...protocols].sort((left, right) => {
@@ -305,14 +305,15 @@ const ProtocolView = ({
             const usageCount = getProtocolUsageCount(protocol.id);
             const canDelete = usageCount === 0;
             const latestVersion = getLatestProtocolVersion(protocol);
+            const isActive = protocol.id === activeProtocolId;
             return (
               <article
                 key={protocol.id}
                 className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3"
               >
-                <div className="flex items-start gap-2">
-                  <div>
-                    <h4 className="text-base font-semibold text-slate-100">{protocol.name}</h4>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-base font-semibold text-slate-100">{protocol.name}</h4>
                     <p className="mt-1 text-sm text-slate-300">{getProtocolCompoundsText(protocol) || "-"}</p>
                     <p className="mt-1 text-xs text-slate-400">
                       {tr("Rapporten", "Reports")}: {usageCount}
@@ -321,6 +322,11 @@ const ProtocolView = ({
                       {tr("Items", "Items")}: {latestVersion?.compounds.length ?? protocol.compounds.length}
                     </p>
                   </div>
+                  {isActive ? (
+                    <span className="shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-200">
+                      {tr("Actief", "Active")}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -444,50 +450,65 @@ const ProtocolView = ({
               aria-labelledby="protocol-save-choice-title"
             >
               <div
-                className="w-full max-w-2xl rounded-2xl border border-slate-700/80 bg-slate-900/95 p-5 shadow-2xl"
+                className="app-modal-shell protocol-save-choice-modal relative w-full max-w-3xl bg-slate-900"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
-                    <AlertTriangle className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h4 id="protocol-save-choice-title" className="text-base font-semibold text-slate-100">
-                      {tr("Dit protocol wordt al gebruikt", "This protocol is already in use")}
-                    </h4>
-                    <p className="mt-1 text-sm text-slate-300">
-                      {tr(
-                        `Dit ${entitySingular} is gekoppeld aan ${linkedReportsForEditing.length} rapporten.`,
-                        `This ${entitySingular} is linked to ${linkedReportsForEditing.length} reports.`
-                      )}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {tr(
-                        "Kies of je een nieuw protocol wilt maken, of dit protocol retroactief wilt aanpassen.",
-                        "Choose whether to create a new protocol, or update this protocol retroactively."
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-lg border border-slate-700/70 bg-slate-800/55 p-3">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                    {tr("Gekoppelde rapporten", "Linked reports")}
-                  </p>
-                  <div className="max-h-48 space-y-1 overflow-y-auto pr-1 text-sm text-slate-200">
-                    {linkedReportsForEditing.map((report) => (
-                      <div
-                        key={`linked-report-${report.id}`}
-                        className="flex items-center justify-between gap-3 rounded-md border border-slate-700/60 bg-slate-900/55 px-2.5 py-1.5"
-                      >
-                        <span className="shrink-0 text-slate-300">{formatDate(report.testDate)}</span>
-                        <span className="min-w-0 truncate text-right text-slate-400">{report.sourceFileName}</span>
+                <div className="app-modal-header p-5">
+                  <div className="app-modal-header-glow" aria-hidden />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+                        <AlertTriangle className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h4 id="protocol-save-choice-title" className="text-lg font-semibold text-slate-50">
+                          {tr("Dit protocol wordt al gebruikt", "This protocol is already in use")}
+                        </h4>
+                        <p className="mt-1 text-sm text-slate-300">
+                          {tr(
+                            `Dit ${entitySingular} is gekoppeld aan ${linkedReportsForEditing.length} rapporten.`,
+                            `This ${entitySingular} is linked to ${linkedReportsForEditing.length} reports.`
+                          )}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {tr(
+                            "Kies of je een nieuw protocol wilt maken, of dit protocol retroactief wilt aanpassen.",
+                            "Choose whether to create a new protocol, or update this protocol retroactively."
+                          )}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="app-modal-close-btn"
+                      onClick={() => setShowSaveChoiceDialog(false)}
+                      aria-label={tr("Sluiten", "Close")}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <div className="max-h-[calc(100vh-18rem)] overflow-y-auto p-5">
+                  <div className="protocol-save-choice-report-list rounded-lg border border-slate-700/70 bg-slate-800/55 p-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    {tr("Gekoppelde rapporten", "Linked reports")}
+                    </p>
+                    <div className="max-h-48 space-y-1 overflow-y-auto pr-1 text-sm text-slate-200">
+                      {linkedReportsForEditing.map((report) => (
+                        <div
+                          key={`linked-report-${report.id}`}
+                          className="protocol-save-choice-report-row flex items-center justify-between gap-3 rounded-md border border-slate-700/60 bg-slate-900/55 px-2.5 py-1.5"
+                        >
+                          <span className="shrink-0 text-slate-300">{formatDate(report.testDate)}</span>
+                          <span className="min-w-0 truncate text-right text-slate-400">{report.sourceFileName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-700/60 p-4">
                   <button
                     type="button"
                     className="inline-flex items-center rounded-lg border border-slate-600/80 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"

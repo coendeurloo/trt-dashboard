@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getReportProtocol } from "../protocolUtils";
+import { getMostRecentlyUpdatedProtocolId, getReportProtocol } from "../protocolUtils";
 import { LabReport, Protocol } from "../types";
 
 const protocol: Protocol = {
@@ -80,6 +80,25 @@ const makeReport = (id: string, testDate: string, annotationOverrides?: Partial<
 });
 
 describe("protocolUtils version resolution", () => {
+  it("resolves active protocol id from most recently updated protocol", () => {
+    const activeId = getMostRecentlyUpdatedProtocolId([
+      {
+        ...protocol,
+        id: "protocol-old",
+        createdAt: "2025-01-01T08:00:00.000Z",
+        updatedAt: "2025-02-01T08:00:00.000Z"
+      },
+      {
+        ...protocol,
+        id: "protocol-new",
+        createdAt: "2025-03-01T08:00:00.000Z",
+        updatedAt: "2025-03-15T08:00:00.000Z"
+      }
+    ]);
+
+    expect(activeId).toBe("protocol-new");
+  });
+
   it("resolves protocol version by report test date", () => {
     const reportBefore = makeReport("report-before", "2026-02-15");
     const reportAfter = makeReport("report-after", "2026-03-10");

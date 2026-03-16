@@ -138,6 +138,9 @@ describe("ProtocolView modal behavior", () => {
 
     expect(screen.getByRole("heading", { name: "This protocol is already in use" })).toBeTruthy();
     expect(screen.getByText("lab.pdf")).toBeTruthy();
+    const saveChoiceModal = document.querySelector(".protocol-save-choice-modal");
+    expect(saveChoiceModal).toBeTruthy();
+    expect(saveChoiceModal?.classList.contains("app-modal-shell")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Create new protocol" }));
     expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
@@ -166,19 +169,19 @@ describe("ProtocolView ordering", () => {
     cleanup();
   });
 
-  it("places active protocol first and oldest protocol last", () => {
+  it("uses newest protocol as active, shows a single active badge, and keeps oldest last", () => {
     const protocols: Protocol[] = [
       {
         ...protocol,
-        id: "active",
-        name: "Active protocol",
+        id: "older",
+        name: "Older protocol",
         createdAt: "2025-01-10T08:00:00.000Z",
         updatedAt: "2025-01-10T08:00:00.000Z"
       },
       {
         ...protocol,
-        id: "newer",
-        name: "Newer protocol",
+        id: "active-newest",
+        name: "Newest protocol",
         createdAt: "2025-03-10T08:00:00.000Z",
         updatedAt: "2025-03-10T08:00:00.000Z"
       },
@@ -191,30 +194,17 @@ describe("ProtocolView ordering", () => {
       }
     ];
 
-    const reports: LabReport[] = [
-      {
-        ...report,
-        id: "report-active",
-        testDate: "2026-03-10",
-        createdAt: "2026-03-10T08:00:00.000Z",
-        annotations: {
-          ...report.annotations,
-          interventionId: "active",
-          protocolId: "active",
-          interventionLabel: "Active protocol",
-          protocol: "Active protocol"
-        }
-      }
-    ];
-
     renderProtocolView({
       protocols,
-      reports,
+      reports: [],
       usageCount: 0
     });
 
     const headings = screen.getAllByRole("heading", { level: 4 }).map((node) => node.textContent?.trim());
-    expect(headings[0]).toBe("Active protocol");
+    expect(headings[0]).toBe("Newest protocol");
     expect(headings[headings.length - 1]).toBe("Oldest protocol");
+
+    const activeBadges = screen.getAllByText("Active");
+    expect(activeBadges).toHaveLength(1);
   });
 });

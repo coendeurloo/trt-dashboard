@@ -690,6 +690,26 @@ body.light .app-modal-close-btn:hover {
   color: #0f172a;
 }
 
+.protocol-save-choice-modal {
+  box-shadow: 0 28px 72px -40px rgba(8, 145, 178, 0.35);
+}
+
+body.light .protocol-save-choice-modal {
+  border-color: rgba(148, 163, 184, 0.48) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 248, 254, 0.95) 100%) !important;
+  box-shadow: 0 26px 60px -38px rgba(15, 23, 42, 0.32);
+}
+
+body.light .protocol-save-choice-modal .protocol-save-choice-report-list {
+  border-color: rgba(148, 163, 184, 0.46) !important;
+  background: rgba(238, 246, 253, 0.85) !important;
+}
+
+body.light .protocol-save-choice-modal .protocol-save-choice-report-row {
+  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
 .app-teal-glow-surface {
   /* Keep glow inside the panel to avoid circular edge bleed into sidebar/menu */
   background:
