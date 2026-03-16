@@ -967,8 +967,8 @@ const ReportsView = ({
                           title={
                             !isShareMode && protocol
                               ? tr(
-                                  "Klik om protocolversie voor dit rapport te bewerken",
-                                  "Click to edit protocol version for this report"
+                                  "Klik om protocol voor dit rapport te bewerken",
+                                  "Click to edit protocol for this report"
                                 )
                               : undefined
                           }
@@ -1605,7 +1605,7 @@ const ReportsView = ({
                   <div className="relative flex items-start justify-between gap-3">
                     <div>
                       <h4 id="report-protocol-version-modal-title" className="text-lg font-semibold text-slate-50">
-                        {tr("Bewerk protocolversie voor dit rapport", "Edit protocol version for this report")}
+                        {tr("Bewerk protocol voor dit rapport", "Edit protocol for this report")}
                       </h4>
                       <p className="mt-1 text-xs text-slate-300">
                         {tr(
@@ -1645,7 +1645,7 @@ const ReportsView = ({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/70 hover:bg-emerald-500/22"
                     onClick={saveReportProtocolVersion}
                   >
-                    <Save className="h-4 w-4" /> {tr("Sla rapportversie op", "Save report version")}
+                    <Save className="h-4 w-4" /> {tr("Sla rapportprotocol op", "Save report protocol")}
                   </button>
                 </div>
               </div>

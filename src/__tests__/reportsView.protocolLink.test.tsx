@@ -87,7 +87,7 @@ describe("ReportsView protocol linking", () => {
     expect(screen.getByRole("option", { name: "TRT Cypionate 120mg" })).toBeTruthy();
   });
 
-  it("opens report-specific protocol version editor and saves to interventionSnapshot", () => {
+  it("opens report-specific protocol editor and saves to interventionSnapshot", () => {
     const onUpdateReportAnnotations = vi.fn();
     const linkedReport: LabReport = {
       ...report,
@@ -134,11 +134,11 @@ describe("ReportsView protocol linking", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand" }));
     fireEvent.click(screen.getByRole("button", { name: "TRT Cypionate 120mg" }));
 
-    expect(screen.getByRole("heading", { name: "Edit protocol version for this report" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Edit protocol for this report" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Protocol name"), {
       target: { value: "TRT + HGH custom" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save report version" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save report protocol" }));
 
     expect(onUpdateReportAnnotations).toHaveBeenCalledTimes(1);
     expect(onUpdateReportAnnotations.mock.calls[0]?.[0]).toBe("r-1");

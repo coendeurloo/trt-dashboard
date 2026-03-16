@@ -1,9 +1,9 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import ProtocolView from "../views/ProtocolView";
-import { LabReport, Protocol } from "../types";
 import { todayIsoDate } from "../protocolVersions";
+import { LabReport, Protocol, ProtocolUpdateMode } from "../types";
+import ProtocolView from "../views/ProtocolView";
 
 const protocol: Protocol = {
   id: "protocol-1",
@@ -63,18 +63,32 @@ const report: LabReport = {
   }
 };
 
-const renderProtocolView = (onUpdateProtocol = vi.fn()) =>
+const renderProtocolView = ({
+  onUpdateProtocol,
+  protocols = [protocol],
+  reports = [report],
+  usageCount = 1
+}: {
+  onUpdateProtocol?: (
+    id: string,
+    updates: Partial<Protocol> & { effectiveFrom?: string },
+    mode?: ProtocolUpdateMode
+  ) => void;
+  protocols?: Protocol[];
+  reports?: LabReport[];
+  usageCount?: number;
+} = {}) =>
   render(
     <ProtocolView
-      protocols={[protocol]}
-      reports={[report]}
+      protocols={protocols}
+      reports={reports}
       language="en"
       userProfile="trt"
       isShareMode={false}
       onAddProtocol={vi.fn()}
-      onUpdateProtocol={onUpdateProtocol}
+      onUpdateProtocol={onUpdateProtocol ?? vi.fn()}
       onDeleteProtocol={vi.fn(() => true)}
-      getProtocolUsageCount={vi.fn(() => 1)}
+      getProtocolUsageCount={vi.fn(() => usageCount)}
     />
   );
 
@@ -115,18 +129,92 @@ describe("ProtocolView modal behavior", () => {
     confirmSpy.mockRestore();
   });
 
-  it("sends default effectiveFrom=today when saving an edit", () => {
+  it("shows save warning with linked reports and defaults to create_new", () => {
     const onUpdateProtocol = vi.fn();
-    renderProtocolView(onUpdateProtocol);
+    renderProtocolView({ onUpdateProtocol, usageCount: 1, reports: [report] });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
+    expect(screen.getByRole("heading", { name: "This protocol is already in use" })).toBeTruthy();
+    expect(screen.getByText("lab.pdf")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create new protocol" }));
     expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
     expect(onUpdateProtocol.mock.calls[0]?.[0]).toBe("protocol-1");
     expect(onUpdateProtocol.mock.calls[0]?.[1]).toMatchObject({
       effectiveFrom: todayIsoDate()
     });
-    expect(screen.queryByRole("heading", { name: "How do you want to save?" })).toBeNull();
+    expect(onUpdateProtocol.mock.calls[0]?.[2]).toBe("create_new");
+  });
+
+  it("updates in-place immediately when there are no linked reports", () => {
+    const onUpdateProtocol = vi.fn();
+    renderProtocolView({ onUpdateProtocol, usageCount: 0, reports: [] });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.queryByRole("heading", { name: "This protocol is already in use" })).toBeNull();
+    expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
+    expect(onUpdateProtocol.mock.calls[0]?.[2]).toBe("replace_existing");
+  });
+});
+
+describe("ProtocolView ordering", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("places active protocol first and oldest protocol last", () => {
+    const protocols: Protocol[] = [
+      {
+        ...protocol,
+        id: "active",
+        name: "Active protocol",
+        createdAt: "2025-01-10T08:00:00.000Z",
+        updatedAt: "2025-01-10T08:00:00.000Z"
+      },
+      {
+        ...protocol,
+        id: "newer",
+        name: "Newer protocol",
+        createdAt: "2025-03-10T08:00:00.000Z",
+        updatedAt: "2025-03-10T08:00:00.000Z"
+      },
+      {
+        ...protocol,
+        id: "oldest",
+        name: "Oldest protocol",
+        createdAt: "2024-01-10T08:00:00.000Z",
+        updatedAt: "2024-01-10T08:00:00.000Z"
+      }
+    ];
+
+    const reports: LabReport[] = [
+      {
+        ...report,
+        id: "report-active",
+        testDate: "2026-03-10",
+        createdAt: "2026-03-10T08:00:00.000Z",
+        annotations: {
+          ...report.annotations,
+          interventionId: "active",
+          protocolId: "active",
+          interventionLabel: "Active protocol",
+          protocol: "Active protocol"
+        }
+      }
+    ];
+
+    renderProtocolView({
+      protocols,
+      reports,
+      usageCount: 0
+    });
+
+    const headings = screen.getAllByRole("heading", { level: 4 }).map((node) => node.textContent?.trim());
+    expect(headings[0]).toBe("Active protocol");
+    expect(headings[headings.length - 1]).toBe("Oldest protocol");
   });
 });

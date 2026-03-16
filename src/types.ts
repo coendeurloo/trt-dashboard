@@ -172,6 +172,7 @@ export interface InterventionPlan {
 }
 
 export type Protocol = InterventionPlan;
+export type ProtocolUpdateMode = "create_new" | "replace_existing";
 
 export interface WellbeingCheckIn {
   id: string;

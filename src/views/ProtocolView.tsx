@@ -1,18 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
-import { getProtocolCompoundsText } from "../protocolUtils";
+import { getMostRecentlyUsedProtocolId, getProtocolCompoundsText } from "../protocolUtils";
 import {
   createProtocolVersion,
   ensureProtocolVersions,
   getLatestProtocolVersion,
   todayIsoDate
 } from "../protocolVersions";
-import { AppLanguage, LabReport, Protocol, UserProfile } from "../types";
-import { createId } from "../utils";
+import { AppLanguage, LabReport, Protocol, ProtocolUpdateMode, UserProfile } from "../types";
+import { createId, formatDate } from "../utils";
 
 interface ProtocolViewProps {
   protocols: Protocol[];
@@ -21,7 +21,11 @@ interface ProtocolViewProps {
   userProfile: UserProfile;
   isShareMode: boolean;
   onAddProtocol: (protocol: Protocol) => void;
-  onUpdateProtocol: (id: string, updates: Partial<Protocol> & { effectiveFrom?: string }) => void;
+  onUpdateProtocol: (
+    id: string,
+    updates: Partial<Protocol> & { effectiveFrom?: string },
+    mode?: ProtocolUpdateMode
+  ) => void;
   onDeleteProtocol: (id: string) => boolean;
   getProtocolUsageCount: (id: string) => number;
 }
@@ -57,7 +61,7 @@ const canonicalizeDraftForCompare = (draft: ProtocolDraft): string =>
 
 const ProtocolView = ({
   protocols,
-  reports: _reports,
+  reports,
   language,
   userProfile,
   isShareMode,
@@ -95,11 +99,47 @@ const ProtocolView = ({
   const [draft, setDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [initialDraft, setInitialDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [feedback, setFeedback] = useState("");
+  const [showSaveChoiceDialog, setShowSaveChoiceDialog] = useState(false);
+
+  const activeProtocolId = useMemo(() => getMostRecentlyUsedProtocolId(reports), [reports]);
+  const sortedProtocols = useMemo(
+    () =>
+      [...protocols].sort((left, right) => {
+        const leftActive = left.id === activeProtocolId;
+        const rightActive = right.id === activeProtocolId;
+        if (leftActive !== rightActive) {
+          return leftActive ? -1 : 1;
+        }
+        const leftCreatedAt = left.createdAt || left.updatedAt;
+        const rightCreatedAt = right.createdAt || right.updatedAt;
+        const byCreatedAt = rightCreatedAt.localeCompare(leftCreatedAt);
+        if (byCreatedAt !== 0) {
+          return byCreatedAt;
+        }
+        return right.updatedAt.localeCompare(left.updatedAt);
+      }),
+    [protocols, activeProtocolId]
+  );
+  const linkedReportsForEditing = useMemo(() => {
+    if (!editingId) {
+      return [];
+    }
+    return reports
+      .filter((report) => (report.annotations.interventionId ?? report.annotations.protocolId ?? null) === editingId)
+      .sort((left, right) => {
+        const byDate = right.testDate.localeCompare(left.testDate);
+        if (byDate !== 0) {
+          return byDate;
+        }
+        return right.createdAt.localeCompare(left.createdAt);
+      });
+  }, [editingId, reports]);
 
   const startCreate = () => {
     const nextDraft = blankProtocolDraft();
     setEditorMode("create");
     setEditingId(null);
+    setShowSaveChoiceDialog(false);
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
@@ -113,6 +153,7 @@ const ProtocolView = ({
     const nextDraft = protocolToDraft(normalizedProtocol);
     setEditorMode("edit");
     setEditingId(protocol.id);
+    setShowSaveChoiceDialog(false);
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
@@ -126,6 +167,7 @@ const ProtocolView = ({
     };
     setEditorMode("create");
     setEditingId(null);
+    setShowSaveChoiceDialog(false);
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
     setFeedback("");
@@ -137,6 +179,7 @@ const ProtocolView = ({
   const closeEditor = () => {
     setEditorMode(null);
     setEditingId(null);
+    setShowSaveChoiceDialog(false);
     const nextDraft = blankProtocolDraft();
     setDraft(nextDraft);
     setInitialDraft(nextDraft);
@@ -159,6 +202,26 @@ const ProtocolView = ({
     closeEditor();
   };
 
+  const applyEditUpdate = (mode: ProtocolUpdateMode) => {
+    if (!editingId) {
+      return;
+    }
+    const name = draft.name.trim();
+    const effectiveFrom = draft.effectiveFrom.trim() || todayIsoDate();
+    onUpdateProtocol(
+      editingId,
+      {
+        name,
+        effectiveFrom,
+        items: draft.compounds,
+        compounds: draft.compounds,
+        notes: draft.notes
+      },
+      mode
+    );
+    closeEditor();
+  };
+
   const saveEditor = () => {
     const name = draft.name.trim();
     const effectiveFrom = draft.effectiveFrom.trim() || todayIsoDate();
@@ -176,14 +239,11 @@ const ProtocolView = ({
     }
 
     if (editorMode === "edit" && editingId) {
-      onUpdateProtocol(editingId, {
-        name,
-        effectiveFrom,
-        items: draft.compounds,
-        compounds: draft.compounds,
-        notes: draft.notes
-      });
-      closeEditor();
+      if (linkedReportsForEditing.length > 0) {
+        setShowSaveChoiceDialog(true);
+        return;
+      }
+      applyEditUpdate("replace_existing");
       return;
     }
 
@@ -235,13 +295,13 @@ const ProtocolView = ({
         <p className="px-1 text-sm text-cyan-300">{feedback}</p>
       ) : null}
 
-      {protocols.length === 0 ? (
+      {sortedProtocols.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400">
           {tr(`Nog geen ${entityPlural} opgeslagen.`, `No ${entityPlural} saved yet.`)}
         </div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {protocols.map((protocol) => {
+          {sortedProtocols.map((protocol) => {
             const usageCount = getProtocolUsageCount(protocol.id);
             const canDelete = usageCount === 0;
             const latestVersion = getLatestProtocolVersion(protocol);
@@ -345,15 +405,6 @@ const ProtocolView = ({
 
                 {/* Body */}
                 <div className="max-h-[calc(100vh-18rem)] overflow-y-auto p-5">
-                  {editorMode === "edit" && editingId && getProtocolUsageCount(editingId) > 0 ? (
-                    <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                      {tr(
-                        `Dit ${entitySingular} is gekoppeld aan ${getProtocolUsageCount(editingId)} rapporten. Opslaan maakt automatisch een nieuw ${entitySingular}; oude rapporten blijven ongewijzigd.`,
-                        `This ${entitySingular} is linked to ${getProtocolUsageCount(editingId)} reports. Saving will automatically create a new ${entitySingular}; older reports stay unchanged.`
-                      )}
-                    </div>
-                  ) : null}
-
                   <ProtocolEditor value={draft} language={language} onChange={setDraft} />
 
                   {feedback ? (
@@ -376,6 +427,87 @@ const ProtocolView = ({
                     onClick={saveEditor}
                   >
                     <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {showSaveChoiceDialog && editorMode === "edit" && editingId
+        ? createPortal(
+            <div
+              className="app-modal-overlay z-[96]"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="protocol-save-choice-title"
+            >
+              <div
+                className="w-full max-w-2xl rounded-2xl border border-slate-700/80 bg-slate-900/95 p-5 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+                    <AlertTriangle className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h4 id="protocol-save-choice-title" className="text-base font-semibold text-slate-100">
+                      {tr("Dit protocol wordt al gebruikt", "This protocol is already in use")}
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {tr(
+                        `Dit ${entitySingular} is gekoppeld aan ${linkedReportsForEditing.length} rapporten.`,
+                        `This ${entitySingular} is linked to ${linkedReportsForEditing.length} reports.`
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {tr(
+                        "Kies of je een nieuw protocol wilt maken, of dit protocol retroactief wilt aanpassen.",
+                        "Choose whether to create a new protocol, or update this protocol retroactively."
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-slate-700/70 bg-slate-800/55 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    {tr("Gekoppelde rapporten", "Linked reports")}
+                  </p>
+                  <div className="max-h-48 space-y-1 overflow-y-auto pr-1 text-sm text-slate-200">
+                    {linkedReportsForEditing.map((report) => (
+                      <div
+                        key={`linked-report-${report.id}`}
+                        className="flex items-center justify-between gap-3 rounded-md border border-slate-700/60 bg-slate-900/55 px-2.5 py-1.5"
+                      >
+                        <span className="shrink-0 text-slate-300">{formatDate(report.testDate)}</span>
+                        <span className="min-w-0 truncate text-right text-slate-400">{report.sourceFileName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-lg border border-slate-600/80 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                    onClick={() => setShowSaveChoiceDialog(false)}
+                  >
+                    {tr("Annuleren", "Cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 transition hover:border-amber-400/70 hover:bg-amber-500/18"
+                    onClick={() => applyEditUpdate("replace_existing")}
+                  >
+                    {tr("Bestaand aanpassen", "Update existing")}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-lg border border-cyan-500/45 bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-400/70 hover:bg-cyan-500/24"
+                    onClick={() => applyEditUpdate("create_new")}
+                  >
+                    {tr("Nieuw protocol maken", "Create new protocol")}
                   </button>
                 </div>
               </div>

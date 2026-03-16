@@ -19,7 +19,7 @@ const makeMarker = (id: string) => ({
 });
 
 describe("useAppData protocol editing", () => {
-  it("creates a new protocol id when editing a protocol linked to reports", () => {
+  it("creates a new protocol id when editing a linked protocol in create_new mode", () => {
     const today = todayIsoDate();
     const initial = coerceStoredAppData({
       interventions: [
@@ -91,7 +91,7 @@ describe("useAppData protocol editing", () => {
           { name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }
         ],
         notes: "added HGH"
-      });
+      }, "create_new");
     });
 
     expect(result.current.appData.protocols).toHaveLength(2);
@@ -108,6 +108,113 @@ describe("useAppData protocol editing", () => {
 
     expect(oldResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
     expect(todayResolved?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(false);
+  });
+
+  it("replaces existing protocol and clears report snapshots in replace_existing mode", () => {
+    const initial = coerceStoredAppData({
+      interventions: [
+        {
+          id: "protocol-1",
+          name: "TRT base",
+          items: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+          compounds: [{ name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" }],
+          notes: "base",
+          createdAt: "2025-01-01T08:00:00.000Z",
+          updatedAt: "2025-01-01T08:00:00.000Z"
+        }
+      ],
+      reports: [
+        {
+          id: "report-1",
+          sourceFileName: "first.pdf",
+          testDate: "2025-02-01",
+          createdAt: "2025-02-01T08:00:00.000Z",
+          markers: [makeMarker("m-1")],
+          annotations: {
+            interventionId: "protocol-1",
+            interventionLabel: "TRT base",
+            interventionVersionId: "version-old",
+            interventionSnapshot: {
+              interventionId: "protocol-1",
+              versionId: "version-old",
+              name: "TRT base custom",
+              items: [{ name: "Testosterone Enanthate", dose: "90 mg/week", frequency: "2x_week", route: "SubQ" }],
+              compounds: [{ name: "Testosterone Enanthate", dose: "90 mg/week", frequency: "2x_week", route: "SubQ" }],
+              notes: "custom snapshot",
+              effectiveFrom: "2025-01-01"
+            },
+            protocolId: "protocol-1",
+            protocolVersionId: "version-old",
+            protocol: "TRT base custom",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "trough"
+          },
+          extraction: { provider: "fallback", model: "unit-test", confidence: 1, needsReview: false }
+        },
+        {
+          id: "report-2",
+          sourceFileName: "second.pdf",
+          testDate: "2025-03-01",
+          createdAt: "2025-03-01T08:00:00.000Z",
+          markers: [makeMarker("m-2")],
+          annotations: {
+            interventionId: "protocol-1",
+            interventionLabel: "TRT base",
+            protocolId: "protocol-1",
+            protocol: "TRT base",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "trough"
+          },
+          extraction: { provider: "fallback", model: "unit-test", confidence: 1, needsReview: false }
+        }
+      ]
+    });
+
+    const { result } = renderHook(() =>
+      useAppData({
+        sharedData: initial,
+        isShareMode: false
+      })
+    );
+
+    act(() => {
+      result.current.updateProtocol("protocol-1", {
+        name: "TRT base + HGH",
+        items: [
+          { name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" },
+          { name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }
+        ],
+        compounds: [
+          { name: "Testosterone Enanthate", dose: "105 mg/week", frequency: "2x_week", route: "SubQ" },
+          { name: "Human Growth Hormone (HGH)", dose: "1 IU/day", frequency: "daily", route: "SubQ" }
+        ],
+        notes: "retroactive update",
+        effectiveFrom: "2025-03-02"
+      }, "replace_existing");
+    });
+
+    expect(result.current.appData.protocols).toHaveLength(1);
+    expect(result.current.appData.protocols[0]?.id).toBe("protocol-1");
+    expect(result.current.appData.protocols[0]?.name).toBe("TRT base + HGH");
+    expect(result.current.appData.protocols[0]?.compounds.some((entry) => entry.name.includes("HGH"))).toBe(true);
+
+    result.current.appData.reports.forEach((entry) => {
+      expect(entry.annotations.interventionId).toBe("protocol-1");
+      expect(entry.annotations.protocolId).toBe("protocol-1");
+      expect(entry.annotations.interventionLabel).toBe("TRT base + HGH");
+      expect(entry.annotations.protocol).toBe("TRT base + HGH");
+      expect(entry.annotations.interventionSnapshot).toBeNull();
+      expect(entry.annotations.interventionVersionId).toBeNull();
+      expect(entry.annotations.protocolVersionId).toBeNull();
+    });
+
+    const resolvedProtocols = result.current.appData.reports.map((entry) => getReportProtocol(entry, result.current.appData.protocols));
+    expect(resolvedProtocols.every((entry) => entry?.name === "TRT base + HGH")).toBe(true);
+    expect(resolvedProtocols.every((entry) => entry?.compounds.some((compound) => compound.name.includes("HGH")))).toBe(true);
   });
 
   it("updates protocol in place when no reports are linked", () => {

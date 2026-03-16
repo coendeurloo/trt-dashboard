@@ -7,6 +7,7 @@ import {
   LabReport,
   PersonalInfo,
   Protocol,
+  ProtocolUpdateMode,
   ReportAnnotations,
   StoredAppData,
   SupplementPeriod,
@@ -326,7 +327,8 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   const updateProtocol = useCallback(
     (
       protocolId: string,
-      updates: Partial<Protocol> & { effectiveFrom?: string }
+      updates: Partial<Protocol> & { effectiveFrom?: string },
+      mode: ProtocolUpdateMode = "create_new"
     ) => {
       if (isShareMode) {
         return;
@@ -356,7 +358,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         const usageCount = prev.reports.filter(
           (report) => (report.annotations.interventionId ?? report.annotations.protocolId ?? null) === protocolId
         ).length;
-        if (usageCount > 0) {
+        if (usageCount > 0 && mode === "create_new") {
           const forkedProtocol = normalizeProtocolMirrors({
             ...target,
             id: createId(),
@@ -383,6 +385,31 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
               })
             : protocol
         );
+        if (usageCount > 0 && mode === "replace_existing") {
+          const nextReports = prev.reports.map((report) => {
+            const linkedProtocolId = report.annotations.interventionId ?? report.annotations.protocolId ?? null;
+            if (linkedProtocolId !== protocolId) {
+              return report;
+            }
+            return {
+              ...report,
+              annotations: {
+                ...report.annotations,
+                interventionId: protocolId,
+                interventionLabel: nextName,
+                interventionVersionId: null,
+                interventionSnapshot: null,
+                protocolId: protocolId,
+                protocolVersionId: null,
+                protocol: nextName
+              }
+            };
+          });
+          return {
+            ...withProtocols(prev, nextProtocols),
+            reports: nextReports
+          };
+        }
         return withProtocols(prev, nextProtocols);
       });
     },

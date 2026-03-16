@@ -1714,10 +1714,10 @@ const App = () => {
     if (activeTab === "protocol") {
       const protocolProfile = appData.settings.userProfile === "trt" || appData.settings.userProfile === "enhanced";
       return protocolProfile
-        ? tr("Je testosteronprotocol in detail.", "Your TRT protocol details and history.")
+        ? tr("Je testosteronprotocolen in detail.", "Your TRT protocols in detail.")
         : appData.settings.userProfile === "health"
-          ? tr("Je interventies en context in detail.", "Your interventions and context in detail.")
-          : tr("Je stack en context in detail.", "Your stack and context in detail.");
+          ? tr("Je interventies in detail.", "Your interventions in detail.")
+          : tr("Je stacks in detail.", "Your stacks in detail.");
     }
     if (activeTab === "supplements") return tr("Bijhoud supplementen naast je labresultaten.", "Track your supplements alongside lab results.");
     if (activeTab === "protocolImpact") {
