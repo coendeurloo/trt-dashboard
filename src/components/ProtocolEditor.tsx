@@ -13,14 +13,6 @@ import { ProtocolDraft } from "./protocolEditorModel";
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_MAX_OPTIONS = 8;
-const PREFERRED_COMPOUNDS = [
-  "Testosterone Enanthate (Test E)",
-  "Testosterone Cypionate (Test C)",
-  "Human Chorionic Gonadotropin (hCG)",
-  "Nandrolone Decanoate (Deca)",
-  "Dehydroepiandrosterone (DHEA)",
-  "Pregnenolone"
-];
 
 const formatWeeklyDoseValue = (value: number): string => {
   const rounded = Math.round(value * 100) / 100;
@@ -81,13 +73,6 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
 
   const compoundSuggestions = useMemo(() => buildSuggestions(compoundNameInput, COMPOUND_OPTIONS), [compoundNameInput]);
-  const quickCompoundPicks = useMemo(() => {
-    const preferred = PREFERRED_COMPOUNDS.filter((option) => COMPOUND_OPTIONS.includes(option));
-    if (preferred.length >= 4) {
-      return preferred;
-    }
-    return COMPOUND_OPTIONS.slice(0, 6);
-  }, []);
   const searchQuery = compoundNameInput.trim();
   const shouldShowSuggestionMenu = showCompoundSuggestions && searchQuery.length >= AUTOCOMPLETE_MIN_CHARS;
   const hasMatchingSuggestions = compoundSuggestions.length > 0;
@@ -203,24 +188,9 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             ) : null}
           </div>
           {!shouldShowSuggestionMenu ? (
-            <div className="space-y-1">
-              <p className="text-[11px] text-slate-400">
-                {tr("Type minimaal 2 letters om gericht te zoeken.", "Type at least 2 letters to search precisely.")}
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-slate-500">{tr("Populair", "Popular")}:</span>
-                {quickCompoundPicks.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className="rounded-full border border-slate-600/90 bg-slate-800/70 px-2 py-0.5 text-[11px] text-slate-300 transition hover:border-cyan-500/45 hover:text-cyan-200"
-                    onClick={() => applyCompoundName(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className="text-[11px] text-slate-400">
+              {tr("Type minimaal 2 letters om gericht te zoeken.", "Type at least 2 letters to search precisely.")}
+            </p>
           ) : null}
 
           <div className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_170px_200px_140px_auto]">

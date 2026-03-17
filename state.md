@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: March 15, 2026
+Last updated: March 17, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -13,6 +13,12 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Protocol UX simplified: no visible version management on Protocols page, cleaner cards, and clearer copy
+- Protocol edit save flow now explicit for linked reports: `Nieuw protocol maken` (default) vs `Bestaand aanpassen` with linked-report warning list
+- `replace_existing` flow now updates linked report labels and clears protocol snapshot/version refs so retroactive edits are truly retroactive
+- Report-specific protocol modal wording simplified (no "version" jargon in user-facing labels)
+- Active protocol logic updated app-wide: newest created/edited protocol is now active, with visible `Active` badge on Protocol cards
+- Save-choice warning modal restyled for better light-mode readability/contrast
 - Personal info system shipped: name, DOB, biological sex, height, weight stored in personalInfo with dashboard greeting ("Good morning, Coen") and contextual nudges
 - Settings redesigned with 6-tab layout: Profile, Appearance, Analysis, Data, Markers, Account (replaces flat scroll)
 - Onboarding wizard expanded to 6 steps: success, personal info, protocol, wellbeing check-in, supplements, summary with autocomplete inputs
@@ -24,7 +30,7 @@ Parser QA is active with batch registry + scorecards.
 - Parser robustness upgrades for Quest/LabCorp fixtures and expanded marker coverage (including Cardio IQ aliases)
 - Modal/UX polish round completed across extraction review, parser upload summary, reports cards/header density, and wellbeing check-ins
 - Parser batch workflow + scorecards added and running (B01-B04 currently logged as PASS/PASS* with source-quality caveats)
-- Test coverage expanded to 56 test files in `src/__tests__`
+- Test coverage expanded to 64 test files in `src/__tests__`
 
 ## In progress
 
