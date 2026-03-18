@@ -507,9 +507,11 @@ const App = () => {
 
   const {
     isAnalyzingLabs,
+    analysisRequestState,
     analysisError,
     analysisResult,
     analysisGeneratedAt,
+    analysisQuestion,
     analysisCopied,
     analysisModelInfo,
     analysisKind,
@@ -519,6 +521,7 @@ const App = () => {
     betaLimits,
     setAnalysisError,
     runAiAnalysis,
+    runAiQuestion,
     copyAnalysis
   } = useAnalysis({
     settings: appData.settings,
@@ -1616,6 +1619,10 @@ const App = () => {
     const annotationLabel = (latestReport.annotations.interventionLabel ?? latestReport.annotations.protocol ?? "").trim();
     return annotationLabel || tr("Geen protocol", "No protocol");
   }, [appData.protocols, visibleReports, tr]);
+  const hasActiveAnalysisProtocol = useMemo(
+    () => activeAnalysisProtocolLabel.trim().length > 0 && activeAnalysisProtocolLabel !== tr("Geen protocol", "No protocol"),
+    [activeAnalysisProtocolLabel, tr]
+  );
   const analysisMarkerNames = useMemo(() => {
     const markerSet = new Set<string>();
     visibleReports.forEach((report) => {
@@ -1679,7 +1686,7 @@ const App = () => {
         "Markers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
       );
 
-  const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
+  const requestAnalysisConsent = async (): Promise<AIConsentDecision | null> => {
     const decision = await requestAiConsent("analysis");
     if (!decision || !decision.allowExternalAi) {
       setAnalysisError(
@@ -1688,12 +1695,28 @@ const App = () => {
           "External AI was not started. You can continue without AI or try again later."
         )
       );
-      return;
+      return null;
     }
     if (decision.scope === "always") {
       updateSettings({ aiExternalConsent: true });
     }
+    return decision;
+  };
+
+  const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
+    const decision = await requestAnalysisConsent();
+    if (!decision) {
+      return;
+    }
     await runAiAnalysis(analysisType, decision);
+  };
+
+  const runAiQuestionWithConsent = async (question: string) => {
+    const decision = await requestAnalysisConsent();
+    if (!decision) {
+      return;
+    }
+    await runAiQuestion(question, decision);
   };
 
   const activeTabTitle = getPersonaTabLabel(
@@ -2128,7 +2151,7 @@ const App = () => {
         {!isReviewMode ? (
           <>
             <AnimatePresence>
-                {!isShareMode && hasDemoData ? (
+                {!isShareMode && hasDemoData && activeTab !== "analysis" ? (
                   <motion.section
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -2399,25 +2422,33 @@ const App = () => {
                 {activeTab === "analysis" ? (
                   <AnalysisView
                     isAnalyzingLabs={isAnalyzingLabs}
+                    analysisRequestState={analysisRequestState}
                     analysisError={analysisError}
                     analysisResult={analysisResult}
                     analysisResultDisplay={analysisResultDisplay}
                     analysisGeneratedAt={analysisGeneratedAt}
+                    analysisQuestion={analysisQuestion}
                     analysisCopied={analysisCopied}
                     analysisModelInfo={analysisModelInfo}
                     analysisKind={analysisKind}
                     analyzingKind={analyzingKind}
                     analysisScopeNotice={analysisScopeNotice}
+                    reports={reports}
+                    trendByMarker={trendByMarker}
                     reportsInScope={reports.length}
                     markersTracked={allMarkers.length}
                     analysisMarkerNames={analysisMarkerNames}
                     activeProtocolLabel={activeAnalysisProtocolLabel}
+                    hasActiveProtocol={hasActiveAnalysisProtocol}
+                    hasDemoData={hasDemoData}
+                    isDemoMode={isDemoMode}
                     memory={isShareMode ? null : analystMemory}
                     betaUsage={betaUsage}
                     betaLimits={betaLimits}
                     settings={appData.settings}
                     language={appData.settings.language}
                     onRunAnalysis={runAiAnalysisWithConsent}
+                    onAskQuestion={runAiQuestionWithConsent}
                     onCopyAnalysis={copyAnalysis}
                   />
                 ) : null}

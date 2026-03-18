@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: March 17, 2026
+Last updated: March 18, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -13,6 +13,13 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Claude streaming upgraded end-to-end (real SSE, no fake reveal): backend proxy streams directly to frontend, frontend renders progressive chunks, and abort/race handling is in place
+- AI Analysis page redesigned into clearer hierarchy: header -> compact info bar -> lighter stats strip -> primary Ask AI workspace + secondary quick actions -> full-width output
+- Ask AI panel visual refinement round shipped: shorter focused textarea, CTA anchored directly under input, tighter suggestions rhythm, quieter helper note, improved light/dark polish
+- Ask AI prompt behavior updated to be question-first (no broad "story so far" fallback), with output guard remapping generic sections into direct-answer structure when needed
+- Analyst memory prompt is now profile-aware (TRT / enhanced / health / biohacker) instead of hardcoded TRT framing
+- Modal responsiveness polish applied: desktop max-width respected, mobile-friendly bottom-sheet behavior for key modals, and AI output remains inline on the page
+- Local AI suggestions now generated deterministically from report signals via dedicated suggestion utility + hook (no AI/API usage)
 - Protocol UX simplified: no visible version management on Protocols page, cleaner cards, and clearer copy
 - Protocol edit save flow now explicit for linked reports: `Nieuw protocol maken` (default) vs `Bestaand aanpassen` with linked-report warning list
 - `replace_existing` flow now updates linked report labels and clears protocol snapshot/version refs so retroactive edits are truly retroactive
@@ -35,7 +42,7 @@ Parser QA is active with batch registry + scorecards.
 ## In progress
 
 - Improving parser fixture quality: many candidate files are still auto-skipped due unreadable OCR/source quality
-- AI analysis UX polish: loading/error clarity and friendlier handling when providers are overloaded
+- AI analysis UX polish: continued copy/spacing tuning and prompt quality iteration based on real-user feedback
 - Mobile and light-mode readability polish
 
 ## Next up

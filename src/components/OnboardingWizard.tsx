@@ -963,7 +963,7 @@ export default function OnboardingWizard({
   /* ── Render ── */
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center p-2 sm:items-center sm:p-4">
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -985,7 +985,7 @@ export default function OnboardingWizard({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className={`relative z-10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${
+        className={`relative z-10 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-[20px] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl ${
           isDark
             ? "bg-slate-900 border border-slate-700/60"
             : "bg-white border border-slate-200"

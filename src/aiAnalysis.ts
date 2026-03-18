@@ -41,6 +41,11 @@ interface ClaudeResponse {
   };
 }
 
+interface SseStreamParseResult {
+  text: string;
+  stopReason: string | null;
+}
+
 interface AnalyzeLabDataOptions {
   reports: LabReport[];
   protocols: Protocol[];
@@ -51,9 +56,12 @@ interface AnalyzeLabDataOptions {
   language?: AppLanguage;
   analysisType?: "full" | "latestComparison";
   deepMode?: boolean;
+  customQuestion?: string;
   externalAiAllowed?: boolean;
   aiConsent?: Pick<AIConsentDecision, "includeSymptoms" | "includeNotes">;
   providerPreference?: AIAnalysisProvider;
+  signal?: AbortSignal;
+  onStreamEvent?: (event: { type: "start" | "delta" | "complete"; delta?: string; text?: string }) => void;
   context?: {
     samplingFilter: "all" | "trough" | "peak";
     protocolImpact: ProtocolImpactSummary;
@@ -70,6 +78,7 @@ interface GenerateAnalystMemoryOptions {
   protocols: Protocol[];
   supplementTimeline?: SupplementPeriod[];
   unitSystem: UnitSystem;
+  profile?: UserProfile;
   currentMemory: AnalystMemory | null;
   analysisResult: string;
   aiConsent?: Pick<AIConsentDecision, "includeSymptoms" | "includeNotes">;
@@ -356,6 +365,21 @@ If the current stack looks appropriate given the data, say so briefly and explai
 ${supplementSection}`;
 };
 
+const buildQuestionSections = (supplementActionsNeeded: boolean): string => {
+  const supplementSection = supplementActionsNeeded
+    ? `5) ## Supplement tweaks
+Only include if directly relevant to the user question and current signals. Keep it brief and specific.`
+    : `5) ## Supplement tweaks
+Only include if directly relevant; otherwise one sentence saying no supplement change is clearly indicated from this question-focused review.`;
+
+  return `Required sections in this order:
+1) ## Direct answer - answer the user question first in 2-4 sentences, with a clear stance.
+2) ## Why this fits your data - 2-3 concise evidence chains using specific markers/trends/protocol context.
+3) ## What to watch next - max 3 concise watch points tied to this question.
+4) ## Suggested next step - one practical next step and what to recheck next.
+${supplementSection}`;
+};
+
 const buildComparisonSections = (supplementActionsNeeded: boolean): string => {
   const supplementSection = supplementActionsNeeded
     ? `5) ## Supplement tweaks
@@ -415,6 +439,146 @@ const parseRetryAfterSeconds = (value: string | null): number | null => {
     return Math.ceil(numeric);
   }
   return null;
+};
+
+const isAbortError = (error: unknown): boolean => {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+  return Boolean(
+    typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      (error as { name?: string }).name === "AbortError"
+  );
+};
+
+const parseSseEventBlock = (rawBlock: string): { eventType: string; payloadText: string | null } => {
+  const lines = rawBlock.split(/\r?\n/);
+  let eventType = "message";
+  const dataLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (line.startsWith("event:")) {
+      eventType = line.slice("event:".length).trim() || "message";
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  });
+
+  return {
+    eventType,
+    payloadText: dataLines.length > 0 ? dataLines.join("\n") : null
+  };
+};
+
+const parseAnthropicEventStream = async ({
+  response,
+  signal,
+  onStreamEvent
+}: {
+  response: Response;
+  signal?: AbortSignal;
+  onStreamEvent?: AnalyzeLabDataOptions["onStreamEvent"];
+}): Promise<SseStreamParseResult> => {
+  if (!response.body) {
+    return { text: "", stopReason: null };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let stopReason: string | null = null;
+  let started = false;
+
+  const processBlock = (block: string) => {
+    const { payloadText } = parseSseEventBlock(block);
+    if (!payloadText || payloadText === "[DONE]") {
+      return;
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(payloadText) as unknown;
+    } catch {
+      return;
+    }
+    const typedPayload = payload as {
+      type?: string;
+      delta?: { type?: string; text?: string; stop_reason?: string | null };
+      error?: { message?: string };
+      message?: string;
+    };
+
+    if (typedPayload.type === "content_block_delta") {
+      const textDelta = typedPayload.delta?.type === "text_delta" ? typedPayload.delta.text ?? "" : "";
+      if (!textDelta) {
+        return;
+      }
+      if (!started) {
+        started = true;
+        onStreamEvent?.({ type: "start" });
+      }
+      fullText += textDelta;
+      onStreamEvent?.({ type: "delta", delta: textDelta });
+      return;
+    }
+
+    if (typedPayload.type === "message_delta") {
+      if (typeof typedPayload.delta?.stop_reason === "string") {
+        stopReason = typedPayload.delta.stop_reason;
+      }
+      return;
+    }
+
+    if (typedPayload.type === "error") {
+      const errorMessage = typedPayload.error?.message ?? typedPayload.message ?? "Anthropic stream error";
+      throw new Error(`AI_REQUEST_FAILED:${response.status}:${errorMessage}`);
+    }
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw new Error("AI_REQUEST_ABORTED");
+      }
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      let separatorMatch = buffer.match(/\r?\n\r?\n/);
+      while (separatorMatch && separatorMatch.index !== undefined) {
+        const separatorIndex = separatorMatch.index;
+        const separatorLength = separatorMatch[0].length;
+        const eventBlock = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + separatorLength);
+        if (eventBlock.trim()) {
+          processBlock(eventBlock);
+        }
+        separatorMatch = buffer.match(/\r?\n\r?\n/);
+      }
+    }
+    if (buffer.trim()) {
+      processBlock(buffer);
+    }
+  } catch (error) {
+    if (isAbortError(error) || (error instanceof Error && error.message === "AI_REQUEST_ABORTED")) {
+      throw new Error("AI_REQUEST_ABORTED");
+    }
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+
+  onStreamEvent?.({ type: "complete", text: fullText });
+  return {
+    text: fullText,
+    stopReason
+  };
 };
 
 const shouldRetryTransientAnalysisError = (status: number, errorCode: string): boolean => {
@@ -568,6 +732,7 @@ interface FullAnalysisParams {
   fullSupplementActionability: SupplementActionabilityDecision;
   benchmarkSection: string;
   supplementActionsNeeded: boolean;
+  customQuestion: string | null;
 }
 
 interface ComparisonParams {
@@ -591,8 +756,14 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
   const {
     today, unitSystem, profile, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
-    benchmarkSection, supplementActionsNeeded
+    benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
+
+  const questionInstruction = customQuestion
+    ? `USER QUESTION:
+- "${customQuestion}"
+- Answer this directly in the opening section, then provide the usual structured analysis and next steps.`
+    : "No explicit user question was provided. Focus on the most important data-driven priorities.";
 
   return [
     buildPersona(profile, today),
@@ -601,6 +772,7 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
     buildCoreRules(profile),
     HALLUCINATION_GUARDRAILS,
     buildFullSections(supplementActionsNeeded),
+    questionInstruction,
     SAFETY_FOOTER,
     benchmarkSection,
     buildMemoryContext(memory),
@@ -612,6 +784,51 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
       reports: payload,
       latestReportEvidence: buildLatestReportEvidence(payload, profile),
       currentSupplements: supplementContext,
+      userQuestion: customQuestion,
+      signals,
+      premiumInsights: fullPremiumInsightPack,
+      actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
+    }),
+    "DATA END"
+  ].join("\n");
+}
+
+function buildQuestionPrompt(params: FullAnalysisParams): string {
+  const {
+    today, unitSystem, profile, memory, payload, supplementContext, signals,
+    fullPremiumInsightPack, fullActionability, fullSupplementActionability,
+    benchmarkSection, supplementActionsNeeded, customQuestion
+  } = params;
+
+  const safeQuestion = customQuestion?.trim() ? customQuestion.trim() : "No explicit user question was provided.";
+
+  return [
+    buildPersona(profile, today),
+    "Scope: answer the user question first. This is a targeted Q&A run, not a full timeline recap.",
+    "Target length: 180-320 words.",
+    FORMAT_RULES(8, 4),
+    buildCoreRules(profile),
+    HALLUCINATION_GUARDRAILS,
+    buildQuestionSections(supplementActionsNeeded),
+    `USER QUESTION:
+- "${safeQuestion}"`,
+    `Question-first rules:
+- The user question is the primary objective.
+- Do not include a broad "story so far" narrative or full historical recap unless strictly required to answer the question.
+- Use LabTracker data only as supporting evidence for the answer.
+- Keep context mentions concise and directly tied to the question.`,
+    SAFETY_FOOTER,
+    benchmarkSection,
+    buildMemoryContext(memory),
+    "DATA START",
+    JSON.stringify({
+      type: "questionFocusedFull",
+      units: unitSystem,
+      userProfile: profile,
+      reports: payload,
+      latestReportEvidence: buildLatestReportEvidence(payload, profile),
+      currentSupplements: supplementContext,
+      userQuestion: customQuestion,
       signals,
       premiumInsights: fullPremiumInsightPack,
       actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
@@ -658,17 +875,36 @@ function buildComparisonPrompt(params: ComparisonParams): string {
 
 const buildMemoryPrompt = ({
   today,
+  profile,
   currentMemory,
   compactInput
 }: {
   today: string;
+  profile: UserProfile;
   currentMemory: AnalystMemory | null;
   compactInput: Record<string, unknown>;
 }): string => {
   const analysisCount = (currentMemory?.analysisCount ?? 0) + 1;
-  return `Update AnalystMemory (v1) for a TRT user.
+  const profileDescriptor: Record<UserProfile, string> = {
+    trt: "TRT",
+    enhanced: "enhanced athlete / performance",
+    health: "general health optimization",
+    biohacker: "biohacker / quantified self"
+  };
+  const profileGuidance: Record<UserProfile, string> = {
+    trt: "Focus memory on protocol-response patterns, estradiol balance, hematocrit trajectory, and cardiovascular risk context.",
+    enhanced:
+      "Focus memory on harm-reduction signals for performance use: liver enzymes, kidney markers, lipids, hematocrit, blood pressure, and protocol complexity.",
+    health: "Focus memory on metabolic, inflammation, thyroid, and nutrient pattern stability across repeated tests.",
+    biohacker:
+      "Focus memory on repeatable experimental signals, responder tendencies, and hypothesis quality (what repeatedly improved or worsened)."
+  };
+
+  return `Update AnalystMemory (v1) for a ${profileDescriptor[profile]} user.
 Today: ${today}. Analysis #${analysisCount}.
 Return valid JSON only (full AnalystMemory object). No markdown.
+Profile guidance:
+- ${profileGuidance[profile]}
 
 Rules:
 - Conservative: use "unknown" when uncertain.
@@ -772,6 +1008,7 @@ export const generateAnalystMemory = async ({
   protocols,
   supplementTimeline = [],
   unitSystem,
+  profile = "trt",
   currentMemory,
   analysisResult,
   aiConsent
@@ -830,6 +1067,7 @@ export const generateAnalystMemory = async ({
   });
   const memoryPrompt = buildMemoryPrompt({
     today,
+    profile,
     currentMemory,
     compactInput
   });
@@ -1845,11 +2083,29 @@ const H2_HEADING_PATTERN = /^##\s+(.+?)\s*$/;
 const SUPPLEMENT_SECTION_HEADING = "Supplement tweaks";
 const FULL_REQUIRED_NARRATIVE_SECTIONS = ["Here's where you stand", "What's driving these numbers", "What to focus on", "Next steps"] as const;
 const COMPARISON_REQUIRED_NARRATIVE_SECTIONS = ["What changed", "Why it moved", "What to focus on", "Next steps"] as const;
+const QUESTION_REQUIRED_NARRATIVE_SECTIONS = [
+  "Direct answer",
+  "Why this fits your data",
+  "What to watch next",
+  "Suggested next step"
+] as const;
 
 const canonicalNarrativeHeading = (heading: string): string => {
   const normalized = heading.trim().toLowerCase();
   if (normalized.includes("what changed")) {
     return "What changed";
+  }
+  if (normalized.includes("direct answer") || normalized.includes("short answer")) {
+    return "Direct answer";
+  }
+  if (normalized.includes("why this fits your data") || normalized.includes("why this answer fits")) {
+    return "Why this fits your data";
+  }
+  if (normalized.includes("what to watch next")) {
+    return "What to watch next";
+  }
+  if (normalized.includes("suggested next step")) {
+    return "Suggested next step";
   }
   if (normalized.includes("why it moved")) {
     return "Why it moved";
@@ -1951,16 +2207,51 @@ const hasSupplementSection = (sections: ParsedNarrativeSection[]): boolean =>
 const applyNarrativeQualityGuard = ({
   text,
   supplementActionsNeeded,
-  analysisType
+  analysisType,
+  questionMode
 }: {
   text: string;
   supplementActionsNeeded: boolean;
   analysisType: "full" | "latestComparison";
+  questionMode: boolean;
 }): QualityGuardResult => {
   const qualityIssues: string[] = [];
   let qualityGuardApplied = false;
   const parsed = parseNarrativeSections(text);
-  const sections = [...parsed.sections];
+  let sections = [...parsed.sections];
+
+  if (questionMode) {
+    const headingMap: Record<string, string> = {
+      "Here's where you stand": "Direct answer",
+      "What changed": "Direct answer",
+      "What's driving these numbers": "Why this fits your data",
+      "Why it moved": "Why this fits your data",
+      "What to focus on": "What to watch next",
+      "Next steps": "Suggested next step"
+    };
+    const remapped: ParsedNarrativeSection[] = [];
+    sections.forEach((section) => {
+      const nextHeading = headingMap[section.heading] ?? section.heading;
+      const existing = remapped.find((item) => item.heading === nextHeading);
+      if (!existing) {
+        remapped.push({
+          heading: nextHeading,
+          lines: [...section.lines]
+        });
+        return;
+      }
+      if (existing.lines.length > 0 && existing.lines[existing.lines.length - 1]?.trim() !== "") {
+        existing.lines.push("");
+      }
+      existing.lines.push(...section.lines);
+    });
+    if (remapped.some((section, index) => section.heading !== (sections[index]?.heading ?? ""))) {
+      qualityIssues.push("question_mode_headings_remapped");
+      qualityGuardApplied = true;
+    }
+    sections = remapped;
+  }
+
   const supplementIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
 
   if (!supplementActionsNeeded && supplementIndex !== -1) {
@@ -1986,8 +2277,11 @@ const applyNarrativeQualityGuard = ({
     }
   }
 
-  const requiredNarrativeSections =
-    analysisType === "latestComparison" ? COMPARISON_REQUIRED_NARRATIVE_SECTIONS : FULL_REQUIRED_NARRATIVE_SECTIONS;
+  const requiredNarrativeSections = questionMode
+    ? QUESTION_REQUIRED_NARRATIVE_SECTIONS
+    : analysisType === "latestComparison"
+      ? COMPARISON_REQUIRED_NARRATIVE_SECTIONS
+      : FULL_REQUIRED_NARRATIVE_SECTIONS;
   const sectionHeadings = new Set(sections.map((section) => section.heading));
   requiredNarrativeSections.forEach((heading) => {
     if (sectionHeadings.has(heading)) {
@@ -1995,6 +2289,34 @@ const applyNarrativeQualityGuard = ({
     }
     qualityGuardApplied = true;
     qualityIssues.push(`missing_section_${heading.toLowerCase().replace(/\s+/g, "_")}`);
+    if (heading === "Direct answer") {
+      sections.unshift({
+        heading,
+        lines: ["Short answer: based on the available data, the direct conclusion was only partially clear."]
+      });
+      return;
+    }
+    if (heading === "Why this fits your data") {
+      sections.push({
+        heading,
+        lines: ["The evidence-to-conclusion chain was partially unclear due to limited or conflicting context signals."]
+      });
+      return;
+    }
+    if (heading === "What to watch next") {
+      sections.push({
+        heading,
+        lines: ["- Re-check the key marker linked to your question.", "- Keep protocol and sampling context stable until the next panel."]
+      });
+      return;
+    }
+    if (heading === "Suggested next step") {
+      sections.push({
+        heading,
+        lines: ["- Discuss one focused next adjustment with your clinician and retest the relevant marker in a consistent context."]
+      });
+      return;
+    }
     if (heading === "Here's where you stand" || heading === "What changed") {
       sections.unshift({
         heading,
@@ -2061,9 +2383,12 @@ export const analyzeLabDataWithClaude = async ({
   language: _language = "nl",
   analysisType = "full",
   deepMode = false,
+  customQuestion,
   externalAiAllowed = false,
   aiConsent,
   providerPreference = "auto",
+  signal,
+  onStreamEvent,
   context
 }: AnalyzeLabDataOptions): Promise<AnalyzeLabDataResult> => {
   if (reports.length === 0) {
@@ -2077,6 +2402,7 @@ export const analyzeLabDataWithClaude = async ({
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const normalizedCustomQuestion = customQuestion?.trim() ? customQuestion.trim().slice(0, 280) : null;
   const priorityMarkers = buildPriorityMarkerSet(context);
   const rawPayload = buildPayload(reports, protocols, supplementTimeline, unitSystem, priorityMarkers);
   const sanitizedPayload = sanitizeAnalysisPayloadForAI(rawPayload, {
@@ -2126,8 +2452,26 @@ export const analyzeLabDataWithClaude = async ({
     fullActionability,
     fullSupplementActionability,
     benchmarkSection,
-    supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded
+    supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded,
+    customQuestion: normalizedCustomQuestion
   });
+  const questionPrompt = normalizedCustomQuestion
+    ? buildQuestionPrompt({
+        today,
+        unitSystem,
+        profile,
+        memory,
+        payload,
+        supplementContext,
+        signals,
+        fullPremiumInsightPack,
+        fullActionability,
+        fullSupplementActionability,
+        benchmarkSection,
+        supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded,
+        customQuestion: normalizedCustomQuestion
+      })
+    : null;
 
   const latestComparisonConfig = (() => {
     const relevantPayload = payload.slice(-2);
@@ -2192,7 +2536,13 @@ export const analyzeLabDataWithClaude = async ({
     };
   })();
 
-  const prompt = analysisType === "latestComparison" ? latestComparisonConfig.prompt : fullPrompt;
+  const isQuestionFocusedRun = analysisType === "full" && Boolean(normalizedCustomQuestion);
+  const prompt =
+    analysisType === "latestComparison"
+      ? latestComparisonConfig.prompt
+      : isQuestionFocusedRun && questionPrompt
+        ? questionPrompt
+        : fullPrompt;
   const actionability = analysisType === "latestComparison" ? latestComparisonConfig.actionability : fullActionability;
   const supplementActionability =
     analysisType === "latestComparison"
@@ -2206,6 +2556,7 @@ export const analyzeLabDataWithClaude = async ({
   ): Promise<{ status: number; body: ClaudeResponse; retryAfterSeconds: number | null }> => {
     const endpoint = provider === "gemini" ? "/api/gemini/analysis" : "/api/claude/messages";
     const providerMaxTokens = provider === "gemini" ? Math.max(maxTokens, GEMINI_MIN_OUTPUT_TOKENS) : maxTokens;
+    const shouldStreamClaude = provider === "claude" && typeof onStreamEvent === "function";
     let response: Response;
     try {
       response = await fetch(endpoint, {
@@ -2213,18 +2564,40 @@ export const analyzeLabDataWithClaude = async ({
         headers: {
           "content-type": "application/json"
         },
+        signal,
         body: JSON.stringify({
           requestType: "analysis",
           payload: {
             model,
             max_tokens: providerMaxTokens,
             temperature: 0.3,
+            ...(shouldStreamClaude ? { stream: true } : {}),
             messages: [{ role: "user", content: promptText }]
           }
         })
       });
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new Error("AI_REQUEST_ABORTED");
+      }
       throw new Error("PROXY_UNREACHABLE");
+    }
+
+    const responseContentType = response.headers.get("content-type") ?? "";
+    if (shouldStreamClaude && response.ok && responseContentType.includes("text/event-stream")) {
+      const streamed = await parseAnthropicEventStream({
+        response,
+        signal,
+        onStreamEvent
+      });
+      return {
+        status: response.status,
+        body: {
+          content: [{ type: "text", text: streamed.text }],
+          stop_reason: streamed.stopReason ?? "end_turn"
+        },
+        retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after"))
+      };
     }
 
     const text = await response.text();
@@ -2267,6 +2640,9 @@ export const analyzeLabDataWithClaude = async ({
         try {
         result = await tryModel(model, provider, prompt);
         } catch (error) {
+          if (error instanceof Error && error.message === "AI_REQUEST_ABORTED") {
+            throw error;
+          }
           if (error instanceof Error && error.message === "PROXY_UNREACHABLE") {
             throw new Error("AI_PROXY_UNREACHABLE");
           }
@@ -2314,10 +2690,12 @@ export const analyzeLabDataWithClaude = async ({
             ? `${finalized}\n\n_Note: output may be incomplete due to output token limit._`
             : finalized;
           const outputText = stripComplexFormatting(maybeTruncated);
+          const questionMode = analysisType === "full" && Boolean(normalizedCustomQuestion);
           const qualityResult = applyNarrativeQualityGuard({
             text: outputText,
             supplementActionsNeeded: supplementActionability.supplementActionsNeeded,
-            analysisType
+            analysisType,
+            questionMode
           });
           return {
             text: qualityResult.text,

@@ -947,29 +947,61 @@ const SettingsView = ({
       </div>
 
       {showDeleteConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-red-400">{tr("Alle data verwijderen?", "Delete all data?")}</h3>
-            <p className="mt-2 text-sm text-slate-400">
+        <div
+          className="app-modal-overlay z-[92]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-delete-all-title"
+          onClick={closeDeleteModal}
+        >
+          <div
+            className={
+              isLightTheme
+                ? "app-modal-shell w-full max-w-md border-slate-300/85 bg-white p-5 shadow-soft sm:p-6"
+                : "app-modal-shell w-full max-w-md bg-slate-900 p-5 shadow-soft sm:p-6"
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3
+              id="settings-delete-all-title"
+              className={isLightTheme ? "text-base font-semibold text-rose-700" : "text-base font-semibold text-red-400"}
+            >
+              {tr("Alle data verwijderen?", "Delete all data?")}
+            </h3>
+            <p className={isLightTheme ? "mt-2 text-sm text-slate-600" : "mt-2 text-sm text-slate-400"}>
               {tr(
                 "Dit verwijdert permanent al je rapporten, markers, protocollen, supplementen en instellingen. Je kunt dit alleen herstellen met een eerdere backup.",
                 "This will permanently delete all your reports, markers, protocols, supplements, and settings. There is no way to recover this data unless you have a backup."
               )}
             </p>
 
-            <p className="mt-4 text-xs font-medium text-slate-500">
-              {tr("Typ", "Type")} <span className="font-bold text-slate-300">DELETE</span> {tr("om te bevestigen", "to confirm")}
+            <p className={isLightTheme ? "mt-4 text-xs font-medium text-slate-500" : "mt-4 text-xs font-medium text-slate-500"}>
+              {tr("Typ", "Type")}{" "}
+              <span className={isLightTheme ? "font-bold text-slate-800" : "font-bold text-slate-300"}>DELETE</span>{" "}
+              {tr("om te bevestigen", "to confirm")}
             </p>
             <input
               type="text"
               value={deleteInput}
               onChange={(event) => setDeleteInput(event.target.value)}
               placeholder="DELETE"
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-red-700 focus:outline-none"
+              className={
+                isLightTheme
+                  ? "mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none"
+                  : "mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-red-700 focus:outline-none"
+              }
             />
 
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={closeDeleteModal} className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className={
+                  isLightTheme
+                    ? "rounded-lg px-4 py-2 text-sm text-slate-600 hover:text-slate-900"
+                    : "rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+                }
+              >
                 {tr("Annuleren", "Cancel")}
               </button>
               <button
@@ -980,7 +1012,11 @@ const SettingsView = ({
                   setImportStatus(null);
                   closeDeleteModal();
                 }}
-                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                className={
+                  isLightTheme
+                    ? "rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+                    : "rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                }
               >
                 {tr("Verwijder alles", "Delete everything")}
               </button>

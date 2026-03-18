@@ -7,6 +7,7 @@ interface ClaudeMessagePayload {
   model: string;
   max_tokens: number;
   temperature?: number;
+  stream?: boolean;
   messages: Array<{
     role: string;
     content:
@@ -42,6 +43,41 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
   res.end(JSON.stringify(payload));
+};
+
+const pipeWebResponseStream = async (upstream: Response, res: ServerResponse): Promise<void> => {
+  if (!upstream.body) {
+    res.statusCode = 502;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({ error: { message: "Anthropic stream body missing" } }));
+    return;
+  }
+
+  res.statusCode = upstream.status;
+  res.setHeader("content-type", "text/event-stream; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("connection", "keep-alive");
+  res.setHeader("x-accel-buffering", "no");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value || value.length === 0) {
+        continue;
+      }
+      res.write(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  res.end();
 };
 
 const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
@@ -221,6 +257,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
     }
 
+    const upstreamAbort = new AbortController();
+    const onClientClose = () => upstreamAbort.abort();
+    req.on("close", onClientClose);
     try {
       const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -229,16 +268,34 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01"
         },
+        signal: upstreamAbort.signal,
         body: JSON.stringify(body.payload)
       });
+
+      const requestedStreaming = body.payload.stream === true;
+      const upstreamContentType = anthropicResponse.headers.get("content-type") ?? "";
+      const isStreamResponse = anthropicResponse.ok && requestedStreaming && upstreamContentType.includes("text/event-stream");
+
+      if (isStreamResponse) {
+        await pipeWebResponseStream(anthropicResponse, res);
+        return;
+      }
 
       const responseText = await anthropicResponse.text();
       res.statusCode = anthropicResponse.status;
       res.setHeader("content-type", "application/json; charset=utf-8");
       res.setHeader("cache-control", "no-store");
       res.end(responseText);
-    } catch {
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "name" in error && (error as { name?: string }).name === "AbortError") {
+        if (!res.writableEnded) {
+          res.end();
+        }
+        return;
+      }
       sendJson(res, 502, { error: { message: "Anthropic API unreachable" } });
+    } finally {
+      req.off("close", onClientClose);
     }
   } catch (error) {
     if (!res.writableEnded) {

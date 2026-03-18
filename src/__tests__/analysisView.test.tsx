@@ -1,9 +1,44 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
+import { LabReport } from "../types";
 import AnalysisView from "../views/AnalysisView";
+
+const sampleReport: LabReport = {
+  id: "r1",
+  sourceFileName: "report.pdf",
+  testDate: "2026-01-21",
+  createdAt: "2026-01-21T10:00:00.000Z",
+  markers: [
+    {
+      id: "m1",
+      marker: "Testosterone",
+      canonicalMarker: "Testosterone",
+      value: 20.7,
+      unit: "nmol/L",
+      referenceMin: 8,
+      referenceMax: 29,
+      abnormal: "normal",
+      confidence: 1
+    }
+  ],
+  annotations: {
+    protocolId: null,
+    protocol: "",
+    supplementOverrides: null,
+    symptoms: "",
+    notes: "",
+    samplingTiming: "trough"
+  },
+  extraction: {
+    provider: "fallback",
+    model: "fallback",
+    confidence: 0.9,
+    needsReview: false
+  }
+};
 
 describe("AnalysisView", () => {
   afterEach(() => {
@@ -12,19 +47,26 @@ describe("AnalysisView", () => {
 
   const baseProps = {
     isAnalyzingLabs: false,
+    analysisRequestState: "idle" as const,
     analysisError: "",
     analysisResult: "",
     analysisResultDisplay: "",
     analysisGeneratedAt: null,
+    analysisQuestion: null,
     analysisCopied: false,
     analysisModelInfo: null,
     analysisKind: null,
     analyzingKind: null,
     analysisScopeNotice: null,
+    reports: [sampleReport],
+    trendByMarker: {},
     reportsInScope: 1,
     markersTracked: 35,
     analysisMarkerNames: ["Testosterone", "Estradiol", "Hematocrit"],
     activeProtocolLabel: "No protocol",
+    hasActiveProtocol: false,
+    hasDemoData: false,
+    isDemoMode: false,
     memory: null,
     betaUsage: {
       dailyCount: 0,
@@ -37,16 +79,17 @@ describe("AnalysisView", () => {
     settings: DEFAULT_SETTINGS,
     language: "en" as const,
     onRunAnalysis: vi.fn(),
+    onAskQuestion: vi.fn(),
     onCopyAnalysis: vi.fn()
   };
 
   it("shows usage as used/limit counts", () => {
     render(<AnalysisView {...baseProps} />);
-    expect(screen.getByText(/0\/5 used today/i)).toBeTruthy();
-    expect(screen.getByText(/0\/25 used this month/i)).toBeTruthy();
+    expect(screen.getAllByText(/0\/5 today/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/0\/25 month/i).length).toBeGreaterThan(0);
   });
 
-  it("renders scope card values", () => {
+  it("renders main stats", () => {
     render(<AnalysisView {...baseProps} />);
     expect(screen.getByText("Reports in scope")).toBeTruthy();
     expect(screen.getByText("Markers tracked")).toBeTruthy();
@@ -71,17 +114,14 @@ describe("AnalysisView", () => {
     expect(screen.getByRole("button", { name: /copy analysis/i })).toBeTruthy();
   });
 
-  it("disables latest-vs-previous action when there are fewer than 2 reports", () => {
+  it("disables latest comparison action when there are fewer than 2 reports", () => {
     render(<AnalysisView {...baseProps} reportsInScope={1} />);
     const latestButton = screen.getByRole("button", { name: /compare latest report/i });
     expect(latestButton.getAttribute("disabled")).not.toBeNull();
   });
 
-  it("shows scope notice only when reports are truncated", () => {
-    const { rerender } = render(<AnalysisView {...baseProps} />);
-    expect(screen.queryByText(/AI uses/i)).toBeNull();
-
-    rerender(
+  it("shows scope notice when available", () => {
+    render(
       <AnalysisView
         {...baseProps}
         analysisScopeNotice={{
@@ -97,29 +137,36 @@ describe("AnalysisView", () => {
     expect(screen.getByText(/AI uses 10 of 27 reports for this run/i)).toBeTruthy();
   });
 
-  it("shows supplement action badge when model metadata is present", () => {
+  it("fills the question input when clicking a suggestion chip", () => {
     render(
       <AnalysisView
         {...baseProps}
-        analysisResult="## Clinical Story"
-        analysisResultDisplay="Clinical Story"
-        analysisModelInfo={{
-          provider: "gemini",
-          model: "gemini-2.5-flash",
-          fallbackUsed: false,
-          actionsNeeded: false,
-          actionReasons: [],
-          actionConfidence: "low",
-          supplementActionsNeeded: false,
-          supplementAdviceIncluded: false,
-          qualityGuardApplied: false,
-          qualityIssues: []
-        }}
+        reports={[
+          {
+            ...sampleReport,
+            markers: [
+              {
+                ...sampleReport.markers[0],
+                canonicalMarker: "Hematocrit",
+                marker: "Hematocrit",
+                value: 55,
+                referenceMin: 40,
+                referenceMax: 52,
+                abnormal: "high",
+                unit: "%"
+              }
+            ]
+          }
+        ]}
+        analysisMarkerNames={["Hematocrit"]}
       />
     );
 
-    expect(screen.getByText(/Model: gemini-2.5-flash/i)).toBeTruthy();
-    expect(screen.getByText(/Supplement actions: none/i)).toBeTruthy();
+    const suggestionChip = screen.getByRole("button", { name: /why is my hematocrit/i });
+    fireEvent.click(suggestionChip);
+
+    const input = screen.getByLabelText(/your question/i) as HTMLTextAreaElement;
+    expect(input.value).toMatch(/hematocrit/i);
   });
 
   it("shows analyst memory status after enough analyses", () => {
@@ -145,7 +192,7 @@ describe("AnalysisView", () => {
       />
     );
 
-    expect(screen.getByText(/Analyst memory:/i)).toBeTruthy();
-    expect(screen.getByText(/active · 4 analyses/i)).toBeTruthy();
+    expect(screen.getByText(/Analyst memory active/i)).toBeTruthy();
+    expect(screen.getByText(/4 analyses/i)).toBeTruthy();
   });
 });

@@ -1,21 +1,27 @@
-import { format, parseISO } from "date-fns";
-import { Suspense, lazy, useMemo } from "react";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { MarkerTrendSummary } from "../analytics";
 import { AnalysisScopeNotice } from "../analysisScope";
 import { betaLimitsDisabled } from "../betaLimits";
-import { trLocale } from "../i18n";
-import { AppLanguage, AppSettings } from "../types";
+import AIAnalysisHeader from "../components/analysis/AIAnalysisHeader";
+import AIInfoBar from "../components/analysis/AIInfoBar";
+import AIOutputPanel from "../components/analysis/AIOutputPanel";
+import AIQuestionInput from "../components/analysis/AIQuestionInput";
+import AIQuickActionsPanel from "../components/analysis/AIQuickActionsPanel";
+import AIStatsGrid from "../components/analysis/AIStatsGrid";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
+import useAiQuestionSuggestions from "../hooks/useAiQuestionSuggestions";
+import { trLocale } from "../i18n";
+import { AppLanguage, AppSettings, LabReport } from "../types";
 import { AnalystMemory } from "../types/analystMemory";
-
-const AnalysisMarkdownBlock = lazy(() => import("../components/AnalysisMarkdownBlock"));
 
 interface AnalysisViewProps {
   isAnalyzingLabs: boolean;
+  analysisRequestState: "idle" | "preparing" | "streaming" | "completed" | "error";
   analysisError: string;
   analysisResult: string;
   analysisResultDisplay: string;
   analysisGeneratedAt: string | null;
+  analysisQuestion: string | null;
   analysisCopied: boolean;
   analysisModelInfo: {
     provider: "claude" | "gemini";
@@ -29,13 +35,18 @@ interface AnalysisViewProps {
     qualityGuardApplied: boolean;
     qualityIssues: string[];
   } | null;
-  analysisKind: "full" | "latestComparison" | null;
-  analyzingKind: "full" | "latestComparison" | null;
+  analysisKind: "full" | "latestComparison" | "question" | null;
+  analyzingKind: "full" | "latestComparison" | "question" | null;
   analysisScopeNotice: AnalysisScopeNotice | null;
+  reports: LabReport[];
+  trendByMarker: Record<string, MarkerTrendSummary>;
   reportsInScope: number;
   markersTracked: number;
   analysisMarkerNames: string[];
   activeProtocolLabel: string;
+  hasActiveProtocol: boolean;
+  hasDemoData: boolean;
+  isDemoMode: boolean;
   memory: AnalystMemory | null;
   betaUsage: {
     dailyCount: number;
@@ -48,30 +59,39 @@ interface AnalysisViewProps {
   settings: AppSettings;
   language: AppLanguage;
   onRunAnalysis: (mode: "full" | "latestComparison") => void;
+  onAskQuestion: (question: string) => void;
   onCopyAnalysis: () => void;
 }
 
 const AnalysisView = ({
   isAnalyzingLabs,
+  analysisRequestState,
   analysisError,
   analysisResult,
   analysisResultDisplay,
   analysisGeneratedAt,
+  analysisQuestion,
   analysisCopied,
   analysisModelInfo,
   analysisKind,
   analyzingKind,
   analysisScopeNotice,
+  reports,
+  trendByMarker,
   reportsInScope,
   markersTracked,
   analysisMarkerNames,
   activeProtocolLabel,
+  hasActiveProtocol,
+  hasDemoData,
+  isDemoMode,
   memory,
   betaUsage,
   betaLimits,
   settings,
   language,
   onRunAnalysis,
+  onAskQuestion,
   onCopyAnalysis
 }: AnalysisViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -84,341 +104,217 @@ const AnalysisView = ({
   const blockedByConsent = !settings.aiExternalConsent;
   const isAnalyzingFull = isAnalyzingLabs && analyzingKind === "full";
   const isAnalyzingLatest = isAnalyzingLabs && analyzingKind === "latestComparison";
+  const isAnalyzingQuestion = isAnalyzingLabs && analyzingKind === "question";
   const canRunFull = !isAnalyzingLabs && reportsInScope > 0 && !blockedByLimits;
   const canRunLatest = !isAnalyzingLabs && reportsInScope >= 2 && !blockedByLimits;
-
-  const scopeCardClassName = isDarkTheme
-    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
-  const scopeMutedClassName = isDarkTheme ? "text-sm text-slate-400" : "text-sm text-slate-600";
-  const scopeValueClassName = isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900";
-  const usageBadgeClassName =
-    blockedByLimits
-      ? isDarkTheme
-        ? "rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-        : "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-      : isDarkTheme
-        ? "rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-100/90"
-        : "rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs text-cyan-900";
-
-  const actionCardBaseClass = isDarkTheme
-    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 transition hover:border-cyan-500/40"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-cyan-300";
-  const actionTitleClass = isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900";
-  const actionBodyClass = isDarkTheme ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-600";
-  const actionButtonClass =
-    "mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed";
-  const aiPrivacyHintClass = isDarkTheme
-    ? "mt-2 rounded-md border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-xs text-slate-300"
-    : "mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700";
-  const outputShellClass = isDarkTheme
-    ? "app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/80 to-slate-950/70 p-4 shadow-xl shadow-slate-950/20"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60";
-  const outputBodyClass = isDarkTheme ? "prose-premium-dark mt-3 overflow-x-auto" : "prose-premium-light mt-3 overflow-x-auto";
-  const scopeNoticeClassName = isDarkTheme
-    ? "app-teal-glow-surface rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
-    : "rounded-xl border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900";
   const relevantBenchmarks = useMemo(
     () => getRelevantBenchmarks(analysisMarkerNames),
     [analysisMarkerNames]
   );
-  const scopeReasonText = (() => {
-    if (!analysisScopeNotice) {
-      return "";
+
+  const suggestedQuestions = useAiQuestionSuggestions({
+    reports,
+    trendByMarker,
+    language,
+    userProfile: settings.userProfile,
+    hasActiveProtocol
+  });
+
+  const [questionInput, setQuestionInput] = useState("");
+  const canAskQuestion = !isAnalyzingLabs && questionInput.trim().length > 0 && reportsInScope > 0 && !blockedByLimits;
+
+  useEffect(() => {
+    if (analysisQuestion) {
+      setQuestionInput(analysisQuestion);
     }
-    return tr(
-      "Voor deze run is slim gesampled over je volledige tijdlijn: beginpunt, recente metingen en tussenliggende ankers.",
-      "For this run, reports were smart-sampled across your full timeline: origin, recent labs, and spaced anchors in between."
-    );
-  })();
+  }, [analysisQuestion]);
+
+  const usageLabel = limitsDisabled
+    ? tr("Beta limieten uit", "Beta limits disabled")
+    : `${betaUsage.dailyCount}/${betaLimits.maxAnalysesPerDay} ${tr("vandaag", "today")} · ${betaUsage.monthlyCount}/${betaLimits.maxAnalysesPerMonth} ${tr("maand", "month")}`;
+  const usageHint = dayLimitReached
+    ? tr("Daglimiet bereikt, reset om middernacht.", "Daily limit reached, resets at midnight.")
+    : monthLimitReached
+      ? tr("Maandlimiet bereikt, probeer later opnieuw.", "Monthly limit reached, try again later.")
+      : null;
+  const memoryLabel =
+    memory && memory.analysisCount >= 2
+      ? tr(`Analyst memory actief · ${memory.analysisCount} analyses`, `Analyst memory active · ${memory.analysisCount} analyses`)
+      : null;
 
   return (
-    <section className="space-y-3 fade-in">
-      <div className={scopeCardClassName}>
-        <h3 className={isDarkTheme ? "text-base font-semibold text-slate-100" : "text-base font-semibold text-slate-900"}>
-          {tr("AI Lab Analyse", "AI Lab Analysis")}
-        </h3>
-        <p className={scopeMutedClassName}>
-          {tr(
-            "Gebruik AI om je trends te interpreteren op basis van rapporten, protocol, supplementen en wellbeing check-ins.",
-            "Use AI to interpret your trends using reports, protocol, supplements, and wellbeing check-ins."
+    <section className="space-y-4 fade-in sm:space-y-5">
+      <AIAnalysisHeader
+        title={tr("AI Lab Assistant", "AI Lab Assistant")}
+        subtitle={tr(
+          "Krijg heldere, contextrijke analyse van je labtrends wanneer jij beslist te starten.",
+          "Get clear, context-rich analysis of your lab trends when you decide to run it."
+        )}
+        memoryLabel={memoryLabel}
+        isDarkTheme={isDarkTheme}
+      />
+
+      <AIInfoBar
+        isDarkTheme={isDarkTheme}
+        hasDemoData={hasDemoData}
+        isDemoMode={isDemoMode}
+        usageLabelTitle={tr("Gebruik", "Usage")}
+        usageLabel={usageLabel}
+        usageHint={usageHint}
+        actionGuardLabel={tr(
+          "AI draait alleen wanneer jij expliciet een actie start.",
+          "AI runs only when you explicitly start an action."
+        )}
+        demoModeLabel={tr("Je werkt nu met demodata.", "You're currently using demo data.")}
+        demoMixedLabel={tr("Demodata staat nog deels actief.", "Demo data is still partially active.")}
+        consentRequiredLabel={
+          blockedByConsent
+            ? tr(
+                "AI staat uit tot je expliciete toestemming geeft in Instellingen.",
+                "AI is off until you grant explicit consent in Settings."
+              )
+            : null
+        }
+      />
+
+      <AIStatsGrid
+        reportsInScope={reportsInScope}
+        markersTracked={markersTracked}
+        unitSystemLabel={unitSystemLabel}
+        activeProtocolLabel={activeProtocolLabel}
+        reportsLabel={tr("Rapporten in scope", "Reports in scope")}
+        markersLabel={tr("Markers gevolgd", "Markers tracked")}
+        unitLabel={tr("Eenheden", "Unit system")}
+        protocolLabel={tr("Actief protocol", "Active protocol")}
+        usageLabelTitle={tr("Gebruik", "Usage")}
+        usageLabel={usageLabel}
+        usageHint={usageHint}
+        isDarkTheme={isDarkTheme}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
+        <AIQuestionInput
+          title={tr("Ask AI", "Ask AI")}
+          subtitle={tr(
+            "Ask one focused question about your current reports, trends, or protocol impact.",
+            "Ask one focused question about your current reports, trends, or protocol impact."
           )}
-        </p>
-
-        {/* Mobile: compact summary row */}
-        <div className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:hidden ${isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" : "rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"}`}>
-          <span className={scopeValueClassName}>{reportsInScope} {tr("rapporten", "reports")}</span>
-          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
-          <span className={scopeValueClassName}>{markersTracked} markers</span>
-          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
-          <span className={scopeValueClassName}>{unitSystemLabel}</span>
-          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
-          <span className={scopeValueClassName}>{activeProtocolLabel}</span>
-        </div>
-        {/* Desktop: full info cards */}
-        <div className="mt-3 hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-4">
-          <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
-            <p className={scopeMutedClassName}>{tr("Rapporten in scope", "Reports in scope")}</p>
-            <p className={scopeValueClassName}>{reportsInScope}</p>
-          </div>
-          <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
-            <p className={scopeMutedClassName}>{tr("Markers gevolgd", "Markers tracked")}</p>
-            <p className={scopeValueClassName}>{markersTracked}</p>
-          </div>
-          <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
-            <p className={scopeMutedClassName}>{tr("Eenheden", "Unit system")}</p>
-            <p className={scopeValueClassName}>{unitSystemLabel}</p>
-          </div>
-          <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
-            <p className={scopeMutedClassName}>{tr("Actief protocol", "Active protocol")}</p>
-            <p className={scopeValueClassName}>{activeProtocolLabel}</p>
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <div className={usageBadgeClassName}>
-            <span className="font-medium">Free beta</span>
-            {" - "}
-            {betaUsage.dailyCount}/{betaLimits.maxAnalysesPerDay} {tr("gebruikt vandaag", "used today")}
-            {" · "}
-            {betaUsage.monthlyCount}/{betaLimits.maxAnalysesPerMonth} {tr("gebruikt deze maand", "used this month")}
-            {dayLimitReached ? ` · ${tr("reset om middernacht", "resets at midnight")}` : ""}
-          </div>
-          {blockedByConsent ? (
-            <div
-              className={
-                isDarkTheme
-                  ? "mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-                  : "mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-              }
-            >
-              {tr(
-                "AI staat standaard uit. Voor elke run zie je eerst een toestemmingscheck.",
-                "AI is off by default. You will see a consent check before each run."
-              )}
-            </div>
-          ) : null}
-          {memory && memory.analysisCount >= 2 ? (
-            <div className={isDarkTheme ? "mt-2 text-xs text-slate-400" : "mt-2 text-xs text-slate-600"}>
-              Analyst memory:{" "}
-              <span className={isDarkTheme ? "font-medium text-slate-200" : "font-medium text-slate-800"}>
-                active · {memory.analysisCount} analyses
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {analysisScopeNotice ? (
-        <div className={scopeNoticeClassName}>
-          {tr("AI gebruikt", "AI uses")} {analysisScopeNotice.usedReports} {tr("van", "of")} {analysisScopeNotice.totalReports} {tr("rapporten voor deze run.", "reports for this run.")}
-          {" "}
-          {scopeReasonText}
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className={actionCardBaseClass}>
-          <h4 className={actionTitleClass}>{tr("Volledige AI-analyse", "Full AI analysis")}</h4>
-          <p className={actionBodyClass}>
-            {tr(
-              "Volledige trendanalyse met samenvatting, protocolimpact, supplementcontext en vervolgstappen.",
-              "Full trend analysis with summary, protocol impact, supplement context, and next steps."
-            )}
-          </p>
-          <button
-            type="button"
-            className={`${actionButtonClass} border-cyan-500/50 bg-cyan-500/10 text-cyan-200`}
-            onClick={() => onRunAnalysis("full")}
-            disabled={!canRunFull}
-          >
-            {isAnalyzingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Start volledige analyse", "Start full analysis")}
-          </button>
-          <p className={aiPrivacyHintClass}>
-            {tr(
-              "Lokaal is standaard. Externe AI start pas na een toestemmingscheck waarin je kiest wat gedeeld wordt.",
-              "Local is the default. External AI starts only after a consent check where you choose what is shared."
-            )}
-          </p>
-        </div>
-
-        <div className={actionCardBaseClass}>
-          <h4 className={actionTitleClass}>{tr("Laatste vs vorige", "Latest vs previous")}</h4>
-          <p className={actionBodyClass}>
-            {tr(
-              "Snelle vergelijking van je meest recente rapport met het rapport daarvoor.",
-              "Quick comparison between your latest report and the previous report."
-            )}
-          </p>
-          <button
-            type="button"
-            className={`${actionButtonClass} border-emerald-500/40 bg-emerald-500/10 text-emerald-200`}
-            onClick={() => onRunAnalysis("latestComparison")}
-            disabled={!canRunLatest}
-          >
-            {isAnalyzingLatest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isAnalyzingLatest ? tr("Analyseren...", "Analyzing...") : tr("Vergelijk laatste rapport", "Compare latest report")}
-          </button>
-          <p className={aiPrivacyHintClass}>
-            {tr(
-              "Zonder toestemming blijft alles lokaal en wordt er niets extern verstuurd.",
-              "Without consent, everything stays local and nothing is sent externally."
-            )}
-          </p>
-          {reportsInScope < 2 ? (
-            <p className={isDarkTheme ? "mt-2 text-xs text-slate-500" : "mt-2 text-xs text-slate-500"}>
-              {tr(
-                "Minimaal 2 rapporten nodig voor deze vergelijking.",
-                "At least 2 reports are required for this comparison."
-              )}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {analysisError ? (
-        <div
-          className={
-            isDarkTheme
-              ? "rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200"
-              : "rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"
+          inputLabel={tr("Jouw vraag", "Your question")}
+          inputPlaceholder={tr(
+            "Bijv. waarom stijgt mijn hematocriet en wat moet ik nu monitoren?",
+            "E.g. why is my hematocrit rising and what should I monitor next?"
+          )}
+          askButtonLabel={isAnalyzingQuestion ? tr("Bezig...", "Asking...") : tr("Ask AI", "Ask AI")}
+          suggestionsTitle={tr("Snelle lokale suggesties", "Quick local suggestions")}
+          localNote={tr(
+            "Suggesties worden lokaal gegenereerd uit je rapportdata. AI start alleen na jouw klik.",
+            "Suggestions are generated locally from your report data. AI starts only after your click."
+          )}
+          reportsHint={
+            reportsInScope === 0
+              ? tr("Voeg eerst minstens één rapport toe om vragen te kunnen stellen.", "Add at least one report first to ask questions.")
+              : null
           }
-        >
-          {analysisError}
-        </div>
-      ) : null}
+          value={questionInput}
+          suggestions={suggestedQuestions.slice(0, 4)}
+          isSubmitting={isAnalyzingQuestion}
+          canSubmit={canAskQuestion}
+          isDarkTheme={isDarkTheme}
+          onChange={setQuestionInput}
+          onSubmit={() => onAskQuestion(questionInput.trim())}
+          onSelectSuggestion={setQuestionInput}
+        />
 
-      <article className={outputShellClass}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>
-            {analysisKind === "latestComparison"
-              ? tr("Analyse-output (laatste vs vorige)", "Analysis output (latest vs previous)")
-              : tr("Analyse-output", "Analysis output")}
-          </h4>
-          {analysisModelInfo ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={
-                  isDarkTheme
-                    ? "rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-slate-300"
-                    : "rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700"
-                }
-              >
-                {tr("Stijl", "Style")}: {tr("Narrative premium", "Narrative premium")}
-              </span>
-              <span
-                className={
-                  isDarkTheme
-                    ? "rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-slate-300"
-                    : "rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700"
-                }
-              >
-                {tr("Model", "Model")}: {analysisModelInfo.model}
-                {" · "}
-                {tr("Provider", "Provider")}: {analysisModelInfo.provider}
-                {analysisModelInfo.fallbackUsed ? ` · ${tr("fallback gebruikt", "fallback used")}` : ""}
-              </span>
-              <span
-                className={
-                  isDarkTheme
-                    ? "rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1 text-xs text-slate-300"
-                    : "rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs text-slate-700"
-                }
-              >
-                {tr("Supplement acties", "Supplement actions")}:{" "}
-                {analysisModelInfo.supplementActionsNeeded ? analysisModelInfo.actionReasons.length : tr("geen", "none")}
-              </span>
-              {analysisModelInfo.qualityGuardApplied ? (
-                <span
-                  className={
-                    isDarkTheme
-                      ? "rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-100"
-                      : "rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900"
-                  }
-                >
-                  {tr("Output guard toegepast", "Output guard applied")}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          {analysisResult ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
-              onClick={onCopyAnalysis}
-              disabled={!analysisResult}
-            >
-              <FileText className="h-4 w-4" /> {analysisCopied ? tr("Gekopieerd", "Copied") : tr("Kopieer analyse", "Copy analysis")}
-            </button>
-          ) : null}
-        </div>
+        <AIQuickActionsPanel
+          title={tr("Quick actions", "Quick actions")}
+          subtitle={tr(
+            "Gebruik deze snelle acties voor een brede analyse of een snelle vergelijking.",
+            "Use these shortcuts when you want a broader pass or a quick comparison."
+          )}
+          fullTitle={tr("Run full analysis", "Run full analysis")}
+          fullDescription={tr(
+            "Diepere overview over trends, protocolcontext en praktische vervolgstappen.",
+            "Deeper overview across trends, protocol context, and practical next checks."
+          )}
+          fullButtonLabel={isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis")}
+          fullFootnote={tr(
+            "Je start dit handmatig. Er draait niets automatisch op paginalaad.",
+            "You start this manually. Nothing runs automatically on page load."
+          )}
+          latestTitle={tr("Compare latest vs previous", "Compare latest vs previous")}
+          latestDescription={tr(
+            "Gerichte check op wat het meest veranderde in je laatste rapportcyclus.",
+            "Focused check on what changed most in your most recent report cycle."
+          )}
+          latestButtonLabel={isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest report", "Compare latest report")}
+          latestFootnote={tr(
+            "Compacte check als je eerst snel overzicht wilt.",
+            "Compact check when you want a quick overview first."
+          )}
+          latestHelperText={
+            reportsInScope < 2
+              ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
+              : undefined
+          }
+          isAnalyzingFull={isAnalyzingFull}
+          isAnalyzingLatest={isAnalyzingLatest}
+          canRunFull={canRunFull}
+          canRunLatest={canRunLatest}
+          isDarkTheme={isDarkTheme}
+          onRunFull={() => onRunAnalysis("full")}
+          onRunLatest={() => onRunAnalysis("latestComparison")}
+        />
+      </div>
 
-        {analysisGeneratedAt ? (
-          <p className={isDarkTheme ? "mt-2 text-xs text-slate-500" : "mt-2 text-xs text-slate-500"}>
-            {tr("Laatste run", "Last run")}: {format(parseISO(analysisGeneratedAt), "dd MMM yyyy HH:mm")}
-          </p>
-        ) : null}
-
-        {isAnalyzingLabs ? (
-          <div className={isDarkTheme ? "mt-3 rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-sm text-slate-300" : "mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"}>
-            <span className="inline-flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
-              {tr("AI is je trendanalyse aan het opstellen...", "AI is preparing your trend analysis...")}
-            </span>
-          </div>
-        ) : null}
-
-        {!isAnalyzingLabs && !analysisResult ? (
-          <div className={isDarkTheme ? "mt-3 rounded-xl border border-dashed border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400" : "mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600"}>
-            {tr(
-              "Kies hierboven een analyse om AI-inzichten te genereren op basis van je huidige rapporten.",
-              "Choose an analysis above to generate AI insights from your current reports."
-            )}
-          </div>
-        ) : null}
-
-        {analysisResult ? (
-          <div className={outputBodyClass}>
-            <Suspense
-              fallback={
-                <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300" : "rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"}>
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
-                    {tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
-                  </span>
-                </div>
-              }
-            >
-              <AnalysisMarkdownBlock content={analysisResultDisplay} isDarkTheme={isDarkTheme} />
-            </Suspense>
-          </div>
-        ) : null}
-
-        {analysisResult && relevantBenchmarks.length > 0 ? (
-          <div className={isDarkTheme ? "mt-4 border-t border-slate-800 pt-3" : "mt-4 border-t border-slate-200 pt-3"}>
-            <p className={isDarkTheme ? "text-[11px] text-slate-500" : "text-[11px] text-slate-600"}>
-              {tr(
-                "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
-                "Analysis may reference published research. Values vary between individuals. This is not medical advice."
-              )}{" "}
-              {relevantBenchmarks.slice(0, 3).map((benchmark, index) => (
-                <span key={`${benchmark.source.url}-${benchmark.marker}-${index}`}>
-                  <a
-                    href={benchmark.source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={isDarkTheme ? "underline decoration-slate-700 hover:text-slate-300" : "underline decoration-slate-300 hover:text-slate-800"}
-                  >
-                    {benchmark.source.authors} ({benchmark.source.year})
-                  </a>
-                  {index < Math.min(2, relevantBenchmarks.length - 1) ? ", " : "."}
-                </span>
-              ))}
-            </p>
-          </div>
-        ) : null}
-      </article>
+      <AIOutputPanel
+        analysisRequestState={analysisRequestState}
+        analysisError={analysisError}
+        analysisResult={analysisResult}
+        analysisResultDisplay={analysisResultDisplay}
+        analysisGeneratedAt={analysisGeneratedAt}
+        analysisCopied={analysisCopied}
+        analysisModelInfo={analysisModelInfo}
+        analysisKind={analysisKind}
+        analysisQuestion={analysisQuestion}
+        analysisScopeNotice={analysisScopeNotice}
+        relevantBenchmarks={relevantBenchmarks}
+        isDarkTheme={isDarkTheme}
+        titleOutput={tr("Analysis output", "Analysis output")}
+        titleLatestComparison={tr("Analysis output (latest vs previous)", "Analysis output (latest vs previous)")}
+        titleQuestionAnswer={tr("Answer to your question", "Answer to your question")}
+        copyLabel={tr("Kopieer analyse", "Copy analysis")}
+        copiedLabel={tr("Gekopieerd", "Copied")}
+        styleLabel={tr("Stijl", "Style")}
+        styleValue={tr("Narrative premium", "Narrative premium")}
+        modelLabel={tr("Model", "Model")}
+        providerLabel={tr("Provider", "Provider")}
+        supplementActionsLabel={tr("Supplement acties", "Supplement actions")}
+        noneLabel={tr("geen", "none")}
+        outputGuardLabel={tr("Output guard toegepast", "Output guard applied")}
+        lastRunLabel={tr("Laatste run", "Last run")}
+        loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
+        loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
+        emptyTitle={tr("Klaar wanneer jij dat bent", "Ready when you are")}
+        emptyBody={tr(
+          "Start met een lokale suggestie, stel je eigen vraag, of draai een volledige analyse.",
+          "Start with a local suggestion, ask your own question, or run a full analysis."
+        )}
+        emptyPointSuggestion={tr("Kies een suggestiechip om snel te starten.", "Pick a suggestion chip to start quickly.")}
+        emptyPointAsk={tr("Typ je eigen vraag en klik op Ask AI.", "Type your own question and click Ask AI.")}
+        emptyPointFull={tr("Gebruik Run full analysis voor de brede context.", "Use Run full analysis for broad context.")}
+        disclaimerLabel={tr(
+          "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
+          "Analysis may reference published research. Values vary between individuals. This is not medical advice."
+        )}
+        aiUsesPrefix={tr("AI gebruikt", "AI uses")}
+        aiUsesMiddle={tr("van", "of")}
+        aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
+        questionPrefixLabel={tr("Vraag:", "Question:")}
+        preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
+        streamingStatusLabel={tr("Generating response…", "Generating response...")}
+        streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
+        onCopyAnalysis={onCopyAnalysis}
+      />
     </section>
   );
 };

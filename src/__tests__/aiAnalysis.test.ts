@@ -92,6 +92,57 @@ describe("analyzeLabDataWithClaude", () => {
     expect(requests[0]?.payload?.max_tokens).toBe(2400);
   });
 
+  it("streams Claude text deltas progressively when streaming is enabled", async () => {
+    const streamedEvents = [
+      "event: content_block_delta",
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}',
+      "",
+      "event: content_block_delta",
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}',
+      "",
+      "event: message_delta",
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}',
+      "",
+      "event: message_stop",
+      'data: {"type":"message_stop"}',
+      ""
+    ].join("\n");
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(streamedEvents));
+        controller.close();
+      }
+    });
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream"
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const deltas: string[] = [];
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      onStreamEvent: (event) => {
+        if (event.type === "delta" && event.delta) {
+          deltas.push(event.delta);
+        }
+      }
+    });
+
+    expect(deltas.join("")).toContain("Hello world");
+    expect(result.text).toContain("Hello world");
+  });
+
   it("keeps symptoms/notes out unless explicitly opted in", async () => {
     const reportWithContext: LabReport = {
       ...sampleReport,
@@ -142,6 +193,40 @@ describe("analyzeLabDataWithClaude", () => {
     expect(prompts[0]).not.toContain("test@example.com");
     expect(prompts[1]).toContain("Headache on peak day");
     expect(prompts[1]).toContain("[REDACTED_EMAIL]");
+  });
+
+  it("injects custom user question into the full-analysis prompt", async () => {
+    let capturedPrompt = "";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      customQuestion: "Why is my testosterone stable but energy still low?"
+    });
+
+    expect(capturedPrompt).toContain("USER QUESTION:");
+    expect(capturedPrompt).toContain("Why is my testosterone stable but energy still low?");
+    expect(capturedPrompt).toContain("Scope: answer the user question first.");
+    expect(capturedPrompt).toContain("Question-first rules:");
+    expect(capturedPrompt).not.toContain("Tell the story of how decisions led to outcomes.");
+    const data = extractDataBlock(capturedPrompt);
+    expect(data.userQuestion).toBe("Why is my testosterone stable but energy still low?");
   });
 
   it("retries overloaded responses with backoff before succeeding", async () => {

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
-import { buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
+import { AnalysisScopeNotice, buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
 import { AnalystMemory } from "../types/analystMemory";
@@ -44,11 +44,17 @@ export const useAnalysis = ({
   mapErrorToMessage,
   tr
 }: UseAnalysisOptions) => {
+  type AnalysisKind = "full" | "latestComparison" | "question";
+  type AnalysisRequestState = "idle" | "preparing" | "streaming" | "completed" | "error";
   const analysisBaseReports = allReports;
+  const activeRunIdRef = useRef(0);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
   const [isAnalyzingLabs, setIsAnalyzingLabs] = useState(false);
+  const [analysisRequestState, setAnalysisRequestState] = useState<AnalysisRequestState>("idle");
   const [analysisError, setAnalysisError] = useState("");
   const [analysisResult, setAnalysisResult] = useState("");
   const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
+  const [analysisQuestion, setAnalysisQuestion] = useState<string | null>(null);
   const [analysisCopied, setAnalysisCopied] = useState(false);
   const [analysisModelInfo, setAnalysisModelInfo] = useState<{
     provider: "claude" | "gemini";
@@ -62,8 +68,9 @@ export const useAnalysis = ({
     qualityGuardApplied: boolean;
     qualityIssues: string[];
   } | null>(null);
-  const [analysisKind, setAnalysisKind] = useState<"full" | "latestComparison" | null>(null);
-  const [analyzingKind, setAnalyzingKind] = useState<"full" | "latestComparison" | null>(null);
+  const [analysisKind, setAnalysisKind] = useState<AnalysisKind | null>(null);
+  const [analyzingKind, setAnalyzingKind] = useState<AnalysisKind | null>(null);
+  const [analysisScopeNotice, setAnalysisScopeNotice] = useState<AnalysisScopeNotice | null>(null);
   const [betaRemaining, setBetaRemaining] = useState(getRemainingAnalyses());
   const [betaUsage, setBetaUsage] = useState(() => {
     const usage = getUsage();
@@ -82,7 +89,19 @@ export const useAnalysis = ({
     setBetaRemaining(getRemainingAnalyses());
   };
 
-  const suggestedScopeNotice = useMemo(() => {
+  const abortActiveRun = () => {
+    activeAbortControllerRef.current?.abort();
+    activeAbortControllerRef.current = null;
+  };
+
+  useEffect(
+    () => () => {
+      abortActiveRun();
+    },
+    []
+  );
+
+  const suggestedScopeNotice = useMemo<AnalysisScopeNotice | null>(() => {
     const scope = selectReportsForAnalysis({
       reports: analysisBaseReports,
       analysisType: "full"
@@ -90,9 +109,27 @@ export const useAnalysis = ({
     return scope.notice;
   }, [analysisBaseReports]);
 
-  const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
+  const runAiAnalysisInternal = async ({
+    kind,
+    analysisType,
+    question,
+    consentOverride
+  }: {
+    kind: AnalysisKind;
+    analysisType: "full" | "latestComparison";
+    question?: string;
+    consentOverride?: AIConsentDecision | null;
+  }) => {
+    const normalizedQuestion = question?.trim() ?? "";
+
+    if (kind === "question" && normalizedQuestion.length === 0) {
+      setAnalysisError(tr("Voer eerst een vraag in voordat je AI start.", "Enter a question first before starting AI."));
+      setAnalysisRequestState("error");
+      return;
+    }
     if (analysisType === "latestComparison" && analysisBaseReports.length < 2) {
       setAnalysisError(tr("Voor vergelijking van laatste vs vorige rapport zijn minimaal 2 rapporten nodig.", "At least 2 reports are required for latest-vs-previous analysis."));
+      setAnalysisRequestState("error");
       return;
     }
     const externalAiAllowed = settings.aiExternalConsent || Boolean(consentOverride?.allowExternalAi);
@@ -103,6 +140,7 @@ export const useAnalysis = ({
           "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
         )
       );
+      setAnalysisRequestState("error");
       return;
     }
 
@@ -111,14 +149,27 @@ export const useAnalysis = ({
     if (!betaCheck.allowed) {
       setAnalysisError(betaCheck.reason ?? "Usage limit reached.");
       refreshBetaUsage();
+      setAnalysisRequestState("error");
       return;
     }
 
+    abortActiveRun();
+    const requestId = activeRunIdRef.current + 1;
+    activeRunIdRef.current = requestId;
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+
     setIsAnalyzingLabs(true);
-    setAnalyzingKind(analysisType);
+    setAnalysisRequestState("preparing");
+    setAnalyzingKind(kind);
+    setAnalysisKind(kind);
+    setAnalysisQuestion(kind === "question" ? normalizedQuestion : null);
     setAnalysisError("");
+    setAnalysisResult("");
+    setAnalysisGeneratedAt(null);
     setAnalysisCopied(false);
     setAnalysisModelInfo(null);
+    let receivedStreamDelta = false;
 
     try {
       const scopeSelection = selectReportsForAnalysis({
@@ -126,6 +177,7 @@ export const useAnalysis = ({
         analysisType
       });
       const selectedReports = scopeSelection.selectedReports;
+      setAnalysisScopeNotice(scopeSelection.notice);
       const wellbeingSummary = buildWellbeingSummary({
         reports: selectedReports,
         checkIns
@@ -140,6 +192,18 @@ export const useAnalysis = ({
         memory: analystMemory,
         language,
         analysisType,
+        customQuestion: normalizedQuestion.length > 0 ? normalizedQuestion : undefined,
+        signal: abortController.signal,
+        onStreamEvent: (event) => {
+          if (activeRunIdRef.current !== requestId) {
+            return;
+          }
+          if (event.type === "delta" && event.delta) {
+            receivedStreamDelta = true;
+            setAnalysisRequestState("streaming");
+            setAnalysisResult((current) => `${current}${event.delta}`);
+          }
+        },
         externalAiAllowed,
         aiConsent: {
           includeSymptoms: consentOverride?.includeSymptoms ?? false,
@@ -156,6 +220,9 @@ export const useAnalysis = ({
         },
         providerPreference: settings.aiAnalysisProvider
       });
+      if (activeRunIdRef.current !== requestId) {
+        return;
+      }
       setAnalysisResult(result.text);
       setAnalysisModelInfo({
         provider: result.provider,
@@ -170,7 +237,7 @@ export const useAnalysis = ({
         qualityIssues: result.qualityIssues
       });
       setAnalysisGeneratedAt(new Date().toISOString());
-      setAnalysisKind(analysisType);
+      setAnalysisRequestState("completed");
 
       void (async () => {
         try {
@@ -180,6 +247,7 @@ export const useAnalysis = ({
             protocols,
             supplementTimeline,
             unitSystem: settings.unitSystem,
+            profile: settings.userProfile,
             currentMemory: analystMemory,
             analysisResult: result.text,
             aiConsent: {
@@ -198,11 +266,44 @@ export const useAnalysis = ({
       recordAnalysisUsage();
       refreshBetaUsage();
     } catch (error) {
-      setAnalysisError(mapErrorToMessage(error, "ai"));
+      if (activeRunIdRef.current !== requestId) {
+        return;
+      }
+      if (error instanceof Error && error.message === "AI_REQUEST_ABORTED") {
+        setAnalysisRequestState("idle");
+        return;
+      }
+      const mappedError = mapErrorToMessage(error, "ai");
+      setAnalysisError(
+        receivedStreamDelta
+          ? `${mappedError} ${tr("Gedeeltelijke output is bewaard.", "Partial output has been preserved.")}`
+          : mappedError
+      );
+      setAnalysisRequestState("error");
     } finally {
-      setIsAnalyzingLabs(false);
-      setAnalyzingKind(null);
+      if (activeRunIdRef.current === requestId) {
+        setIsAnalyzingLabs(false);
+        setAnalyzingKind(null);
+        activeAbortControllerRef.current = null;
+      }
     }
+  };
+
+  const runAiAnalysis = async (analysisType: "full" | "latestComparison", consentOverride?: AIConsentDecision | null) => {
+    await runAiAnalysisInternal({
+      kind: analysisType,
+      analysisType,
+      consentOverride
+    });
+  };
+
+  const runAiQuestion = async (question: string, consentOverride?: AIConsentDecision | null) => {
+    await runAiAnalysisInternal({
+      kind: "question",
+      analysisType: "full",
+      question,
+      consentOverride
+    });
   };
 
   const copyAnalysis = async () => {
@@ -225,19 +326,22 @@ export const useAnalysis = ({
 
   return {
     isAnalyzingLabs,
+    analysisRequestState,
     analysisError,
     analysisResult,
     analysisGeneratedAt,
+    analysisQuestion,
     analysisCopied,
     analysisModelInfo,
     analysisKind,
     analyzingKind,
-    analysisScopeNotice: suggestedScopeNotice,
+    analysisScopeNotice: analysisScopeNotice ?? suggestedScopeNotice,
     betaUsage,
     betaRemaining,
     betaLimits: BETA_LIMITS,
     setAnalysisError,
     runAiAnalysis,
+    runAiQuestion,
     copyAnalysis
   };
 };
