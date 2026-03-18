@@ -287,7 +287,7 @@ const CloudAuthModal = ({
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-xl overflow-hidden rounded-[28px] ${
+        className={`w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-[28px] sm:max-w-xl ${
           isLightTheme
             ? "border border-slate-300/80 bg-white/95 shadow-[0_28px_72px_-42px_rgba(15,23,42,0.45)]"
             : "border border-slate-700/80 bg-slate-950/95 shadow-[0_30px_90px_-45px_rgba(34,211,238,0.65)]"

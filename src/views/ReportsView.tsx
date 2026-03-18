@@ -767,7 +767,7 @@ const ReportsView = ({
               {tr("Oudste eerst", "Oldest first")}
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1.5 text-sm text-slate-300 hover:border-slate-500 hover:text-slate-100"
@@ -788,7 +788,7 @@ const ReportsView = ({
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-sm text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"
+              className={`items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-sm text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50 ${selectedReports.length >= 2 ? "inline-flex" : "hidden sm:inline-flex"}`}
               disabled={selectedReports.length < 2}
               onClick={() => setReportComparisonOpen((prev) => !prev)}
             >
@@ -796,7 +796,7 @@ const ReportsView = ({
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-sm text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+              className={`items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-sm text-rose-300 hover:bg-rose-500/20 disabled:opacity-50 ${selectedReports.length > 0 ? "inline-flex" : "hidden sm:inline-flex"}`}
               disabled={selectedReports.length === 0 || isShareMode}
               onClick={deleteSelectedReports}
             >
@@ -987,7 +987,7 @@ const ReportsView = ({
                 </span>
 
                 <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-end sm:justify-between lg:justify-end lg:gap-2">
-                  <span className="report-compact-marker-grid grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+                  <span className="report-compact-marker-grid hidden min-w-0 gap-1 sm:grid sm:grid-cols-3 lg:grid-cols-6">
                     {compactHeaderSlots.map((slot, index) => {
                       const marker = slot.marker;
                       const converted = marker ? convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem) : null;

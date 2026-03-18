@@ -585,7 +585,7 @@ const AppShell = ({
                       </div>
                     </div>
                   ) : null}
-                  <label className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
+                  <label className="hidden items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300 lg:inline-flex">
                     <span>{tr("Taal", "Language")}:</span>
                     <select
                       value={language}
@@ -602,7 +602,7 @@ const AppShell = ({
                   <button
                     type="button"
                     onClick={onToggleTheme}
-                    className="theme-toggle"
+                    className="theme-toggle hidden lg:inline-flex"
                     aria-label={tr("Schakel thema", "Toggle theme")}
                     title={tr("Thema wisselen", "Toggle theme")}
                   >
@@ -640,7 +640,7 @@ const AppShell = ({
           </header>
 
           {activeTab === "dashboard" && !isReviewMode
-            ? renderUploadPanelCard("lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3")
+            ? renderUploadPanelCard("hidden lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3")
             : null}
 
           {children}

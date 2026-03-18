@@ -334,11 +334,14 @@ const ProtocolImpactEventCard = ({
             </div>
           ) : null}
           {compoundChanged ? (
-            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3.5 py-2 text-sm">
-              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{tr("Compound", "Compound")}</span>
-              <span className="font-semibold text-slate-200">{formatCompounds(event.fromCompounds, true)}</span>
-              <ArrowRight className="h-3 w-3 text-slate-600" />
-              <span className="font-bold text-slate-50">{formatCompounds(event.toCompounds, false)}</span>
+            <div className="rounded-xl border border-slate-700/60 bg-slate-800/60 px-3.5 py-2 text-sm">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500 sm:mb-0 sm:mr-2 sm:inline">{tr("Compound", "Compound")}</span>
+              <span className="flex flex-col gap-1 sm:inline-flex sm:flex-row sm:items-center sm:gap-2">
+                <span className="font-semibold text-slate-200">{formatCompounds(event.fromCompounds, true)}</span>
+                <ArrowRight className="hidden h-3 w-3 text-slate-600 sm:inline-block" />
+                <span className="text-xs text-slate-600 sm:hidden">↓</span>
+                <span className="font-bold text-slate-50">{formatCompounds(event.toCompounds, false)}</span>
+              </span>
             </div>
           ) : null}
         </div>

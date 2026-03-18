@@ -145,7 +145,18 @@ const AnalysisView = ({
           )}
         </p>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Mobile: compact summary row */}
+        <div className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:hidden ${isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" : "rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"}`}>
+          <span className={scopeValueClassName}>{reportsInScope} {tr("rapporten", "reports")}</span>
+          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
+          <span className={scopeValueClassName}>{markersTracked} markers</span>
+          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
+          <span className={scopeValueClassName}>{unitSystemLabel}</span>
+          <span className={isDarkTheme ? "text-slate-600" : "text-slate-300"}>·</span>
+          <span className={scopeValueClassName}>{activeProtocolLabel}</span>
+        </div>
+        {/* Desktop: full info cards */}
+        <div className="mt-3 hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-4">
           <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
             <p className={scopeMutedClassName}>{tr("Rapporten in scope", "Reports in scope")}</p>
             <p className={scopeValueClassName}>{reportsInScope}</p>
