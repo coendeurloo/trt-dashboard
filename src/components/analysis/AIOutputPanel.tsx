@@ -47,11 +47,7 @@ interface AIOutputPanelProps {
   lastRunLabel: string;
   loadingLabel: string;
   loadingFormatLabel: string;
-  emptyTitle: string;
   emptyBody: string;
-  emptyPointSuggestion: string;
-  emptyPointAsk: string;
-  emptyPointFull: string;
   disclaimerLabel: string;
   aiUsesPrefix: string;
   aiUsesMiddle: string;
@@ -99,11 +95,7 @@ const AIOutputPanel = ({
   lastRunLabel,
   loadingLabel,
   loadingFormatLabel,
-  emptyTitle,
   emptyBody,
-  emptyPointSuggestion,
-  emptyPointAsk,
-  emptyPointFull,
   disclaimerLabel,
   aiUsesPrefix,
   aiUsesMiddle,
@@ -212,13 +204,7 @@ const AIOutputPanel = ({
 
       {!showLoadingCard && !showLiveOutput && !analysisResult ? (
         <div className={isDarkTheme ? "mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-900/45 p-4 text-sm text-slate-300" : "mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700"}>
-          <p className={isDarkTheme ? "font-medium text-slate-200" : "font-medium text-slate-900"}>{emptyTitle}</p>
-          <p className="mt-1">{emptyBody}</p>
-          <ul className={isDarkTheme ? "mt-3 list-disc space-y-1 pl-4 text-slate-400" : "mt-3 list-disc space-y-1 pl-4 text-slate-600"}>
-            <li>{emptyPointSuggestion}</li>
-            <li>{emptyPointAsk}</li>
-            <li>{emptyPointFull}</li>
-          </ul>
+          <p className={isDarkTheme ? "text-sm text-slate-400" : "text-sm text-slate-500"}>{emptyBody}</p>
         </div>
       ) : null}
 

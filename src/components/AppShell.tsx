@@ -275,7 +275,7 @@ const AppShell = ({
 
     return (
       <div ref={uploadPanelRef} className={containerClassName}>
-        <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">{t(language, "uploadPdf")}</p>
+        <p className={`mb-2 text-xs uppercase tracking-wide ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>{t(language, "uploadPdf")}</p>
         {hasReports ? (
           <>
             <UploadPanel
@@ -289,7 +289,11 @@ const AppShell = ({
             />
             <button
               type="button"
-              className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+              className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm ${
+                isLightTheme
+                  ? "border-slate-300 text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
+                  : "border-slate-600 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+              }`}
               onClick={onStartManualEntry}
             >
               <Plus className="h-4 w-4" /> {t(language, "addManualValue")}
@@ -300,8 +304,12 @@ const AppShell = ({
             type="button"
             className={`inline-flex w-full items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition ${
               quickUploadDisabled
-                ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
-                : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+                ? isLightTheme
+                  ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
+                  : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+                : isLightTheme
+                  ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
+                  : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
             }`}
             onClick={onQuickUpload}
             disabled={quickUploadDisabled}
@@ -330,7 +338,13 @@ const AppShell = ({
     includeUploadPanel: boolean;
     onAfterNavigate?: () => void;
   }) => {
-    const sidebarUploadPanel = !isShareMode && includeUploadPanel ? renderUploadPanelCard("mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3") : null;
+    const sidebarUploadPanel = !isShareMode && includeUploadPanel
+      ? renderUploadPanelCard(
+          isLightTheme
+            ? "mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+        )
+      : null;
     const showAccountTools = !isShareMode && cloudConfigured;
     const syncBadgeLabel =
       appMode !== "cloud"
@@ -369,11 +383,19 @@ const AppShell = ({
                     onRequestTabChange("settings");
                     onAfterNavigate?.();
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/65 px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:border-cyan-500/45 hover:text-cyan-100"
+                  className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                    isLightTheme
+                      ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
+                      : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
+                  }`}
                 >
                   <span className={`h-2 w-2 rounded-full ${syncDotClassName}`} />
                   <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
-                  <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-1.5 py-0.5 text-[10px] text-slate-300">
+                  <span
+                    className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
+                      isLightTheme ? "border-slate-300 bg-slate-50 text-slate-600" : "border-slate-700/80 bg-slate-900/70 text-slate-300"
+                    }`}
+                  >
                     {syncBadgeLabel}
                   </span>
                 </button>
@@ -408,20 +430,24 @@ const AppShell = ({
             </div>
           ) : null}
           {hasReports ? (
-            <div className="sidebar-protocol-card mt-3 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-3">
+            <div
+              className={`sidebar-protocol-card mt-3 rounded-xl border px-3 py-3 ${
+                isLightTheme ? "border-slate-200 bg-white shadow-sm" : "border-slate-700/50 bg-slate-900/50"
+              }`}
+            >
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 {activeProtocolCompound ? currentPlanLabel : tr("Tracking", "Tracking")}
               </p>
               {activeProtocolCompound ? (
-                <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
+                <p className={`mt-1 truncate text-[13px] font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-200"}`}>
                   {activeProtocolCompound.name} {activeProtocolCompound.dose}
                 </p>
               ) : (
                 <>
-                  <p className="mt-1 truncate text-[13px] font-semibold text-slate-200">
+                  <p className={`mt-1 truncate text-[13px] font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-200"}`}>
                     {tr(`${markersTrackedCount} markers gevolgd`, `${markersTrackedCount} markers tracked`)}
                   </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
+                  <p className={`mt-1 text-[11px] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
                     {latestReportDate
                       ? tr(`Laatste upload: ${formatDate(latestReportDate)}`, `Last upload: ${formatDate(latestReportDate)}`)
                       : tr("Nog geen uploads", "No uploads yet")}
@@ -467,7 +493,7 @@ const AppShell = ({
   };
 
   return (
-    <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
+    <div className={`min-h-screen px-3 py-4 ${isLightTheme ? "text-slate-900" : "text-slate-100"} sm:px-5 lg:px-6`}>
       <input
         ref={hiddenUploadInputRef}
         type="file"
@@ -487,13 +513,19 @@ const AppShell = ({
         title={tr("Navigatie", "Navigation")}
         onClose={onCloseMobileMenu}
       >
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3">
+        <div className={isLightTheme ? "rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" : "rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3"}>
           {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu })}
         </div>
       </MobileNavDrawer>
 
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
-        <aside className="hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start">
+        <aside
+          className={
+            isLightTheme
+              ? "hidden w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start"
+              : "hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start"
+          }
+        >
           {renderSidebarContent({ includeUploadPanel: true })}
         </aside>
 
@@ -506,7 +538,11 @@ const AppShell = ({
                 aria-controls="mobile-nav-drawer"
                 aria-label={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
                 title={isMobileMenuOpen ? tr("Menu sluiten", "Close menu") : tr("Menu openen", "Open menu")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-md border ${
+                  isLightTheme
+                    ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/60 hover:text-cyan-700"
+                    : "border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
+                }`}
                 onClick={onToggleMobileMenu}
               >
                 {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -514,18 +550,22 @@ const AppShell = ({
               <img
                 src={appIcon}
                 alt="LabTracker"
-                className="h-6 w-6 shrink-0 rounded-md border border-slate-700/70 bg-slate-900/75 p-0.5"
+                className={`h-6 w-6 shrink-0 rounded-md border p-0.5 ${isLightTheme ? "border-slate-300 bg-white" : "border-slate-700/70 bg-slate-900/75"}`}
               />
-              {!hideDashboardMobileTitle ? <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{activeTabTitle}</p> : null}
+              {!hideDashboardMobileTitle ? <p className={`min-w-0 truncate text-sm font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{activeTabTitle}</p> : null}
               <div className="flex-1" />
               {!isReviewMode ? (
                 <button
                   type="button"
-                  className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
-                    quickUploadDisabled
-                      ? "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
-                      : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
-                  }`}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                      quickUploadDisabled
+                        ? isLightTheme
+                          ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
+                          : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+                        : isLightTheme
+                          ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
+                          : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+                    }`}
                   onClick={onQuickUpload}
                   disabled={quickUploadDisabled}
                 >
@@ -534,18 +574,18 @@ const AppShell = ({
                 </button>
               ) : null}
             </div>
-            {!isReviewMode && activeTabSubtitle ? <p className="text-xs text-slate-400 lg:hidden">{activeTabSubtitle}</p> : null}
+            {!isReviewMode && activeTabSubtitle ? <p className={`text-xs lg:hidden ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>{activeTabSubtitle}</p> : null}
             {!hideDashboardDesktopHeader ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 {!isReviewMode ? (
                   <div className="hidden lg:block">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <h2 className="text-base font-semibold text-slate-100 sm:text-lg">{activeTabTitle}</h2>
+                      <h2 className={`text-base font-semibold sm:text-lg ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{activeTabTitle}</h2>
                       {showDashboardHeaderStats ? (
-                        <div className="flex flex-wrap items-center gap-2.5 text-sm text-slate-400">
-                          <span><strong className="text-slate-100">{reportsCount}</strong> {t(language, "reports")}</span>
+                        <div className={`flex flex-wrap items-center gap-2.5 text-sm ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+                          <span><strong className={isLightTheme ? "text-slate-900" : "text-slate-100"}>{reportsCount}</strong> {t(language, "reports")}</span>
                           <span className="text-slate-600">·</span>
-                          <span><strong className="text-slate-100">{markersTrackedCount}</strong> {t(language, "markersTracked")}</span>
+                          <span><strong className={isLightTheme ? "text-slate-900" : "text-slate-100"}>{markersTrackedCount}</strong> {t(language, "markersTracked")}</span>
                           <span className="text-slate-600">·</span>
                           <span>
                             <strong className={outOfRangeCount === 0 ? "text-emerald-300" : "text-amber-300"}>{outOfRangeCount}</strong> {t(language, "outOfRange")}
@@ -553,7 +593,7 @@ const AppShell = ({
                         </div>
                       ) : null}
                     </div>
-                    {activeTabSubtitle ? <p className="text-sm text-slate-400">{activeTabSubtitle}</p> : null}
+                    {activeTabSubtitle ? <p className={`text-sm ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>{activeTabSubtitle}</p> : null}
                   </div>
                 ) : (
                   <div className="hidden lg:block" />
@@ -585,12 +625,18 @@ const AppShell = ({
                       </div>
                     </div>
                   ) : null}
-                  <label className="hidden items-center gap-2 rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-300 lg:inline-flex">
+                  <label
+                    className={`hidden items-center gap-2 rounded-md border px-2 py-1 text-xs lg:inline-flex ${
+                      isLightTheme ? "border-slate-300 bg-white text-slate-700" : "border-slate-700 bg-slate-900/70 text-slate-300"
+                    }`}
+                  >
                     <span>{tr("Taal", "Language")}:</span>
                     <select
                       value={language}
                       onChange={(event) => onLanguageChange(event.target.value as AppSettings["language"])}
-                      className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 outline-none"
+                      className={`rounded border px-1.5 py-0.5 text-xs outline-none ${
+                        isLightTheme ? "border-slate-300 bg-white text-slate-700" : "border-slate-600 bg-slate-900 text-slate-200"
+                      }`}
                     >
                       {APP_LANGUAGE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -640,7 +686,11 @@ const AppShell = ({
           </header>
 
           {activeTab === "dashboard" && !isReviewMode
-            ? renderUploadPanelCard("hidden lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3")
+            ? renderUploadPanelCard(
+                isLightTheme
+                  ? "hidden lg:hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                  : "hidden lg:hidden rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+              )
             : null}
 
           {children}

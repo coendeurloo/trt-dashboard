@@ -89,13 +89,10 @@ describe("AnalysisView", () => {
     expect(screen.getAllByText(/0\/25 month/i).length).toBeGreaterThan(0);
   });
 
-  it("renders main stats", () => {
+  it("renders compact scope hint", () => {
     render(<AnalysisView {...baseProps} />);
-    expect(screen.getByText("Reports in scope")).toBeTruthy();
-    expect(screen.getByText("Markers tracked")).toBeTruthy();
-    expect(screen.getByText("Active protocol")).toBeTruthy();
-    expect(screen.getByText("35")).toBeTruthy();
-    expect(screen.getByText("No protocol")).toBeTruthy();
+    expect(screen.getByText(/1 reports in scope/i)).toBeTruthy();
+    expect(screen.getByText(/35 markers/i)).toBeTruthy();
   });
 
   it("keeps copy button in output area only when a result exists", () => {

@@ -10,7 +10,7 @@ export default {
       },
       colors: {
         panel: {
-          light: "#f8fafb",
+          light: "#f7f8fb",
           dark: "#0f172a"
         },
         accent: {

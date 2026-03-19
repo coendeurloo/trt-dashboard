@@ -7,7 +7,6 @@ import AIInfoBar from "../components/analysis/AIInfoBar";
 import AIOutputPanel from "../components/analysis/AIOutputPanel";
 import AIQuestionInput from "../components/analysis/AIQuestionInput";
 import AIQuickActionsPanel from "../components/analysis/AIQuickActionsPanel";
-import AIStatsGrid from "../components/analysis/AIStatsGrid";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
 import useAiQuestionSuggestions from "../hooks/useAiQuestionSuggestions";
 import { trLocale } from "../i18n";
@@ -141,6 +140,15 @@ const AnalysisView = ({
     memory && memory.analysisCount >= 2
       ? tr(`Analyst memory actief · ${memory.analysisCount} analyses`, `Analyst memory active · ${memory.analysisCount} analyses`)
       : null;
+  const scopeHint = hasActiveProtocol
+    ? tr(
+        `${reportsInScope} rapporten in scope · ${markersTracked} markers · ${unitSystemLabel} · ${activeProtocolLabel}`,
+        `${reportsInScope} reports in scope · ${markersTracked} markers · ${unitSystemLabel} · ${activeProtocolLabel}`
+      )
+    : tr(
+        `${reportsInScope} rapporten in scope · ${markersTracked} markers · ${unitSystemLabel}`,
+        `${reportsInScope} reports in scope · ${markersTracked} markers · ${unitSystemLabel}`
+      );
 
   return (
     <section className="space-y-4 fade-in sm:space-y-5">
@@ -177,94 +185,74 @@ const AnalysisView = ({
         }
       />
 
-      <AIStatsGrid
-        reportsInScope={reportsInScope}
-        markersTracked={markersTracked}
-        unitSystemLabel={unitSystemLabel}
-        activeProtocolLabel={activeProtocolLabel}
-        reportsLabel={tr("Rapporten in scope", "Reports in scope")}
-        markersLabel={tr("Markers gevolgd", "Markers tracked")}
-        unitLabel={tr("Eenheden", "Unit system")}
-        protocolLabel={tr("Actief protocol", "Active protocol")}
-        usageLabelTitle={tr("Gebruik", "Usage")}
-        usageLabel={usageLabel}
-        usageHint={usageHint}
+      <AIQuestionInput
+        title={tr("Ask AI", "Ask AI")}
+        subtitle={tr(
+          "Ask a focused question or run a broader analysis when you need it.",
+          "Ask a focused question or run a broader analysis when you need it."
+        )}
+        scopeHint={scopeHint}
+        inputLabel={tr("Jouw vraag", "Your question")}
+        inputPlaceholder={tr(
+          "Bijv. waarom stijgt mijn hematocriet en wat moet ik nu monitoren?",
+          "E.g. why is my hematocrit rising and what should I monitor next?"
+        )}
+        askButtonLabel={isAnalyzingQuestion ? tr("Bezig...", "Asking...") : tr("Ask AI", "Ask AI")}
+        suggestionsTitle={tr("Snelle lokale suggesties", "Quick local suggestions")}
+        localNote={tr(
+          "Suggesties worden lokaal gegenereerd uit je rapportdata. AI start alleen na jouw klik.",
+          "Suggestions are generated locally from your report data. AI starts only after your click."
+        )}
+        reportsHint={
+          reportsInScope === 0
+            ? tr("Voeg eerst minstens één rapport toe om vragen te kunnen stellen.", "Add at least one report first to ask questions.")
+            : null
+        }
+        value={questionInput}
+        suggestions={suggestedQuestions.slice(0, 4)}
+        actionsSlot={
+          <AIQuickActionsPanel
+            fullTitle={tr("Run full analysis", "Run full analysis")}
+            fullDescription={tr(
+              "Trends, protocolcontext, supplementen en praktische volgende stappen.",
+              "Trends, protocol context, supplements, and practical next steps."
+            )}
+            fullButtonLabel={isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis")}
+            fullFootnote={tr(
+              "Je start dit handmatig. Er draait niets automatisch op paginalaad.",
+              "You start this manually. Nothing runs automatically on page load."
+            )}
+            latestTitle={tr("Compare latest vs previous", "Compare latest vs previous")}
+            latestDescription={tr(
+              "Snelle vergelijking van wat recent het meest veranderde.",
+              "Quick comparison of what changed most recently."
+            )}
+            latestButtonLabel={isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest report", "Compare latest report")}
+            latestFootnote={tr(
+              "Compacte check als je eerst snel overzicht wilt.",
+              "Compact check when you want a quick overview first."
+            )}
+            latestHelperText={
+              reportsInScope < 2
+                ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
+                : undefined
+            }
+            isAnalyzingFull={isAnalyzingFull}
+            isAnalyzingLatest={isAnalyzingLatest}
+            canRunFull={canRunFull}
+            canRunLatest={canRunLatest}
+            isDarkTheme={isDarkTheme}
+            onRunFull={() => onRunAnalysis("full")}
+            onRunLatest={() => onRunAnalysis("latestComparison")}
+          />
+        }
+        isSubmitting={isAnalyzingQuestion}
+        canSubmit={canAskQuestion}
         isDarkTheme={isDarkTheme}
+        onChange={setQuestionInput}
+        onSubmit={() => onAskQuestion(questionInput.trim())}
+        onSelectSuggestion={setQuestionInput}
       />
-
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
-        <AIQuestionInput
-          title={tr("Ask AI", "Ask AI")}
-          subtitle={tr(
-            "Ask one focused question about your current reports, trends, or protocol impact.",
-            "Ask one focused question about your current reports, trends, or protocol impact."
-          )}
-          inputLabel={tr("Jouw vraag", "Your question")}
-          inputPlaceholder={tr(
-            "Bijv. waarom stijgt mijn hematocriet en wat moet ik nu monitoren?",
-            "E.g. why is my hematocrit rising and what should I monitor next?"
-          )}
-          askButtonLabel={isAnalyzingQuestion ? tr("Bezig...", "Asking...") : tr("Ask AI", "Ask AI")}
-          suggestionsTitle={tr("Snelle lokale suggesties", "Quick local suggestions")}
-          localNote={tr(
-            "Suggesties worden lokaal gegenereerd uit je rapportdata. AI start alleen na jouw klik.",
-            "Suggestions are generated locally from your report data. AI starts only after your click."
-          )}
-          reportsHint={
-            reportsInScope === 0
-              ? tr("Voeg eerst minstens één rapport toe om vragen te kunnen stellen.", "Add at least one report first to ask questions.")
-              : null
-          }
-          value={questionInput}
-          suggestions={suggestedQuestions.slice(0, 4)}
-          isSubmitting={isAnalyzingQuestion}
-          canSubmit={canAskQuestion}
-          isDarkTheme={isDarkTheme}
-          onChange={setQuestionInput}
-          onSubmit={() => onAskQuestion(questionInput.trim())}
-          onSelectSuggestion={setQuestionInput}
-        />
-
-        <AIQuickActionsPanel
-          title={tr("Quick actions", "Quick actions")}
-          subtitle={tr(
-            "Gebruik deze snelle acties voor een brede analyse of een snelle vergelijking.",
-            "Use these shortcuts when you want a broader pass or a quick comparison."
-          )}
-          fullTitle={tr("Run full analysis", "Run full analysis")}
-          fullDescription={tr(
-            "Diepere overview over trends, protocolcontext en praktische vervolgstappen.",
-            "Deeper overview across trends, protocol context, and practical next checks."
-          )}
-          fullButtonLabel={isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis")}
-          fullFootnote={tr(
-            "Je start dit handmatig. Er draait niets automatisch op paginalaad.",
-            "You start this manually. Nothing runs automatically on page load."
-          )}
-          latestTitle={tr("Compare latest vs previous", "Compare latest vs previous")}
-          latestDescription={tr(
-            "Gerichte check op wat het meest veranderde in je laatste rapportcyclus.",
-            "Focused check on what changed most in your most recent report cycle."
-          )}
-          latestButtonLabel={isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest report", "Compare latest report")}
-          latestFootnote={tr(
-            "Compacte check als je eerst snel overzicht wilt.",
-            "Compact check when you want a quick overview first."
-          )}
-          latestHelperText={
-            reportsInScope < 2
-              ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
-              : undefined
-          }
-          isAnalyzingFull={isAnalyzingFull}
-          isAnalyzingLatest={isAnalyzingLatest}
-          canRunFull={canRunFull}
-          canRunLatest={canRunLatest}
-          isDarkTheme={isDarkTheme}
-          onRunFull={() => onRunAnalysis("full")}
-          onRunLatest={() => onRunAnalysis("latestComparison")}
-        />
-      </div>
 
       <AIOutputPanel
         analysisRequestState={analysisRequestState}
@@ -294,14 +282,7 @@ const AnalysisView = ({
         lastRunLabel={tr("Laatste run", "Last run")}
         loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
         loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
-        emptyTitle={tr("Klaar wanneer jij dat bent", "Ready when you are")}
-        emptyBody={tr(
-          "Start met een lokale suggestie, stel je eigen vraag, of draai een volledige analyse.",
-          "Start with a local suggestion, ask your own question, or run a full analysis."
-        )}
-        emptyPointSuggestion={tr("Kies een suggestiechip om snel te starten.", "Pick a suggestion chip to start quickly.")}
-        emptyPointAsk={tr("Typ je eigen vraag en klik op Ask AI.", "Type your own question and click Ask AI.")}
-        emptyPointFull={tr("Gebruik Run full analysis voor de brede context.", "Use Run full analysis for broad context.")}
+        emptyBody={tr("Start een analyse of stel een vraag om te beginnen.", "Run an analysis or ask a question to get started.")}
         disclaimerLabel={tr(
           "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
           "Analysis may reference published research. Values vary between individuals. This is not medical advice."

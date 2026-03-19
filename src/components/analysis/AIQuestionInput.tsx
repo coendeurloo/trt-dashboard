@@ -1,3 +1,4 @@
+import { ReactNode } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { SuggestedAiQuestion } from "../../analysisSuggestions";
 import AISuggestedQuestions from "./AISuggestedQuestions";
@@ -10,6 +11,8 @@ interface AIQuestionInputProps {
   askButtonLabel: string;
   suggestionsTitle: string;
   localNote: string;
+  scopeHint?: string | null;
+  actionsSlot?: ReactNode;
   reportsHint: string | null;
   value: string;
   suggestions: SuggestedAiQuestion[];
@@ -29,6 +32,8 @@ const AIQuestionInput = ({
   askButtonLabel,
   suggestionsTitle,
   localNote,
+  scopeHint,
+  actionsSlot,
   reportsHint,
   value,
   suggestions,
@@ -52,6 +57,7 @@ const AIQuestionInput = ({
       <div className="space-y-1">
         <h4 className={isDarkTheme ? "text-lg font-semibold tracking-tight text-slate-100" : "text-lg font-semibold tracking-tight text-slate-900"}>{title}</h4>
         <p className={isDarkTheme ? "max-w-2xl text-sm text-slate-300" : "max-w-2xl text-sm text-slate-600"}>{subtitle}</p>
+        {scopeHint ? <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-500"}>{scopeHint}</p> : null}
       </div>
 
       <div className="mt-3.5 space-y-2">
@@ -67,7 +73,7 @@ const AIQuestionInput = ({
             rows={2}
             className={
               isDarkTheme
-                ? "min-h-[86px] w-full resize-y rounded-2xl border border-slate-700/90 bg-slate-950/72 px-4 py-3 text-sm leading-relaxed text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 sm:min-h-[96px]"
+                ? "min-h-[86px] w-full resize-y rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm leading-relaxed text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 sm:min-h-[96px]"
                 : "min-h-[86px] w-full resize-y rounded-2xl border border-slate-300/90 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus-visible:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/20 sm:min-h-[96px]"
             }
           />
@@ -76,11 +82,7 @@ const AIQuestionInput = ({
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit}
-            className={
-              isDarkTheme
-                ? "inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-500/20 px-5 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/26 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[132px]"
-                : "inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-500 bg-cyan-600 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[132px]"
-            }
+            className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[132px]"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {askButtonLabel}
@@ -102,6 +104,8 @@ const AIQuestionInput = ({
           />
         </div>
       ) : null}
+
+      {actionsSlot}
 
       <div className={isDarkTheme ? "mt-2.5 border-t border-slate-800/90 pt-2.5 text-[11px] text-slate-500" : "mt-2.5 border-t border-slate-200/90 pt-2.5 text-[11px] text-slate-500"}>
         <p>{localNote}</p>

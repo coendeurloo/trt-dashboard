@@ -30,6 +30,7 @@ const AlertsView = ({
   onFocusedMarkerHandled
 }: AlertsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isDarkTheme = settings.theme === "dark";
   const rootRef = useRef<HTMLElement | null>(null);
   const predictiveAlerts = useMemo(
     () => buildPredictiveAlerts(alertSeriesByMarker, settings.unitSystem),
@@ -68,20 +69,28 @@ const AlertsView = ({
 
   return (
     <section ref={rootRef} className="space-y-4 fade-in">
-      <div className="alerts-hero app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4">
+      <div
+        className={
+          isDarkTheme
+            ? "alerts-hero app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-cyan-950/25 p-4"
+            : "alerts-hero rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-cyan-50/60 p-4 shadow-sm"
+        }
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-100">{tr("Alerts Centrum", "Alerts Center")}</h3>
-            <p className="mt-0.5 text-sm text-slate-400">
-              <span className="font-medium text-amber-300">{actionableAlerts.length}</span> {tr("actie nodig", "need action")}
-              <span className="mx-2 text-slate-600">·</span>
-              <span className="font-medium text-emerald-300">{positiveAlerts.length}</span> {tr("positief", "positive")}
-              <span className="mx-2 text-slate-600">·</span>
-              <span className="font-medium text-slate-300">{alerts.length}</span> {tr("totaal", "total")}
+            <h3 className={isDarkTheme ? "text-base font-semibold text-slate-100" : "text-base font-semibold text-slate-900"}>{tr("Alerts Centrum", "Alerts Center")}</h3>
+            <p className={isDarkTheme ? "mt-0.5 text-sm text-slate-400" : "mt-0.5 text-sm text-slate-600"}>
+              <span className={isDarkTheme ? "font-medium text-amber-300" : "font-medium text-amber-700"}>{actionableAlerts.length}</span>{" "}
+              {tr("actie nodig", "need action")}
+              <span className={isDarkTheme ? "mx-2 text-slate-600" : "mx-2 text-slate-400"}>·</span>
+              <span className={isDarkTheme ? "font-medium text-emerald-300" : "font-medium text-emerald-700"}>{positiveAlerts.length}</span>{" "}
+              {tr("positief", "positive")}
+              <span className={isDarkTheme ? "mx-2 text-slate-600" : "mx-2 text-slate-400"}>·</span>
+              <span className={isDarkTheme ? "font-medium text-slate-300" : "font-medium text-slate-700"}>{alerts.length}</span> {tr("totaal", "total")}
             </p>
           </div>
           {samplingControlsEnabled ? (
-            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/15 px-3 py-1 text-xs text-cyan-200">
+            <span className={isDarkTheme ? "rounded-full border border-cyan-500/40 bg-cyan-500/15 px-3 py-1 text-xs text-cyan-200" : "rounded-full border border-cyan-300 bg-cyan-50 px-3 py-1 text-xs text-cyan-700"}>
               {tr("Filter actief", "Filter active")}: {settings.samplingFilter}
             </span>
           ) : null}
@@ -89,10 +98,16 @@ const AlertsView = ({
       </div>
 
       {predictiveAlerts.length > 0 ? (
-        <section className="alerts-panel-predictive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+        <section
+          className={
+            isDarkTheme
+              ? "alerts-panel-predictive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+              : "alerts-panel-predictive rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          }
+        >
           <div className="mb-4 flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-slate-100">{tr("Voorspellend", "Predictive")}</h4>
-            <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20">
+            <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Voorspellend", "Predictive")}</h4>
+            <span className={isDarkTheme ? "rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-violet-300 ring-1 ring-violet-500/20" : "rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200"}>
               {tr("Op basis van trend", "Trend-based")}
             </span>
           </div>
@@ -101,18 +116,22 @@ const AlertsView = ({
             {predictiveAlerts.map((alert) => (
               <article
                 key={`${alert.marker}-${alert.threshold}`}
-                className="alerts-card-predictive rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+                className={
+                  isDarkTheme
+                    ? "alerts-card-predictive rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+                    : "alerts-card-predictive rounded-2xl border border-slate-200 bg-slate-50/80 p-4"
+                }
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-100">
+                    <p className={isDarkTheme ? "text-sm font-medium text-slate-100" : "text-sm font-medium text-slate-900"}>
                       {getMarkerDisplayName(alert.marker, language)}
                     </p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                    <p className={isDarkTheme ? "mt-1 text-sm leading-relaxed text-slate-300" : "mt-1 text-sm leading-relaxed text-slate-700"}>
                       {language === "nl" ? alert.narrativeNl : alert.narrativeEn}
                     </p>
                     {alert.confidence === "low" ? (
-                      <p className="mt-1.5 text-[11px] text-slate-500">
+                      <p className={isDarkTheme ? "mt-1.5 text-[11px] text-slate-500" : "mt-1.5 text-[11px] text-slate-600"}>
                         {tr(
                           "Gebaseerd op slechts 2 metingen. Meer metingen maken deze projectie betrouwbaarder.",
                           "Based on only 2 data points. More measurements make this projection more reliable."
@@ -123,8 +142,12 @@ const AlertsView = ({
                   <span
                     className={
                       alert.daysUntil <= 60
-                        ? "shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/25"
-                        : "shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300 ring-1 ring-slate-700"
+                        ? isDarkTheme
+                          ? "shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/25"
+                          : "shrink-0 rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200"
+                        : isDarkTheme
+                          ? "shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300 ring-1 ring-slate-700"
+                          : "shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 ring-1 ring-slate-200"
                     }
                   >
                     ~{Math.max(1, Math.round(alert.daysUntil / 30))}
@@ -135,19 +158,27 @@ const AlertsView = ({
             ))}
           </div>
 
-          <p className="mt-3 text-[10px] text-slate-600">
+          <p className={isDarkTheme ? "mt-3 text-[10px] text-slate-500" : "mt-3 text-[10px] text-slate-600"}>
             {tr("Lineaire extrapolatie. Geen medisch advies.", "Linear extrapolation. Not medical advice.")}
           </p>
         </section>
       ) : null}
 
-      <div className="alerts-panel-positive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h4 className="text-sm font-semibold text-slate-100">{tr("Positieve signalen", "Positive signals")}</h4>
-        <p className="mt-1 text-xs text-slate-400">
+      <div
+        className={
+          isDarkTheme
+            ? "alerts-panel-positive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+            : "alerts-panel-positive rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+        }
+      >
+        <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Positieve signalen", "Positive signals")}</h4>
+        <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
           {tr("Waarden of trends die momenteel gunstig ogen worden hier groen gemarkeerd.", "Values or trends that currently look favorable are shown here in green.")}
         </p>
         {positiveAlerts.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">{tr("Nog geen positieve signalen in deze filter.", "No positive signals in this filter yet.")}</p>
+          <p className={isDarkTheme ? "mt-3 text-sm text-slate-400" : "mt-3 text-sm text-slate-600"}>
+            {tr("Nog geen positieve signalen in deze filter.", "No positive signals in this filter yet.")}
+          </p>
         ) : (
           <div className="mt-3 columns-1 [column-gap:0.75rem] md:columns-2 2xl:columns-3">
             {positiveAlerts.map((alert) => {
@@ -193,9 +224,15 @@ const AlertsView = ({
         )}
       </div>
 
-      <div className="alerts-panel-actionable app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-        <h4 className="text-sm font-semibold text-slate-100">{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
-        <p className="mt-1 text-xs text-slate-400">
+      <div
+        className={
+          isDarkTheme
+            ? "alerts-panel-actionable app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+            : "alerts-panel-actionable rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+        }
+      >
+        <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
+        <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
           {tr("Dit zijn signalen waarbij vaak een bespreekactie of extra monitoring zinvol is.", "These signals often benefit from discussion or additional monitoring.")}
         </p>
         {actionableAlerts.length === 0 ? (
@@ -210,10 +247,16 @@ const AlertsView = ({
             {actionableAlerts.map((alert) => {
               const cardClass =
                 alert.severity === "high"
-                  ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
+                  ? isDarkTheme
+                    ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
+                    : "border-rose-200 bg-rose-50 text-rose-900"
                   : alert.severity === "medium"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
-                    : "border-slate-600 bg-slate-800/70 text-slate-100";
+                    ? isDarkTheme
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                      : "border-amber-200 bg-amber-50 text-amber-900"
+                    : isDarkTheme
+                      ? "border-slate-600 bg-slate-800/70 text-slate-100"
+                      : "border-slate-200 bg-slate-50 text-slate-900";
               const series = alertSeriesByMarker[alert.marker] ?? [];
               return (
                 <article
@@ -228,16 +271,22 @@ const AlertsView = ({
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
                         <div className="flex items-center gap-1.5 text-[11px]">
-                          <span className="rounded-full border border-white/20 bg-black/15 px-2 py-0.5">
+                          <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
                             {alertTypeLabel(alert.type)}
                           </span>
-                          <span className="rounded-full border border-white/20 bg-black/15 px-2 py-0.5">
+                          <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
                             {tr("Prioriteit", "Priority")}: {alertSeverityLabel(alert.severity)}
                           </span>
                         </div>
                       </div>
                       <p className="mt-1 text-sm leading-snug">{alert.message}</p>
-                      <div className="mt-1 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 py-2">
+                      <div
+                        className={
+                          isDarkTheme
+                            ? "mt-1 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 py-2"
+                            : "mt-1 rounded-lg border border-slate-300/80 bg-white px-2.5 py-2"
+                        }
+                      >
                         <p className="text-[11px] uppercase tracking-wide opacity-80">
                           {tr("Mogelijke bespreekactie", "Suggested discussion action")}
                         </p>

@@ -115,11 +115,12 @@ const MarkerChartCard = ({
 
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
         <span className="inline-flex items-center gap-1" title={trendExplanation}>
+          <span className="text-slate-500">{tr("Algemene trend", "Overall trend")}:</span>
           {trend.icon}
           {trendText}
         </span>
         <span>
-          {tr("Sinds vorige test", "Since last test")}:{" "}
+          {tr("Recente verandering", "Recent change")} ({tr("sinds vorige test", "since last test")}):{" "}
           <strong className={deltaToneClass(percentChange)}>
             {percentChange === null ? "-" : `${percentChange > 0 ? "+" : ""}${percentChange}%`}
           </strong>

@@ -142,6 +142,7 @@ const DashboardView = ({
   const unitSystemLabel = (unitSystem: "eu" | "us"): string =>
     unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const hasReports = reports.length > 0;
+  const isDarkTheme = settings.theme === "dark";
   const isGeneralProfile = settings.userProfile === "health" || settings.userProfile === "biohacker";
 
   // Wellbeing nudge: show when no check-ins or last one was ≥7 days ago
@@ -279,10 +280,10 @@ const DashboardView = ({
       {hasReports && personalInfo.name ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-100">
+            <h2 className={isDarkTheme ? "text-lg font-semibold text-slate-100" : "text-lg font-semibold text-slate-900"}>
               {greeting}, {personalInfo.name.split(" ")[0]}
             </h2>
-            <p className="mt-0.5 text-sm text-slate-400">
+            <p className={isDarkTheme ? "mt-0.5 text-sm text-slate-400" : "mt-0.5 text-sm text-slate-500"}>
               {outOfRangeCount > 0
                 ? tr(
                     `Je hebt ${outOfRangeCount} marker${outOfRangeCount === 1 ? "" : "s"} buiten bereik.`,
@@ -309,7 +310,13 @@ const DashboardView = ({
       ) : null}
 
       {hasReports ? (
-        <div className="dashboard-filter-bar rounded-xl bg-slate-800/40 px-3 py-2.5">
+        <div
+          className={
+            isDarkTheme
+              ? "dashboard-filter-bar rounded-xl bg-slate-800/40 px-3 py-2.5"
+              : "dashboard-filter-bar rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+          }
+        >
           <div ref={chartSettingsRef} className="relative space-y-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1">
@@ -320,7 +327,9 @@ const DashboardView = ({
                     className={`rounded-md px-2 py-1 text-xs transition-colors ${
                       settings.timeRange === value
                         ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                        : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                        : isDarkTheme
+                          ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                          : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
                     }`}
                     onClick={() => onUpdateSettings({ timeRange: value })}
                   >
@@ -335,7 +344,9 @@ const DashboardView = ({
                   className={`rounded-md px-2 py-1 text-xs transition-colors ${
                     dashboardView === "primary"
                       ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                      : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                      : isDarkTheme
+                        ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                        : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
                   }`}
                   onClick={() => onDashboardViewChange("primary")}
                 >
@@ -346,7 +357,9 @@ const DashboardView = ({
                   className={`rounded-md px-2 py-1 text-xs transition-colors ${
                     dashboardView === "all"
                       ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                      : "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                      : isDarkTheme
+                        ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                        : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
                   }`}
                   onClick={() => onDashboardViewChange("all")}
                 >
@@ -357,13 +370,21 @@ const DashboardView = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="date"
-                    className="rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
+                    className={
+                      isDarkTheme
+                        ? "rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
+                        : "rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    }
                     value={settings.customRangeStart}
                     onChange={(event) => onUpdateSettings({ customRangeStart: event.target.value })}
                   />
                   <input
                     type="date"
-                    className="rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
+                    className={
+                      isDarkTheme
+                        ? "rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
+                        : "rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    }
                     value={settings.customRangeEnd}
                     onChange={(event) => onUpdateSettings({ customRangeEnd: event.target.value })}
                   />
@@ -374,7 +395,13 @@ const DashboardView = ({
                   type="button"
                   onClick={() => setShowChartSettings((current) => !current)}
                   className={`inline-flex items-center gap-1 rounded-md p-1.5 text-xs transition-colors ${
-                    showChartSettings ? "text-slate-100" : "text-slate-500 hover:text-slate-300"
+                    showChartSettings
+                      ? isDarkTheme
+                        ? "text-slate-100"
+                        : "text-slate-700"
+                      : isDarkTheme
+                        ? "text-slate-500 hover:text-slate-300"
+                        : "text-slate-500 hover:text-slate-700"
                   }`}
                   aria-expanded={showChartSettings}
                   aria-label={tr("Grafiekinstellingen", "Chart settings")}
@@ -385,20 +412,34 @@ const DashboardView = ({
             </div>
 
             {showChartSettings ? (
-            <div className="chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+            <div
+              className={
+                isDarkTheme
+                  ? "chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur"
+                  : "chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+              }
+            >
               <div className="flex items-center justify-between px-0.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Grafiekinstellingen", "Chart settings")}</p>
+                <p className={isDarkTheme ? "text-xs font-semibold uppercase tracking-wide text-slate-400" : "text-xs font-semibold uppercase tracking-wide text-slate-500"}>
+                  {tr("Grafiekinstellingen", "Chart settings")}
+                </p>
                 <button
                   type="button"
                   onClick={() => setShowChartSettings(false)}
-                  className="inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 p-1 text-slate-300 hover:border-slate-500 hover:text-slate-100"
+                  className={
+                    isDarkTheme
+                      ? "inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 p-1 text-slate-300 hover:border-slate-500 hover:text-slate-100"
+                      : "inline-flex items-center justify-center rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:border-slate-400 hover:text-slate-900"
+                  }
                   aria-label={tr("Sluit grafiekinstellingen", "Close chart settings")}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Weergavemodus", "View mode")}</p>
+              <div className={isDarkTheme ? "rounded-xl border border-slate-700/70 bg-slate-900/50 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
+                <p className={isDarkTheme ? "text-[11px] font-semibold uppercase tracking-wide text-slate-400" : "text-[11px] font-semibold uppercase tracking-wide text-slate-500"}>
+                  {tr("Weergavemodus", "View mode")}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   <button
                     type="button"

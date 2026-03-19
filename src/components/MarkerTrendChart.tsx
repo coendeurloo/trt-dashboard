@@ -34,6 +34,7 @@ const MarkerTrendChart = ({
   checkIns = []
 }: MarkerTrendChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isDarkTheme = settings.theme === "dark";
   const seriesColor = markerColor(colorIndex);
   const gradientBaseId = useId().replace(/:/g, "");
   const seriesGradientId = `marker-series-fill-${gradientBaseId}`;
@@ -63,6 +64,7 @@ const MarkerTrendChart = ({
   const areaBaseValue = Number.isFinite(chartMin) ? chartMin : 0;
   const availableKeys = new Set(points.map((point) => point.key));
   const compactTooltip = settings.tooltipDetailMode === "compact";
+  const referenceRangeFillOpacity = isDarkTheme ? 0.06 : 0.03;
   const phaseBlocksForSeries = phaseBlocks.filter(
     (block) => availableKeys.has(block.fromKey) || availableKeys.has(block.toKey)
   );
@@ -221,13 +223,34 @@ const MarkerTrendChart = ({
             : null}
 
         {settings.showReferenceRanges && rangeMin !== undefined && rangeMax !== undefined && rangeMin < rangeMax ? (
-          <ReferenceArea y1={rangeMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
+          <ReferenceArea
+            y1={rangeMin}
+            y2={rangeMax}
+            fill="#22c55e"
+            fillOpacity={referenceRangeFillOpacity}
+            stroke="#22c55e"
+            strokeOpacity={0.3}
+          />
         ) : null}
         {settings.showReferenceRanges && hasLowerBound && !hasUpperBound && rangeMin !== undefined && chartMax > rangeMin ? (
-          <ReferenceArea y1={rangeMin} y2={chartMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
+          <ReferenceArea
+            y1={rangeMin}
+            y2={chartMax}
+            fill="#22c55e"
+            fillOpacity={referenceRangeFillOpacity}
+            stroke="#22c55e"
+            strokeOpacity={0.3}
+          />
         ) : null}
         {settings.showReferenceRanges && hasUpperBound && !hasLowerBound && rangeMax !== undefined && chartMin < rangeMax ? (
-          <ReferenceArea y1={chartMin} y2={rangeMax} fill="#22c55e" fillOpacity={0.18} stroke="#22c55e" strokeOpacity={0.3} />
+          <ReferenceArea
+            y1={chartMin}
+            y2={rangeMax}
+            fill="#22c55e"
+            fillOpacity={referenceRangeFillOpacity}
+            stroke="#22c55e"
+            strokeOpacity={0.3}
+          />
         ) : null}
 
         {trtZone && trtZone.min < trtZone.max ? (
