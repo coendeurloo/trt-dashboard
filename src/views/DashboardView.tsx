@@ -1,6 +1,6 @@
-import { RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
-import { Check, Loader2, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Check, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
@@ -11,11 +11,10 @@ import {
 } from "../analytics";
 import ComparisonChart from "../components/ComparisonChart";
 import MarkerChartCard from "../components/MarkerChartCard";
-import UploadPanel from "../components/UploadPanel";
 import WelcomeHero from "../components/WelcomeHero";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
-import { AppLanguage, AppSettings, DashboardViewMode, LabReport, ParserStage, PersonalInfo, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
+import { AppLanguage, AppSettings, DashboardViewMode, LabReport, PersonalInfo, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
 
 interface DashboardViewProps {
   personalInfo: PersonalInfo;
@@ -52,16 +51,7 @@ interface DashboardViewProps {
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
-  uploadPanelRef: RefObject<HTMLDivElement>;
-  uploadPanelHighlighted: boolean;
-  uploadPanelStatus: string;
   isProcessing: boolean;
-  uploadStage: ParserStage | null;
-  uploadError: string;
-  uploadNotice: string;
-  onUploadFileSelected: (file: File) => void | Promise<void>;
-  onUploadIntent: () => void;
-  onStartManualEntry: () => void;
   checkIns: SymptomCheckIn[];
   onNavigateToCheckIns: () => void;
 }
@@ -144,16 +134,7 @@ const DashboardView = ({
   onLoadDemo,
   onUploadClick,
   onOpenCloudAuth,
-  uploadPanelRef,
-  uploadPanelHighlighted,
-  uploadPanelStatus,
   isProcessing,
-  uploadStage,
-  uploadError,
-  uploadNotice,
-  onUploadFileSelected,
-  onUploadIntent,
-  onStartManualEntry,
   checkIns,
   onNavigateToCheckIns
 }: DashboardViewProps) => {
@@ -325,62 +306,6 @@ const DashboardView = ({
               </button>
             ) : null}
           </div>
-        </div>
-      ) : null}
-
-      {!isShareMode && hasReports ? (
-        <div
-          ref={uploadPanelRef}
-          id="dashboard-upload-panel"
-          tabIndex={-1}
-          className={`rounded-2xl border p-3 transition ${
-            uploadPanelHighlighted
-              ? "border-cyan-400/70 bg-cyan-500/10 ring-2 ring-cyan-400/35"
-              : isDarkTheme
-                ? "border-slate-700/70 bg-slate-900/60"
-                : "border-slate-200 bg-white shadow-sm"
-          }`}
-        >
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className={isDarkTheme ? "text-xs font-semibold uppercase tracking-wide text-slate-400" : "text-xs font-semibold uppercase tracking-wide text-slate-500"}>
-              {tr("Upload PDF", "Upload PDF")}
-            </p>
-            {uploadPanelStatus ? (
-              <span role="status" aria-live="polite" className={isDarkTheme ? "text-xs text-cyan-200" : "text-xs text-cyan-700"}>
-                {uploadPanelStatus}
-              </span>
-            ) : null}
-          </div>
-          <UploadPanel
-            isProcessing={isProcessing}
-            processingStage={uploadStage}
-            onFileSelected={(file) => {
-              void onUploadFileSelected(file);
-            }}
-            onUploadIntent={onUploadIntent}
-            language={language}
-          />
-          <button
-            type="button"
-            className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm ${
-              isDarkTheme
-                ? "border-slate-600 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-                : "border-slate-300 text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
-            }`}
-            onClick={onStartManualEntry}
-          >
-            <Plus className="h-4 w-4" /> {tr("Handmatige waarde toevoegen", "Add manual value")}
-          </button>
-          {uploadError ? (
-            <div role="alert" aria-live="assertive" className={isDarkTheme ? "mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" : "mt-2 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700"}>
-              {uploadError}
-            </div>
-          ) : null}
-          {uploadNotice ? (
-            <div role="status" aria-live="polite" className={isDarkTheme ? "mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" : "mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800"}>
-              {uploadNotice}
-            </div>
-          ) : null}
         </div>
       ) : null}
 

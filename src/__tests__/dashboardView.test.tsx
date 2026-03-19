@@ -1,7 +1,6 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrtStabilityResult } from "../analytics";
 import { DEFAULT_SETTINGS } from "../constants";
@@ -105,16 +104,7 @@ const buildProps = () => {
       onLoadDemo: vi.fn(),
       onUploadClick,
       onOpenCloudAuth: vi.fn(),
-      uploadPanelRef: createRef<HTMLDivElement>(),
-      uploadPanelHighlighted: false,
-      uploadPanelStatus: "",
       isProcessing: false,
-      uploadStage: null,
-      uploadError: "",
-      uploadNotice: "",
-      onUploadFileSelected: vi.fn(),
-      onUploadIntent: vi.fn(),
-      onStartManualEntry: vi.fn(),
       checkIns: [],
       onNavigateToCheckIns: vi.fn(),
       personalInfo: { name: "", dateOfBirth: "", biologicalSex: "prefer_not_to_say" as const, heightCm: null, weightKg: null }

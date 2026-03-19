@@ -13,6 +13,11 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Dashboard upload layout hotfix shipped:
+  - Removed the large primary upload card from dashboard main content
+  - Restored the original full upload panel in the desktop sidebar
+  - Kept quick-upload behavior working through the restored sidebar flow
+  - Updated AppShell/Dashboard contracts and related tests
 - UX Remediation Wave 1 (kritiek + hoog) shipped:
   - Central delete orchestrator with global 10s Undo toast in `App`
   - Confirm dialogs before destructive deletes in Reports, Protocols, Supplements (Check-ins kept existing confirm step)

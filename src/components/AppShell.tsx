@@ -12,7 +12,6 @@ import {
   Plus,
   SlidersHorizontal,
   Sparkles,
-  UploadCloud,
   X
 } from "lucide-react";
 import appIcon from "../../favicon.svg";
@@ -22,8 +21,9 @@ import { getTabLabel, t } from "../i18n";
 import { getPersonaNavSectionLabel, getPersonaSidebarCurrentLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
 import { stabilityColor } from "../chartHelpers";
 import { formatDate } from "../utils";
-import { AppMode, AppSettings, CompoundEntry, TabKey, UserProfile } from "../types";
+import { AppMode, AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
 import MobileNavDrawer from "./MobileNavDrawer";
+import UploadPanel from "./UploadPanel";
 
 export interface AppShellState {
   activeTab: TabKey;
@@ -55,9 +55,12 @@ export interface AppShellState {
 }
 
 export interface AppShellUploadState {
+  uploadPanelRef: RefObject<HTMLDivElement>;
   hiddenUploadInputRef: RefObject<HTMLInputElement>;
-  uploadShortcutHighlighted: boolean;
-  uploadShortcutStatus: string;
+  isProcessing: boolean;
+  uploadStage: ParserStage | null;
+  uploadError: string;
+  uploadNotice: string;
 }
 
 export interface AppShellActions {
@@ -67,6 +70,8 @@ export interface AppShellActions {
   onQuickUpload: () => void;
   onToggleTheme: () => void;
   onUploadFileSelected: (file: File) => void | Promise<void>;
+  onUploadIntent: () => void;
+  onStartManualEntry: () => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
 }
 
@@ -114,9 +119,12 @@ const AppShell = ({
     cloudUserEmail = null
   } = shellState;
   const {
+    uploadPanelRef,
     hiddenUploadInputRef,
-    uploadShortcutHighlighted,
-    uploadShortcutStatus
+    isProcessing,
+    uploadStage,
+    uploadError,
+    uploadNotice
   } = uploadState;
   const {
     onRequestTabChange,
@@ -125,6 +133,8 @@ const AppShell = ({
     onQuickUpload,
     onToggleTheme,
     onUploadFileSelected,
+    onUploadIntent,
+    onStartManualEntry,
     onOpenCloudAuth
   } = actions;
 
@@ -256,48 +266,86 @@ const AppShell = ({
     </div>
   );
 
-  const renderSidebarUploadShortcut = () => {
+  const renderUploadPanelCard = (containerClassName: string) => {
     if (isShareMode) {
       return null;
     }
+
     return (
-      <div className="mt-4">
-        <button
-          type="button"
-          onClick={onQuickUpload}
-          disabled={quickUploadDisabled}
-          title={tr("Snelle upload", "Quick Upload")}
-          aria-label={tr("Snelle upload", "Quick Upload")}
-          className={`inline-flex h-10 w-10 items-center justify-center rounded-md border transition ${
-            quickUploadDisabled
-              ? isLightTheme
-                ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
-                : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
-              : uploadShortcutHighlighted
+      <div ref={uploadPanelRef} className={containerClassName}>
+        <p className={`mb-2 text-xs uppercase tracking-wide ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+          {t(language, "uploadPdf")}
+        </p>
+        {hasReports ? (
+          <>
+            <UploadPanel
+              isProcessing={isProcessing}
+              processingStage={uploadStage}
+              onFileSelected={(file) => {
+                void onUploadFileSelected(file);
+              }}
+              onUploadIntent={onUploadIntent}
+              language={language}
+            />
+            <button
+              type="button"
+              className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm ${
+                isLightTheme
+                  ? "border-slate-300 text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
+                  : "border-slate-600 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+              }`}
+              onClick={onStartManualEntry}
+            >
+              <Plus className="h-4 w-4" /> {t(language, "addManualValue")}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={`inline-flex w-full items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition ${
+              quickUploadDisabled
                 ? isLightTheme
-                  ? "border-cyan-500/70 bg-cyan-100 text-cyan-800 ring-2 ring-cyan-400/45"
-                  : "border-cyan-400/80 bg-cyan-500/20 text-cyan-100 ring-2 ring-cyan-400/45"
+                  ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
+                  : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
                 : isLightTheme
-                  ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/60 hover:text-cyan-700"
-                  : "border-slate-600 bg-slate-900/75 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
-          }`}
-        >
-          <UploadCloud className="h-4 w-4" />
-        </button>
-        {uploadShortcutStatus ? (
-          <p role="status" aria-live="polite" className={`mt-2 text-xs ${isLightTheme ? "text-cyan-700" : "text-cyan-200"}`}>
-            {uploadShortcutStatus}
-          </p>
+                  ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
+                  : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+            }`}
+            onClick={onQuickUpload}
+            disabled={quickUploadDisabled}
+          >
+            {tr("Upload een PDF", "Upload a PDF")}
+          </button>
+        )}
+        {uploadError ? (
+          <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+            {uploadError}
+          </div>
+        ) : null}
+        {uploadNotice ? (
+          <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            {uploadNotice}
+          </div>
         ) : null}
       </div>
     );
   };
 
   const renderSidebarContent = ({
+    includeUploadPanel,
     onAfterNavigate
   }: {
+    includeUploadPanel: boolean;
     onAfterNavigate?: () => void;
   }) => {
+    const sidebarUploadPanel =
+      !isShareMode && includeUploadPanel
+        ? renderUploadPanelCard(
+            isLightTheme
+              ? "mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+              : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+          )
+        : null;
     const showAccountTools = !isShareMode && cloudConfigured;
     const syncBadgeLabel =
       appMode !== "cloud"
@@ -424,9 +472,8 @@ const AppShell = ({
         </div>
 
         {renderNavigationSections(onAfterNavigate)}
-
-        {renderSidebarUploadShortcut()}
         {isShareMode ? renderShareSnapshotCard() : null}
+        {sidebarUploadPanel}
       </>
     );
   };
@@ -467,7 +514,7 @@ const AppShell = ({
         onClose={onCloseMobileMenu}
       >
         <div className={isLightTheme ? "rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" : "rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3"}>
-          {renderSidebarContent({ onAfterNavigate: onCloseMobileMenu })}
+          {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu })}
         </div>
       </MobileNavDrawer>
 
@@ -479,7 +526,7 @@ const AppShell = ({
               : "hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start"
           }
         >
-          {renderSidebarContent({})}
+          {renderSidebarContent({ includeUploadPanel: true })}
         </aside>
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">

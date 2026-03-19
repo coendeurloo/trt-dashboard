@@ -369,13 +369,9 @@ const App = () => {
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
   const [pendingUndoAction, setPendingUndoAction] = useState<PendingUndoAction | null>(null);
-  const [uploadShortcutHighlighted, setUploadShortcutHighlighted] = useState(false);
-  const [uploadShortcutStatus, setUploadShortcutStatus] = useState("");
 
   const hadGrantedCloudAuthRef = useRef(false);
   const undoTimeoutRef = useRef<number | null>(null);
-  const uploadShortcutHighlightTimeoutRef = useRef<number | null>(null);
-  const uploadShortcutStatusTimeoutRef = useRef<number | null>(null);
   useEffect(() => {
     const cloudAuthGranted = cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted";
     if (cloudAuthGranted) {
@@ -414,12 +410,6 @@ const App = () => {
   useEffect(() => () => {
     if (undoTimeoutRef.current !== null) {
       window.clearTimeout(undoTimeoutRef.current);
-    }
-    if (uploadShortcutHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(uploadShortcutHighlightTimeoutRef.current);
-    }
-    if (uploadShortcutStatusTimeoutRef.current !== null) {
-      window.clearTimeout(uploadShortcutStatusTimeoutRef.current);
     }
   }, []);
 
@@ -967,25 +957,6 @@ const App = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
-  const pulseUploadShortcut = useCallback((statusMessage: string) => {
-    setUploadShortcutHighlighted(true);
-    setUploadShortcutStatus(statusMessage);
-    if (uploadShortcutHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(uploadShortcutHighlightTimeoutRef.current);
-    }
-    if (uploadShortcutStatusTimeoutRef.current !== null) {
-      window.clearTimeout(uploadShortcutStatusTimeoutRef.current);
-    }
-    uploadShortcutHighlightTimeoutRef.current = window.setTimeout(() => {
-      setUploadShortcutHighlighted(false);
-      uploadShortcutHighlightTimeoutRef.current = null;
-    }, 1500);
-    uploadShortcutStatusTimeoutRef.current = window.setTimeout(() => {
-      setUploadShortcutStatus("");
-      uploadShortcutStatusTimeoutRef.current = null;
-    }, 3500);
-  }, []);
-
   const openHiddenUploadPicker = (): boolean => {
     const input = hiddenUploadInputRef.current;
     if (!input) {
@@ -1022,14 +993,8 @@ const App = () => {
       if (uploadPanelRef.current) {
         uploadPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      pulseUploadShortcut(
-        tr(
-          "Uploadpaneel gemarkeerd op Dashboard.",
-          "Upload panel highlighted on Dashboard."
-        )
-      );
     });
-  }, [activeTab, isProcessing, isShareMode, pulseUploadShortcut, tr]);
+  }, [activeTab, isProcessing, isShareMode]);
 
   const startSecondUpload = useCallback(() => {
     if (isShareMode || isProcessing) {
@@ -2216,9 +2181,12 @@ const App = () => {
           cloudUserEmail: cloudAuth.session?.user.email ?? null
         }}
         uploadState={{
+          uploadPanelRef,
           hiddenUploadInputRef,
-          uploadShortcutHighlighted,
-          uploadShortcutStatus
+          isProcessing,
+          uploadStage,
+          uploadError,
+          uploadNotice
         }}
         actions={{
           onRequestTabChange: requestTabChange,
@@ -2227,6 +2195,10 @@ const App = () => {
           onQuickUpload: startSecondUpload,
           onToggleTheme: () => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" }),
           onUploadFileSelected: handleUpload,
+          onUploadIntent: () => {
+            void ensurePdfParsingModule();
+          },
+          onStartManualEntry: startManualEntry,
           onOpenCloudAuth: openCloudAuthModal
         }}
         tr={tr}
@@ -2479,18 +2451,7 @@ const App = () => {
                 onLoadDemo={loadDemoData}
                 onUploadClick={startSecondUpload}
                 onOpenCloudAuth={openCloudAuthModal}
-                uploadPanelRef={uploadPanelRef}
-                uploadPanelHighlighted={uploadShortcutHighlighted}
-                uploadPanelStatus={uploadShortcutStatus}
                 isProcessing={isProcessing}
-                uploadStage={uploadStage}
-                uploadError={uploadError}
-                uploadNotice={uploadNotice}
-                onUploadFileSelected={handleUpload}
-                onUploadIntent={() => {
-                  void ensurePdfParsingModule();
-                }}
-                onStartManualEntry={startManualEntry}
                 checkIns={appData.checkIns}
                 onNavigateToCheckIns={() => setActiveTab("checkIns")}
               />

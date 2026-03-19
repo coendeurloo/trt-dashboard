@@ -36,9 +36,12 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
   };
 
   const uploadState: AppShellUploadState = {
+    uploadPanelRef: createRef<HTMLDivElement>(),
     hiddenUploadInputRef: createRef<HTMLInputElement>(),
-    uploadShortcutHighlighted: false,
-    uploadShortcutStatus: ""
+    isProcessing: false,
+    uploadStage: null,
+    uploadError: "",
+    uploadNotice: ""
   };
 
   const actions: AppShellActions = {
@@ -48,6 +51,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     onQuickUpload: vi.fn(),
     onToggleTheme: vi.fn(),
     onUploadFileSelected: vi.fn(),
+    onUploadIntent: vi.fn(),
+    onStartManualEntry: vi.fn(),
     onOpenCloudAuth: vi.fn()
   };
 
