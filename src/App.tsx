@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { differenceInDays, parseISO } from "date-fns";
 import {
   CheckCircle2,
   Info,
@@ -140,6 +141,7 @@ interface PendingUndoAction {
 
 const CLOUD_POST_AUTH_INTENT_STORAGE_KEY = "labtracker-cloud-post-auth-intent-v1";
 const CLOUD_POST_AUTH_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
+const WELLBEING_REMINDER_DISMISS_STORAGE_KEY = "labtracker-wellbeing-reminder-dismiss-v1";
 
 type PendingCloudAuthIntent = {
   view: CloudAuthView;
@@ -195,6 +197,18 @@ const loadBackupPromptDismissed = (): boolean => {
     return false;
   }
   return window.localStorage.getItem(CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY) === "1";
+};
+
+const loadWellbeingReminderDismissedDate = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const value = window.localStorage.getItem(WELLBEING_REMINDER_DISMISS_STORAGE_KEY);
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 };
 
 const buildFallbackParserAssessment = (draft: ExtractionDraft): ParserUncertaintyAssessment => {
@@ -265,6 +279,10 @@ const App = () => {
   );
   const [showSignupSuccessModal, setShowSignupSuccessModal] = useState(false);
   const [showSigninSuccessToast, setShowSigninSuccessToast] = useState(false);
+  const [showWellbeingReminderModal, setShowWellbeingReminderModal] = useState(false);
+  const [wellbeingReminderDismissedDate, setWellbeingReminderDismissedDate] = useState<string | null>(() =>
+    loadWellbeingReminderDismissedDate()
+  );
   const [backupPromptDismissed, setBackupPromptDismissed] = useState<boolean>(() => loadBackupPromptDismissed());
   const appMode: AppMode = cloudAuth.appMode;
   const tr = useCallback((nl: string, en: string): string => trLocale(appData.settings.language, nl, en), [appData.settings.language]);
@@ -406,6 +424,17 @@ const App = () => {
     }, 4500);
     return () => globalThis.clearTimeout(timeout);
   }, [showSigninSuccessToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!wellbeingReminderDismissedDate) {
+      window.localStorage.removeItem(WELLBEING_REMINDER_DISMISS_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(WELLBEING_REMINDER_DISMISS_STORAGE_KEY, wellbeingReminderDismissedDate);
+  }, [wellbeingReminderDismissedDate]);
 
   useEffect(() => () => {
     if (undoTimeoutRef.current !== null) {
@@ -1722,6 +1751,22 @@ const App = () => {
     const latestReport = [...visibleReports].sort((a, b) => b.testDate.localeCompare(a.testDate))[0];
     return latestReport.markers.filter((m) => m.abnormal === "high" || m.abnormal === "low").length;
   }, [visibleReports]);
+  const latestWellbeingCheckInDate = useMemo(() => {
+    if (appData.checkIns.length === 0) {
+      return null;
+    }
+    return [...appData.checkIns].sort((left, right) => right.date.localeCompare(left.date))[0]?.date ?? null;
+  }, [appData.checkIns]);
+  const daysSinceWellbeingCheckIn = useMemo(() => {
+    if (!latestWellbeingCheckInDate) {
+      return null;
+    }
+    const parsedDate = parseISO(latestWellbeingCheckInDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return null;
+    }
+    return differenceInDays(new Date(), parsedDate);
+  }, [latestWellbeingCheckInDate]);
   const hasReports = reports.length > 0;
   const isOnboardingLocked = !isShareMode && !hasReports;
   const latestReportDate = useMemo(() => {
@@ -1906,6 +1951,25 @@ const App = () => {
     return null;
   })();
   const isReviewMode = Boolean(draft && !isShareMode);
+  const shouldShowWellbeingReminder =
+    !isShareMode &&
+    !isReviewMode &&
+    !showOnboardingWizard &&
+    activeTab === "dashboard" &&
+    hasReports &&
+    !isProcessing &&
+    !isImprovingExtraction &&
+    daysSinceWellbeingCheckIn !== null &&
+    daysSinceWellbeingCheckIn >= 7 &&
+    latestWellbeingCheckInDate !== null &&
+    latestWellbeingCheckInDate !== wellbeingReminderDismissedDate;
+  useEffect(() => {
+    if (shouldShowWellbeingReminder) {
+      setShowWellbeingReminderModal(true);
+      return;
+    }
+    setShowWellbeingReminderModal(false);
+  }, [shouldShowWellbeingReminder]);
   const shellActiveTabTitle = isReviewMode
     ? tr("Controleer geëxtraheerde data", "Review extracted data")
     : activeTabTitle;
@@ -1951,6 +2015,16 @@ const App = () => {
   const openReportForSupplementBackfill = (reportId: string) => {
     setFocusedReportId(reportId);
     requestTabChange("reports");
+  };
+  const dismissWellbeingReminder = () => {
+    if (latestWellbeingCheckInDate) {
+      setWellbeingReminderDismissedDate(latestWellbeingCheckInDate);
+    }
+    setShowWellbeingReminderModal(false);
+  };
+  const handleOpenWellbeingCheckIn = () => {
+    dismissWellbeingReminder();
+    requestTabChange("checkIns");
   };
 
   useEffect(() => {
@@ -2111,6 +2185,7 @@ const App = () => {
     reports.length > 0 &&
     cloudAuth.status !== "authenticated" &&
     !backupPromptDismissed;
+  const wellbeingReminderDays = daysSinceWellbeingCheckIn ?? 7;
   const quickUploadDisabled = isShareMode || isProcessing;
 
   if (isShareResolving) {
@@ -2770,6 +2845,55 @@ const App = () => {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showWellbeingReminderModal ? (
+          <motion.div
+            className="app-modal-overlay z-[89]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={dismissWellbeingReminder}
+          >
+            <motion.div
+              className="app-modal-shell w-full max-w-sm bg-slate-900 p-4 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="wellbeing-reminder-title"
+            >
+              <h3 id="wellbeing-reminder-title" className="text-base font-semibold text-slate-100">
+                {tr("Tijd voor een welzijn check-in", "Time for a wellbeing check-in")}
+              </h3>
+              <p className="mt-2 text-sm text-slate-300">
+                {tr(
+                  `${wellbeingReminderDays} dagen geleden deed je je laatste check-in. Een korte update helpt trends te koppelen aan je labwaarden.`,
+                  `Your last check-in was ${wellbeingReminderDays} days ago. A quick update helps connect your wellbeing trends to your labs.`
+                )}
+              </p>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={dismissWellbeingReminder}
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                >
+                  {tr("Later", "Later")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenWellbeingCheckIn}
+                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                >
+                  {tr("Nu check-in doen", "Do check-in now")}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         ) : null}
       </AnimatePresence>

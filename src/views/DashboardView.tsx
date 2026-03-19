@@ -224,38 +224,51 @@ const DashboardView = ({
     const lookupKey = normalizeMarkerLookupKey(marker);
     return markerCategoryLookup.get(lookupKey) ?? "Other";
   };
-  const categoryPriority = [
-    "Hormones - Sex",
-    "Hormones - Adrenal",
-    "Blood Glucose",
-    "Metabolic Health",
-    "Liver Function",
-    "Kidney Function",
-    "Complete Blood Count",
-    "Inflammatory Markers",
-    "Thyroid",
-    "Vitamins & Minerals",
-    "Iron Studies",
-    "Electrolytes",
-    "Coagulation",
-    "Enzymes",
-    "Other"
-  ];
+  const mapMarkerCategoryToFilterGroup = (category: string): string => {
+    if (category === "Hormones - Sex" || category === "Hormones - Adrenal" || category === "Thyroid") {
+      return "hormones";
+    }
+    if (category === "Metabolic Health" || category === "Blood Glucose") {
+      return "metabolic";
+    }
+    if (category === "Complete Blood Count" || category === "Inflammatory Markers" || category === "Coagulation") {
+      return "blood";
+    }
+    if (category === "Liver Function" || category === "Kidney Function" || category === "Electrolytes" || category === "Enzymes") {
+      return "organs";
+    }
+    if (category === "Vitamins & Minerals" || category === "Iron Studies") {
+      return "nutrients";
+    }
+    return "other";
+  };
+  const categoryFilterLabel = (key: string): string => {
+    if (key === "hormones") {
+      return tr("Hormonen & schildklier", "Hormones & thyroid");
+    }
+    if (key === "metabolic") {
+      return tr("Metabool & glucose", "Metabolic & glucose");
+    }
+    if (key === "blood") {
+      return tr("Bloed & ontsteking", "Blood & inflammation");
+    }
+    if (key === "organs") {
+      return tr("Lever, nier & elektrolyten", "Liver, kidney & electrolytes");
+    }
+    if (key === "nutrients") {
+      return tr("Vitamines & ijzer", "Vitamins & iron");
+    }
+    return tr("Overig", "Other");
+  };
+  const categoryFilterOrder = ["hormones", "metabolic", "blood", "organs", "nutrients", "other"];
   const dashboardCategoryOptions = useMemo(() => {
     if (dashboardView !== "all") {
       return [];
     }
-    const uniqueCategories = Array.from(new Set(markersToRenderBase.map((marker) => resolveMarkerCategory(marker))));
-    return uniqueCategories.sort((left, right) => {
-      const leftRank = categoryPriority.indexOf(left);
-      const rightRank = categoryPriority.indexOf(right);
-      const normalizedLeftRank = leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank;
-      const normalizedRightRank = rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank;
-      if (normalizedLeftRank !== normalizedRightRank) {
-        return normalizedLeftRank - normalizedRightRank;
-      }
-      return left.localeCompare(right);
-    });
+    const availableGroups = new Set(
+      markersToRenderBase.map((marker) => mapMarkerCategoryToFilterGroup(resolveMarkerCategory(marker)))
+    );
+    return categoryFilterOrder.filter((group) => availableGroups.has(group));
   }, [dashboardView, markersToRenderBase]);
   useEffect(() => {
     if (dashboardView !== "all") {
@@ -274,7 +287,8 @@ const DashboardView = ({
         if (dashboardView !== "all") {
           return true;
         }
-        if (markerCategoryFilter !== "all" && resolveMarkerCategory(marker) !== markerCategoryFilter) {
+        const markerCategoryGroup = mapMarkerCategoryToFilterGroup(resolveMarkerCategory(marker));
+        if (markerCategoryFilter !== "all" && markerCategoryGroup !== markerCategoryFilter) {
           return false;
         }
         if (!normalizedMarkerSearchTerm) {
@@ -514,39 +528,26 @@ const DashboardView = ({
                 <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
                   {tr(`${markersToRender.length} markers zichtbaar`, `${markersToRender.length} markers shown`)}
                 </p>
-                <div className="w-full overflow-x-auto pb-0.5">
-                  <div className="flex min-w-max items-center gap-1.5">
-                    <button
-                      type="button"
-                      className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                        markerCategoryFilter === "all"
-                          ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                          : isDarkTheme
-                            ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
-                            : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
-                      }`}
-                      onClick={() => setMarkerCategoryFilter("all")}
-                    >
-                      {tr("Alle categorieen", "All categories")}
-                    </button>
-                    {dashboardCategoryOptions.map((category) => (
-                      <button
-                        key={category}
-                        type="button"
-                        className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                          markerCategoryFilter === category
-                            ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                            : isDarkTheme
-                              ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
-                              : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
-                        }`}
-                        onClick={() => setMarkerCategoryFilter(category)}
-                      >
-                        {category}
-                      </button>
+                <label className="ml-auto flex items-center gap-2 text-xs">
+                  <span className={isDarkTheme ? "text-slate-400" : "text-slate-600"}>{tr("Categorie", "Category")}</span>
+                  <select
+                    value={markerCategoryFilter}
+                    onChange={(event) => setMarkerCategoryFilter(event.target.value)}
+                    className={
+                      isDarkTheme
+                        ? "rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1.5 text-xs text-slate-100"
+                        : "rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800"
+                    }
+                    aria-label={tr("Marker category", "Marker category")}
+                  >
+                    <option value="all">{tr("Alle categorieen", "All categories")}</option>
+                    {dashboardCategoryOptions.map((group) => (
+                      <option key={group} value={group}>
+                        {categoryFilterLabel(group)}
+                      </option>
                     ))}
-                  </div>
-                </div>
+                  </select>
+                </label>
               </div>
             ) : null}
 

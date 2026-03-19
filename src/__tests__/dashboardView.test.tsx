@@ -346,11 +346,13 @@ describe("DashboardView chart controls", () => {
     );
 
     const searchInput = screen.getByLabelText("Search marker");
+    const categorySelect = screen.getByLabelText("Marker category");
     expect(searchInput).toBeTruthy();
-    expect(screen.getByRole("button", { name: "All categories" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Kidney Function" })).toBeTruthy();
+    expect(categorySelect).toBeTruthy();
+    expect(screen.getByRole("option", { name: "All categories" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Liver, kidney & electrolytes" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Kidney Function" }));
+    fireEvent.change(categorySelect, { target: { value: "organs" } });
     expect(screen.getByText("Creatinine")).toBeTruthy();
     expect(screen.queryByText("Testosterone")).toBeNull();
 
