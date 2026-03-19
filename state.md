@@ -22,10 +22,16 @@ Parser QA is active with batch registry + scorecards.
   - Central delete orchestrator with global 10s Undo toast in `App`
   - Confirm dialogs before destructive deletes in Reports, Protocols, Supplements (Check-ins kept existing confirm step)
   - Undo coverage for report delete (single + bulk), supplement delete, protocol delete, and check-in delete
-  - Upload UI de-duplicated: one primary upload card on Dashboard main content + compact sidebar upload shortcut
-  - Quick Upload now does direct picker first, with fallback to dashboard upload panel (navigate + smooth scroll + highlight + status feedback)
+  - Upload UI de-duplicated with sidebar as the single primary upload area (dashboard no longer shows oversized upload card)
+  - Quick Upload now does direct picker first, with fallback to sidebar upload panel (navigate + smooth scroll + highlight + status feedback)
   - Supplements UX feedback improved: add-form auto-scroll/focus, required-field validation, success feedback, and explicit Cancel label in edit mode
   - Language selector removed from shell header; language change is now in Settings > Appearance only
+- UX Remediation Wave 2 (current slice) shipped:
+  - Dashboard all-marker filtering integrated into the top filter bar with search + category filtering
+  - Category UX simplified to broader grouped categories via compact selector (no horizontal chip rail / no horizontal scrollbar)
+  - Alerts view now prioritizes actionable alerts before positive signals
+  - Hormone stability info popover layering/opacity adjusted to avoid semi-transparent overlap artifacts
+  - Added compact wellbeing reminder modal that prompts after 7 days without a check-in
 - Added/updated test coverage for delete undo, upload fallback, delete confirmations, shell/dashboard prop changes, and supplements UX flows
 - Claude streaming upgraded end-to-end (real SSE, no fake reveal): backend proxy streams directly to frontend, frontend renders progressive chunks, and abort/race handling is in place
 - AI Analysis page redesigned into clearer hierarchy: header -> compact info bar -> lighter stats strip -> primary Ask AI workspace + secondary quick actions -> full-width output
