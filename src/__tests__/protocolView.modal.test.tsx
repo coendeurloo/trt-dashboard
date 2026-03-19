@@ -65,6 +65,7 @@ const report: LabReport = {
 
 const renderProtocolView = ({
   onUpdateProtocol,
+  onDeleteProtocol,
   protocols = [protocol],
   reports = [report],
   usageCount = 1
@@ -74,6 +75,7 @@ const renderProtocolView = ({
     updates: Partial<Protocol> & { effectiveFrom?: string },
     mode?: ProtocolUpdateMode
   ) => void;
+  onDeleteProtocol?: (id: string) => boolean;
   protocols?: Protocol[];
   reports?: LabReport[];
   usageCount?: number;
@@ -87,7 +89,7 @@ const renderProtocolView = ({
       isShareMode={false}
       onAddProtocol={vi.fn()}
       onUpdateProtocol={onUpdateProtocol ?? vi.fn()}
-      onDeleteProtocol={vi.fn(() => true)}
+      onDeleteProtocol={onDeleteProtocol ?? vi.fn(() => true)}
       getProtocolUsageCount={vi.fn(() => usageCount)}
     />
   );
@@ -161,6 +163,26 @@ describe("ProtocolView modal behavior", () => {
     expect(screen.queryByRole("heading", { name: "This protocol is already in use" })).toBeNull();
     expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
     expect(onUpdateProtocol.mock.calls[0]?.[2]).toBe("replace_existing");
+  });
+
+  it("asks confirmation before deleting a protocol", () => {
+    const onDeleteProtocol = vi.fn(() => true);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderProtocolView({
+      onDeleteProtocol,
+      usageCount: 0,
+      reports: []
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(onDeleteProtocol).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onDeleteProtocol).toHaveBeenCalledWith("protocol-1");
+    confirmSpy.mockRestore();
   });
 });
 

@@ -584,6 +584,17 @@ const ReportsView = ({
     if (selectedReports.length === 0) {
       return;
     }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        tr(
+          `Weet je zeker dat je ${selectedReports.length} geselecteerde rapporten wilt verwijderen?`,
+          `Are you sure you want to delete ${selectedReports.length} selected reports?`
+        )
+      )
+    ) {
+      return;
+    }
     onDeleteReports(selectedReports);
     setSelectedReports([]);
     if (editingReportId && selectedReports.includes(editingReportId)) {
@@ -1152,6 +1163,17 @@ const ReportsView = ({
                     className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
                     disabled={isShareMode}
                     onClick={() => {
+                      if (
+                        typeof window !== "undefined" &&
+                        !window.confirm(
+                          tr(
+                            `Weet je zeker dat je rapport van ${formatDate(report.testDate)} wilt verwijderen?`,
+                            `Are you sure you want to delete the report from ${formatDate(report.testDate)}?`
+                          )
+                        )
+                      ) {
+                        return;
+                      }
                       onDeleteReport(report.id);
                       setSelectedReports((current) => current.filter((id) => id !== report.id));
                       if (editingReportId === report.id) {

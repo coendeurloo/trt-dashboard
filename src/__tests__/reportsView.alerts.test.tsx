@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
 import ReportsView from "../views/ReportsView";
 import { AppSettings, LabReport, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
@@ -56,6 +56,11 @@ const buildProps = (report: LabReport) => {
 };
 
 describe("ReportsView alert logic", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
   it("does not show report alert badge for markers that are in-range even if stored abnormal flags are stale", () => {
     const report = baseReport({
       markers: [
@@ -125,7 +130,7 @@ describe("ReportsView alert logic", () => {
     expect(screen.getByRole("button", { name: "Edit details" })).toBeTruthy();
   });
 
-  it("renders compact collapsed header with filename and marker cells while preserving expand controls", () => {
+  it("renders compact collapsed header with filename and out-of-range pills while preserving expand controls", () => {
     const report = baseReport({
       sourceFileName: "labrapport-compact.pdf",
       markers: [
@@ -201,23 +206,63 @@ describe("ReportsView alert logic", () => {
     render(<ReportsView {...buildProps(report)} />);
 
     expect(screen.getByText("labrapport-compact.pdf")).toBeTruthy();
-    const expandButton = screen.getAllByRole("button", { name: "Expand" })[0];
-    const compactCells = expandButton?.querySelectorAll(".report-compact-marker-cell") ?? [];
-    expect(compactCells.length).toBe(6);
-    expect(screen.getAllByText("Not in report").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("-").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Hematocrit").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Estradiol").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Free Testosterone").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("PSA").length).toBeGreaterThan(0);
+    expect(screen.getByTitle("Hematocrit")).toBeTruthy();
+    expect(screen.getByTitle("Estradiol")).toBeTruthy();
     expect(screen.getAllByText("6 markers").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Inherited")).toBeNull();
-    expect(screen.queryByText("Anchored")).toBeNull();
-    expect(screen.queryByText("No supps")).toBeNull();
-    expect(screen.queryByText("6 m")).toBeNull();
-    expect(screen.queryByText("Albumin")).toBeNull();
-    expect(screen.queryByText("TSH")).toBeNull();
     expect(screen.getAllByRole("button", { name: "Expand" }).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Out-of-range markers in this report").length).toBeGreaterThan(0);
+  });
+});
+
+describe("ReportsView delete confirmations", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("asks for confirmation before deleting a single report", () => {
+    const report = baseReport();
+    const onDeleteReport = vi.fn();
+    const props = {
+      ...buildProps(report),
+      onDeleteReport
+    };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<ReportsView {...props} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Expand" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(onDeleteReport).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onDeleteReport).toHaveBeenCalledWith(report.id);
+    confirmSpy.mockRestore();
+  });
+
+  it("asks for confirmation before deleting selected reports", () => {
+    const report = baseReport();
+    const onDeleteReports = vi.fn();
+    const props = {
+      ...buildProps(report),
+      onDeleteReports
+    };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<ReportsView {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(onDeleteReports).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    expect(onDeleteReports).toHaveBeenCalledWith([report.id]);
+    confirmSpy.mockRestore();
   });
 });

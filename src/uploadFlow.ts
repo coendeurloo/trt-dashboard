@@ -6,12 +6,20 @@ import {
 } from "./types";
 
 export type UploadTriggerAction = "scroll-to-panel" | "open-hidden-picker" | "noop";
+export type UploadFallbackAction = "scroll-to-panel" | "noop";
 export type ParserRescueAction = "local_only" | "prompt_consent" | "run_ai" | "keep_local_denied";
 
 interface ResolveUploadTriggerActionInput {
   isShareMode: boolean;
   hasUploadPanel: boolean;
   isProcessing: boolean;
+}
+
+interface ResolveUploadFallbackActionInput {
+  isShareMode: boolean;
+  hasUploadPanel: boolean;
+  isProcessing: boolean;
+  pickerOpened: boolean;
 }
 
 interface ResolveParserRescueActionInput {
@@ -73,6 +81,18 @@ export const resolveUploadTriggerAction = ({
     return "noop";
   }
   return "open-hidden-picker";
+};
+
+export const resolveUploadFallbackAction = ({
+  isShareMode,
+  hasUploadPanel,
+  isProcessing,
+  pickerOpened
+}: ResolveUploadFallbackActionInput): UploadFallbackAction => {
+  if (pickerOpened || isShareMode || isProcessing) {
+    return "noop";
+  }
+  return hasUploadPanel ? "scroll-to-panel" : "noop";
 };
 
 export const isSevereParserExtraction = (assessment: ParserUncertaintyAssessment): boolean => {

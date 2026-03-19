@@ -52,11 +52,18 @@ import {
 import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
-  resolveUploadTriggerAction,
+  resolveUploadFallbackAction,
   shouldPresentUploadAsNeedsReview,
   shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
 } from "./uploadFlow";
+import {
+  UndoPatch,
+  restoreCheckInsPatch,
+  restoreProtocolsPatch,
+  restoreReportsPatch,
+  restoreSupplementsPatch
+} from "./deleteUndo";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
@@ -124,6 +131,12 @@ type UploadSummary =
       warnings: number;
       aiApplied: boolean;
     };
+
+interface PendingUndoAction {
+  id: number;
+  message: string;
+  patch: UndoPatch;
+}
 
 const CLOUD_POST_AUTH_INTENT_STORAGE_KEY = "labtracker-cloud-post-auth-intent-v1";
 const CLOUD_POST_AUTH_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
@@ -355,8 +368,14 @@ const App = () => {
   const [draftAnnotations, setDraftAnnotations] = useState<ReportAnnotations>(blankAnnotations());
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
+  const [pendingUndoAction, setPendingUndoAction] = useState<PendingUndoAction | null>(null);
+  const [uploadShortcutHighlighted, setUploadShortcutHighlighted] = useState(false);
+  const [uploadShortcutStatus, setUploadShortcutStatus] = useState("");
 
   const hadGrantedCloudAuthRef = useRef(false);
+  const undoTimeoutRef = useRef<number | null>(null);
+  const uploadShortcutHighlightTimeoutRef = useRef<number | null>(null);
+  const uploadShortcutStatusTimeoutRef = useRef<number | null>(null);
   useEffect(() => {
     const cloudAuthGranted = cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted";
     if (cloudAuthGranted) {
@@ -391,6 +410,18 @@ const App = () => {
     }, 4500);
     return () => globalThis.clearTimeout(timeout);
   }, [showSigninSuccessToast]);
+
+  useEffect(() => () => {
+    if (undoTimeoutRef.current !== null) {
+      window.clearTimeout(undoTimeoutRef.current);
+    }
+    if (uploadShortcutHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(uploadShortcutHighlightTimeoutRef.current);
+    }
+    if (uploadShortcutStatusTimeoutRef.current !== null) {
+      window.clearTimeout(uploadShortcutStatusTimeoutRef.current);
+    }
+  }, []);
 
   const [dashboardMode, setDashboardMode] = useState<DashboardViewMode>("cards");
   const [leftCompareMarker, setLeftCompareMarker] = useState<string>(PRIMARY_MARKERS[0]);
@@ -435,6 +466,42 @@ const App = () => {
     consentResolveRef.current = null;
     resolver?.(decision);
   };
+
+  const clearPendingUndoAction = useCallback(() => {
+    if (undoTimeoutRef.current !== null) {
+      window.clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+    setPendingUndoAction(null);
+  }, []);
+
+  const queueUndoAction = useCallback(
+    (message: string, patch: UndoPatch) => {
+      if (undoTimeoutRef.current !== null) {
+        window.clearTimeout(undoTimeoutRef.current);
+      }
+      const id = Date.now();
+      setPendingUndoAction({
+        id,
+        message,
+        patch
+      });
+      undoTimeoutRef.current = window.setTimeout(() => {
+        setPendingUndoAction((current) => (current?.id === id ? null : current));
+        undoTimeoutRef.current = null;
+      }, 10_000);
+    },
+    []
+  );
+
+  const applyUndoAction = useCallback(() => {
+    if (!pendingUndoAction) {
+      return;
+    }
+    const patch = pendingUndoAction.patch;
+    clearPendingUndoAction();
+    setAppData((current) => patch(current));
+  }, [clearPendingUndoAction, pendingUndoAction, setAppData]);
 
   const {
     reports,
@@ -696,6 +763,90 @@ const App = () => {
     );
   };
 
+  const deleteReportWithUndo = useCallback(
+    (reportId: string) => {
+      if (isShareMode) {
+        return;
+      }
+      if (!appData.reports.some((report) => report.id === reportId)) {
+        return;
+      }
+      const reportsSnapshot = appData.reports;
+      deleteReportFromData(reportId);
+      queueUndoAction(tr("Rapport verwijderd.", "Report deleted."), restoreReportsPatch(reportsSnapshot));
+    },
+    [appData.reports, deleteReportFromData, isShareMode, queueUndoAction, tr]
+  );
+
+  const deleteReportsWithUndo = useCallback(
+    (reportIds: string[]) => {
+      if (isShareMode || reportIds.length === 0) {
+        return;
+      }
+      const selected = new Set(reportIds);
+      const deleteCount = appData.reports.filter((report) => selected.has(report.id)).length;
+      if (deleteCount === 0) {
+        return;
+      }
+      const reportsSnapshot = appData.reports;
+      deleteReportsFromData(reportIds);
+      queueUndoAction(
+        tr(`${deleteCount} rapporten verwijderd.`, `${deleteCount} reports deleted.`),
+        restoreReportsPatch(reportsSnapshot)
+      );
+    },
+    [appData.reports, deleteReportsFromData, isShareMode, queueUndoAction, tr]
+  );
+
+  const deleteSupplementPeriodWithUndo = useCallback(
+    (id: string) => {
+      if (isShareMode) {
+        return;
+      }
+      if (!appData.supplementTimeline.some((period) => period.id === id)) {
+        return;
+      }
+      const timelineSnapshot = appData.supplementTimeline;
+      deleteSupplementPeriod(id);
+      queueUndoAction(tr("Supplement verwijderd.", "Supplement deleted."), restoreSupplementsPatch(timelineSnapshot));
+    },
+    [appData.supplementTimeline, deleteSupplementPeriod, isShareMode, queueUndoAction, tr]
+  );
+
+  const deleteProtocolWithUndo = useCallback(
+    (id: string): boolean => {
+      if (isShareMode) {
+        return false;
+      }
+      const protocolSnapshot = appData.protocols;
+      const interventionsSnapshot = appData.interventions;
+      const deleted = deleteProtocol(id);
+      if (deleted) {
+        queueUndoAction(
+          tr("Protocol verwijderd.", "Protocol deleted."),
+          restoreProtocolsPatch(protocolSnapshot, interventionsSnapshot)
+        );
+      }
+      return deleted;
+    },
+    [appData.interventions, appData.protocols, deleteProtocol, isShareMode, queueUndoAction, tr]
+  );
+
+  const deleteCheckInWithUndo = useCallback(
+    (id: string) => {
+      if (isShareMode) {
+        return;
+      }
+      if (!appData.checkIns.some((checkIn) => checkIn.id === id)) {
+        return;
+      }
+      const checkInsSnapshot = appData.checkIns;
+      deleteCheckIn(id);
+      queueUndoAction(tr("Check-in verwijderd.", "Check-in deleted."), restoreCheckInsPatch(checkInsSnapshot));
+    },
+    [appData.checkIns, deleteCheckIn, isShareMode, queueUndoAction, tr]
+  );
+
   const openRenameDialog = (sourceCanonical: string) => {
     setRenameDialog({
       sourceCanonical,
@@ -816,49 +967,81 @@ const App = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
-  const openHiddenUploadPicker = () => {
+  const pulseUploadShortcut = useCallback((statusMessage: string) => {
+    setUploadShortcutHighlighted(true);
+    setUploadShortcutStatus(statusMessage);
+    if (uploadShortcutHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(uploadShortcutHighlightTimeoutRef.current);
+    }
+    if (uploadShortcutStatusTimeoutRef.current !== null) {
+      window.clearTimeout(uploadShortcutStatusTimeoutRef.current);
+    }
+    uploadShortcutHighlightTimeoutRef.current = window.setTimeout(() => {
+      setUploadShortcutHighlighted(false);
+      uploadShortcutHighlightTimeoutRef.current = null;
+    }, 1500);
+    uploadShortcutStatusTimeoutRef.current = window.setTimeout(() => {
+      setUploadShortcutStatus("");
+      uploadShortcutStatusTimeoutRef.current = null;
+    }, 3500);
+  }, []);
+
+  const openHiddenUploadPicker = (): boolean => {
     const input = hiddenUploadInputRef.current;
     if (!input) {
-      return;
+      return false;
     }
     input.value = "";
-    input.click();
+    try {
+      const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+      if (typeof pickerInput.showPicker === "function") {
+        pickerInput.showPicker();
+      } else {
+        input.click();
+      }
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const scrollToUploadPanel = () => {
-    void ensurePdfParsingModule();
+  const focusUploadPanelFallback = useCallback(() => {
     if (activeTab !== "dashboard") {
       setActiveTab("dashboard");
     }
     requestAnimationFrame(() => {
-      const action = resolveUploadTriggerAction({
+      const fallbackAction = resolveUploadFallbackAction({
         isShareMode,
         hasUploadPanel: Boolean(uploadPanelRef.current),
-        isProcessing
+        isProcessing,
+        pickerOpened: false
       });
-      if (action === "scroll-to-panel" && uploadPanelRef.current) {
+      if (fallbackAction !== "scroll-to-panel") {
+        return;
+      }
+      if (uploadPanelRef.current) {
         uploadPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
       }
-      if (action !== "open-hidden-picker") {
-        return;
-      }
-      openHiddenUploadPicker();
+      pulseUploadShortcut(
+        tr(
+          "Uploadpaneel gemarkeerd op Dashboard.",
+          "Upload panel highlighted on Dashboard."
+        )
+      );
     });
-  };
+  }, [activeTab, isProcessing, isShareMode, pulseUploadShortcut, tr]);
 
-  const startSecondUpload = () => {
+  const startSecondUpload = useCallback(() => {
     if (isShareMode || isProcessing) {
       return;
     }
     void ensurePdfParsingModule();
-    if (activeTab !== "dashboard") {
-      setActiveTab("dashboard");
+    const pickerOpened = openHiddenUploadPicker();
+    if (pickerOpened) {
+      return;
     }
-    requestAnimationFrame(() => {
-      openHiddenUploadPicker();
-    });
-  };
+    focusUploadPanelFallback();
+  }, [focusUploadPanelFallback, isProcessing, isShareMode]);
   const hasAnyReportData = reports.length > 0;
   const handleSignupSuccessPrimaryAction = () => {
     setShowSignupSuccessModal(false);
@@ -878,7 +1061,7 @@ const App = () => {
   const clearDemoAndUpload = () => {
     clearDemoData();
     requestAnimationFrame(() => {
-      scrollToUploadPanel();
+      startSecondUpload();
     });
   };
 
@@ -2033,25 +2216,17 @@ const App = () => {
           cloudUserEmail: cloudAuth.session?.user.email ?? null
         }}
         uploadState={{
-          uploadPanelRef,
           hiddenUploadInputRef,
-          isProcessing,
-          uploadStage,
-          uploadError,
-          uploadNotice
+          uploadShortcutHighlighted,
+          uploadShortcutStatus
         }}
         actions={{
           onRequestTabChange: requestTabChange,
           onToggleMobileMenu: () => setIsMobileMenuOpen((current) => !current),
           onCloseMobileMenu: closeMobileMenu,
           onQuickUpload: startSecondUpload,
-          onLanguageChange: (language) => updateSettings({ language }),
           onToggleTheme: () => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" }),
           onUploadFileSelected: handleUpload,
-          onUploadIntent: () => {
-            void ensurePdfParsingModule();
-          },
-          onStartManualEntry: startManualEntry,
           onOpenCloudAuth: openCloudAuthModal
         }}
         tr={tr}
@@ -2304,7 +2479,18 @@ const App = () => {
                 onLoadDemo={loadDemoData}
                 onUploadClick={startSecondUpload}
                 onOpenCloudAuth={openCloudAuthModal}
+                uploadPanelRef={uploadPanelRef}
+                uploadPanelHighlighted={uploadShortcutHighlighted}
+                uploadPanelStatus={uploadShortcutStatus}
                 isProcessing={isProcessing}
+                uploadStage={uploadStage}
+                uploadError={uploadError}
+                uploadNotice={uploadNotice}
+                onUploadFileSelected={handleUpload}
+                onUploadIntent={() => {
+                  void ensurePdfParsingModule();
+                }}
+                onStartManualEntry={startManualEntry}
                 checkIns={appData.checkIns}
                 onNavigateToCheckIns={() => setActiveTab("checkIns")}
               />
@@ -2321,7 +2507,7 @@ const App = () => {
                     isShareMode={isShareMode}
                     onAddProtocol={addProtocol}
                     onUpdateProtocol={updateProtocol}
-                    onDeleteProtocol={deleteProtocol}
+                    onDeleteProtocol={deleteProtocolWithUndo}
                     getProtocolUsageCount={getProtocolUsageCount}
                   />
                 ) : null}
@@ -2336,7 +2522,7 @@ const App = () => {
                     onAddSupplementPeriod={addSupplementPeriod}
                     onUpdateSupplementPeriod={updateSupplementPeriod}
                     onStopSupplement={stopSupplement}
-                    onDeleteSupplementPeriod={deleteSupplementPeriod}
+                    onDeleteSupplementPeriod={deleteSupplementPeriodWithUndo}
                     onOpenReportForSupplementBackfill={openReportForSupplementBackfill}
                   />
                 ) : null}
@@ -2349,7 +2535,7 @@ const App = () => {
                     isShareMode={isShareMode}
                     onAdd={(data) => addCheckIn({ ...data, id: crypto.randomUUID() })}
                     onUpdate={updateCheckIn}
-                    onDelete={deleteCheckIn}
+                    onDelete={deleteCheckInWithUndo}
                   />
                 ) : null}
 
@@ -2408,8 +2594,8 @@ const App = () => {
                     samplingControlsEnabled={samplingControlsEnabled}
                     isShareMode={isShareMode}
                     resolvedSupplementContexts={resolvedSupplementContexts}
-                    onDeleteReport={deleteReportFromData}
-                    onDeleteReports={deleteReportsFromData}
+                    onDeleteReport={deleteReportWithUndo}
+                    onDeleteReports={deleteReportsWithUndo}
                     onUpdateReportAnnotations={updateReportAnnotations}
                     onSetBaseline={setBaseline}
                     onRenameMarker={openRenameDialog}
@@ -2617,6 +2803,44 @@ const App = () => {
               <button
                 type="button"
                 onClick={() => setShowSigninSuccessToast(false)}
+                className="rounded-md border border-slate-700 px-1.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100"
+                aria-label={tr("Melding sluiten", "Dismiss notification")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pendingUndoAction ? (
+          <motion.div
+            className="fixed bottom-4 left-4 z-[90] w-[min(92vw,420px)] rounded-xl border border-cyan-500/40 bg-slate-900/95 p-3 shadow-soft"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-slate-100">{pendingUndoAction.message}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {tr("Je kunt dit binnen 10 seconden ongedaan maken.", "You can undo this within 10 seconds.")}
+                </p>
+                <button
+                  type="button"
+                  onClick={applyUndoAction}
+                  className="mt-2 inline-flex items-center rounded-md border border-cyan-500/45 bg-cyan-500/12 px-2.5 py-1 text-xs font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                >
+                  {tr("Ongedaan maken", "Undo")}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={clearPendingUndoAction}
                 className="rounded-md border border-slate-700 px-1.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100"
                 aria-label={tr("Melding sluiten", "Dismiss notification")}
               >

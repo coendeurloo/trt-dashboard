@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock3, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { canonicalizeSupplement, SUPPLEMENT_FREQUENCY_OPTIONS, SUPPLEMENT_OPTIONS, supplementFrequencyLabel } from "../protocolStandards";
 import { trLocale } from "../i18n";
@@ -73,11 +73,19 @@ const SupplementsView = ({
   const [frequencyInput, setFrequencyInput] = useState("unknown");
   const [startDateInput, setStartDateInput] = useState(todayIso());
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [addErrors, setAddErrors] = useState<{
+    name?: string;
+    startDate?: string;
+  }>({});
+  const [addSuccessMessage, setAddSuccessMessage] = useState("");
 
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [editDoseInput, setEditDoseInput] = useState("");
   const [editFrequencyInput, setEditFrequencyInput] = useState("unknown");
   const [editStartDateInput, setEditStartDateInput] = useState(todayIso());
+  const addFormRef = useRef<HTMLDivElement | null>(null);
+  const addNameInputRef = useRef<HTMLInputElement | null>(null);
+  const addStartDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedTimeline = useMemo(
     () =>
@@ -119,11 +127,28 @@ const SupplementsView = ({
     setFrequencyInput("unknown");
     setStartDateInput(todayIso());
     setShowSuggestions(false);
+    setAddErrors({});
   };
 
   const submitNewSupplement = () => {
     const name = canonicalizeSupplement(nameInput);
-    if (!name || !startDateInput) {
+    const nextErrors: {
+      name?: string;
+      startDate?: string;
+    } = {};
+    if (!name) {
+      nextErrors.name = tr("Vul een supplementnaam in.", "Please enter a supplement name.");
+    }
+    if (!startDateInput) {
+      nextErrors.startDate = tr("Kies een startdatum.", "Please choose a start date.");
+    }
+    setAddErrors(nextErrors);
+    if (nextErrors.name || nextErrors.startDate) {
+      if (nextErrors.name) {
+        addNameInputRef.current?.focus();
+      } else if (nextErrors.startDate) {
+        addStartDateInputRef.current?.focus();
+      }
       return;
     }
     onAddSupplementPeriod({
@@ -134,9 +159,21 @@ const SupplementsView = ({
       startDate: startDateInput,
       endDate: null
     });
+    setAddSuccessMessage(tr(`${name} toegevoegd aan je actieve stack.`, `${name} added to your active stack.`));
     resetAddForm();
     setIsAdding(false);
   };
+
+  useEffect(() => {
+    if (!isAdding) {
+      return;
+    }
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = window.setTimeout(() => {
+      addNameInputRef.current?.focus();
+    }, 80);
+    return () => window.clearTimeout(timeout);
+  }, [isAdding]);
 
   const startEditDose = (period: SupplementPeriod) => {
     setEditingPeriodId(period.id);
@@ -206,28 +243,50 @@ const SupplementsView = ({
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:opacity-50"
-            onClick={() => setIsAdding((current) => !current)}
+            onClick={() => {
+              if (isAdding) {
+                setIsAdding(false);
+                setAddErrors({});
+                return;
+              }
+              setAddSuccessMessage("");
+              setAddErrors({});
+              setIsAdding(true);
+            }}
             disabled={isShareMode}
           >
             {isAdding ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {isAdding ? tr("Sluiten", "Close") : tr("Supplement toevoegen", "Add supplement")}
           </button>
         </div>
+        {addSuccessMessage ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+          >
+            {addSuccessMessage}
+          </div>
+        ) : null}
 
         {isAdding ? (
-          <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+          <div ref={addFormRef} className="mt-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_170px_150px_auto] md:items-end">
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 {tr("Supplement", "Supplement")}
                 <div className="relative mt-1">
                   <input
+                    ref={addNameInputRef}
                     value={nameInput}
                     onChange={(event) => {
                       setNameInput(event.target.value);
+                      setAddErrors((current) => ({ ...current, name: undefined }));
                       setShowSuggestions(true);
                     }}
                     onFocus={() => setShowSuggestions(true)}
                     onBlur={() => window.setTimeout(() => setShowSuggestions(false), 120)}
-                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                    className={`review-context-input w-full rounded-md border bg-slate-800/70 px-3 py-2 text-sm text-slate-100 ${
+                      addErrors.name ? "border-rose-500/80 focus:border-rose-400" : "border-slate-600"
+                    }`}
                     placeholder={tr("Zoek of typ supplement", "Search or type supplement")}
                   />
                   {showSuggestions && suggestions.length > 0 ? (
@@ -249,6 +308,7 @@ const SupplementsView = ({
                     </div>
                   ) : null}
                 </div>
+                {addErrors.name ? <p className="mt-1 text-xs text-rose-300">{addErrors.name}</p> : null}
               </label>
 
               <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -277,11 +337,18 @@ const SupplementsView = ({
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 {tr("Startdatum", "Date started")}
                 <input
+                  ref={addStartDateInputRef}
                   type="date"
                   value={startDateInput}
-                  onChange={(event) => setStartDateInput(event.target.value)}
-                  className="review-context-input mt-1 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  onChange={(event) => {
+                    setStartDateInput(event.target.value);
+                    setAddErrors((current) => ({ ...current, startDate: undefined }));
+                  }}
+                  className={`review-context-input mt-1 w-full rounded-md border bg-slate-800/70 px-3 py-2 text-sm text-slate-100 ${
+                    addErrors.startDate ? "border-rose-500/80 focus:border-rose-400" : "border-slate-600"
+                  }`}
                 />
+                {addErrors.startDate ? <p className="mt-1 text-xs text-rose-300">{addErrors.startDate}</p> : null}
               </label>
               <button
                 type="button"
@@ -355,7 +422,7 @@ const SupplementsView = ({
                         className="inline-flex items-center justify-center rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200"
                         onClick={cancelEditDose}
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
                       </button>
                     </div>
                   ) : (
@@ -379,7 +446,20 @@ const SupplementsView = ({
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200 disabled:opacity-50"
-                        onClick={() => onDeleteSupplementPeriod(period.id)}
+                        onClick={() => {
+                          if (
+                            typeof window !== "undefined" &&
+                            !window.confirm(
+                              tr(
+                                `Weet je zeker dat je ${period.name} wilt verwijderen?`,
+                                `Are you sure you want to delete ${period.name}?`
+                              )
+                            )
+                          ) {
+                            return;
+                          }
+                          onDeleteSupplementPeriod(period.id);
+                        }}
                         disabled={isShareMode}
                       >
                         <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijderen", "Delete")}

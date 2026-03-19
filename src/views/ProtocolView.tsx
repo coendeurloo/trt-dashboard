@@ -359,6 +359,17 @@ const ProtocolView = ({
                         );
                         return;
                       }
+                      if (
+                        typeof window !== "undefined" &&
+                        !window.confirm(
+                          tr(
+                            `Weet je zeker dat je ${protocol.name} wilt verwijderen?`,
+                            `Are you sure you want to delete ${protocol.name}?`
+                          )
+                        )
+                      ) {
+                        return;
+                      }
                       onDeleteProtocol(protocol.id);
                       setFeedback(tr(
                         `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} verwijderd.`,

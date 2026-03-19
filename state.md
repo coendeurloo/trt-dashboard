@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: March 18, 2026
+Last updated: March 19, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -13,6 +13,15 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- UX Remediation Wave 1 (kritiek + hoog) shipped:
+  - Central delete orchestrator with global 10s Undo toast in `App`
+  - Confirm dialogs before destructive deletes in Reports, Protocols, Supplements (Check-ins kept existing confirm step)
+  - Undo coverage for report delete (single + bulk), supplement delete, protocol delete, and check-in delete
+  - Upload UI de-duplicated: one primary upload card on Dashboard main content + compact sidebar upload shortcut
+  - Quick Upload now does direct picker first, with fallback to dashboard upload panel (navigate + smooth scroll + highlight + status feedback)
+  - Supplements UX feedback improved: add-form auto-scroll/focus, required-field validation, success feedback, and explicit Cancel label in edit mode
+  - Language selector removed from shell header; language change is now in Settings > Appearance only
+- Added/updated test coverage for delete undo, upload fallback, delete confirmations, shell/dashboard prop changes, and supplements UX flows
 - Claude streaming upgraded end-to-end (real SSE, no fake reveal): backend proxy streams directly to frontend, frontend renders progressive chunks, and abort/race handling is in place
 - AI Analysis page redesigned into clearer hierarchy: header -> compact info bar -> lighter stats strip -> primary Ask AI workspace + secondary quick actions -> full-width output
 - Ask AI panel visual refinement round shipped: shorter focused textarea, CTA anchored directly under input, tighter suggestions rhythm, quieter helper note, improved light/dark polish
@@ -37,7 +46,7 @@ Parser QA is active with batch registry + scorecards.
 - Parser robustness upgrades for Quest/LabCorp fixtures and expanded marker coverage (including Cardio IQ aliases)
 - Modal/UX polish round completed across extraction review, parser upload summary, reports cards/header density, and wellbeing check-ins
 - Parser batch workflow + scorecards added and running (B01-B04 currently logged as PASS/PASS* with source-quality caveats)
-- Test coverage expanded to 64 test files in `src/__tests__`
+- Test coverage expanded to 67 test files in `src/__tests__`
 
 ## In progress
 

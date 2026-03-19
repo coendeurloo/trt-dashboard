@@ -36,12 +36,9 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
   };
 
   const uploadState: AppShellUploadState = {
-    uploadPanelRef: createRef<HTMLDivElement>(),
     hiddenUploadInputRef: createRef<HTMLInputElement>(),
-    isProcessing: false,
-    uploadStage: null,
-    uploadError: "",
-    uploadNotice: ""
+    uploadShortcutHighlighted: false,
+    uploadShortcutStatus: ""
   };
 
   const actions: AppShellActions = {
@@ -49,11 +46,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     onToggleMobileMenu: vi.fn(),
     onCloseMobileMenu: vi.fn(),
     onQuickUpload: vi.fn(),
-    onLanguageChange: vi.fn(),
     onToggleTheme: vi.fn(),
     onUploadFileSelected: vi.fn(),
-    onUploadIntent: vi.fn(),
-    onStartManualEntry: vi.fn(),
     onOpenCloudAuth: vi.fn()
   };
 
@@ -98,7 +92,6 @@ describe("AppShell onboarding lock", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Dashboard", level: 2 })).toBeTruthy();
-    expect(screen.getByText("Language:")).toBeTruthy();
     expect(screen.getByText((_, node) => node?.textContent?.trim() === "1 Reports")).toBeTruthy();
     expect(screen.getByText((_, node) => node?.textContent?.trim() === "18 Markers tracked")).toBeTruthy();
     const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "0 Out of range");

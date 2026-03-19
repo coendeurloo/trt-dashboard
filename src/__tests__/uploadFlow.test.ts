@@ -3,6 +3,7 @@ import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
   resolveParserRescueAction,
+  resolveUploadFallbackAction,
   resolveUploadTriggerAction,
   shouldPresentUploadAsNeedsReview,
   shouldOfferParserImprovementSubmission,
@@ -85,6 +86,47 @@ describe("uploadFlow.resolveUploadTriggerAction", () => {
         isShareMode: false,
         hasUploadPanel: false,
         isProcessing: true
+      })
+    ).toBe("noop");
+  });
+});
+
+describe("uploadFlow.resolveUploadFallbackAction", () => {
+  it("uses scroll fallback when picker did not open and upload panel exists", () => {
+    const action = resolveUploadFallbackAction({
+      isShareMode: false,
+      hasUploadPanel: true,
+      isProcessing: false,
+      pickerOpened: false
+    });
+    expect(action).toBe("scroll-to-panel");
+  });
+
+  it("returns noop when picker opened successfully", () => {
+    const action = resolveUploadFallbackAction({
+      isShareMode: false,
+      hasUploadPanel: true,
+      isProcessing: false,
+      pickerOpened: true
+    });
+    expect(action).toBe("noop");
+  });
+
+  it("returns noop when fallback is not possible", () => {
+    expect(
+      resolveUploadFallbackAction({
+        isShareMode: true,
+        hasUploadPanel: true,
+        isProcessing: false,
+        pickerOpened: false
+      })
+    ).toBe("noop");
+    expect(
+      resolveUploadFallbackAction({
+        isShareMode: false,
+        hasUploadPanel: false,
+        isProcessing: false,
+        pickerOpened: false
       })
     ).toBe("noop");
   });
