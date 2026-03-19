@@ -13,6 +13,17 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- UX Remediation Wave 3 (resterende punten) shipped:
+  - Uniforme header-stat chips per tab via `AppShell` (Dashboard, Reports, Alerts, Supplements, Protocols, Wellbeing)
+  - Dashboard chart settings vervangen door echte `ChartSettingsDrawer` (desktop right drawer, mobile/tablet bottom sheet)
+  - Drawer sluit nu via `X`, `Esc` en backdrop, met body scroll lock tijdens open
+  - Mobiele navigatie verbeterd: grotere close target (44x44), swipe-to-close, en safe-area padding
+  - Herbruikbare `EmptyStateCard` toegevoegd en toegepast op Alerts, Protocols en Wellbeing
+  - Banners gecomprimeerd: nooit meer 2 persistente top-banners tegelijk (demo-banner heeft nu subtiele backup-tip inline)
+  - Desktop-sidebar is inklapbaar (`expanded`/`compact`) met icon-first compacte modus en upload-shortcut
+  - Sidebar-voorkeur wordt persistent opgeslagen in settings (`sidebarCollapsedDesktop`)
+  - Wave-scope i18n-dekking aangevuld voor nieuwe shell/drawer/empty-state tekst
+  - Regressie-suite groen (typecheck + volledige vitest)
 - Dashboard upload layout hotfix shipped:
   - Removed the large primary upload card from dashboard main content
   - Restored the original full upload panel in the desktop sidebar
@@ -81,5 +92,5 @@ Parser QA is active with batch registry + scorecards.
 
 ## Schema
 
-Current: v6, stored in `localStorage` key `trt_lab_tracker_v1`.
-`userProfile` is now part of `AppSettings`, with normalization handled in `src/storage.ts`.
+Current: v7, stored in `localStorage` key `trt_lab_tracker_v1`.
+`userProfile` and `sidebarCollapsedDesktop` are part of `AppSettings`, with normalization handled in `src/storage.ts`.

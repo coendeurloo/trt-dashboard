@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrtStabilityResult } from "../analytics";
 import { DEFAULT_SETTINGS } from "../constants";
@@ -212,13 +212,17 @@ describe("DashboardView chart controls", () => {
     expect(within(stabilitySection as HTMLElement).getAllByText("66").length).toBeGreaterThan(0);
   });
 
-  it("shows Compare 2 markers and Chart settings controls", () => {
+  it("shows Compare 2 markers and Chart settings controls", async () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
 
     expect(screen.getByRole("button", { name: "Chart settings" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
     expect(screen.getByRole("button", { name: "Compare 2 markers" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Compare 2 markers" })).toBeNull();
+    });
   });
 
   it("keeps time range and marker scope filters visually separated with aligned active styling", () => {

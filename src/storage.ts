@@ -815,6 +815,10 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     ...DEFAULT_SETTINGS,
     ...rest,
     aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
+    sidebarCollapsedDesktop:
+      typeof rest.sidebarCollapsedDesktop === "boolean"
+        ? rest.sidebarCollapsedDesktop
+        : DEFAULT_SETTINGS.sidebarCollapsedDesktop,
     parserRescueConsentState:
       rest.parserRescueConsentState === "unset" || rest.parserRescueConsentState === "allowed" || rest.parserRescueConsentState === "denied"
         ? rest.parserRescueConsentState

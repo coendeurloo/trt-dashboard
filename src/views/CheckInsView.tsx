@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { X } from "lucide-react";
+import EmptyStateCard from "../components/EmptyStateCard";
 import { trLocale } from "../i18n";
 import { AppLanguage, SymptomCheckIn, UserProfile, WellbeingMetricId } from "../types";
 import { getCheckInAverage, getCheckInMetricValue, WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
@@ -508,16 +509,16 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
       ) : null}
 
       {sorted.length === 0 && !isCreateModalOpen ? (
-        <section className="rounded-xl border border-slate-700/50 bg-slate-900/30 px-6 py-10 text-center">
-          <p className="text-3xl">🧘</p>
-          <p className="mt-2 text-sm font-medium text-slate-300">{tr("Nog geen check-ins", "No check-ins yet")}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            {tr(
-              "Start met één korte check-in per week om trends naast je labwaarden te zien.",
-              "Start with one short weekly check-in to view trends next to your lab results."
-            )}
-          </p>
-        </section>
+        <EmptyStateCard
+          title={tr("Nog geen check-ins", "No check-ins yet")}
+          description={tr(
+            "Start met één korte check-in per week om trends naast je labwaarden te zien.",
+            "Start with one short weekly check-in to view trends next to your lab results."
+          )}
+          actionLabel={!isShareMode ? tr("Check-in starten", "Start check-in") : undefined}
+          onAction={!isShareMode ? () => setIsCreateModalOpen(true) : undefined}
+          icon={<span className="text-3xl" aria-hidden>🧘</span>}
+        />
       ) : null}
 
       <CheckInModal

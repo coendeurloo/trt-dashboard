@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { differenceInDays, parseISO } from "date-fns";
 import {
@@ -14,7 +14,7 @@ import {
   calculatePercentVsBaseline
 } from "./analytics";
 import { PRIMARY_MARKERS, TAB_ITEMS } from "./constants";
-import AppShell from "./components/AppShell";
+import AppShell, { AppShellHeaderStat } from "./components/AppShell";
 import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
 import {
   CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
@@ -94,7 +94,7 @@ import {
   TimeRangeKey
 } from "./types";
 import { AnalystMemory } from "./types/analystMemory";
-import { createId, deriveAbnormalFlag } from "./utils";
+import { createId, deriveAbnormalFlag, formatDate } from "./utils";
 import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -1590,7 +1590,7 @@ const App = () => {
     });
 
     if (sanitizedMarkers.length === 0) {
-      setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal één marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
+      setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal Ã©Ã©n marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
       return;
     }
 
@@ -1782,6 +1782,11 @@ const App = () => {
     () => appData.protocols.find((protocol) => protocol.id === activeProtocolId) ?? null,
     [appData.protocols, activeProtocolId]
   );
+  const activeSupplementsCount = useMemo(
+    () => appData.supplementTimeline.filter((period) => period.endDate === null).length,
+    [appData.supplementTimeline]
+  );
+  const supplementHistoryCount = appData.supplementTimeline.length;
   const activeProtocolCompound = useMemo(
     () => getPrimaryProtocolCompound(activeProtocol),
     [activeProtocol]
@@ -1924,8 +1929,8 @@ const App = () => {
         ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
         : null;
     }
-    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.") : null;
-    if (activeTab === "reports") return tr("Alle geüploade labresultaten in één overzicht.", "All uploaded lab reports in one overview.");
+    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in Ã©Ã©n oogopslag.", "Your health markers at a glance.") : null;
+    if (activeTab === "reports") return tr("Alle geÃ¼ploade labresultaten in Ã©Ã©n overzicht.", "All uploaded lab reports in one overview.");
     if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je markers.", "Trend and threshold alerts for your markers.");
     if (activeTab === "protocol") {
       const protocolProfile = appData.settings.userProfile === "trt" || appData.settings.userProfile === "enhanced";
@@ -1945,7 +1950,7 @@ const App = () => {
       }
       return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
     }
-    if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
+    if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beÃ¯nvloeden.", "Model how dose changes may affect your levels.");
     if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
     if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
     return null;
@@ -1971,11 +1976,132 @@ const App = () => {
     setShowWellbeingReminderModal(false);
   }, [shouldShowWellbeingReminder]);
   const shellActiveTabTitle = isReviewMode
-    ? tr("Controleer geëxtraheerde data", "Review extracted data")
+    ? tr("Controleer geÃ«xtraheerde data", "Review extracted data")
     : activeTabTitle;
   const shellActiveTabSubtitle = isReviewMode
     ? null
     : activeTabSubtitle;
+  const headerStats = useMemo<AppShellHeaderStat[]>(() => {
+    if (isReviewMode) {
+      return [];
+    }
+    if (activeTab === "dashboard" && hasReports) {
+      return [
+        {
+          id: "reports",
+          value: String(reports.length),
+          label: tr("rapporten", "reports")
+        },
+        {
+          id: "markers",
+          value: String(allMarkers.length),
+          label: tr("markers gevolgd", "markers tracked")
+        },
+        {
+          id: "out-of-range",
+          value: String(outOfRangeCount),
+          label: tr("buiten bereik", "out of range"),
+          tone: outOfRangeCount === 0 ? "positive" : "warning"
+        }
+      ];
+    }
+    if (activeTab === "reports") {
+      return [
+        {
+          id: "reports-total",
+          value: String(reports.length),
+          label: tr("rapporten", "reports")
+        },
+        {
+          id: "reports-latest",
+          value: latestReportDate ? formatDate(latestReportDate) : "â€”",
+          label: tr("laatste rapport", "latest report")
+        }
+      ];
+    }
+    if (activeTab === "alerts") {
+      return [
+        {
+          id: "alerts-actionable",
+          value: String(actionableAlerts.length),
+          label: tr("actie nodig", "actionable"),
+          tone: actionableAlerts.length === 0 ? "positive" : "warning"
+        },
+        {
+          id: "alerts-positive",
+          value: String(positiveAlerts.length),
+          label: tr("positief", "positive"),
+          tone: positiveAlerts.length > 0 ? "positive" : "neutral"
+        },
+        {
+          id: "alerts-total",
+          value: String(alerts.length),
+          label: tr("totaal", "total")
+        }
+      ];
+    }
+    if (activeTab === "supplements") {
+      return [
+        {
+          id: "supplements-active",
+          value: String(activeSupplementsCount),
+          label: tr("actief", "active")
+        },
+        {
+          id: "supplements-history",
+          value: String(supplementHistoryCount),
+          label: tr("historie-items", "history items")
+        }
+      ];
+    }
+    if (activeTab === "protocol") {
+      return [
+        {
+          id: "protocol-total",
+          value: String(appData.protocols.length),
+          label: tr("protocollen", "protocols")
+        },
+        {
+          id: "protocol-active",
+          value: activeProtocol?.name?.trim() ? activeProtocol.name : tr("geen", "none"),
+          label: tr("actief", "active")
+        }
+      ];
+    }
+    if (activeTab === "checkIns") {
+      return [
+        {
+          id: "checkins-total",
+          value: String(appData.checkIns.length),
+          label: tr("check-ins", "check-ins")
+        },
+        {
+          id: "checkins-last",
+          value: daysSinceWellbeingCheckIn === null ? tr("geen", "none") : String(daysSinceWellbeingCheckIn),
+          label: tr("dagen sinds laatste", "days since last")
+        }
+      ];
+    }
+    return [];
+  }, [
+    activeProtocol,
+    activeSupplementsCount,
+    activeTab,
+    alerts.length,
+    allMarkers.length,
+    appData.checkIns.length,
+    appData.protocols.length,
+    actionableAlerts.length,
+    daysSinceWellbeingCheckIn,
+    hasReports,
+    isReviewMode,
+    latestReportDate,
+    outOfRangeCount,
+    positiveAlerts.length,
+    reports.length,
+    supplementHistoryCount,
+    tr
+  ]);
   const tabLoadFallback = (
     <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
       <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -2179,12 +2305,14 @@ const App = () => {
         ["trough", "Trough only"],
         ["peak", "Peak only"]
       ];
+  const showDemoBanner = !isShareMode && hasDemoData && activeTab !== "analysis";
   const showBackupPrompt =
     !isShareMode &&
     activeTab === "dashboard" &&
     reports.length > 0 &&
     cloudAuth.status !== "authenticated" &&
-    !backupPromptDismissed;
+    !backupPromptDismissed &&
+    !showDemoBanner;
   const wellbeingReminderDays = daysSinceWellbeingCheckIn ?? 7;
   const quickUploadDisabled = isShareMode || isProcessing;
 
@@ -2253,7 +2381,9 @@ const App = () => {
           syncStatus: appMode === "cloud" ? cloudSync.syncStatus : "idle",
           cloudConfigured: cloudAuth.configured,
           cloudAuthStatus: cloudAuth.status,
-          cloudUserEmail: cloudAuth.session?.user.email ?? null
+          cloudUserEmail: cloudAuth.session?.user.email ?? null,
+          headerStats,
+          sidebarCollapsedDesktop: appData.settings.sidebarCollapsedDesktop
         }}
         uploadState={{
           uploadPanelRef,
@@ -2274,7 +2404,9 @@ const App = () => {
             void ensurePdfParsingModule();
           },
           onStartManualEntry: startManualEntry,
-          onOpenCloudAuth: openCloudAuthModal
+          onOpenCloudAuth: openCloudAuthModal,
+          onToggleDesktopSidebar: () =>
+            updateSettings({ sidebarCollapsedDesktop: !appData.settings.sidebarCollapsedDesktop })
         }}
         tr={tr}
       >
@@ -2373,7 +2505,7 @@ const App = () => {
         {!isReviewMode ? (
           <>
             <AnimatePresence>
-                {!isShareMode && hasDemoData && activeTab !== "analysis" ? (
+                {showDemoBanner ? (
                   <motion.section
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -2383,17 +2515,35 @@ const App = () => {
                     <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
                       <div className={demoBannerTextClassName}>
                         <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>
-                          {isDemoMode
-                            ? tr(
-                                "Je verkent de app met demodata — kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
-                                "You're exploring with demo data — feel free to look around. When you're ready, start fresh with your own labs."
-                              )
-                            : tr(
-                                "Demodata is nog geladen. Wis het wanneer je klaar bent.",
-                                "Demo data is still loaded. Clear it when you're ready."
+                        <div>
+                          <p>
+                            {isDemoMode
+                              ? tr(
+                                  "Je verkent de app met demodata â€” kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
+                                  "You're exploring with demo data â€” feel free to look around. When you're ready, start fresh with your own labs."
+                                )
+                              : tr(
+                                  "Demodata is nog geladen. Wis het wanneer je klaar bent.",
+                                  "Demo data is still loaded. Clear it when you're ready."
+                                )}
+                          </p>
+                          {cloudAuth.status !== "authenticated" ? (
+                            <button
+                              type="button"
+                              onClick={() => openCloudAuthModal("signup")}
+                              className={
+                                isDarkTheme
+                                  ? "mt-1 text-xs text-cyan-200 underline decoration-cyan-300/70 underline-offset-2 transition hover:text-cyan-50"
+                                  : "mt-1 text-xs text-cyan-800 underline decoration-cyan-600/60 underline-offset-2 transition hover:text-cyan-900"
+                              }
+                            >
+                              {tr(
+                                "Tip: maak een gratis account voor cloud back-up.",
+                                "Tip: create a free account to back up your data."
                               )}
-                        </p>
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {isDemoMode ? (
@@ -2586,6 +2736,7 @@ const App = () => {
                     samplingControlsEnabled={samplingControlsEnabled}
                     focusedMarker={focusedAlertMarker}
                     onFocusedMarkerHandled={() => setFocusedAlertMarker(null)}
+                    onOpenDashboard={() => requestTabChange("dashboard")}
                   />
                 ) : null}
 

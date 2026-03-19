@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+﻿import { useEffect, useMemo, useRef } from "react";
+import { ShieldCheck } from "lucide-react";
 import { MarkerAlert, MarkerSeriesPoint } from "../analytics";
 import AlertTrendMiniChart from "../components/AlertTrendMiniChart";
+import EmptyStateCard from "../components/EmptyStateCard";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { buildPredictiveAlerts } from "../predictiveTrends";
 import { AppLanguage, AppSettings } from "../types";
@@ -16,6 +18,7 @@ interface AlertsViewProps {
   samplingControlsEnabled: boolean;
   focusedMarker: string | null;
   onFocusedMarkerHandled: () => void;
+  onOpenDashboard: () => void;
 }
 
 const AlertsView = ({
@@ -27,7 +30,8 @@ const AlertsView = ({
   language,
   samplingControlsEnabled,
   focusedMarker,
-  onFocusedMarkerHandled
+  onFocusedMarkerHandled,
+  onOpenDashboard
 }: AlertsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isDarkTheme = settings.theme === "dark";
@@ -36,6 +40,7 @@ const AlertsView = ({
     () => buildPredictiveAlerts(alertSeriesByMarker, settings.unitSystem),
     [alertSeriesByMarker, settings.unitSystem]
   );
+  const showAllClearState = alerts.length === 0 && predictiveAlerts.length === 0;
 
   const alertSeverityLabel = (severity: "high" | "medium" | "low"): string => {
     if (severity === "high") {
@@ -231,13 +236,10 @@ const AlertsView = ({
           <div>
             <h3 className={isDarkTheme ? "text-base font-semibold text-slate-100" : "text-base font-semibold text-slate-900"}>{tr("Alerts Centrum", "Alerts Center")}</h3>
             <p className={isDarkTheme ? "mt-0.5 text-sm text-slate-400" : "mt-0.5 text-sm text-slate-600"}>
-              <span className={isDarkTheme ? "font-medium text-amber-300" : "font-medium text-amber-700"}>{actionableAlerts.length}</span>{" "}
-              {tr("actie nodig", "need action")}
-              <span className={isDarkTheme ? "mx-2 text-slate-600" : "mx-2 text-slate-400"}>·</span>
-              <span className={isDarkTheme ? "font-medium text-emerald-300" : "font-medium text-emerald-700"}>{positiveAlerts.length}</span>{" "}
-              {tr("positief", "positive")}
-              <span className={isDarkTheme ? "mx-2 text-slate-600" : "mx-2 text-slate-400"}>·</span>
-              <span className={isDarkTheme ? "font-medium text-slate-300" : "font-medium text-slate-700"}>{alerts.length}</span> {tr("totaal", "total")}
+              {tr(
+                "Hier zie je prioriteitssignalen, voorspellende trends en positieve bevestigingen per marker.",
+                "See prioritized signals, predictive trends, and positive confirmations per marker."
+              )}
             </p>
           </div>
           {samplingControlsEnabled ? (
@@ -248,7 +250,21 @@ const AlertsView = ({
         </div>
       </div>
 
-      {predictiveAlerts.length > 0 ? (
+      {showAllClearState ? (
+        <EmptyStateCard
+          title={tr("Geen alerts in deze filter", "No alerts in this filter")}
+          description={tr(
+            "Alles ziet er stabiel uit binnen je huidige selectie. Je kunt op het dashboard een ruimer tijdsbereik of andere markers kiezen.",
+            "Everything looks stable in your current selection. Use the dashboard to pick a wider range or different markers."
+          )}
+          actionLabel={tr("Naar dashboard", "Go to dashboard")}
+          onAction={onOpenDashboard}
+          icon={<ShieldCheck className={isDarkTheme ? "h-8 w-8 text-emerald-300" : "h-8 w-8 text-emerald-600"} />}
+          isDarkTheme={isDarkTheme}
+        />
+      ) : null}
+
+      {!showAllClearState && predictiveAlerts.length > 0 ? (
         <section
           className={
             isDarkTheme
@@ -315,8 +331,8 @@ const AlertsView = ({
         </section>
       ) : null}
 
-      {actionableAlertsSection}
-      {positiveSignalsSection}
+      {!showAllClearState ? actionableAlertsSection : null}
+      {!showAllClearState ? positiveSignalsSection : null}
 
     </section>
   );

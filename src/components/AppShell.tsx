@@ -1,4 +1,4 @@
-import { ReactNode, RefObject } from "react";
+﻿import { ReactNode, RefObject } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -8,10 +8,13 @@ import {
   Heart,
   Lock,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pill,
   Plus,
   SlidersHorizontal,
   Sparkles,
+  Upload,
   X
 } from "lucide-react";
 import appIcon from "../../favicon.svg";
@@ -52,6 +55,15 @@ export interface AppShellState {
   cloudConfigured?: boolean;
   cloudAuthStatus?: "loading" | "authenticated" | "unauthenticated" | "error";
   cloudUserEmail?: string | null;
+  headerStats?: AppShellHeaderStat[];
+  sidebarCollapsedDesktop?: boolean;
+}
+
+export interface AppShellHeaderStat {
+  id: string;
+  label: string;
+  value: string;
+  tone?: "neutral" | "positive" | "warning";
 }
 
 export interface AppShellUploadState {
@@ -73,6 +85,7 @@ export interface AppShellActions {
   onUploadIntent: () => void;
   onStartManualEntry: () => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
+  onToggleDesktopSidebar: () => void;
 }
 
 interface AppShellProps {
@@ -116,7 +129,9 @@ const AppShell = ({
     syncStatus = "idle",
     cloudConfigured = false,
     cloudAuthStatus = "unauthenticated",
-    cloudUserEmail = null
+    cloudUserEmail = null,
+    headerStats = [],
+    sidebarCollapsedDesktop = false
   } = shellState;
   const {
     uploadPanelRef,
@@ -135,7 +150,8 @@ const AppShell = ({
     onUploadFileSelected,
     onUploadIntent,
     onStartManualEntry,
-    onOpenCloudAuth
+    onOpenCloudAuth,
+    onToggleDesktopSidebar
   } = actions;
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
@@ -144,13 +160,17 @@ const AppShell = ({
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
   const currentPlanLabel = getPersonaSidebarCurrentLabel(userProfile, language);
+  const showDashboardStabilityBadge = activeTab === "dashboard" && hasReports && !isReviewMode;
+  const shouldShowHeaderStats = !isReviewMode && headerStats.length > 0;
 
-  const renderTabButton = (key: TabKey, onAfterNavigate?: () => void) => {
+  const renderTabButton = (key: TabKey, onAfterNavigate?: () => void, compact = false) => {
     if (!visibleTabKeys.has(key)) {
       return null;
     }
 
     const isLocked = tabIsLockedDuringOnboarding(key);
+    const tabLabel = getPersonaTabLabel(userProfile, key, language, getTabLabel(key, language));
+    const lockedTitle = tr("Upload je eerste PDF om deze sectie te ontgrendelen", "Upload your first PDF to unlock this section");
     const icon =
       key === "dashboard" ? (
         <BarChart3 className="h-4 w-4" />
@@ -187,8 +207,9 @@ const AppShell = ({
         }}
         disabled={isLocked}
         aria-disabled={isLocked}
-        title={isLocked ? tr("Upload je eerste PDF om deze sectie te ontgrendelen", "Upload your first PDF to unlock this section") : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+        aria-label={tabLabel}
+        title={isLocked ? `${tabLabel} - ${lockedTitle}` : tabLabel}
+        className={`flex w-full items-center ${compact ? "justify-center px-2" : "gap-2 px-3"} rounded-lg py-2 text-sm transition ${
           isLocked
             ? "cursor-not-allowed border border-slate-800/80 text-slate-500 opacity-75"
             : activeTab === key
@@ -197,13 +218,13 @@ const AppShell = ({
         }`}
       >
         {icon}
-        <span>{getPersonaTabLabel(userProfile, key, language, getTabLabel(key, language))}</span>
-        {isLocked ? (
+        {!compact ? <span>{tabLabel}</span> : null}
+        {!compact && isLocked ? (
           <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700/80 bg-slate-900/70 text-slate-500">
             <Lock className="h-3 w-3" />
           </span>
         ) : null}
-        {key === "analysis" ? (
+        {!compact && key === "analysis" ? (
           <span className={`${isLocked ? "" : "ml-auto"} rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300 ring-1 ring-cyan-500/40`}>
             Pro
           </span>
@@ -212,15 +233,19 @@ const AppShell = ({
     );
   };
 
-  const renderNavigationSections = (onAfterNavigate?: () => void) => (
+  const renderNavigationSections = (onAfterNavigate?: () => void, compact = false) => (
     <nav className="space-y-0.5">
       {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") || visibleTabKeys.has("checkIns") ? (
         <>
-          <p className={`mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Core</p>
-          {renderTabButton("dashboard", onAfterNavigate)}
-          {renderTabButton("checkIns", onAfterNavigate)}
-          {renderTabButton("reports", onAfterNavigate)}
-          {renderTabButton("alerts", onAfterNavigate)}
+          {!compact ? (
+            <p className={`mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
+              {tr("Kern", "Core")}
+            </p>
+          ) : null}
+          {renderTabButton("dashboard", onAfterNavigate, compact)}
+          {renderTabButton("checkIns", onAfterNavigate, compact)}
+          {renderTabButton("reports", onAfterNavigate, compact)}
+          {renderTabButton("alerts", onAfterNavigate, compact)}
         </>
       ) : null}
 
@@ -229,23 +254,31 @@ const AppShell = ({
       visibleTabKeys.has("protocolImpact") ||
       visibleTabKeys.has("doseResponse") ? (
         <>
-          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>{protocolSectionLabel}</p>
-          {renderTabButton("protocol", onAfterNavigate)}
-          {renderTabButton("supplements", onAfterNavigate)}
-          {renderTabButton("protocolImpact", onAfterNavigate)}
-          {renderTabButton("doseResponse", onAfterNavigate)}
+          {!compact ? (
+            <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
+              {protocolSectionLabel}
+            </p>
+          ) : null}
+          {renderTabButton("protocol", onAfterNavigate, compact)}
+          {renderTabButton("supplements", onAfterNavigate, compact)}
+          {renderTabButton("protocolImpact", onAfterNavigate, compact)}
+          {renderTabButton("doseResponse", onAfterNavigate, compact)}
         </>
       ) : null}
 
       {visibleTabKeys.has("analysis") ? (
         <>
-          <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>Pro</p>
-          {renderTabButton("analysis", onAfterNavigate)}
+          {!compact ? (
+            <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
+              {tr("Pro", "Pro")}
+            </p>
+          ) : null}
+          {renderTabButton("analysis", onAfterNavigate, compact)}
         </>
       ) : null}
 
       {visibleTabKeys.has("settings") ? (
-        <div className="mt-3 border-t border-slate-800 pt-3">{renderTabButton("settings", onAfterNavigate)}</div>
+        <div className={`mt-3 border-t border-slate-800 pt-3 ${compact ? "px-1" : ""}`}>{renderTabButton("settings", onAfterNavigate, compact)}</div>
       ) : null}
     </nav>
   );
@@ -264,6 +297,56 @@ const AppShell = ({
         </p>
       ) : null}
     </div>
+  );
+
+  const renderHeaderStats = () => (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+      {headerStats.map((stat) => {
+        const valueClassName =
+          stat.tone === "positive"
+            ? "text-emerald-300"
+            : stat.tone === "warning"
+              ? "text-amber-300"
+              : isLightTheme
+                ? "text-slate-900"
+                : "text-slate-100";
+        return (
+          <span
+            key={stat.id}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+              isLightTheme ? "border-slate-300 bg-white text-slate-600" : "border-slate-700/70 bg-slate-900/55 text-slate-400"
+            }`}
+          >
+            <strong className={valueClassName}>{stat.value}</strong>
+            <span>{stat.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+
+  const renderUploadShortcut = (compact: boolean) => (
+    <button
+      type="button"
+      onClick={onQuickUpload}
+      disabled={quickUploadDisabled}
+      title={tr("Upload PDF", "Upload PDF")}
+      aria-label={tr("Upload PDF", "Upload PDF")}
+      className={`inline-flex items-center justify-center rounded-lg border transition ${
+        compact ? "h-10 w-10" : "w-full gap-2 px-3 py-2 text-sm"
+      } ${
+        quickUploadDisabled
+          ? isLightTheme
+            ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
+            : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
+          : isLightTheme
+            ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
+            : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+      }`}
+    >
+      <Upload className={compact ? "h-4 w-4" : "h-4 w-4"} />
+      {!compact ? <span>{tr("Upload PDF", "Upload PDF")}</span> : null}
+    </button>
   );
 
   const renderUploadPanelCard = (containerClassName: string) => {
@@ -300,22 +383,7 @@ const AppShell = ({
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            className={`inline-flex w-full items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition ${
-              quickUploadDisabled
-                ? isLightTheme
-                  ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
-                  : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
-                : isLightTheme
-                  ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
-                  : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
-            }`}
-            onClick={onQuickUpload}
-            disabled={quickUploadDisabled}
-          >
-            {tr("Upload een PDF", "Upload a PDF")}
-          </button>
+          renderUploadShortcut(false)
         )}
         {uploadError ? (
           <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -333,20 +401,28 @@ const AppShell = ({
 
   const renderSidebarContent = ({
     includeUploadPanel,
-    onAfterNavigate
+    onAfterNavigate,
+    compact
   }: {
     includeUploadPanel: boolean;
     onAfterNavigate?: () => void;
+    compact?: boolean;
   }) => {
     const sidebarUploadPanel =
       !isShareMode && includeUploadPanel
-        ? renderUploadPanelCard(
-            isLightTheme
-              ? "mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-              : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+        ? compact
+          ? (
+            <div className={isLightTheme ? "mt-4 flex justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm" : "mt-4 flex justify-center rounded-xl border border-slate-700 bg-slate-900/80 p-2"}>
+              {renderUploadShortcut(true)}
+            </div>
           )
+          : renderUploadPanelCard(
+              isLightTheme
+                ? "mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+            )
         : null;
-    const showAccountTools = !isShareMode && cloudConfigured;
+    const showAccountTools = !isShareMode && cloudConfigured && !compact;
     const syncBadgeLabel =
       appMode !== "cloud"
         ? tr("Lokaal-only", "Local-only")
@@ -369,11 +445,28 @@ const AppShell = ({
               : "bg-amber-300";
     return (
       <>
-        <div className="brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 p-3">
+        <div className={`brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 ${compact ? "p-2.5" : "p-3"}`}>
+          {!onAfterNavigate ? (
+            <div className={`hidden items-center ${compact ? "justify-center" : "justify-end"} lg:flex`}>
+              <button
+                type="button"
+                onClick={onToggleDesktopSidebar}
+                title={sidebarCollapsedDesktop ? tr("Zijbalk uitklappen", "Expand sidebar") : tr("Zijbalk inklappen", "Collapse sidebar")}
+                aria-label={sidebarCollapsedDesktop ? tr("Zijbalk uitklappen", "Expand sidebar") : tr("Zijbalk inklappen", "Collapse sidebar")}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md border ${
+                  isLightTheme
+                    ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
+                    : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                }`}
+              >
+                {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+            </div>
+          ) : null}
           <img
             src={theme === "dark" ? labtrackerLogoDark : labtrackerLogoLight}
             alt="LabTracker"
-            className="brand-logo mx-auto w-full max-w-[230px]"
+            className={`brand-logo mx-auto ${compact ? "mt-2 w-10" : "w-full max-w-[230px]"}`}
           />
           {showAccountTools ? (
             <div className="mt-2">
@@ -430,7 +523,7 @@ const AppShell = ({
               )}
             </div>
           ) : null}
-          {hasReports ? (
+          {!compact && hasReports ? (
             <div
               className={`sidebar-protocol-card mt-3 rounded-xl border px-3 py-3 ${
                 isLightTheme ? "border-slate-200 bg-white shadow-sm" : "border-slate-700/50 bg-slate-900/50"
@@ -471,8 +564,8 @@ const AppShell = ({
           ) : null}
         </div>
 
-        {renderNavigationSections(onAfterNavigate)}
-        {isShareMode ? renderShareSnapshotCard() : null}
+        {renderNavigationSections(onAfterNavigate, compact)}
+        {isShareMode && !compact ? renderShareSnapshotCard() : null}
         {sidebarUploadPanel}
       </>
     );
@@ -480,7 +573,6 @@ const AppShell = ({
 
   const hideDashboardDesktopHeader = isOnboardingLocked && activeTab === "dashboard" && !isReviewMode;
   const hideDashboardMobileTitle = hideDashboardDesktopHeader;
-  const showDashboardHeaderStats = activeTab === "dashboard" && hasReports && !isReviewMode;
   const scrollToStabilityIndex = () => {
     const section = document.getElementById("dashboard-stability-index");
     if (!section) {
@@ -511,10 +603,11 @@ const AppShell = ({
       <MobileNavDrawer
         open={isMobileMenuOpen}
         title={tr("Navigatie", "Navigation")}
+        closeLabel={tr("Navigatie sluiten", "Close navigation")}
         onClose={onCloseMobileMenu}
       >
         <div className={isLightTheme ? "rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" : "rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3"}>
-          {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu })}
+          {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu, compact: false })}
         </div>
       </MobileNavDrawer>
 
@@ -522,11 +615,11 @@ const AppShell = ({
         <aside
           className={
             isLightTheme
-              ? "hidden w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start"
-              : "hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block lg:w-72 lg:self-start"
+              ? `hidden w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-4 lg:block ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
+              : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
           }
         >
-          {renderSidebarContent({ includeUploadPanel: true })}
+          {renderSidebarContent({ includeUploadPanel: true, compact: sidebarCollapsedDesktop })}
         </aside>
 
         <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
@@ -581,17 +674,7 @@ const AppShell = ({
                   <div className="hidden lg:block">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <h2 className={`text-base font-semibold sm:text-lg ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{activeTabTitle}</h2>
-                      {showDashboardHeaderStats ? (
-                        <div className={`flex flex-wrap items-center gap-2.5 text-sm ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
-                          <span><strong className={isLightTheme ? "text-slate-900" : "text-slate-100"}>{reportsCount}</strong> {t(language, "reports")}</span>
-                          <span className="text-slate-600">·</span>
-                          <span><strong className={isLightTheme ? "text-slate-900" : "text-slate-100"}>{markersTrackedCount}</strong> {t(language, "markersTracked")}</span>
-                          <span className="text-slate-600">·</span>
-                          <span>
-                            <strong className={outOfRangeCount === 0 ? "text-emerald-300" : "text-amber-300"}>{outOfRangeCount}</strong> {t(language, "outOfRange")}
-                          </span>
-                        </div>
-                      ) : null}
+                      {shouldShowHeaderStats ? renderHeaderStats() : null}
                     </div>
                     {activeTabSubtitle ? <p className={`text-sm ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>{activeTabSubtitle}</p> : null}
                   </div>
@@ -599,7 +682,7 @@ const AppShell = ({
                   <div className="hidden lg:block" />
                 )}
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {showDashboardHeaderStats && stabilityScore !== null ? (
+                  {showDashboardStabilityBadge && stabilityScore !== null ? (
                     <div className="group relative">
                       <button
                         type="button"
@@ -615,12 +698,12 @@ const AppShell = ({
                         <p className="stability-tooltip-title font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
                         <p className="mt-1.5">
                           {tr(
-                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling — een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
-                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation — a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
+                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling â€” een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
+                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation â€” a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
                           )}
                         </p>
                         <p className="mt-2 text-[11px] text-slate-500">
-                          {tr("80-100: stabiel · 60-79: matig · onder 60: wisselend", "80-100: stable · 60-79: moderate · below 60: variable")}
+                          {tr("80-100: stabiel Â· 60-79: matig Â· onder 60: wisselend", "80-100: stable Â· 60-79: moderate Â· below 60: variable")}
                         </p>
                       </div>
                     </div>

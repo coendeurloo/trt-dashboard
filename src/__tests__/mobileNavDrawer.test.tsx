@@ -10,7 +10,7 @@ describe("MobileNavDrawer", () => {
 
   it("renders nothing when closed", () => {
     render(
-      <MobileNavDrawer open={false} title="Navigation" onClose={vi.fn()}>
+      <MobileNavDrawer open={false} title="Navigation" closeLabel="Close navigation" onClose={vi.fn()}>
         <div>Menu</div>
       </MobileNavDrawer>
     );
@@ -21,7 +21,7 @@ describe("MobileNavDrawer", () => {
   it("closes when clicking the overlay", () => {
     const onClose = vi.fn();
     render(
-      <MobileNavDrawer open title="Navigation" onClose={onClose}>
+      <MobileNavDrawer open title="Navigation" closeLabel="Close navigation" onClose={onClose}>
         <div>Menu</div>
       </MobileNavDrawer>
     );
@@ -33,7 +33,7 @@ describe("MobileNavDrawer", () => {
   it("closes on escape", () => {
     const onClose = vi.fn();
     render(
-      <MobileNavDrawer open title="Navigation" onClose={onClose}>
+      <MobileNavDrawer open title="Navigation" closeLabel="Close navigation" onClose={onClose}>
         <div>Menu</div>
       </MobileNavDrawer>
     );
@@ -42,9 +42,23 @@ describe("MobileNavDrawer", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on left swipe gesture", () => {
+    const onClose = vi.fn();
+    render(
+      <MobileNavDrawer open title="Navigation" closeLabel="Close navigation" onClose={onClose}>
+        <div>Menu</div>
+      </MobileNavDrawer>
+    );
+
+    const drawer = screen.getByRole("dialog");
+    fireEvent.touchStart(drawer, { changedTouches: [{ clientX: 240, clientY: 20 }] });
+    fireEvent.touchEnd(drawer, { changedTouches: [{ clientX: 150, clientY: 24 }] });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("locks body scroll while open and restores on close", async () => {
     const { rerender, unmount } = render(
-      <MobileNavDrawer open title="Navigation" onClose={vi.fn()}>
+      <MobileNavDrawer open title="Navigation" closeLabel="Close navigation" onClose={vi.fn()}>
         <div>Menu</div>
       </MobileNavDrawer>
     );
@@ -52,7 +66,7 @@ describe("MobileNavDrawer", () => {
     expect(document.body.style.overflow).toBe("hidden");
 
     rerender(
-      <MobileNavDrawer open={false} title="Navigation" onClose={vi.fn()}>
+      <MobileNavDrawer open={false} title="Navigation" closeLabel="Close navigation" onClose={vi.fn()}>
         <div>Menu</div>
       </MobileNavDrawer>
     );
@@ -61,7 +75,7 @@ describe("MobileNavDrawer", () => {
     });
 
     rerender(
-      <MobileNavDrawer open title="Navigation" onClose={vi.fn()}>
+      <MobileNavDrawer open title="Navigation" closeLabel="Close navigation" onClose={vi.fn()}>
         <div>Menu</div>
       </MobileNavDrawer>
     );

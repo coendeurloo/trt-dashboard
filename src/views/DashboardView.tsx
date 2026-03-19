@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
-import { Check, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { Check, Loader2, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   DosePhaseBlock,
@@ -10,6 +10,7 @@ import {
   TrtStabilityResult
 } from "../analytics";
 import ComparisonChart from "../components/ComparisonChart";
+import ChartSettingsDrawer from "../components/ChartSettingsDrawer";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { MARKER_DATABASE } from "../data/markerDatabase";
@@ -162,7 +163,6 @@ const DashboardView = ({
   const [showPrimaryMarkerPicker, setShowPrimaryMarkerPicker] = useState(false);
   const [markerSearchTerm, setMarkerSearchTerm] = useState("");
   const [markerCategoryFilter, setMarkerCategoryFilter] = useState("all");
-  const chartSettingsRef = useRef<HTMLDivElement | null>(null);
 
   const referenceRangesTooltip = tr(
     "Toont per marker het normale referentiebereik als band in de grafiek.",
@@ -343,27 +343,6 @@ const DashboardView = ({
     onUpdateSettings(buildDashboardPresetPatch(preset));
   };
 
-  useEffect(() => {
-    if (!showChartSettings) {
-      return;
-    }
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (!chartSettingsRef.current) {
-        return;
-      }
-      const target = event.target;
-      if (target instanceof Node && !chartSettingsRef.current.contains(target)) {
-        setShowChartSettings(false);
-      }
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("touchstart", handlePointerDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("touchstart", handlePointerDown);
-    };
-  }, [showChartSettings]);
-
   const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return tr("Goedemorgen", "Good morning");
@@ -414,7 +393,7 @@ const DashboardView = ({
               : "dashboard-filter-bar rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
           }
         >
-          <div ref={chartSettingsRef} className="relative space-y-2">
+          <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1">
                 {timeRangeOptions.map(([value, label]) => (
@@ -501,6 +480,7 @@ const DashboardView = ({
                         : "text-slate-500 hover:text-slate-700"
                   }`}
                   aria-expanded={showChartSettings}
+                  aria-controls="dashboard-chart-settings-drawer"
                   aria-label={tr("Grafiekinstellingen", "Chart settings")}
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -551,31 +531,15 @@ const DashboardView = ({
               </div>
             ) : null}
 
-            {showChartSettings ? (
-            <div
-              className={
-                isDarkTheme
-                  ? "chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-700/80 bg-slate-950/95 p-3 shadow-2xl backdrop-blur"
-                  : "chart-settings-panel absolute right-0 top-full z-40 mt-2 w-[min(92vw,28rem)] space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
-              }
+            <ChartSettingsDrawer
+              id="dashboard-chart-settings-drawer"
+              open={showChartSettings}
+              title={tr("Grafiekinstellingen", "Chart settings")}
+              closeLabel={tr("Sluit grafiekinstellingen", "Close chart settings")}
+              isDarkTheme={isDarkTheme}
+              onClose={() => setShowChartSettings(false)}
             >
-              <div className="flex items-center justify-between px-0.5">
-                <p className={isDarkTheme ? "text-xs font-semibold uppercase tracking-wide text-slate-400" : "text-xs font-semibold uppercase tracking-wide text-slate-500"}>
-                  {tr("Grafiekinstellingen", "Chart settings")}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowChartSettings(false)}
-                  className={
-                    isDarkTheme
-                      ? "inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 p-1 text-slate-300 hover:border-slate-500 hover:text-slate-100"
-                      : "inline-flex items-center justify-center rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                  }
-                  aria-label={tr("Sluit grafiekinstellingen", "Close chart settings")}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <div className="space-y-3">
               <div className={isDarkTheme ? "rounded-xl border border-slate-700/70 bg-slate-900/50 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
                 <p className={isDarkTheme ? "text-[11px] font-semibold uppercase tracking-wide text-slate-400" : "text-[11px] font-semibold uppercase tracking-wide text-slate-500"}>
                   {tr("Weergavemodus", "View mode")}
@@ -868,7 +832,7 @@ const DashboardView = ({
                 </div>
               ) : null}
             </div>
-          ) : null}
+            </ChartSettingsDrawer>
           </div>
         </div>
       ) : null}

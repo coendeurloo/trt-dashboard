@@ -361,6 +361,7 @@ export interface PersonalInfo {
 
 export interface AppSettings {
   theme: ThemeMode;
+  sidebarCollapsedDesktop: boolean;
   unitSystem: UnitSystem;
   language: AppLanguage;
   userProfile: UserProfile;

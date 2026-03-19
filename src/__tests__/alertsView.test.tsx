@@ -98,7 +98,8 @@ const buildProps = (seriesByMarker: Record<string, MarkerSeriesPoint[]>) => {
     language: "en" as const,
     samplingControlsEnabled: true,
     focusedMarker: null,
-    onFocusedMarkerHandled: vi.fn()
+    onFocusedMarkerHandled: vi.fn(),
+    onOpenDashboard: vi.fn()
   };
 };
 
@@ -137,5 +138,22 @@ describe("AlertsView order", () => {
     render(<AlertsView {...props} />);
 
     expect(screen.queryByRole("heading", { name: "Predictive" })).toBeNull();
+  });
+
+  it("shows all-clear empty state when there are no alerts in the current filter", () => {
+    const props = buildProps({});
+    render(
+      <AlertsView
+        {...{
+          ...props,
+          alerts: [],
+          actionableAlerts: [],
+          positiveAlerts: []
+        }}
+      />
+    );
+
+    expect(screen.getByText("No alerts in this filter")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Go to dashboard" })).toBeTruthy();
   });
 });

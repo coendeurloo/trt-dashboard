@@ -1,7 +1,7 @@
 import { AppSettings, PersonalInfo, UserProfile } from "./types";
 
 export const APP_STORAGE_KEY = "trt_lab_tracker_v1";
-export const APP_SCHEMA_VERSION = 6;
+export const APP_SCHEMA_VERSION = 7;
 export const FEEDBACK_EMAIL = "trtlabtracker@gmail.com";
 
 export const PRIMARY_MARKERS = [
@@ -43,6 +43,7 @@ export const DEFAULT_PERSONAL_INFO: PersonalInfo = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
+  sidebarCollapsedDesktop: false,
   unitSystem: "us",
   language: "en",
   userProfile: "trt",

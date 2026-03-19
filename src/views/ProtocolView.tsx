@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import EmptyStateCard from "../components/EmptyStateCard";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
@@ -296,9 +297,16 @@ const ProtocolView = ({
       ) : null}
 
       {sortedProtocols.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400">
-          {tr(`Nog geen ${entityPlural} opgeslagen.`, `No ${entityPlural} saved yet.`)}
-        </div>
+        <EmptyStateCard
+          title={tr(`Nog geen ${entityPlural} opgeslagen`, `No ${entityPlural} saved yet`)}
+          description={tr(
+            `Maak je eerste ${entitySingular} om doseringen, frequenties en wijzigingen gestructureerd te volgen.`,
+            `Create your first ${entitySingular} to track doses, frequencies, and changes in one place.`
+          )}
+          actionLabel={tr(`Nieuw ${entitySingular}`, `New ${entitySingular}`)}
+          onAction={startCreate}
+          actionDisabled={isShareMode}
+        />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {sortedProtocols.map((protocol) => {

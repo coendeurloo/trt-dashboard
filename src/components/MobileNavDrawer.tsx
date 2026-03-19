@@ -5,13 +5,15 @@ import { X } from "lucide-react";
 interface MobileNavDrawerProps {
   open: boolean;
   title: string;
+  closeLabel: string;
   onClose: () => void;
   children: ReactNode;
 }
 
-const MobileNavDrawer = ({ open, title, onClose, children }: MobileNavDrawerProps) => {
+const MobileNavDrawer = ({ open, title, closeLabel, onClose, children }: MobileNavDrawerProps) => {
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -67,8 +69,33 @@ const MobileNavDrawer = ({ open, title, onClose, children }: MobileNavDrawerProp
             exit={{ x: -24, opacity: 0.96 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             onClick={(event) => event.stopPropagation()}
+            onTouchStart={(event) => {
+              const touch = event.changedTouches[0];
+              touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={(event) => {
+              const start = touchStartRef.current;
+              if (!start) {
+                return;
+              }
+              const touch = event.changedTouches[0];
+              const deltaX = touch.clientX - start.x;
+              const deltaY = touch.clientY - start.y;
+              if (deltaX <= -60 && Math.abs(deltaY) <= 48 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                onClose();
+              }
+              touchStartRef.current = null;
+            }}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
+            }}
           >
-            <div className="mb-2 flex items-center justify-between">
+            <div
+              className="mb-2 flex items-center justify-between"
+              style={{
+                paddingTop: "max(0.35rem, env(safe-area-inset-top))"
+              }}
+            >
               <h2 id={titleId} className="text-sm font-semibold text-slate-100">
                 {title}
               </h2>
@@ -76,13 +103,13 @@ const MobileNavDrawer = ({ open, title, onClose, children }: MobileNavDrawerProp
                 ref={closeButtonRef}
                 type="button"
                 onClick={onClose}
-                aria-label="Close navigation"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
+                aria-label={closeLabel}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80 text-slate-200 hover:border-cyan-500/60 hover:text-cyan-200"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="h-[calc(100%-2.5rem)] overflow-y-auto pr-1">{children}</div>
+            <div className="h-[calc(100%-2.5rem)] overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom))] pr-1">{children}</div>
           </motion.div>
         </motion.div>
       ) : null}

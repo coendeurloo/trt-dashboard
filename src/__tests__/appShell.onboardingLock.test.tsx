@@ -32,6 +32,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     activeProtocolCompound: null,
     outOfRangeCount: 0,
     reportsCount: 0,
+    headerStats: [],
+    sidebarCollapsedDesktop: false,
     ...overrides
   };
 
@@ -53,7 +55,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     onUploadFileSelected: vi.fn(),
     onUploadIntent: vi.fn(),
     onStartManualEntry: vi.fn(),
-    onOpenCloudAuth: vi.fn()
+    onOpenCloudAuth: vi.fn(),
+    onToggleDesktopSidebar: vi.fn()
   };
 
   return {
@@ -88,7 +91,12 @@ describe("AppShell onboarding lock", () => {
       reportsCount: 1,
       markersTrackedCount: 18,
       outOfRangeCount: 0,
-      stabilityScore: 66
+      stabilityScore: 66,
+      headerStats: [
+        { id: "reports", value: "1", label: "Reports" },
+        { id: "markers", value: "18", label: "Markers tracked" },
+        { id: "oor", value: "0", label: "Out of range", tone: "positive" }
+      ]
     });
     render(
       <AppShell {...props}>
@@ -97,9 +105,9 @@ describe("AppShell onboarding lock", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Dashboard", level: 2 })).toBeTruthy();
-    expect(screen.getByText((_, node) => node?.textContent?.trim() === "1 Reports")).toBeTruthy();
-    expect(screen.getByText((_, node) => node?.textContent?.trim() === "18 Markers tracked")).toBeTruthy();
-    const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "0 Out of range");
+    expect(screen.getByText((_, node) => node?.textContent?.trim() === "1Reports")).toBeTruthy();
+    expect(screen.getByText((_, node) => node?.textContent?.trim() === "18Markers tracked")).toBeTruthy();
+    const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "0Out of range");
     const outOfRangeValue = outOfRangeStat.querySelector("strong");
     expect(outOfRangeValue?.className).toContain("text-emerald-300");
     expect(screen.getByRole("button", { name: "Open Stability Index" })).toBeTruthy();
@@ -113,7 +121,12 @@ describe("AppShell onboarding lock", () => {
       reportsCount: 1,
       markersTrackedCount: 18,
       outOfRangeCount: 2,
-      stabilityScore: 66
+      stabilityScore: 66,
+      headerStats: [
+        { id: "reports", value: "1", label: "Reports" },
+        { id: "markers", value: "18", label: "Markers tracked" },
+        { id: "oor", value: "2", label: "Out of range", tone: "warning" }
+      ]
     });
     render(
       <AppShell {...props}>
@@ -121,7 +134,7 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "2 Out of range");
+    const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "2Out of range");
     const outOfRangeValue = outOfRangeStat.querySelector("strong");
     expect(outOfRangeValue?.className).toContain("text-amber-300");
   });
@@ -133,7 +146,12 @@ describe("AppShell onboarding lock", () => {
       reportsCount: 1,
       markersTrackedCount: 18,
       outOfRangeCount: 0,
-      stabilityScore: 66
+      stabilityScore: 66,
+      headerStats: [
+        { id: "reports", value: "1", label: "Reports" },
+        { id: "markers", value: "18", label: "Markers tracked" },
+        { id: "oor", value: "0", label: "Out of range", tone: "positive" }
+      ]
     });
     render(
       <AppShell {...props}>
@@ -235,6 +253,44 @@ describe("AppShell onboarding lock", () => {
     expect(screen.getByText("Synced")).toBeTruthy();
     fireEvent.click(accountButton);
     expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("settings");
+  });
+
+  it("renders custom header stats on non-dashboard tabs", () => {
+    const props = buildProps({
+      activeTab: "reports",
+      activeTabTitle: "All Reports",
+      isOnboardingLocked: false,
+      hasReports: true,
+      headerStats: [
+        { id: "reports", value: "9", label: "reports" },
+        { id: "latest", value: "19 Feb", label: "latest report" }
+      ]
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.getByText((_, node) => node?.textContent?.trim() === "9reports")).toBeTruthy();
+    expect(screen.getByText((_, node) => node?.textContent?.trim() === "19 Feblatest report")).toBeTruthy();
+  });
+
+  it("supports compact desktop sidebar mode with icon-first navigation", () => {
+    const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true,
+      sidebarCollapsedDesktop: true
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.queryByText("Core")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Upload PDF" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Protocols" })).toBeTruthy();
   });
 
   it("shows Local-only instead of pending when authenticated outside cloud mode", () => {
