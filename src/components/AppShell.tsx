@@ -611,7 +611,7 @@ const AppShell = ({
                         <span className="stability-pill-label text-slate-300">{stabilityLabel}</span>
                         <span className="font-semibold" style={{ color: stabilityColor(stabilityScore) }}>{stabilityScore}</span>
                       </button>
-                      <div className="stability-header-tooltip pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-700/80 bg-slate-900/97 p-3 text-xs leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                      <div className="stability-header-tooltip pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-72 max-w-[min(92vw,22rem)] rounded-xl border border-slate-700/90 bg-slate-950 p-3 text-xs leading-relaxed text-slate-300 opacity-0 shadow-2xl transition-opacity group-hover:opacity-100">
                         <p className="stability-tooltip-title font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
                         <p className="mt-1.5">
                           {tr(

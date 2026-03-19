@@ -67,6 +67,157 @@ const AlertsView = ({
     onFocusedMarkerHandled();
   }, [focusedMarker, onFocusedMarkerHandled]);
 
+  const positiveSignalsSection = (
+    <div
+      className={
+        isDarkTheme
+          ? "alerts-panel-positive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+          : "alerts-panel-positive rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      }
+    >
+      <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Positieve signalen", "Positive signals")}</h4>
+      <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
+        {tr("Waarden of trends die momenteel gunstig ogen worden hier groen gemarkeerd.", "Values or trends that currently look favorable are shown here in green.")}
+      </p>
+      {positiveAlerts.length === 0 ? (
+        <p className={isDarkTheme ? "mt-3 text-sm text-slate-400" : "mt-3 text-sm text-slate-600"}>
+          {tr("Nog geen positieve signalen in deze filter.", "No positive signals in this filter yet.")}
+        </p>
+      ) : (
+        <div className="mt-3 columns-1 [column-gap:0.75rem] md:columns-2 2xl:columns-3">
+          {positiveAlerts.map((alert) => {
+            const series = alertSeriesByMarker[alert.marker] ?? [];
+            return (
+              <article
+                key={alert.id}
+                data-alert-marker={alert.marker}
+                className={`alerts-card-positive positive-alert-card mb-3 break-inside-avoid rounded-xl border bg-emerald-500/10 p-3 text-emerald-100 ${
+                  focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : "border-emerald-500/35"
+                }`}
+              >
+                <div className="space-y-2">
+                  <div className="grid items-start gap-2 lg:grid-cols-[minmax(0,1fr)_176px]">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="min-w-0 text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
+                        <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/20 px-2 py-0.5 text-[11px]">
+                          {tr("Positief", "Positive")}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-snug">{alert.message}</p>
+                    </div>
+                    <div>
+                      <AlertTrendMiniChart
+                        marker={alert.marker}
+                        points={series}
+                        highlightDate={alert.date}
+                        language={language}
+                        height={100}
+                      />
+                    </div>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-xs leading-snug text-emerald-200/90">{alert.suggestion}</p>
+                    <p className="mt-1 text-[11px] text-emerald-200/80">{formatDate(alert.date)}</p>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const actionableAlertsSection = (
+    <div
+      className={
+        isDarkTheme
+          ? "alerts-panel-actionable app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
+          : "alerts-panel-actionable rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      }
+    >
+      <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
+      <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
+        {tr("Dit zijn signalen waarbij vaak een bespreekactie of extra monitoring zinvol is.", "These signals often benefit from discussion or additional monitoring.")}
+      </p>
+      {actionableAlerts.length === 0 ? (
+        <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-4 text-sm text-emerald-200">
+          {tr(
+            "Geen alerts met directe actie in de huidige filter. Dat is meestal een goed teken.",
+            "No action-needed alerts in the current filter. That is usually a good sign."
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 columns-1 [column-gap:0.75rem] xl:columns-2">
+          {actionableAlerts.map((alert) => {
+            const cardClass =
+              alert.severity === "high"
+                ? isDarkTheme
+                  ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
+                  : "border-rose-200 bg-rose-50 text-rose-900"
+                : alert.severity === "medium"
+                  ? isDarkTheme
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                  : isDarkTheme
+                    ? "border-slate-600 bg-slate-800/70 text-slate-100"
+                    : "border-slate-200 bg-slate-50 text-slate-900";
+            const series = alertSeriesByMarker[alert.marker] ?? [];
+            return (
+              <article
+                key={alert.id}
+                data-alert-marker={alert.marker}
+                className={`alerts-card-actionable mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass} ${
+                  focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : ""
+                }`}
+              >
+                <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_200px]">
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
+                      <div className="flex items-center gap-1.5 text-[11px]">
+                        <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
+                          {alertTypeLabel(alert.type)}
+                        </span>
+                        <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
+                          {tr("Prioriteit", "Priority")}: {alertSeverityLabel(alert.severity)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm leading-snug">{alert.message}</p>
+                    <div
+                      className={
+                        isDarkTheme
+                          ? "mt-1 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 py-2"
+                          : "mt-1 rounded-lg border border-slate-300/80 bg-white px-2.5 py-2"
+                      }
+                    >
+                      <p className="text-[11px] uppercase tracking-wide opacity-80">
+                        {tr("Mogelijke bespreekactie", "Suggested discussion action")}
+                      </p>
+                      <p className="mt-1 text-xs leading-snug">{alert.suggestion}</p>
+                    </div>
+                    <p className="mt-1 text-[11px] opacity-75">{formatDate(alert.date)}</p>
+                  </div>
+                  <div>
+                    <AlertTrendMiniChart
+                      marker={alert.marker}
+                      points={series}
+                      highlightDate={alert.date}
+                      language={language}
+                      height={100}
+                    />
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <section ref={rootRef} className="space-y-4 fade-in">
       <div
@@ -164,152 +315,8 @@ const AlertsView = ({
         </section>
       ) : null}
 
-      <div
-        className={
-          isDarkTheme
-            ? "alerts-panel-positive app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
-            : "alerts-panel-positive rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-        }
-      >
-        <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Positieve signalen", "Positive signals")}</h4>
-        <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
-          {tr("Waarden of trends die momenteel gunstig ogen worden hier groen gemarkeerd.", "Values or trends that currently look favorable are shown here in green.")}
-        </p>
-        {positiveAlerts.length === 0 ? (
-          <p className={isDarkTheme ? "mt-3 text-sm text-slate-400" : "mt-3 text-sm text-slate-600"}>
-            {tr("Nog geen positieve signalen in deze filter.", "No positive signals in this filter yet.")}
-          </p>
-        ) : (
-          <div className="mt-3 columns-1 [column-gap:0.75rem] md:columns-2 2xl:columns-3">
-            {positiveAlerts.map((alert) => {
-              const series = alertSeriesByMarker[alert.marker] ?? [];
-              return (
-                <article
-                  key={alert.id}
-                  data-alert-marker={alert.marker}
-                  className={`alerts-card-positive positive-alert-card mb-3 break-inside-avoid rounded-xl border bg-emerald-500/10 p-3 text-emerald-100 ${
-                    focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : "border-emerald-500/35"
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="grid items-start gap-2 lg:grid-cols-[minmax(0,1fr)_176px]">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="min-w-0 text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
-                          <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/20 px-2 py-0.5 text-[11px]">
-                            {tr("Positief", "Positive")}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm leading-snug">{alert.message}</p>
-                      </div>
-                      <div>
-                        <AlertTrendMiniChart
-                          marker={alert.marker}
-                          points={series}
-                          highlightDate={alert.date}
-                          language={language}
-                          height={100}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-full">
-                      <p className="text-xs leading-snug text-emerald-200/90">{alert.suggestion}</p>
-                      <p className="mt-1 text-[11px] text-emerald-200/80">{formatDate(alert.date)}</p>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div
-        className={
-          isDarkTheme
-            ? "alerts-panel-actionable app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4"
-            : "alerts-panel-actionable rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-        }
-      >
-        <h4 className={isDarkTheme ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-900"}>{tr("Actiegerichte alerts", "Actionable alerts")}</h4>
-        <p className={isDarkTheme ? "mt-1 text-xs text-slate-400" : "mt-1 text-xs text-slate-600"}>
-          {tr("Dit zijn signalen waarbij vaak een bespreekactie of extra monitoring zinvol is.", "These signals often benefit from discussion or additional monitoring.")}
-        </p>
-        {actionableAlerts.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-4 text-sm text-emerald-200">
-            {tr(
-              "Geen alerts met directe actie in de huidige filter. Dat is meestal een goed teken.",
-              "No action-needed alerts in the current filter. That is usually a good sign."
-            )}
-          </div>
-        ) : (
-          <div className="mt-3 columns-1 [column-gap:0.75rem] xl:columns-2">
-            {actionableAlerts.map((alert) => {
-              const cardClass =
-                alert.severity === "high"
-                  ? isDarkTheme
-                    ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
-                    : "border-rose-200 bg-rose-50 text-rose-900"
-                  : alert.severity === "medium"
-                    ? isDarkTheme
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
-                      : "border-amber-200 bg-amber-50 text-amber-900"
-                    : isDarkTheme
-                      ? "border-slate-600 bg-slate-800/70 text-slate-100"
-                      : "border-slate-200 bg-slate-50 text-slate-900";
-              const series = alertSeriesByMarker[alert.marker] ?? [];
-              return (
-                <article
-                  key={alert.id}
-                  data-alert-marker={alert.marker}
-                  className={`alerts-card-actionable mb-3 break-inside-avoid rounded-xl border p-3 shadow-soft ${cardClass} ${
-                    focusedMarker?.toLowerCase() === alert.marker.toLowerCase() ? "border-cyan-400/70 ring-2 ring-cyan-400/35" : ""
-                  }`}
-                >
-                  <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_200px]">
-                    <div>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">{getMarkerDisplayName(alert.marker, language)}</p>
-                        <div className="flex items-center gap-1.5 text-[11px]">
-                          <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
-                            {alertTypeLabel(alert.type)}
-                          </span>
-                          <span className={isDarkTheme ? "rounded-full border border-white/20 bg-black/15 px-2 py-0.5" : "rounded-full border border-slate-300 bg-white px-2 py-0.5"}>
-                            {tr("Prioriteit", "Priority")}: {alertSeverityLabel(alert.severity)}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="mt-1 text-sm leading-snug">{alert.message}</p>
-                      <div
-                        className={
-                          isDarkTheme
-                            ? "mt-1 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 py-2"
-                            : "mt-1 rounded-lg border border-slate-300/80 bg-white px-2.5 py-2"
-                        }
-                      >
-                        <p className="text-[11px] uppercase tracking-wide opacity-80">
-                          {tr("Mogelijke bespreekactie", "Suggested discussion action")}
-                        </p>
-                        <p className="mt-1 text-xs leading-snug">{alert.suggestion}</p>
-                      </div>
-                      <p className="mt-1 text-[11px] opacity-75">{formatDate(alert.date)}</p>
-                    </div>
-                    <div>
-                      <AlertTrendMiniChart
-                        marker={alert.marker}
-                        points={series}
-                        highlightDate={alert.date}
-                        language={language}
-                        height={100}
-                      />
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {actionableAlertsSection}
+      {positiveSignalsSection}
 
     </section>
   );

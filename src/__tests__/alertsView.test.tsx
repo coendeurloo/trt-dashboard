@@ -103,7 +103,7 @@ const buildProps = (seriesByMarker: Record<string, MarkerSeriesPoint[]>) => {
 };
 
 describe("AlertsView order", () => {
-  it("shows predictive section before positive and actionable sections", () => {
+  it("shows predictive first, then actionable alerts, then positive signals", () => {
     const props = buildProps({
       Hematocrit: [
         makeSeriesPoint({ id: "h1", date: "2025-12-01", value: 49, unit: "%" }),
@@ -115,11 +115,12 @@ describe("AlertsView order", () => {
     const { container } = render(<AlertsView {...props} />);
 
     const predictive = screen.getByRole("heading", { name: "Predictive" });
-    const positive = screen.getByRole("heading", { name: "Positive signals" });
     const actionable = screen.getByRole("heading", { name: "Actionable alerts" });
+    const positive = screen.getByRole("heading", { name: "Positive signals" });
 
-    expect(Boolean(predictive.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(Boolean(predictive.compareDocumentPosition(actionable) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(actionable.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(predictive.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(container.querySelector(".alerts-panel-predictive")).toBeTruthy();
     expect(container.querySelector(".alerts-panel-actionable")).toBeTruthy();
     expect(container.querySelector(".alerts-panel-positive")).toBeTruthy();

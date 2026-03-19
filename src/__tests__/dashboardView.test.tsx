@@ -331,4 +331,31 @@ describe("DashboardView chart controls", () => {
     });
   });
 
+  it("shows category and search filters in All view and filters marker cards", () => {
+    const { props } = buildProps();
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          dashboardView: "all",
+          visibleReports: [report],
+          allMarkers: ["Testosterone", "Creatinine"],
+          primaryMarkers: ["Testosterone"]
+        }}
+      />
+    );
+
+    const searchInput = screen.getByLabelText("Search marker");
+    expect(searchInput).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All categories" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Kidney Function" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Kidney Function" }));
+    expect(screen.getByText("Creatinine")).toBeTruthy();
+    expect(screen.queryByText("Testosterone")).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: "test" } });
+    expect(screen.getByText("No markers found")).toBeTruthy();
+  });
+
 });

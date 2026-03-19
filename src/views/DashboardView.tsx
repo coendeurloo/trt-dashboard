@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Check, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
@@ -12,8 +12,10 @@ import {
 import ComparisonChart from "../components/ComparisonChart";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
+import { MARKER_DATABASE } from "../data/markerDatabase";
 import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
+import { normalizeMarkerLookupKey } from "../markerNormalization";
 import { AppLanguage, AppSettings, DashboardViewMode, LabReport, PersonalInfo, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
 
 interface DashboardViewProps {
@@ -145,7 +147,7 @@ const DashboardView = ({
   const isDarkTheme = settings.theme === "dark";
   const isGeneralProfile = settings.userProfile === "health" || settings.userProfile === "biohacker";
 
-  // Wellbeing nudge: show when no check-ins or last one was ≥7 days ago
+  // Wellbeing nudge: show when no check-ins or last one was >= 7 days ago
   const lastCheckIn = checkIns.length > 0
     ? checkIns.reduce((a, b) => a.date > b.date ? a : b)
     : null;
@@ -158,6 +160,8 @@ const DashboardView = ({
   const firstReportFilteredOut = hasSingleReport && visibleReports.length === 0;
   const [showChartSettings, setShowChartSettings] = useState(false);
   const [showPrimaryMarkerPicker, setShowPrimaryMarkerPicker] = useState(false);
+  const [markerSearchTerm, setMarkerSearchTerm] = useState("");
+  const [markerCategoryFilter, setMarkerCategoryFilter] = useState("all");
   const chartSettingsRef = useRef<HTMLDivElement | null>(null);
 
   const referenceRangesTooltip = tr(
@@ -202,6 +206,85 @@ const DashboardView = ({
   const selectedPrimaryMarkers = settings.primaryMarkersSelection.length > 0
     ? settings.primaryMarkersSelection.filter((marker) => allMarkers.includes(marker))
     : primaryMarkers.filter((marker) => allMarkers.includes(marker));
+  const markerCategoryLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
+    MARKER_DATABASE.forEach((entry) => {
+      [entry.canonicalName, ...entry.aliases].forEach((alias) => {
+        const key = normalizeMarkerLookupKey(alias);
+        if (!key) {
+          return;
+        }
+        lookup.set(key, entry.category);
+      });
+    });
+    return lookup;
+  }, []);
+  const markersToRenderBase = dashboardView === "primary" ? primaryMarkers : allMarkers;
+  const resolveMarkerCategory = (marker: string): string => {
+    const lookupKey = normalizeMarkerLookupKey(marker);
+    return markerCategoryLookup.get(lookupKey) ?? "Other";
+  };
+  const categoryPriority = [
+    "Hormones - Sex",
+    "Hormones - Adrenal",
+    "Blood Glucose",
+    "Metabolic Health",
+    "Liver Function",
+    "Kidney Function",
+    "Complete Blood Count",
+    "Inflammatory Markers",
+    "Thyroid",
+    "Vitamins & Minerals",
+    "Iron Studies",
+    "Electrolytes",
+    "Coagulation",
+    "Enzymes",
+    "Other"
+  ];
+  const dashboardCategoryOptions = useMemo(() => {
+    if (dashboardView !== "all") {
+      return [];
+    }
+    const uniqueCategories = Array.from(new Set(markersToRenderBase.map((marker) => resolveMarkerCategory(marker))));
+    return uniqueCategories.sort((left, right) => {
+      const leftRank = categoryPriority.indexOf(left);
+      const rightRank = categoryPriority.indexOf(right);
+      const normalizedLeftRank = leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank;
+      const normalizedRightRank = rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank;
+      if (normalizedLeftRank !== normalizedRightRank) {
+        return normalizedLeftRank - normalizedRightRank;
+      }
+      return left.localeCompare(right);
+    });
+  }, [dashboardView, markersToRenderBase]);
+  useEffect(() => {
+    if (dashboardView !== "all") {
+      setMarkerSearchTerm("");
+      setMarkerCategoryFilter("all");
+      return;
+    }
+    if (markerCategoryFilter !== "all" && !dashboardCategoryOptions.includes(markerCategoryFilter)) {
+      setMarkerCategoryFilter("all");
+    }
+  }, [dashboardCategoryOptions, dashboardView, markerCategoryFilter]);
+  const normalizedMarkerSearchTerm = markerSearchTerm.trim().toLowerCase();
+  const markersToRender = useMemo(
+    () =>
+      markersToRenderBase.filter((marker) => {
+        if (dashboardView !== "all") {
+          return true;
+        }
+        if (markerCategoryFilter !== "all" && resolveMarkerCategory(marker) !== markerCategoryFilter) {
+          return false;
+        }
+        if (!normalizedMarkerSearchTerm) {
+          return true;
+        }
+        const markerLabel = getMarkerDisplayName(marker, language).toLowerCase();
+        return markerLabel.includes(normalizedMarkerSearchTerm) || marker.toLowerCase().includes(normalizedMarkerSearchTerm);
+      }),
+    [dashboardView, language, markerCategoryFilter, markersToRenderBase, normalizedMarkerSearchTerm]
+  );
 
   const togglePrimaryMarkerSelection = (marker: string) => {
     const currentSelection = selectedPrimaryMarkers;
@@ -276,7 +359,7 @@ const DashboardView = ({
 
   return (
     <section className="space-y-4 fade-in">
-      {/* ── Greeting + summary row ── */}
+      {/* Greeting + summary row */}
       {hasReports && personalInfo.name ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -410,6 +493,62 @@ const DashboardView = ({
                 </button>
               </div>
             </div>
+            {dashboardView === "all" && !isCompareMode ? (
+              <div
+                className={`flex flex-wrap items-center gap-2 border-t pt-2 ${
+                  isDarkTheme ? "border-slate-700/60" : "border-slate-200/90"
+                }`}
+              >
+                <input
+                  type="search"
+                  value={markerSearchTerm}
+                  onChange={(event) => setMarkerSearchTerm(event.target.value)}
+                  placeholder={tr("Zoek marker...", "Search markers...")}
+                  className={
+                    isDarkTheme
+                      ? "w-full rounded-md border border-slate-700/80 bg-slate-900/70 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 sm:w-64"
+                      : "w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-500 sm:w-64"
+                  }
+                  aria-label={tr("Zoek marker", "Search marker")}
+                />
+                <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
+                  {tr(`${markersToRender.length} markers zichtbaar`, `${markersToRender.length} markers shown`)}
+                </p>
+                <div className="w-full overflow-x-auto pb-0.5">
+                  <div className="flex min-w-max items-center gap-1.5">
+                    <button
+                      type="button"
+                      className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                        markerCategoryFilter === "all"
+                          ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
+                          : isDarkTheme
+                            ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                            : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
+                      }`}
+                      onClick={() => setMarkerCategoryFilter("all")}
+                    >
+                      {tr("Alle categorieen", "All categories")}
+                    </button>
+                    {dashboardCategoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                          markerCategoryFilter === category
+                            ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
+                            : isDarkTheme
+                              ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
+                              : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
+                        }`}
+                        onClick={() => setMarkerCategoryFilter(category)}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {showChartSettings ? (
             <div
@@ -772,6 +911,7 @@ const DashboardView = ({
 
       {!isCompareMode || !hasReports ? (
         <div>
+
         {hasReports ? (
           <>
 
@@ -824,7 +964,7 @@ const DashboardView = ({
                 <p className="text-base font-semibold text-slate-100">{tr("Eerste rapport opgeslagen", "First report saved")}</p>
                 <p className="mt-1 text-sm text-slate-300">
                   {tr(
-                    "Je eerste rapport is opgeslagen, maar valt buiten je huidige filter. Zet je bereik op ‘All time’ of upload een tweede rapport om trends te zien.",
+                    "Je eerste rapport is opgeslagen, maar valt buiten je huidige filter. Zet je bereik op 'All time' of upload een tweede rapport om trends te zien.",
                     "Your first report is saved, but it falls outside your current filter. Set your range to All time or upload a second report to start seeing trends."
                   )}
                 </p>
@@ -889,9 +1029,16 @@ const DashboardView = ({
               </>
             )}
           </div>
+        ) : markersToRender.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-700 py-10 text-center">
+            <p className="text-base font-semibold text-slate-200">{tr("Geen markers gevonden", "No markers found")}</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {tr("Pas je zoekterm of categorie aan om markers te tonen.", "Adjust your search term or category filter to show markers.")}
+            </p>
+          </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {(dashboardView === "primary" ? primaryMarkers : allMarkers).map((marker, index) => {
+            {markersToRender.map((marker, index) => {
               const points = chartPointsForMarker(marker);
               return (
                 <MarkerChartCard
@@ -951,8 +1098,8 @@ const DashboardView = ({
                 <p className="text-xs font-medium text-slate-200">{tr("Hormoonestabiliteit", "Hormone stability")}</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
                   {tr(
-                    "Meet hoe consistent je markers zijn over je recente rapporten. Weinig schommeling betekent een hoge score — een goed teken dat je protocol zijn werk doet. 80-100: stabiel · 60-79: matig · onder 60: wisselend.",
-                    "Measures how consistent your markers have been across your recent reports. Little fluctuation means a high score — a good sign your protocol is working. 80-100: stable · 60-79: moderate · below 60: variable."
+                    "Meet hoe consistent je markers zijn over je recente rapporten. Weinig schommeling betekent een hoge score - een goed teken dat je protocol zijn werk doet. 80-100: stabiel | 60-79: matig | onder 60: wisselend.",
+                    "Measures how consistent your markers have been across your recent reports. Little fluctuation means a high score - a good sign your protocol is working. 80-100: stable | 60-79: moderate | below 60: variable."
                   )}
                 </p>
               </div>
