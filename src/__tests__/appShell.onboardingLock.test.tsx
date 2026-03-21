@@ -172,7 +172,7 @@ describe("AppShell onboarding lock", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps only Dashboard enabled before the first upload", () => {
+  it("keeps Dashboard and Settings enabled before the first upload", () => {
     const props = buildProps();
     render(
       <AppShell {...props}>
@@ -181,7 +181,7 @@ describe("AppShell onboarding lock", () => {
     );
 
     expect((screen.getByRole("button", { name: "Dashboard" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Settings" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Settings" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Protocols" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Supplements" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /AI Lab Analysis/i }) as HTMLButtonElement).disabled).toBe(true);
@@ -214,7 +214,7 @@ describe("AppShell onboarding lock", () => {
     expect(protocolButtons.length).toBeGreaterThan(1);
     expect(settingsButtons.length).toBeGreaterThan(1);
     protocolButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
-    settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
+    settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(false));
   });
 
   it("shows subtle Sign up and Sign in buttons in sidebar header when unauthenticated", () => {
@@ -248,8 +248,9 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    const accountButton = screen.getByRole("button", { name: /alice@example.com/i });
+    const accountButton = screen.getByRole("button", { name: /open settings/i });
     expect(accountButton).toBeTruthy();
+    expect(screen.getByText(/alice@example.com/i)).toBeTruthy();
     expect(screen.getByText("Synced")).toBeTruthy();
     fireEvent.click(accountButton);
     expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("settings");

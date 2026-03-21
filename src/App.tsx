@@ -2162,7 +2162,7 @@ const App = () => {
     if (!isOnboardingLocked) {
       return;
     }
-    if (activeTab === "dashboard") {
+    if (activeTab === "dashboard" || activeTab === "settings") {
       return;
     }
     setActiveTab("dashboard");

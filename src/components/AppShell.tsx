@@ -124,7 +124,6 @@ const AppShell = ({
     stabilityScore,
     activeProtocolCompound,
     outOfRangeCount,
-    reportsCount,
     appMode = "local",
     syncStatus = "idle",
     cloudConfigured = false,
@@ -155,7 +154,7 @@ const AppShell = ({
   } = actions;
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
-    isOnboardingLocked && key !== "dashboard";
+    isOnboardingLocked && key !== "dashboard" && key !== "settings";
   const isLightTheme = theme === "light";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
@@ -477,6 +476,16 @@ const AppShell = ({
                     onRequestTabChange("settings");
                     onAfterNavigate?.();
                   }}
+                  title={
+                    syncStatus === "error"
+                      ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
+                      : tr("Open Instellingen", "Open Settings")
+                  }
+                  aria-label={
+                    syncStatus === "error"
+                      ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
+                      : tr("Open Instellingen", "Open Settings")
+                  }
                   className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
                     isLightTheme
                       ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
