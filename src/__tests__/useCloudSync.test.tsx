@@ -101,7 +101,7 @@ describe("useCloudSync", () => {
     applyPatchMock.mockReset();
   });
 
-  it("blocks sync when cloud schema version mismatches local schema", async () => {
+  it("blocks sync when cloud schema version is newer than local schema", async () => {
     const emptyData = makeEmptyData();
     fetchSnapshotMock.mockResolvedValue({
       data: emptyData,
@@ -126,6 +126,35 @@ describe("useCloudSync", () => {
     });
     expect(result.current.schemaVersionCompatible).toBe(false);
     expect(result.current.error).toContain("schema version");
+  });
+
+  it("accepts older cloud schema versions and continues syncing", async () => {
+    const emptyData = makeEmptyData();
+    fetchSnapshotMock.mockResolvedValue({
+      data: emptyData,
+      rawPayload: toCloudSyncPayload(emptyData),
+      schemaVersion: APP_SCHEMA_VERSION - 1,
+      revision: 2
+    });
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(emptyData);
+      return useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.schemaVersionCompatible).toBe(true);
+      expect(result.current.syncStatus).toBe("idle");
+    });
+    expect(result.current.error).toBeNull();
+    expect(replaceAllMock).not.toHaveBeenCalled();
+    expect(applyPatchMock).not.toHaveBeenCalled();
   });
 
   it("flags revision conflict when initial upload hits mismatch", async () => {

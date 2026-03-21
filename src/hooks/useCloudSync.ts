@@ -235,7 +235,7 @@ export const useCloudSync = ({
       setLastRevision(snapshotRevision);
       lastRevisionRef.current = snapshotRevision;
 
-      if (schemaVersion !== APP_SCHEMA_VERSION) {
+      if (schemaVersion > APP_SCHEMA_VERSION) {
         setSchemaVersionCompatible(false);
         setSyncStatus("error");
         setError(

@@ -59,6 +59,18 @@ const parseJson = async <T>(response: Response): Promise<T> => {
   return payload as T;
 };
 
+const isRecoverableSyncStateError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toUpperCase();
+  return (
+    message.includes("SUPABASE_HTTP_404") ||
+    message.includes("42P01") ||
+    message.includes("SYNC_STATE")
+  );
+};
+
 const fetchRows = async <T>(
   table: string,
   query: string,
@@ -200,13 +212,21 @@ export class SupabaseCloudAdapter {
       this.accessToken
     );
 
-    const syncStateRows = await fetchRows<{
-      last_revision: number | null;
-    }>(
-      "sync_state",
-      `select=last_revision&user_id=eq.${escapeFilterValue(this.userId)}&device_id=eq.${escapeFilterValue(this.deviceId)}&limit=1`,
-      this.accessToken
-    );
+    let syncStateRows: Array<{ last_revision: number | null }> = [];
+    try {
+      syncStateRows = await fetchRows<{
+        last_revision: number | null;
+      }>(
+        "sync_state",
+        `select=last_revision&user_id=eq.${escapeFilterValue(this.userId)}&device_id=eq.${escapeFilterValue(this.deviceId)}&limit=1`,
+        this.accessToken
+      );
+    } catch (error) {
+      if (!isRecoverableSyncStateError(error)) {
+        throw error;
+      }
+      syncStateRows = [];
+    }
 
     const profile = profileRows[0];
     const profileSettings = profile?.settings ?? null;
