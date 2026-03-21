@@ -1593,7 +1593,7 @@ const App = () => {
     });
 
     if (sanitizedMarkers.length === 0) {
-      setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal Ã©Ã©n marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
+      setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal één marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
       return;
     }
 
@@ -1933,8 +1933,8 @@ const App = () => {
         ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
         : null;
     }
-    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in Ã©Ã©n oogopslag.", "Your health markers at a glance.") : null;
-    if (activeTab === "reports") return tr("Alle geÃ¼ploade labresultaten in Ã©Ã©n overzicht.", "All uploaded lab reports in one overview.");
+    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.") : null;
+    if (activeTab === "reports") return tr("Alle geüploade labresultaten in één overzicht.", "All uploaded lab reports in one overview.");
     if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je markers.", "Trend and threshold alerts for your markers.");
     if (activeTab === "protocol") {
       const protocolProfile = appData.settings.userProfile === "trt" || appData.settings.userProfile === "enhanced";
@@ -1954,7 +1954,7 @@ const App = () => {
       }
       return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
     }
-    if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beÃ¯nvloeden.", "Model how dose changes may affect your levels.");
+    if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
     if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
     if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
     return null;
@@ -1980,7 +1980,7 @@ const App = () => {
     setShowWellbeingReminderModal(false);
   }, [shouldShowWellbeingReminder]);
   const shellActiveTabTitle = isReviewMode
-    ? tr("Controleer geÃ«xtraheerde data", "Review extracted data")
+    ? tr("Controleer geëxtraheerde data", "Review extracted data")
     : activeTabTitle;
   const shellActiveTabSubtitle = isReviewMode
     ? null
@@ -2019,7 +2019,7 @@ const App = () => {
         },
         {
           id: "reports-latest",
-          value: latestReportDate ? formatDate(latestReportDate) : "â€”",
+          value: latestReportDate ? formatDate(latestReportDate) : "-",
           label: tr("laatste rapport", "latest report")
         }
       ];
@@ -2524,8 +2524,8 @@ const App = () => {
                           <p>
                             {isDemoMode
                               ? tr(
-                                  "Je verkent de app met demodata â€” kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
-                                  "You're exploring with demo data â€” feel free to look around. When you're ready, start fresh with your own labs."
+                                  "Je verkent de app met demodata, kijk gerust rond. Klaar? Begin opnieuw met je eigen uitslagen.",
+                                  "You're exploring with demo data, feel free to look around. When you're ready, start fresh with your own labs."
                                 )
                               : tr(
                                   "Demodata is nog geladen. Wis het wanneer je klaar bent.",

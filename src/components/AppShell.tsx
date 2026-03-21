@@ -433,6 +433,33 @@ const AppShell = ({
     </button>
   );
 
+  const renderHeaderAuthLinks = () => (
+    <div className="hidden items-center gap-2 lg:flex">
+      <button
+        type="button"
+        onClick={() => onOpenCloudAuth("signup")}
+        className={`rounded-md border px-2.5 py-1 text-xs transition ${
+          isLightTheme
+            ? "border-cyan-600/45 bg-cyan-500/20 font-medium text-cyan-900 hover:border-cyan-700/60 hover:bg-cyan-500/30"
+            : "border-cyan-500/45 bg-cyan-500/10 text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+        }`}
+      >
+        {tr("Sign up", "Sign up")}
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpenCloudAuth("signin")}
+        className={`rounded-md px-2 py-1 text-xs transition ${
+          isLightTheme
+            ? "font-medium text-slate-700 hover:text-slate-900"
+            : "text-slate-300 hover:text-slate-100"
+        }`}
+      >
+        {tr("Sign in", "Sign in")}
+      </button>
+    </div>
+  );
+
   const renderUploadShortcut = (compact: boolean) => (
     <button
       type="button"
@@ -709,19 +736,21 @@ const AppShell = ({
                         <p className="stability-tooltip-title font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
                         <p className="mt-1.5">
                           {tr(
-                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling â€” een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
-                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation â€” a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
+                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling, een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
+                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation, a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
                           )}
                         </p>
                         <p className="mt-2 text-[11px] text-slate-500">
-                          {tr("80-100: stabiel Â· 60-79: matig Â· onder 60: wisselend", "80-100: stable Â· 60-79: moderate Â· below 60: variable")}
+                          {tr("80-100: stabiel · 60-79: matig · onder 60: wisselend", "80-100: stable · 60-79: moderate · below 60: variable")}
                         </p>
                       </div>
                     </div>
                   ) : null}
                   {!isShareMode && cloudConfigured && cloudAuthStatus === "authenticated"
                     ? renderAccountStatusButton("header")
-                    : null}
+                    : !isShareMode && cloudConfigured && cloudAuthStatus !== "authenticated" && cloudAuthStatus !== "loading"
+                      ? renderHeaderAuthLinks()
+                      : null}
                   <button
                     type="button"
                     onClick={onToggleTheme}
