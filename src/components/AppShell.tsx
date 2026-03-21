@@ -252,14 +252,53 @@ const AppShell = ({
     );
   };
 
-  const renderNavigationSections = (onAfterNavigate?: () => void, compact = false) => (
+  const renderNavigationSections = (onAfterNavigate?: () => void, compact = false) => {
+    const showDesktopSidebarToggle = !onAfterNavigate;
+    const sidebarToggleTitle = sidebarCollapsedDesktop
+      ? tr("Zijbalk uitklappen", "Expand sidebar")
+      : tr("Zijbalk inklappen", "Collapse sidebar");
+
+    return (
     <nav className="space-y-0.5">
       {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") || visibleTabKeys.has("checkIns") ? (
         <>
           {!compact ? (
-            <p className={`mb-1 mt-0 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
-              {tr("Kern", "Core")}
-            </p>
+            <div className={`mb-1 mt-0 flex items-center justify-between px-3 ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest">
+                {tr("Kern", "Core")}
+              </p>
+              {showDesktopSidebarToggle ? (
+                <button
+                  type="button"
+                  onClick={onToggleDesktopSidebar}
+                  title={sidebarToggleTitle}
+                  aria-label={sidebarToggleTitle}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+                    isLightTheme
+                      ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
+                      : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                  }`}
+                >
+                  {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+                </button>
+              ) : null}
+            </div>
+          ) : showDesktopSidebarToggle ? (
+            <div className="mb-1 mt-0 flex justify-end px-1">
+              <button
+                type="button"
+                onClick={onToggleDesktopSidebar}
+                title={sidebarToggleTitle}
+                aria-label={sidebarToggleTitle}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+                  isLightTheme
+                    ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
+                    : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                }`}
+              >
+                {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           ) : null}
           {renderTabButton("dashboard", onAfterNavigate, compact)}
           {renderTabButton("checkIns", onAfterNavigate, compact)}
@@ -300,7 +339,8 @@ const AppShell = ({
         <div className={`mt-3 border-t border-slate-800 pt-3 ${compact ? "px-1" : ""}`}>{renderTabButton("settings", onAfterNavigate, compact)}</div>
       ) : null}
     </nav>
-  );
+    );
+  };
 
   const renderShareSnapshotCard = () => (
     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-100">
@@ -494,23 +534,6 @@ const AppShell = ({
     return (
       <>
         <div className={`brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 ${compact ? "p-2.5" : "p-3"}`}>
-          {!onAfterNavigate ? (
-            <div className={`hidden items-center ${compact ? "justify-center" : "justify-end"} lg:flex`}>
-              <button
-                type="button"
-                onClick={onToggleDesktopSidebar}
-                title={sidebarCollapsedDesktop ? tr("Zijbalk uitklappen", "Expand sidebar") : tr("Zijbalk inklappen", "Collapse sidebar")}
-                aria-label={sidebarCollapsedDesktop ? tr("Zijbalk uitklappen", "Expand sidebar") : tr("Zijbalk inklappen", "Collapse sidebar")}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-md border ${
-                  isLightTheme
-                    ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
-                    : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                }`}
-              >
-                {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
-            </div>
-          ) : null}
           <img
             src={theme === "dark" ? labtrackerLogoDark : labtrackerLogoLight}
             alt="LabTracker"
