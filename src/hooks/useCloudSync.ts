@@ -16,6 +16,7 @@ import { CloudSession } from "../cloud/authClient";
 
 type CloudSyncStatus = "idle" | "loading" | "syncing" | "pending" | "error";
 type CloudSyncAction = "none" | "upload_local" | "choose_source";
+type RetryChannel = "load" | "upload" | "patch";
 
 interface UseCloudSyncOptions {
   enabled: boolean;
@@ -46,6 +47,57 @@ const detectRevisionConflict = (error: unknown): boolean => {
   return /REVISION_MISMATCH|P0001|409/.test(error.message);
 };
 
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : typeof error === "string" ? error : "";
+
+const getErrorCode = (error: unknown): string => {
+  const message = getErrorMessage(error).trim();
+  if (!message) {
+    return "";
+  }
+  const separator = message.indexOf(":");
+  return (separator >= 0 ? message.slice(0, separator) : message).trim().toUpperCase();
+};
+
+const isNetworkFailure = (error: unknown): boolean => {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed") ||
+    message.includes("timeout")
+  );
+};
+
+const isAuthFailure = (error: unknown): boolean => {
+  const code = getErrorCode(error);
+  if (code === "AUTH_REQUIRED" || code === "SUPABASE_HTTP_401" || code === "SUPABASE_HTTP_403" || code === "AUTH_UNAUTHORIZED") {
+    return true;
+  }
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes("jwt") && message.includes("expired");
+};
+
+const isTransientFailure = (error: unknown): boolean => {
+  if (detectRevisionConflict(error) || isAuthFailure(error)) {
+    return false;
+  }
+  if (isNetworkFailure(error)) {
+    return true;
+  }
+  const code = getErrorCode(error);
+  if (code === "SUPABASE_HTTP_429") {
+    return true;
+  }
+  if (/^SUPABASE_HTTP_5\d\d$/.test(code)) {
+    return true;
+  }
+  if (code === "CLOUD_PATCH_FAILED" || code === "CLOUD_PATCH_UNEXPECTED" || code === "CLOUD_REPLACE_FAILED" || code === "CLOUD_REPLACE_UNEXPECTED") {
+    return true;
+  }
+  return false;
+};
+
 const hashPayload = (payload: CloudSyncPayload): string => JSON.stringify(payload);
 
 export const useCloudSync = ({
@@ -65,6 +117,9 @@ export const useCloudSync = ({
   const [cloudCandidateData, setCloudCandidateData] = useState<StoredAppData | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [bootstrapped, setBootstrapped] = useState(false);
+  const [loadRetryTick, setLoadRetryTick] = useState(0);
+  const [uploadRetryTick, setUploadRetryTick] = useState(0);
+  const [patchRetryTick, setPatchRetryTick] = useState(0);
 
   const deviceId = useMemo(() => getOrCreateCloudDeviceId(), []);
   const adapter = useMemo(() => {
@@ -79,6 +134,65 @@ export const useCloudSync = ({
   const lastSyncedPayloadRef = useRef<CloudSyncPayload | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptsRef = useRef<Record<RetryChannel, number>>({
+    load: 0,
+    upload: 0,
+    patch: 0
+  });
+  const retryTimersRef = useRef<Record<RetryChannel, ReturnType<typeof setTimeout> | null>>({
+    load: null,
+    upload: null,
+    patch: null
+  });
+
+  const clearRetryTimer = useCallback((channel: RetryChannel) => {
+    const timer = retryTimersRef.current[channel];
+    if (timer) {
+      clearTimeout(timer);
+      retryTimersRef.current[channel] = null;
+    }
+  }, []);
+
+  const resetRetryState = useCallback((channel?: RetryChannel) => {
+    if (channel) {
+      retryAttemptsRef.current[channel] = 0;
+      clearRetryTimer(channel);
+      return;
+    }
+    (["load", "upload", "patch"] as RetryChannel[]).forEach((entry) => {
+      retryAttemptsRef.current[entry] = 0;
+      clearRetryTimer(entry);
+    });
+  }, [clearRetryTimer]);
+
+  const scheduleRetry = useCallback((channel: RetryChannel, reason: unknown): boolean => {
+    if (!isTransientFailure(reason)) {
+      return false;
+    }
+    const attempts = retryAttemptsRef.current[channel];
+    if (attempts >= 6) {
+      return false;
+    }
+    const nextAttempt = attempts + 1;
+    retryAttemptsRef.current[channel] = nextAttempt;
+    clearRetryTimer(channel);
+    const delayMs = Math.min(30_000, 1_500 * 2 ** (nextAttempt - 1));
+    setSyncStatus("syncing");
+    setError(null);
+    retryTimersRef.current[channel] = setTimeout(() => {
+      retryTimersRef.current[channel] = null;
+      if (channel === "load") {
+        setLoadRetryTick((current) => current + 1);
+        return;
+      }
+      if (channel === "upload") {
+        setUploadRetryTick((current) => current + 1);
+        return;
+      }
+      setPatchRetryTick((current) => current + 1);
+    }, delayMs);
+    return true;
+  }, [clearRetryTimer]);
 
   useEffect(() => {
     if (!enabled || !session) {
@@ -92,16 +206,20 @@ export const useCloudSync = ({
       setCloudCandidateData(null);
       setInitialized(false);
       setBootstrapped(false);
+      setLoadRetryTick(0);
+      setUploadRetryTick(0);
+      setPatchRetryTick(0);
       localAtInitRef.current = null;
       lastSyncedHashRef.current = "";
       lastSyncedPayloadRef.current = null;
       lastRevisionRef.current = null;
+      resetRetryState();
       return;
     }
     if (!localAtInitRef.current) {
       localAtInitRef.current = coerceStoredAppData(appData);
     }
-  }, [appData, enabled, session]);
+  }, [appData, enabled, resetRetryState, session]);
 
   const loadFromCloud = useCallback(async () => {
     if (!adapter || isShareMode) {
@@ -198,13 +316,16 @@ export const useCloudSync = ({
       setBootstrapped(true);
       setCloudCandidateData(cloudData);
       setInitialized(true);
+      resetRetryState("load");
     } catch (loadError) {
-      setSyncStatus("error");
-      setError(loadError instanceof Error ? loadError.message : "Cloud load failed");
+      if (!scheduleRetry("load", loadError)) {
+        setSyncStatus("error");
+        setError(loadError instanceof Error ? loadError.message : "Cloud load failed");
+      }
       setInitialized(true);
       setBootstrapped(false);
     }
-  }, [adapter, appData, isShareMode, setAppData]);
+  }, [adapter, appData, isShareMode, resetRetryState, scheduleRetry, setAppData]);
 
   useEffect(() => {
     if (!adapter || initialized || isShareMode) {
@@ -212,6 +333,13 @@ export const useCloudSync = ({
     }
     void loadFromCloud();
   }, [adapter, initialized, isShareMode, loadFromCloud]);
+
+  useEffect(() => {
+    if (!adapter || isShareMode || loadRetryTick === 0) {
+      return;
+    }
+    void loadFromCloud();
+  }, [adapter, isShareMode, loadRetryTick, loadFromCloud]);
 
   const replaceCloudWithData = useCallback(
     async (nextData: StoredAppData) => {
@@ -239,6 +367,7 @@ export const useCloudSync = ({
     try {
       await replaceCloudWithData(coerceStoredAppData(appData));
       setCloudCandidateData(coerceStoredAppData(appData));
+      resetRetryState("upload");
     } catch (replaceError) {
       setError(replaceError instanceof Error ? replaceError.message : "Upload failed");
       if (detectRevisionConflict(replaceError)) {
@@ -247,9 +376,11 @@ export const useCloudSync = ({
         setSyncStatus("pending");
         return;
       }
-      setSyncStatus("error");
+      if (!scheduleRetry("upload", replaceError)) {
+        setSyncStatus("error");
+      }
     }
-  }, [appData, replaceCloudWithData]);
+  }, [appData, replaceCloudWithData, resetRetryState, scheduleRetry]);
 
   const useCloudCopy = useCallback(() => {
     if (!cloudCandidateData) {
@@ -285,7 +416,7 @@ export const useCloudSync = ({
     }
 
     void uploadLocalData();
-  }, [actionRequired, adapter, enabled, isShareMode, uploadLocalData]);
+  }, [actionRequired, adapter, enabled, isShareMode, uploadLocalData, uploadRetryTick]);
 
   useEffect(() => {
     if (!adapter || !enabled || isShareMode) {
@@ -330,6 +461,7 @@ export const useCloudSync = ({
         setConflictDetected(false);
         setActionRequired("none");
         setSyncStatus("idle");
+        resetRetryState("patch");
       } catch (syncError) {
         setError(syncError instanceof Error ? syncError.message : "Cloud sync failed");
         if (detectRevisionConflict(syncError)) {
@@ -338,7 +470,9 @@ export const useCloudSync = ({
           setSyncStatus("pending");
           return;
         }
-        setSyncStatus("error");
+        if (!scheduleRetry("patch", syncError)) {
+          setSyncStatus("error");
+        }
       }
     }, 1200);
 
@@ -355,7 +489,18 @@ export const useCloudSync = ({
     enabled,
     isShareMode,
     schemaVersionCompatible
+    ,
+    patchRetryTick,
+    resetRetryState,
+    scheduleRetry
   ]);
+
+  useEffect(() => () => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+    resetRetryState();
+  }, [resetRetryState]);
 
   return {
     schemaVersionCompatible,

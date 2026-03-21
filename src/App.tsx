@@ -133,6 +133,8 @@ type UploadSummary =
       aiApplied: boolean;
     };
 
+type OnboardingEntryPoint = "first_report" | "replay";
+
 interface PendingUndoAction {
   id: number;
   message: string;
@@ -308,6 +310,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [onboardingReport, setOnboardingReport] = useState<LabReport | null>(null);
+  const [onboardingEntryPoint, setOnboardingEntryPoint] = useState<OnboardingEntryPoint | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
@@ -1647,6 +1650,7 @@ const App = () => {
 
     if (isFirstReport) {
       setOnboardingReport(report);
+      setOnboardingEntryPoint("first_report");
       setShowOnboardingWizard(true);
     }
 
@@ -2855,8 +2859,12 @@ const App = () => {
                       setAnalystMemory(null);
                     }}
                     onResetOnboarding={() => {
-                      updateSettings({ onboardingCompleted: false });
-                      setOnboardingReport(reports[0] ?? null);
+                      const replayReport = reports[0] ?? null;
+                      if (!replayReport) {
+                        return;
+                      }
+                      setOnboardingEntryPoint("replay");
+                      setOnboardingReport(replayReport);
                       setShowOnboardingWizard(true);
                     }}
                     onAddMarkerSuggestions={appendMarkerSuggestions}
@@ -3387,7 +3395,15 @@ const App = () => {
               onComplete={() => {
                 setShowOnboardingWizard(false);
                 setOnboardingReport(null);
-                updateSettings({ onboardingCompleted: true });
+                setOnboardingEntryPoint(null);
+                if (onboardingEntryPoint === "first_report") {
+                  updateSettings({ onboardingCompleted: true });
+                }
+              }}
+              onCancel={() => {
+                setShowOnboardingWizard(false);
+                setOnboardingReport(null);
+                setOnboardingEntryPoint(null);
               }}
               onNavigate={setActiveTab}
             />

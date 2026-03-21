@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trLocale } from "../i18n";
 import { WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
@@ -32,6 +32,7 @@ export interface OnboardingWizardProps {
   onAddSupplementPeriod: (supplement: SupplementPeriod) => void;
   onAddCheckIn: (checkIn: SymptomCheckIn) => void;
   onComplete: () => void;
+  onCancel: () => void;
   onNavigate: (tab: TabKey) => void;
 }
 
@@ -789,6 +790,7 @@ export default function OnboardingWizard({
   onAddSupplementPeriod,
   onAddCheckIn,
   onComplete,
+  onCancel,
   onNavigate
 }: OnboardingWizardProps) {
   const tr = useCallback(
@@ -801,6 +803,7 @@ export default function OnboardingWizard({
   /* Step state */
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [personalInfoDraft, setPersonalInfoDraft] = useState<PersonalInfo>(() => ({ ...personalInfo }));
 
   /* Protocol form */
   const [protocolDraft, setProtocolDraft] = useState<ProtocolDraft>({
@@ -907,12 +910,26 @@ export default function OnboardingWizard({
     setSupplements((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      onCancel();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [onCancel]);
+
   /* ── Navigation ── */
 
   const goNext = useCallback(() => {
     // Save data on leaving certain steps
-    if (step === 1 && personalInfo.name.trim()) {
-      onUpdatePersonalInfo(personalInfo);
+    if (step === 1) {
+      onUpdatePersonalInfo(personalInfoDraft);
     }
     if (step === 2 && protocolDraft.compound.trim() && !protocolSaved) {
       saveProtocol();
@@ -931,7 +948,7 @@ export default function OnboardingWizard({
       onComplete();
       onNavigate("dashboard");
     }
-  }, [step, personalInfo, protocolDraft, protocolSaved, checkinSaved, supplements, supplementsSaved, onUpdatePersonalInfo, saveProtocol, saveCheckin, saveSupplements, onComplete, onNavigate]);
+  }, [step, personalInfoDraft, protocolDraft, protocolSaved, checkinSaved, supplements, supplementsSaved, onUpdatePersonalInfo, saveProtocol, saveCheckin, saveSupplements, onComplete, onNavigate]);
 
   const goBack = useCallback(() => {
     if (step > 0) {
@@ -950,7 +967,7 @@ export default function OnboardingWizard({
   const nextLabel = (): string => {
     if (step === 0) return tr("Aan de slag", "Let's go");
     if (step === TOTAL_STEPS - 1) return tr("Start verkennen", "Start exploring");
-    if (step === 1 && personalInfo.name.trim()) return tr("Opslaan en door", "Save & continue");
+    if (step === 1 && personalInfoDraft.name.trim()) return tr("Opslaan en door", "Save & continue");
     if (step === 2 && protocolDraft.compound.trim()) return tr("Opslaan en door", "Save & continue");
     if (step === 3) return tr("Opslaan en door", "Save & continue");
     if (step === 4 && supplements.length > 0) return tr("Opslaan en door", "Save & continue");
@@ -970,13 +987,7 @@ export default function OnboardingWizard({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => {
-          // Allow closing on backdrop click only on last step
-          if (step === TOTAL_STEPS - 1) {
-            onComplete();
-            onNavigate("dashboard");
-          }
-        }}
+        onClick={onCancel}
       />
 
       {/* Modal */}
@@ -1013,8 +1024,10 @@ export default function OnboardingWizard({
                 <StepPersonalInfo
                   language={language}
                   isDark={isDark}
-                  personalInfo={personalInfo}
-                  onChange={onUpdatePersonalInfo}
+                  personalInfo={personalInfoDraft}
+                  onChange={(patch) => {
+                    setPersonalInfoDraft((current) => ({ ...current, ...patch }));
+                  }}
                 />
               )}
               {step === 2 && (
@@ -1053,7 +1066,7 @@ export default function OnboardingWizard({
                   savedProtocol={protocolSaved}
                   savedSupplementCount={supplements.length}
                   savedCheckin={checkinSaved}
-                  savedPersonalInfo={personalInfo.name.trim().length > 0}
+                  savedPersonalInfo={personalInfoDraft.name.trim().length > 0}
                 />
               )}
             </motion.div>
@@ -1064,7 +1077,18 @@ export default function OnboardingWizard({
         <div className={`flex items-center justify-between px-6 py-4 border-t ${
           isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-100 bg-slate-50/50"
         }`}>
-          <div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className={`text-sm px-3 py-2 rounded-lg transition-colors ${
+                isDark
+                  ? "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {tr("Annuleren", "Cancel")}
+            </button>
             {showBack && (
               <button
                 onClick={goBack}
