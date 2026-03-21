@@ -21,7 +21,7 @@ import appIcon from "../../favicon.svg";
 import labtrackerLogoDark from "../assets/labtracker-logo-dark.svg";
 import labtrackerLogoLight from "../assets/labtracker-logo-light.svg";
 import { getTabLabel, t } from "../i18n";
-import { getPersonaNavSectionLabel, getPersonaSidebarCurrentLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
+import { getPersonaNavSectionLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
 import { stabilityColor } from "../chartHelpers";
 import { formatDate } from "../utils";
 import { AppMode, AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
@@ -64,6 +64,7 @@ export interface AppShellHeaderStat {
   label: string;
   value: string;
   tone?: "neutral" | "positive" | "warning";
+  actionTab?: TabKey;
 }
 
 export interface AppShellUploadState {
@@ -119,11 +120,7 @@ const AppShell = ({
     isNl,
     sharedSnapshotGeneratedAt,
     hasReports,
-    latestReportDate,
-    markersTrackedCount,
     stabilityScore,
-    activeProtocolCompound,
-    outOfRangeCount,
     appMode = "local",
     syncStatus = "idle",
     cloudConfigured = false,
@@ -158,9 +155,32 @@ const AppShell = ({
   const isLightTheme = theme === "light";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
-  const currentPlanLabel = getPersonaSidebarCurrentLabel(userProfile, language);
   const showDashboardStabilityBadge = activeTab === "dashboard" && hasReports && !isReviewMode;
   const shouldShowHeaderStats = !isReviewMode && headerStats.length > 0;
+  const syncBadgeLabel =
+    appMode !== "cloud"
+      ? tr("Lokaal-only", "Local-only")
+      : syncStatus === "idle"
+        ? tr("Gesynct", "Synced")
+        : syncStatus === "syncing" || syncStatus === "loading"
+          ? tr("Synchroniseren", "Syncing")
+          : syncStatus === "error"
+            ? tr("Sync fout", "Sync error")
+            : tr("Actie nodig", "Action needed");
+  const syncDotClassName =
+    appMode !== "cloud"
+      ? "bg-slate-400"
+      : syncStatus === "idle"
+        ? "bg-emerald-300"
+        : syncStatus === "syncing" || syncStatus === "loading"
+          ? "bg-cyan-300"
+          : syncStatus === "error"
+            ? "bg-rose-300"
+            : "bg-amber-300";
+  const openSettingsLabel =
+    syncStatus === "error"
+      ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
+      : tr("Open Instellingen", "Open Settings");
 
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void, compact = false) => {
     if (!visibleTabKeys.has(key)) {
@@ -301,6 +321,7 @@ const AppShell = ({
   const renderHeaderStats = () => (
     <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
       {headerStats.map((stat) => {
+        const isInteractive = Boolean(stat.actionTab);
         const valueClassName =
           stat.tone === "positive"
             ? "text-emerald-300"
@@ -309,19 +330,67 @@ const AppShell = ({
               : isLightTheme
                 ? "text-slate-900"
                 : "text-slate-100";
+        const baseClassName = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+          isLightTheme ? "border-slate-300 bg-white text-slate-600" : "border-slate-700/70 bg-slate-900/55 text-slate-400"
+        }`;
+        if (!isInteractive) {
+          return (
+            <span key={stat.id} className={baseClassName}>
+              <strong className={valueClassName}>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </span>
+          );
+        }
         return (
-          <span
+          <button
             key={stat.id}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
-              isLightTheme ? "border-slate-300 bg-white text-slate-600" : "border-slate-700/70 bg-slate-900/55 text-slate-400"
-            }`}
+            type="button"
+            onClick={() => onRequestTabChange(stat.actionTab!)}
+            className={`${baseClassName} transition hover:border-cyan-500/55 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60`}
+            aria-label={`${tr("Open", "Open")} ${stat.label}`}
+            title={`${tr("Open", "Open")} ${stat.label}`}
           >
             <strong className={valueClassName}>{stat.value}</strong>
             <span>{stat.label}</span>
-          </span>
+          </button>
         );
       })}
     </div>
+  );
+
+  const renderAccountStatusButton = (placement: "header" | "mobile", onAfterNavigate?: () => void) => (
+    <button
+      type="button"
+      onClick={() => {
+        onRequestTabChange("settings");
+        onAfterNavigate?.();
+      }}
+      title={openSettingsLabel}
+      aria-label={openSettingsLabel}
+      className={
+        placement === "header"
+          ? `hidden max-w-[320px] items-center gap-2 rounded-full border px-2.5 py-1 text-left text-xs transition lg:inline-flex ${
+              isLightTheme
+                ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
+                : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
+            }`
+          : `flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+              isLightTheme
+                ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
+                : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
+            }`
+      }
+    >
+      <span className={`h-2 w-2 rounded-full ${syncDotClassName}`} />
+      <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
+      <span
+        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${
+          isLightTheme ? "border-slate-300 bg-slate-50 text-slate-600" : "border-slate-700/80 bg-slate-900/70 text-slate-300"
+        }`}
+      >
+        {syncBadgeLabel}
+      </span>
+    </button>
   );
 
   const renderUploadShortcut = (compact: boolean) => (
@@ -421,27 +490,7 @@ const AppShell = ({
                 : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
             )
         : null;
-    const showAccountTools = !isShareMode && cloudConfigured && !compact;
-    const syncBadgeLabel =
-      appMode !== "cloud"
-        ? tr("Lokaal-only", "Local-only")
-        : syncStatus === "idle"
-          ? tr("Gesynct", "Synced")
-          : syncStatus === "syncing" || syncStatus === "loading"
-            ? tr("Synchroniseren", "Syncing")
-            : syncStatus === "error"
-              ? tr("Sync fout", "Sync error")
-              : tr("Actie nodig", "Action needed");
-    const syncDotClassName =
-      appMode !== "cloud"
-        ? "bg-slate-400"
-        : syncStatus === "idle"
-          ? "bg-emerald-300"
-          : syncStatus === "syncing" || syncStatus === "loading"
-            ? "bg-cyan-300"
-            : syncStatus === "error"
-              ? "bg-rose-300"
-              : "bg-amber-300";
+    const showAccountTools = !isShareMode && cloudConfigured && !compact && Boolean(onAfterNavigate);
     return (
       <>
         <div className={`brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 ${compact ? "p-2.5" : "p-3"}`}>
@@ -470,38 +519,7 @@ const AppShell = ({
           {showAccountTools ? (
             <div className="mt-2">
               {cloudAuthStatus === "authenticated" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onRequestTabChange("settings");
-                    onAfterNavigate?.();
-                  }}
-                  title={
-                    syncStatus === "error"
-                      ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
-                      : tr("Open Instellingen", "Open Settings")
-                  }
-                  aria-label={
-                    syncStatus === "error"
-                      ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
-                      : tr("Open Instellingen", "Open Settings")
-                  }
-                  className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
-                    isLightTheme
-                      ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
-                      : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${syncDotClassName}`} />
-                  <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
-                  <span
-                    className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
-                      isLightTheme ? "border-slate-300 bg-slate-50 text-slate-600" : "border-slate-700/80 bg-slate-900/70 text-slate-300"
-                    }`}
-                  >
-                    {syncBadgeLabel}
-                  </span>
-                </button>
+                renderAccountStatusButton("mobile", onAfterNavigate)
               ) : cloudAuthStatus === "loading" ? (
                 <p className="text-center text-xs text-slate-300">{tr("Account check...", "Account check...")}</p>
               ) : (
@@ -529,45 +547,6 @@ const AppShell = ({
                     {tr("Sign in", "Sign in")}
                   </button>
                 </div>
-              )}
-            </div>
-          ) : null}
-          {!compact && hasReports ? (
-            <div
-              className={`sidebar-protocol-card mt-3 rounded-xl border px-3 py-3 ${
-                isLightTheme ? "border-slate-200 bg-white shadow-sm" : "border-slate-700/50 bg-slate-900/50"
-              }`}
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                {activeProtocolCompound ? currentPlanLabel : tr("Tracking", "Tracking")}
-              </p>
-              {activeProtocolCompound ? (
-                <p className={`mt-1 truncate text-[13px] font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-200"}`}>
-                  {activeProtocolCompound.name} {activeProtocolCompound.dose}
-                </p>
-              ) : (
-                <>
-                  <p className={`mt-1 truncate text-[13px] font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-200"}`}>
-                    {tr(`${markersTrackedCount} markers gevolgd`, `${markersTrackedCount} markers tracked`)}
-                  </p>
-                  <p className={`mt-1 text-[11px] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
-                    {latestReportDate
-                      ? tr(`Laatste upload: ${formatDate(latestReportDate)}`, `Last upload: ${formatDate(latestReportDate)}`)
-                      : tr("Nog geen uploads", "No uploads yet")}
-                  </p>
-                </>
-              )}
-              {outOfRangeCount > 0 ? (
-                <p className="mt-2 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
-                  {tr(
-                    `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} buiten bereik`,
-                    `${outOfRangeCount} marker${outOfRangeCount !== 1 ? "s" : ""} out of range`
-                  )}
-                </p>
-              ) : (
-                <p className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                  {tr("Alle markers binnen bereik", "All markers in range")}
-                </p>
               )}
             </div>
           ) : null}
@@ -717,6 +696,9 @@ const AppShell = ({
                       </div>
                     </div>
                   ) : null}
+                  {!isShareMode && cloudConfigured && cloudAuthStatus === "authenticated"
+                    ? renderAccountStatusButton("header")
+                    : null}
                   <button
                     type="button"
                     onClick={onToggleTheme}

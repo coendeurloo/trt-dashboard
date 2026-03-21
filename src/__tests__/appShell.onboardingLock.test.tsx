@@ -125,7 +125,7 @@ describe("AppShell onboarding lock", () => {
       headerStats: [
         { id: "reports", value: "1", label: "Reports" },
         { id: "markers", value: "18", label: "Markers tracked" },
-        { id: "oor", value: "2", label: "Out of range", tone: "warning" }
+        { id: "oor", value: "2", label: "Out of range", tone: "warning", actionTab: "alerts" }
       ]
     });
     render(
@@ -137,6 +137,30 @@ describe("AppShell onboarding lock", () => {
     const outOfRangeStat = screen.getByText((_, node) => node?.textContent?.trim() === "2Out of range");
     const outOfRangeValue = outOfRangeStat.querySelector("strong");
     expect(outOfRangeValue?.className).toContain("text-amber-300");
+    fireEvent.click(screen.getByRole("button", { name: /open out of range/i }));
+    expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("alerts");
+  });
+
+  it("keeps out-of-range stat non-clickable when value is zero", () => {
+    const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true,
+      reportsCount: 1,
+      markersTrackedCount: 18,
+      outOfRangeCount: 0,
+      headerStats: [
+        { id: "reports", value: "1", label: "Reports" },
+        { id: "markers", value: "18", label: "Markers tracked" },
+        { id: "oor", value: "0", label: "Out of range", tone: "positive" }
+      ]
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.queryByRole("button", { name: /open out of range/i })).toBeNull();
   });
 
   it("scrolls to stability index from the dashboard header badge", () => {
@@ -217,10 +241,11 @@ describe("AppShell onboarding lock", () => {
     settingsButtons.forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(false));
   });
 
-  it("shows subtle Sign up and Sign in buttons in sidebar header when unauthenticated", () => {
+  it("shows subtle Sign up and Sign in buttons in mobile navigation fallback when unauthenticated", () => {
     const props = buildProps({
       cloudConfigured: true,
-      cloudAuthStatus: "unauthenticated"
+      cloudAuthStatus: "unauthenticated",
+      isMobileMenuOpen: true
     });
     render(
       <AppShell {...props}>
@@ -228,14 +253,16 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Sign up" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
     expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signup");
-    fireEvent.click(screen.getAllByRole("button", { name: "Sign in" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
   });
 
   it("shows account badge with sync status and opens Settings when authenticated", () => {
     const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true,
       cloudConfigured: true,
       cloudAuthStatus: "authenticated",
       cloudUserEmail: "alice@example.com",
@@ -254,6 +281,26 @@ describe("AppShell onboarding lock", () => {
     expect(screen.getByText("Synced")).toBeTruthy();
     fireEvent.click(accountButton);
     expect(props.actions.onRequestTabChange).toHaveBeenCalledWith("settings");
+  });
+
+  it("does not render the old protocol/tracking summary card in desktop sidebar", () => {
+    const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true,
+      activeProtocolCompound: {
+        name: "ZZZ Protocol Marker",
+        dose: "123 mg",
+        frequency: "weekly",
+        route: "injection"
+      }
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.queryByText(/ZZZ Protocol Marker/i)).toBeNull();
   });
 
   it("renders custom header stats on non-dashboard tabs", () => {
@@ -296,6 +343,8 @@ describe("AppShell onboarding lock", () => {
 
   it("shows Local-only instead of pending when authenticated outside cloud mode", () => {
     const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true,
       cloudConfigured: true,
       cloudAuthStatus: "authenticated",
       cloudUserEmail: "alice@example.com",

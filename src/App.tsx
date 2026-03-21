@@ -2005,7 +2005,8 @@ const App = () => {
           id: "out-of-range",
           value: String(outOfRangeCount),
           label: tr("buiten bereik", "out of range"),
-          tone: outOfRangeCount === 0 ? "positive" : "warning"
+          tone: outOfRangeCount === 0 ? "positive" : "warning",
+          actionTab: outOfRangeCount > 0 ? "alerts" : undefined
         }
       ];
     }
