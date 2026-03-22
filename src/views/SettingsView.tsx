@@ -4,7 +4,7 @@ import { USER_PROFILES } from "../data/userProfiles";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
-import { AppLanguage, AppSettings, BiologicalSex, LabReport, PersonalInfo, UserProfile } from "../types";
+import { AppLanguage, AppSettings, BiologicalSex, PersonalInfo, UserProfile } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
 
 interface MarkerUsageRow {
@@ -13,14 +13,11 @@ interface MarkerUsageRow {
   reportCount: number;
 }
 
-type SettingsTab = "profile" | "appearance" | "analysis" | "data" | "markers" | "account";
+type SettingsTab = "profile" | "appearance" | "lab_data";
 
 interface SettingsViewProps {
   settings: AppSettings;
   language: AppLanguage;
-  reports: LabReport[];
-  samplingControlsEnabled: boolean;
-  allMarkers: string[];
   editableMarkers: string[];
   markerUsage: MarkerUsageRow[];
   shareOptions: ShareOptions;
@@ -34,9 +31,7 @@ interface SettingsViewProps {
   onUpdatePersonalInfo: (patch: Partial<PersonalInfo>) => void;
   onRemapMarker: (sourceCanonical: string, targetLabel: string) => void;
   onOpenRenameDialog: (sourceCanonical: string) => void;
-  onExportJson: () => void;
-  onExportCsv: (selectedMarkers: string[]) => void;
-  onExportPdf: () => void;
+  onCreateBackup: () => void;
   onImportData: (incoming: unknown, mode: "merge" | "replace") => ImportResult;
   onClearAllData: () => void;
   onResetOnboarding: () => void;
@@ -48,45 +43,9 @@ interface SettingsViewProps {
   onSignOut?: () => void;
 }
 
-interface ToggleSwitchProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  tooltip?: string;
-}
-
-const ToggleSwitch = ({ checked, onChange, label, tooltip }: ToggleSwitchProps) => (
-  <label className="group relative inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-slate-100 sm:text-sm">
-    <button
-      type="button"
-      aria-pressed={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
-        checked ? "border-cyan-500/60 bg-cyan-500/20" : "border-slate-600 bg-slate-700"
-      }`}
-    >
-      <span
-        className={`absolute left-0.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-transform duration-200 ${
-          checked ? "translate-x-[11px] bg-cyan-400" : "translate-x-0 bg-slate-500"
-        }`}
-      />
-    </button>
-    {label}
-    {tooltip ? (
-      <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-        {tooltip}
-      </span>
-    ) : null}
-  </label>
-);
-
 const SettingsView = ({
   settings,
   language,
-  reports: _reports,
-  samplingControlsEnabled,
-  allMarkers,
   editableMarkers,
   markerUsage,
   shareOptions,
@@ -100,9 +59,7 @@ const SettingsView = ({
   onUpdatePersonalInfo,
   onRemapMarker,
   onOpenRenameDialog,
-  onExportJson,
-  onExportCsv,
-  onExportPdf,
+  onCreateBackup,
   onImportData,
   onClearAllData,
   onResetOnboarding,
@@ -118,13 +75,10 @@ const SettingsView = ({
   const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("profile");
-  const [draftPersonalInfo, setDraftPersonalInfo] = useState<PersonalInfo>(personalInfo);
-  const [profileSaved, setProfileSaved] = useState(false);
   const [mergeFromMarker, setMergeFromMarker] = useState("");
   const [mergeIntoMarker, setMergeIntoMarker] = useState("");
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [csvMarkerSelection, setCsvMarkerSelection] = useState<string[]>(allMarkers);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -162,26 +116,6 @@ const SettingsView = ({
       setMergeFromMarker(fallbackSource);
     }
   }, [editableMarkers, mergeFromMarker, mergeTargetOptions]);
-
-  useEffect(() => {
-    setCsvMarkerSelection((current) => {
-      if (current.length === 0) {
-        return allMarkers;
-      }
-      const next = current.filter((marker) => allMarkers.includes(marker));
-      return next.length > 0 ? next : allMarkers;
-    });
-  }, [allMarkers]);
-
-  useEffect(() => {
-    setDraftPersonalInfo(personalInfo);
-  }, [personalInfo]);
-
-  const handleSavePersonalInfo = () => {
-    onUpdatePersonalInfo(draftPersonalInfo);
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2000);
-  };
 
   const onImportBackupFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -221,10 +155,7 @@ const SettingsView = ({
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: "profile", label: tr("Profiel", "Profile") },
     { id: "appearance", label: tr("Vormgeving", "Appearance") },
-    { id: "analysis", label: tr("Analyse", "Analysis") },
-    { id: "data", label: tr("Data", "Data") },
-    { id: "markers", label: tr("Markers", "Markers") },
-    { id: "account", label: tr("Account", "Account") }
+    { id: "lab_data", label: tr("Lab & data", "Lab & Data") }
   ];
 
   return (
@@ -263,8 +194,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Naam", "Name")}</span>
                 <input
                   type="text"
-                  value={draftPersonalInfo.name}
-                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, name: event.target.value }))}
+                  value={personalInfo.name}
+                  onChange={(event) => onUpdatePersonalInfo({ name: event.target.value })}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder={tr("Jouw voornaam", "Your name")}
                 />
@@ -274,8 +205,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Geboortedatum", "Date of birth")}</span>
                 <input
                   type="date"
-                  value={draftPersonalInfo.dateOfBirth}
-                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, dateOfBirth: event.target.value }))}
+                  value={personalInfo.dateOfBirth}
+                  onChange={(event) => onUpdatePersonalInfo({ dateOfBirth: event.target.value })}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                 />
               </label>
@@ -289,8 +220,8 @@ const SettingsView = ({
                         type="radio"
                         name="biologicalSex"
                         value={option}
-                        checked={draftPersonalInfo.biologicalSex === option}
-                        onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, biologicalSex: event.target.value as BiologicalSex }))}
+                        checked={personalInfo.biologicalSex === option}
+                        onChange={(event) => onUpdatePersonalInfo({ biologicalSex: event.target.value as BiologicalSex })}
                         className="h-4 w-4 accent-cyan-500"
                       />
                       <span className="text-sm text-slate-300">
@@ -309,8 +240,8 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Lengte (cm)", "Height (cm)")}</span>
                 <input
                   type="number"
-                  value={draftPersonalInfo.heightCm ?? ""}
-                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, heightCm: event.target.value ? Number(event.target.value) : null }))}
+                  value={personalInfo.heightCm ?? ""}
+                  onChange={(event) => onUpdatePersonalInfo({ heightCm: event.target.value ? Number(event.target.value) : null })}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder="180"
                 />
@@ -320,25 +251,12 @@ const SettingsView = ({
                 <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Gewicht (kg)", "Weight (kg)")}</span>
                 <input
                   type="number"
-                  value={draftPersonalInfo.weightKg ?? ""}
-                  onChange={(event) => setDraftPersonalInfo((prev) => ({ ...prev, weightKg: event.target.value ? Number(event.target.value) : null }))}
+                  value={personalInfo.weightKg ?? ""}
+                  onChange={(event) => onUpdatePersonalInfo({ weightKg: event.target.value ? Number(event.target.value) : null })}
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100"
                   placeholder="80"
                 />
               </label>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSavePersonalInfo}
-                className="rounded-lg border border-cyan-500/45 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-400/70 hover:bg-cyan-500/22"
-              >
-                {tr("Opslaan", "Save")}
-              </button>
-              {profileSaved && (
-                <span className="text-sm text-emerald-400">{tr("Opgeslagen", "Saved")}</span>
-              )}
             </div>
 
             <div className="mt-6 border-t border-slate-800 pt-6">
@@ -381,6 +299,87 @@ const SettingsView = ({
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-slate-800 pt-6">
+              <h3 className="text-sm font-semibold text-slate-300">{tr("Account & privacy", "Account & privacy")}</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                {tr("Accountstatus, onboarding, support en dataverwijdering.", "Account status, onboarding, support and data deletion.")}
+              </p>
+
+              <div className="mt-3 divide-y divide-slate-700/50 rounded-lg border border-slate-700/60 bg-slate-900/30 px-4">
+                {cloudUserEmail && onSignOut ? (
+                  <div className="flex items-center justify-between gap-4 py-4 first:pt-0">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">{tr("Ingelogd account", "Signed-in account")}</p>
+                      <p className="mt-0.5 text-sm text-slate-400">{cloudUserEmail}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onSignOut}
+                      className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+                    >
+                      {tr("Uitloggen", "Sign out")}
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="flex items-start justify-between gap-4 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">{tr("Onboarding wizard", "Onboarding wizard")}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {tr(
+                        "Bekijk de introductiewizard opnieuw.",
+                        "Replay the intro wizard. Useful if you skipped something."
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onResetOnboarding}
+                    className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+                  >
+                    {tr("Bekijk opnieuw", "Replay")}
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">{tr("Feedback", "Feedback")}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {tr(
+                        "Problemen met PDF's? Laat ons weten welke labformaten niet werken.",
+                        "Having trouble with PDF parsing? Let us know which lab formats don't work."
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onReportIssue}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {tr("Meld probleem", "Report issue")}
+                  </button>
+                </div>
+
+                <div className="py-4">
+                  <p className="text-sm font-medium text-red-400">{tr("Verwijder alle data", "Delete all data")}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {tr(
+                      "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
+                      "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="settings-danger-btn mt-3 rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/40 hover:text-red-300"
+                  >
+                    {tr("Verwijder alle data", "Delete all data")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -439,13 +438,13 @@ const SettingsView = ({
           </div>
         )}
 
-        {/* Analysis Tab */}
-        {activeSettingsTab === "analysis" && (
+        {/* Lab & Data Tab */}
+        {activeSettingsTab === "lab_data" && (
           <div className="space-y-4 pt-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">{tr("Analyse", "Analysis")}</h2>
+              <h2 className="text-lg font-semibold text-slate-100">{tr("Lab & data", "Lab & Data")}</h2>
               <p className="mt-1 text-sm text-slate-400">
-                {tr("AI-provider, eenheden en rekenmogelijkheden.", "AI provider, units and calculation options.")}
+                {tr("AI, eenheden, backup, delen en markerbeheer.", "AI, units, backup, sharing and marker management.")}
               </p>
             </div>
 
@@ -488,55 +487,7 @@ const SettingsView = ({
               </label>
             </div>
 
-            <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm">
-              <span className="block text-xs uppercase tracking-wide text-emerald-300">{tr("Core toggles", "Core toggles")}</span>
-              <div className="settings-toggle-row mt-2 flex flex-wrap gap-2">
-                <ToggleSwitch
-                  checked={settings.aiExternalConsent}
-                  onChange={(checked) => onUpdateSettings({ aiExternalConsent: checked })}
-                  label={tr("Allow external AI", "Allow external AI")}
-                  tooltip={tr(
-                    "Standaard blijft alles lokaal. Met deze optie kan de app externe AI gebruiken na jouw toestemming.",
-                    "By default everything stays local. This allows the app to use external AI after your consent."
-                  )}
-                />
-                <ToggleSwitch
-                  checked={settings.enableCalculatedFreeTestosterone}
-                  onChange={(checked) => onUpdateSettings({ enableCalculatedFreeTestosterone: checked })}
-                  label={tr(
-                    "Toon berekend Vrij Testosteron als het ontbreekt",
-                    "Show calculated Free Testosterone if missing"
-                  )}
-                  tooltip={tr(
-                    "Als een lab alleen totaal testosteron en SHBG bevat (optioneel met albumine), berekent de app automatisch een geschatte Vrij Testosteron-waarde zodat je trends beter kunt volgen.",
-                    "If a lab has Total Testosterone and SHBG (optionally Albumin) but no Free Testosterone, the app calculates an estimate so trend views stay complete."
-                  )}
-                />
-                <ToggleSwitch
-                  checked={samplingControlsEnabled}
-                  onChange={(checked) => onUpdateSettings({ enableSamplingControls: checked })}
-                  label={tr("Show trough/peak filter controls", "Show trough/peak filter controls")}
-                  tooltip={tr(
-                    "Toont trough/peak-filters en baseline-vergelijking op het dashboard om eerlijker te vergelijken tussen meetmomenten.",
-                    "Shows trough/peak filters and baseline comparison on dashboard for fairer comparisons between sampling moments."
-                  )}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Data Tab */}
-        {activeSettingsTab === "data" && (
-          <div className="space-y-4 pt-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100">{tr("Data", "Data")}</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr("Backup, herstel, delen en synchronisatie.", "Backup, restore, sharing and synchronization.")}
-              </p>
-            </div>
-
-            <div className="mt-4 border-t border-slate-800 pt-4">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Backup & Herstel", "Backup & Restore")}</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {tr(
@@ -548,7 +499,7 @@ const SettingsView = ({
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
-                  onClick={onExportJson}
+                  onClick={onCreateBackup}
                 >
                   <Download className="h-4 w-4" /> {tr("Backup maken (JSON)", "Create backup (JSON)")}
                 </button>
@@ -593,7 +544,7 @@ const SettingsView = ({
               ) : null}
             </div>
 
-            <div className="mt-6 border-t border-slate-800 pt-6">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Delen", "Share")}</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {tr(
@@ -678,14 +629,9 @@ const SettingsView = ({
                 <p className="mt-2 break-all rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{shareLink}</p>
               ) : null}
             </div>
-          </div>
-        )}
 
-        {/* Markers Tab */}
-        {activeSettingsTab === "markers" && (
-          <div className="space-y-4 pt-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100">{tr("Marker Manager", "Marker Manager")}</h2>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Marker Manager", "Marker Manager")}</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {tr(
                   "Beheer markernaam-normalisatie zonder je dashboard te verstoren. Je kunt markers handmatig samenvoegen of hernoemen.",
@@ -698,245 +644,97 @@ const SettingsView = ({
                   "Use merge when two markers mean the same thing but have slightly different names (spelling, abbreviation, lab variant)."
                 )}
               </p>
-            </div>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
-              <select
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
-                value={mergeFromMarker}
-                onChange={(event) => setMergeFromMarker(event.target.value)}
-              >
-                {editableMarkers.length === 0 ? (
-                  <option value="">{tr("Geen markers beschikbaar", "No markers available")}</option>
-                ) : (
-                  editableMarkers.map((marker) => (
-                    <option key={`from-${marker}`} value={marker}>
+              <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+                <select
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
+                  value={mergeFromMarker}
+                  onChange={(event) => setMergeFromMarker(event.target.value)}
+                >
+                  {editableMarkers.length === 0 ? (
+                    <option value="">{tr("Geen markers beschikbaar", "No markers available")}</option>
+                  ) : (
+                    editableMarkers.map((marker) => (
+                      <option key={`from-${marker}`} value={marker}>
+                        {getMarkerDisplayName(marker, language)}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <div className="self-center text-center text-xs text-slate-400">{tr("naar", "into")}</div>
+                <select
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
+                  value={mergeIntoMarker}
+                  onChange={(event) => setMergeIntoMarker(event.target.value)}
+                >
+                  <option value="">{tr("Selecteer target", "Select target")}</option>
+                  {mergeTargetOptions.map((marker) => (
+                    <option key={`to-${marker}`} value={marker}>
                       {getMarkerDisplayName(marker, language)}
                     </option>
-                  ))
-                )}
-              </select>
-              <div className="self-center text-center text-xs text-slate-400">{tr("naar", "into")}</div>
-              <select
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-sm"
-                value={mergeIntoMarker}
-                onChange={(event) => setMergeIntoMarker(event.target.value)}
-              >
-                <option value="">{tr("Selecteer target", "Select target")}</option>
-                {mergeTargetOptions.map((marker) => (
-                  <option key={`to-${marker}`} value={marker}>
-                    {getMarkerDisplayName(marker, language)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 disabled:opacity-50"
-                disabled={!mergeFromMarker || !mergeIntoMarker || mergeFromMarker === mergeIntoMarker}
-                onClick={() => {
-                  const confirmed = window.confirm(
-                    tr(
-                      `Weet je zeker dat je "${getMarkerDisplayName(mergeFromMarker, language)}" wilt samenvoegen in "${getMarkerDisplayName(mergeIntoMarker, language)}"? Dit werkt alle bestaande rapporten bij.`,
-                      `Are you sure you want to merge "${getMarkerDisplayName(mergeFromMarker, language)}" into "${getMarkerDisplayName(mergeIntoMarker, language)}"? This updates all existing reports.`
-                    )
-                  );
-                  if (!confirmed) {
-                    return;
-                  }
-                  onRemapMarker(mergeFromMarker, mergeIntoMarker);
-                }}
-              >
-                {tr("Voer merge uit", "Merge markers")}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400">
-              {tr(
-                "Veilige merge: urine-markers en bloed-markers worden nooit samengevoegd.",
-                "Safe merge: urine markers and blood markers are never merged."
-              )}
-            </p>
-
-            <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-900/40">
-              <table className="min-w-full divide-y divide-slate-700 text-sm">
-                <thead className="bg-slate-900/70 text-slate-300">
-                  <tr>
-                    <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
-                    <th className="px-3 py-2 text-right">{tr("Waarden", "Values")}</th>
-                    <th className="px-3 py-2 text-right">{tr("Rapporten", "Reports")}</th>
-                    <th className="px-3 py-2 text-right">{tr("Actie", "Action")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {markerUsage.map((item) => (
-                    <tr key={item.marker} className="bg-slate-900/30 text-slate-200">
-                      <td className="px-3 py-2">{getMarkerDisplayName(item.marker, language)}</td>
-                      <td className="px-3 py-2 text-right">{item.valueCount}</td>
-                      <td className="px-3 py-2 text-right">{item.reportCount}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          className="rounded p-1 text-slate-400 transition hover:text-cyan-200"
-                          onClick={() => onOpenRenameDialog(item.marker)}
-                          aria-label={tr("Marker hernoemen", "Rename marker")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Account Tab */}
-        {activeSettingsTab === "account" && (
-          <div className="pt-4">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-slate-100">{tr("Account & Privacy", "Account & Privacy")}</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr("Onboarding, data verwijdering en feedback.", "Onboarding, data deletion and feedback.")}
+                </select>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 disabled:opacity-50"
+                  disabled={!mergeFromMarker || !mergeIntoMarker || mergeFromMarker === mergeIntoMarker}
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      tr(
+                        `Weet je zeker dat je "${getMarkerDisplayName(mergeFromMarker, language)}" wilt samenvoegen in "${getMarkerDisplayName(mergeIntoMarker, language)}"? Dit werkt alle bestaande rapporten bij.`,
+                        `Are you sure you want to merge "${getMarkerDisplayName(mergeFromMarker, language)}" into "${getMarkerDisplayName(mergeIntoMarker, language)}"? This updates all existing reports.`
+                      )
+                    );
+                    if (!confirmed) {
+                      return;
+                    }
+                    onRemapMarker(mergeFromMarker, mergeIntoMarker);
+                  }}
+                >
+                  {tr("Voer merge uit", "Merge markers")}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {tr(
+                  "Veilige merge: urine-markers en bloed-markers worden nooit samengevoegd.",
+                  "Safe merge: urine markers and blood markers are never merged."
+                )}
               </p>
-            </div>
 
-            <div className="divide-y divide-slate-700/50">
-              {cloudUserEmail && onSignOut ? (
-                <div className="flex items-center justify-between gap-4 py-4 first:pt-0">
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">{tr("Ingelogd account", "Signed-in account")}</p>
-                    <p className="mt-0.5 text-sm text-slate-400">{cloudUserEmail}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onSignOut}
-                    className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
-                  >
-                    {tr("Uitloggen", "Sign out")}
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="flex items-start justify-between gap-4 py-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-200">{tr("Onboarding wizard", "Onboarding wizard")}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {tr(
-                      "Bekijk de introductiewizard opnieuw.",
-                      "Replay the intro wizard. Useful if you skipped something."
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onResetOnboarding}
-                  className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
-                >
-                  {tr("Bekijk opnieuw", "Replay")}
-                </button>
-              </div>
-
-              <div className="flex items-start justify-between gap-4 py-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-200">{tr("Feedback", "Feedback")}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {tr(
-                      "Problemen met PDF's? Laat ons weten welke labformaten niet werken.",
-                      "Having trouble with PDF parsing? Let us know which lab formats don't work."
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onReportIssue}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  {tr("Meld probleem", "Report issue")}
-                </button>
-              </div>
-
-              <div className="py-4">
-                <p className="text-sm font-medium text-slate-200">{tr("Export", "Export")}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {tr(
-                    "Exporteer data als JSON, markers als CSV, of grafieken als PDF.",
-                    "Export data as JSON, markers as CSV, or charts as PDF."
-                  )}
-                </p>
-
-                <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">{tr("CSV markerselectie", "CSV marker selection")}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {allMarkers.map((marker) => {
-                      const selected = csvMarkerSelection.includes(marker);
-                      return (
-                        <button
-                          key={marker}
-                          type="button"
-                          className={`rounded-full border px-3 py-1 text-xs ${
-                            selected ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-200" : "border-slate-600 text-slate-300"
-                          }`}
-                          onClick={() => {
-                            setCsvMarkerSelection((current) => {
-                              if (current.includes(marker)) {
-                                return current.filter((item) => item !== marker);
-                              }
-                              return [...current, marker];
-                            });
-                          }}
-                        >
-                          {getMarkerDisplayName(marker, language)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
-                    onClick={onExportJson}
-                  >
-                    <FileText className="h-4 w-4" /> {tr("Export JSON", "Export JSON")}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
-                    onClick={() => onExportCsv(csvMarkerSelection)}
-                  >
-                    <Download className="h-4 w-4" /> {tr("Export CSV", "Export CSV")}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600/70 px-3 py-1.5 text-sm text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
-                    onClick={onExportPdf}
-                  >
-                    <FileText className="h-4 w-4" /> {tr("Export PDF", "Export PDF")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="py-4">
-                <p className="text-sm font-medium text-red-400">{tr("Verwijder alle data", "Delete all data")}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {tr(
-                    "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
-                    "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
-                  )}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="settings-danger-btn mt-3 rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-900/40 hover:text-red-300"
-                >
-                  {tr("Verwijder alle data", "Delete all data")}
-                </button>
+              <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-900/40">
+                <table className="min-w-full divide-y divide-slate-700 text-sm">
+                  <thead className="bg-slate-900/70 text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
+                      <th className="px-3 py-2 text-right">{tr("Waarden", "Values")}</th>
+                      <th className="px-3 py-2 text-right">{tr("Rapporten", "Reports")}</th>
+                      <th className="px-3 py-2 text-right">{tr("Actie", "Action")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {markerUsage.map((item) => (
+                      <tr key={item.marker} className="bg-slate-900/30 text-slate-200">
+                        <td className="px-3 py-2">{getMarkerDisplayName(item.marker, language)}</td>
+                        <td className="px-3 py-2 text-right">{item.valueCount}</td>
+                        <td className="px-3 py-2 text-right">{item.reportCount}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            className="rounded p-1 text-slate-400 transition hover:text-cyan-200"
+                            onClick={() => onOpenRenameDialog(item.marker)}
+                            aria-label={tr("Marker hernoemen", "Rename marker")}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            <p className="mt-4 text-xs text-slate-600">
+            <p className="text-xs text-slate-600">
               {tr(
                 "Deze tool is alleen voor persoonlijke tracking en geeft geen medisch advies.",
                 "This tool is for personal tracking only and does not provide medical advice."
@@ -944,6 +742,7 @@ const SettingsView = ({
             </p>
           </div>
         )}
+
       </div>
 
       {showDeleteConfirm ? (

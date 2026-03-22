@@ -134,17 +134,7 @@ export const useAnalysis = ({
       setAnalysisRequestState("error");
       return;
     }
-    const externalAiAllowed = settings.aiExternalConsent || Boolean(consentOverride?.allowExternalAi);
-    if (!externalAiAllowed) {
-      setAnalysisError(
-        tr(
-          "AI staat uit. Geef eerst expliciete toestemming in Instellingen > Privacy & AI.",
-          "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
-        )
-      );
-      setAnalysisRequestState("error");
-      return;
-    }
+    const externalAiAllowed = consentOverride?.allowExternalAi ?? true;
 
     refreshBetaUsage();
     const betaCheck = checkBetaLimit();

@@ -280,7 +280,7 @@ const parseV2Snapshot = (
         unitSystem: parsed.s?.u ?? DEFAULT_SETTINGS.unitSystem,
         language: parsed.s?.l ?? DEFAULT_SETTINGS.language,
         theme: parsed.s?.t ?? DEFAULT_SETTINGS.theme,
-        aiExternalConsent: false,
+        aiExternalConsent: true,
         aiAutoImproveEnabled: false
       }
     });

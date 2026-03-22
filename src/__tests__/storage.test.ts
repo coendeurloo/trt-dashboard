@@ -185,6 +185,20 @@ it("preserves parser rescue consent settings when valid", () => {
   expect(coerced.settings.parserRescueAllowPdfAttachment).toBe(true);
 });
 
+it("forces legacy AI and sampling toggles on during normalization", () => {
+  const coerced = coerceStoredAppData({
+    settings: {
+      aiExternalConsent: false,
+      enableSamplingControls: false,
+      enableCalculatedFreeTestosterone: false
+    }
+  } as unknown as Parameters<typeof coerceStoredAppData>[0]);
+
+  expect(coerced.settings.aiExternalConsent).toBe(true);
+  expect(coerced.settings.enableSamplingControls).toBe(true);
+  expect(coerced.settings.enableCalculatedFreeTestosterone).toBe(true);
+});
+
 it("preserves parser debug page count when present", () => {
   const coerced = coerceStoredAppData({
     reports: [

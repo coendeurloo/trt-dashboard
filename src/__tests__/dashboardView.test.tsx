@@ -364,4 +364,35 @@ describe("DashboardView chart controls", () => {
     expect(screen.getByText("No markers found")).toBeTruthy();
   });
 
+  it("groups All markers by medical category with section headings", () => {
+    const { props } = buildProps();
+    render(
+      <DashboardView
+        {...{
+          ...props,
+          dashboardView: "all",
+          visibleReports: [report],
+          allMarkers: ["Testosterone", "Creatinine", "Hemoglobin"],
+          primaryMarkers: ["Testosterone"]
+        }}
+      />
+    );
+
+    const hormoneHeading = screen.getByRole("heading", { name: "Hormones - Sex" });
+    const kidneyHeading = screen.getByRole("heading", { name: "Kidney Function" });
+    const bloodHeading = screen.getByRole("heading", { name: "Complete Blood Count" });
+
+    const hormoneSection = hormoneHeading.closest("section");
+    const kidneySection = kidneyHeading.closest("section");
+    const bloodSection = bloodHeading.closest("section");
+
+    expect(hormoneSection).toBeTruthy();
+    expect(kidneySection).toBeTruthy();
+    expect(bloodSection).toBeTruthy();
+
+    expect(within(hormoneSection as HTMLElement).getByText("Testosterone")).toBeTruthy();
+    expect(within(kidneySection as HTMLElement).getByText("Creatinine")).toBeTruthy();
+    expect(within(bloodSection as HTMLElement).getByText("Hemoglobin")).toBeTruthy();
+  });
+
 });

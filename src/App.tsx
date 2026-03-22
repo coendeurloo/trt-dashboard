@@ -69,6 +69,7 @@ import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
+import { buildImplicitAnalysisConsent } from "./analysisConsent";
 import {
   ParserImprovementFormValues,
   ParserImprovementSubmissionError,
@@ -76,7 +77,6 @@ import {
 } from "./parserImprovementSubmission";
 import DashboardView from "./views/DashboardView";
 import {
-  AIConsentAction,
   AIConsentDecision,
   AppMode,
   AppSettings,
@@ -485,7 +485,7 @@ const App = () => {
   const hiddenUploadInputRef = useRef<HTMLInputElement | null>(null);
   const parserModuleRef = useRef<Promise<typeof import("./pdfParsing")> | null>(null);
   const consentResolveRef = useRef<((decision: AIConsentDecision | null) => void) | null>(null);
-  const [consentAction, setConsentAction] = useState<AIConsentAction | null>(null);
+  const [consentAction, setConsentAction] = useState<"parser_rescue" | null>(null);
 
   const ensurePdfParsingModule = () => {
     if (!parserModuleRef.current) {
@@ -494,10 +494,10 @@ const App = () => {
     return parserModuleRef.current;
   };
 
-  const requestAiConsent = (action: AIConsentAction): Promise<AIConsentDecision | null> =>
+  const requestAiConsent = (): Promise<AIConsentDecision | null> =>
     new Promise((resolve) => {
       consentResolveRef.current = resolve;
-      setConsentAction(action);
+      setConsentAction("parser_rescue");
     });
 
   const resetParserImprovementPrompt = () => {
@@ -1172,7 +1172,7 @@ const App = () => {
       }
     }
 
-    const decision = await requestAiConsent("parser_rescue");
+    const decision = await requestAiConsent();
     if (!decision || !decision.allowExternalAi || !decision.parserRescueEnabled) {
       updateSettings({
         parserRescueConsentState: "denied",
@@ -1696,27 +1696,6 @@ const App = () => {
     setIsImprovingExtraction(false);
   };
 
-  const exportCsv = async (selectedMarkers: string[]) => {
-    const { buildCsv } = await import("./csvExport");
-    const csv = buildCsv(reports, selectedMarkers, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `trt-lab-data-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPdf = async () => {
-    const { exportElementToPdf } = await import("./pdfExport");
-    const root = document.getElementById("dashboard-export-root");
-    if (!root) {
-      return;
-    }
-    await exportElementToPdf(root, `labtracker-${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
-
   const chartPointsForMarker = useCallback(
     (markerName: string): MarkerSeriesPoint[] =>
       buildMarkerSeries(visibleReports, markerName, appData.settings.unitSystem, appData.protocols, appData.supplementTimeline),
@@ -1913,37 +1892,12 @@ const App = () => {
         "Markers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
       );
 
-  const requestAnalysisConsent = async (): Promise<AIConsentDecision | null> => {
-    const decision = await requestAiConsent("analysis");
-    if (!decision || !decision.allowExternalAi) {
-      setAnalysisError(
-        tr(
-          "Externe AI is niet gestart. Je kunt doorgaan zonder AI of later opnieuw proberen.",
-          "External AI was not started. You can continue without AI or try again later."
-        )
-      );
-      return null;
-    }
-    if (decision.scope === "always") {
-      updateSettings({ aiExternalConsent: true });
-    }
-    return decision;
-  };
-
   const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
-    const decision = await requestAnalysisConsent();
-    if (!decision) {
-      return;
-    }
-    await runAiAnalysis(analysisType, decision);
+    await runAiAnalysis(analysisType, buildImplicitAnalysisConsent());
   };
 
   const runAiQuestionWithConsent = async (question: string) => {
-    const decision = await requestAnalysisConsent();
-    if (!decision) {
-      return;
-    }
-    await runAiQuestion(question, decision);
+    await runAiQuestion(question, buildImplicitAnalysisConsent());
   };
 
   const activeTabTitle = getPersonaTabLabel(
@@ -2908,9 +2862,6 @@ const App = () => {
                     onUpdatePersonalInfo={updatePersonalInfo}
                     settings={appData.settings}
                     language={appData.settings.language}
-                    reports={reports}
-                    samplingControlsEnabled={samplingControlsEnabled}
-                    allMarkers={allMarkers}
                     editableMarkers={editableMarkers}
                     markerUsage={markerUsage}
                     shareOptions={shareOptions}
@@ -2922,9 +2873,7 @@ const App = () => {
                     onUpdateSettings={updateSettings}
                     onRemapMarker={remapMarkerAcrossReports}
                     onOpenRenameDialog={openRenameDialog}
-                    onExportJson={exportJson}
-                    onExportCsv={exportCsv}
-                    onExportPdf={exportPdf}
+                    onCreateBackup={exportJson}
                     onImportData={importData}
                     onClearAllData={() => {
                       clearAllData();
@@ -2971,8 +2920,8 @@ const App = () => {
 
       <Suspense fallback={null}>
         <AIConsentModal
-          open={consentAction !== null}
-          action={consentAction ?? "analysis"}
+          open={consentAction === "parser_rescue"}
+          action="parser_rescue"
           language={appData.settings.language}
           onClose={() => resolveConsentRequest(null)}
           onDecide={(decision) => resolveConsentRequest(decision)}

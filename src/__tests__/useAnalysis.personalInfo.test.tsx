@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildImplicitAnalysisConsent } from "../analysisConsent";
 import { DEFAULT_SETTINGS } from "../constants";
 import useAnalysis from "../hooks/useAnalysis";
 import { LabReport } from "../types";
@@ -57,6 +58,10 @@ const sampleReport: LabReport = {
 };
 
 describe("useAnalysis personal context forwarding", () => {
+  beforeEach(() => {
+    analyzeLabDataWithClaudeMock.mockReset();
+  });
+
   it("passes personalInfo into analyzeLabDataWithClaude for AI calls", async () => {
     analyzeLabDataWithClaudeMock.mockResolvedValue({
       text: "ok",
@@ -114,6 +119,65 @@ describe("useAnalysis personal context forwarding", () => {
           dateOfBirth: "1990-05-10",
           heightCm: 183,
           weightKg: 82
+        })
+      })
+    );
+  });
+
+  it("forwards implicit analysis consent so notes and symptoms are included", async () => {
+    analyzeLabDataWithClaudeMock.mockResolvedValue({
+      text: "ok",
+      provider: "claude",
+      model: "claude-sonnet-4-20250514",
+      fallbackUsed: false,
+      actionsNeeded: false,
+      actionReasons: [],
+      actionConfidence: "low",
+      supplementActionsNeeded: false,
+      supplementAdviceIncluded: false,
+      qualityGuardApplied: false,
+      qualityIssues: []
+    });
+
+    const { result } = renderHook(() =>
+      useAnalysis({
+        settings: { ...DEFAULT_SETTINGS, aiExternalConsent: false },
+        language: "en",
+        allReports: [sampleReport],
+        visibleReports: [sampleReport],
+        personalInfo: {
+          name: "",
+          dateOfBirth: "",
+          biologicalSex: "prefer_not_to_say",
+          heightCm: null,
+          weightKg: null
+        },
+        checkIns: [],
+        protocols: [],
+        supplementTimeline: [],
+        analystMemory: null,
+        onAnalystMemoryUpdate: vi.fn(),
+        samplingControlsEnabled: true,
+        protocolImpactSummary: { events: [], insights: [] },
+        alerts: [],
+        trendByMarker: {},
+        trtStability: { score: null, components: {} },
+        dosePredictions: [],
+        mapErrorToMessage: () => "error",
+        tr: (_nl: string, en: string) => en
+      })
+    );
+
+    await act(async () => {
+      await result.current.runAiQuestion("What stands out?", buildImplicitAnalysisConsent());
+    });
+
+    expect(analyzeLabDataWithClaudeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalAiAllowed: true,
+        aiConsent: expect.objectContaining({
+          includeSymptoms: true,
+          includeNotes: true
         })
       })
     );

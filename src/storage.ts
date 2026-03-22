@@ -814,7 +814,9 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
   const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
-    aiExternalConsent: typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent,
+    aiExternalConsent: true,
+    enableSamplingControls: true,
+    enableCalculatedFreeTestosterone: true,
     sidebarCollapsedDesktop:
       typeof rest.sidebarCollapsedDesktop === "boolean"
         ? rest.sidebarCollapsedDesktop

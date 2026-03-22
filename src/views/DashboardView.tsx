@@ -13,7 +13,7 @@ import ComparisonChart from "../components/ComparisonChart";
 import ChartSettingsDrawer from "../components/ChartSettingsDrawer";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
-import { MARKER_DATABASE } from "../data/markerDatabase";
+import { MARKER_DATABASE, type MarkerCategory } from "../data/markerDatabase";
 import {
   buildDashboardPresetPatch,
   enforceSingleClinicalLayer,
@@ -106,6 +106,24 @@ const ToggleSwitch = ({ checked, onChange, label, tooltip, disabled = false }: T
     ) : null}
   </label>
 );
+
+const MARKER_CATEGORY_ORDER: MarkerCategory[] = [
+  "Hormones - Sex",
+  "Hormones - Adrenal",
+  "Thyroid",
+  "Complete Blood Count",
+  "Inflammatory Markers",
+  "Coagulation",
+  "Metabolic Health",
+  "Blood Glucose",
+  "Liver Function",
+  "Kidney Function",
+  "Electrolytes",
+  "Enzymes",
+  "Vitamins & Minerals",
+  "Iron Studies",
+  "Other"
+];
 
 const DashboardView = ({
   personalInfo,
@@ -229,6 +247,51 @@ const DashboardView = ({
     const lookupKey = normalizeMarkerLookupKey(marker);
     return markerCategoryLookup.get(lookupKey) ?? "Other";
   };
+  const getMarkerCategoryLabel = (category: string): string => {
+    if (category === "Hormones - Sex") {
+      return tr("Geslachtshormonen", "Hormones - Sex");
+    }
+    if (category === "Hormones - Adrenal") {
+      return tr("Bijnierhormonen", "Hormones - Adrenal");
+    }
+    if (category === "Thyroid") {
+      return tr("Schildklier", "Thyroid");
+    }
+    if (category === "Complete Blood Count") {
+      return tr("Compleet bloedbeeld", "Complete Blood Count");
+    }
+    if (category === "Inflammatory Markers") {
+      return tr("Ontstekingsmarkers", "Inflammatory Markers");
+    }
+    if (category === "Coagulation") {
+      return tr("Stolling", "Coagulation");
+    }
+    if (category === "Metabolic Health") {
+      return tr("Metabole gezondheid", "Metabolic Health");
+    }
+    if (category === "Blood Glucose") {
+      return tr("Bloedglucose", "Blood Glucose");
+    }
+    if (category === "Liver Function") {
+      return tr("Leverfunctie", "Liver Function");
+    }
+    if (category === "Kidney Function") {
+      return tr("Nierfunctie", "Kidney Function");
+    }
+    if (category === "Electrolytes") {
+      return tr("Elektrolyten", "Electrolytes");
+    }
+    if (category === "Enzymes") {
+      return tr("Enzymen", "Enzymes");
+    }
+    if (category === "Vitamins & Minerals") {
+      return tr("Vitamines & mineralen", "Vitamins & Minerals");
+    }
+    if (category === "Iron Studies") {
+      return tr("IJzerstatus", "Iron Studies");
+    }
+    return tr("Overig", "Other");
+  };
   const mapMarkerCategoryToFilterGroup = (category: string): string => {
     if (category === "Hormones - Sex" || category === "Hormones - Adrenal" || category === "Thyroid") {
       return "hormones";
@@ -303,6 +366,37 @@ const DashboardView = ({
         return markerLabel.includes(normalizedMarkerSearchTerm) || marker.toLowerCase().includes(normalizedMarkerSearchTerm);
       }),
     [dashboardView, language, markerCategoryFilter, markersToRenderBase, normalizedMarkerSearchTerm]
+  );
+  const markerRenderIndexLookup = useMemo(
+    () => new Map(markersToRender.map((marker, index) => [marker, index])),
+    [markersToRender]
+  );
+  const groupedMarkersToRender = useMemo(
+    () =>
+      Array.from(
+        markersToRender.reduce((groups, marker) => {
+          const category = resolveMarkerCategory(marker);
+          const markers = groups.get(category) ?? [];
+          markers.push(marker);
+          groups.set(category, markers);
+          return groups;
+        }, new Map<string, string[]>())
+      )
+        .map(([category, markers]) => ({
+          category,
+          categoryLabel: getMarkerCategoryLabel(category),
+          markers: [...markers].sort((left, right) => getMarkerDisplayName(left, language).localeCompare(getMarkerDisplayName(right, language))),
+          order: MARKER_CATEGORY_ORDER.indexOf(category as MarkerCategory)
+        }))
+        .sort((left, right) => {
+          const leftOrder = left.order === -1 ? Number.MAX_SAFE_INTEGER : left.order;
+          const rightOrder = right.order === -1 ? Number.MAX_SAFE_INTEGER : right.order;
+          if (leftOrder !== rightOrder) {
+            return leftOrder - rightOrder;
+          }
+          return left.categoryLabel.localeCompare(right.categoryLabel);
+        }),
+    [getMarkerCategoryLabel, language, markersToRender]
   );
 
   const togglePrimaryMarkerSelection = (marker: string) => {
@@ -1018,6 +1112,51 @@ const DashboardView = ({
             <p className="mt-1 text-sm text-slate-400">
               {tr("Pas je zoekterm of categorie aan om markers te tonen.", "Adjust your search term or category filter to show markers.")}
             </p>
+          </div>
+        ) : dashboardView === "all" ? (
+          <div className="space-y-5">
+            {groupedMarkersToRender.map((group) => {
+              const groupId = `dashboard-marker-group-${group.category.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}`;
+              return (
+              <section key={group.category} className="space-y-3" aria-labelledby={groupId}>
+                <div className="flex items-center gap-2 border-b border-slate-700/60 pb-2">
+                  <h3
+                    id={groupId}
+                    className="text-sm font-semibold uppercase tracking-wide text-slate-200"
+                  >
+                    {group.categoryLabel}
+                  </h3>
+                  <span className="rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 text-[11px] text-slate-400">
+                    {group.markers.length}
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {group.markers.map((marker) => {
+                    const points = chartPointsForMarker(marker);
+                    return (
+                      <MarkerChartCard
+                        key={marker}
+                        marker={marker}
+                        points={points}
+                        colorIndex={markerRenderIndexLookup.get(marker) ?? 0}
+                        settings={settings}
+                        language={language}
+                        phaseBlocks={dosePhaseBlocks}
+                        alertCount={alertsByMarker[marker]?.length ?? 0}
+                        trendSummary={trendByMarker[marker] ?? null}
+                        percentChange={markerPercentChange(marker)}
+                        baselineDelta={markerBaselineDelta(marker)}
+                        isCalculatedMarker={points.length > 0 && points.every((point) => point.isCalculated)}
+                        onOpenLarge={() => onExpandMarker(marker)}
+                        onOpenAlerts={() => onOpenMarkerAlerts(marker)}
+                        checkIns={checkIns}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            );
+            })}
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

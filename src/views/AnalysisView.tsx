@@ -100,7 +100,6 @@ const AnalysisView = ({
   const dayLimitReached = !limitsDisabled && betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
   const monthLimitReached = !limitsDisabled && betaUsage.monthlyCount >= betaLimits.maxAnalysesPerMonth;
   const blockedByLimits = dayLimitReached || monthLimitReached;
-  const blockedByConsent = !settings.aiExternalConsent;
   const isAnalyzingFull = isAnalyzingLabs && analyzingKind === "full";
   const isAnalyzingLatest = isAnalyzingLabs && analyzingKind === "latestComparison";
   const isAnalyzingQuestion = isAnalyzingLabs && analyzingKind === "question";
@@ -187,14 +186,7 @@ const AnalysisView = ({
         )}
         demoModeLabel={tr("Je werkt nu met demodata.", "You're currently using demo data.")}
         demoMixedLabel={tr("Demodata staat nog deels actief.", "Demo data is still partially active.")}
-        consentRequiredLabel={
-          blockedByConsent
-            ? tr(
-                "AI staat uit tot je expliciete toestemming geeft in Instellingen.",
-                "AI is off until you grant explicit consent in Settings."
-              )
-            : null
-        }
+        consentRequiredLabel={null}
       />
 
       <AIQuestionInput
