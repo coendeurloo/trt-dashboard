@@ -185,6 +185,7 @@ const ReportsView = ({
 
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [expandedReportIds, setExpandedReportIds] = useState<string[]>([]);
+  const [expandedSupplementReportIds, setExpandedSupplementReportIds] = useState<string[]>([]);
   const [reportSortOrder, setReportSortOrder] = useState<"asc" | "desc">("desc");
   const [reportComparisonOpen, setReportComparisonOpen] = useState(false);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
@@ -306,6 +307,7 @@ const ReportsView = ({
   useEffect(() => {
     const ids = new Set(reports.map((report) => report.id));
     setExpandedReportIds((current) => current.filter((id) => ids.has(id)));
+    setExpandedSupplementReportIds((current) => current.filter((id) => ids.has(id)));
     setSelectedReports((current) => current.filter((id) => ids.has(id)));
     if (editingReportId && !ids.has(editingReportId)) {
       setEditingReportId(null);
@@ -886,12 +888,16 @@ const ReportsView = ({
               : "none"
             : supplementContext?.effectiveState ?? "none";
         const inheritedSourceLabel = `${tr("op basis van schema op", "based on schedule on")} ${formatDate(report.testDate)}`;
-        const supplementSummaryText =
-          inheritedFallbackState === "unknown"
-            ? tr("Onbekend op testdatum", "Unknown at test date")
-            : inheritedFallbackState === "none"
-              ? tr("Geen supplementen", "No supplements")
-              : supplementPeriodsToText(inheritedFallbackSupplements);
+        const symptomsText = report.annotations.symptoms.trim();
+        const notesText = report.annotations.notes.trim();
+        const showAllSupplements = expandedSupplementReportIds.includes(report.id);
+        const supplementPreviewLimit = 4;
+        const totalSupplements = inheritedFallbackSupplements.length;
+        const visibleSupplements =
+          showAllSupplements || totalSupplements <= supplementPreviewLimit
+            ? inheritedFallbackSupplements
+            : inheritedFallbackSupplements.slice(0, supplementPreviewLimit);
+        const hiddenSupplementCount = Math.max(0, totalSupplements - visibleSupplements.length);
         const editingSupplementState = normalizeAnchorState(editingAnnotations);
         const editingOverrideSupplements = editingAnnotations.supplementOverrides ?? [];
         const editingEffectiveSupplements =
@@ -1449,7 +1455,7 @@ const ReportsView = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-8">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Dosis", "Dose")}</span>
                       <strong className="text-sm text-slate-100">{dose === null ? "-" : `${dose} mg/week`}</strong>
@@ -1470,28 +1476,84 @@ const ReportsView = ({
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Compound", "Compound")}</span>
-                      <strong className="text-sm text-slate-100">{getProtocolCompoundsText(protocol) || "-"}</strong>
+                      <strong className="break-words text-sm text-slate-100">{getProtocolCompoundsText(protocol) || "-"}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Injectiefrequentie", "Injection frequency")}</span>
                       <strong className="text-sm text-slate-100">{getProtocolFrequencyLabel(protocol, language)}</strong>
                     </div>
                     <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Actief bij testdatum", "Active at test date")}</span>
-                      <strong className="text-sm text-slate-100">{supplementSummaryText || "-"}</strong>
-                    </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
-                      <strong className="text-sm text-slate-100">{report.annotations.symptoms || "-"}</strong>
-                    </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Notities", "Notes")}</span>
-                      <strong className="text-sm text-slate-100">{report.annotations.notes || "-"}</strong>
-                    </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
                       <span className="block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
                       <strong className="text-sm text-slate-100">{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
                     </div>
+                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2 xl:col-span-3">
+                      <span className="block text-slate-400">{tr("Supplementen", "Supplements")}</span>
+                      {inheritedFallbackState === "unknown" ? (
+                        <span className="mt-1 inline-flex rounded-full border border-slate-500/60 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100">
+                          {tr("Onbekend op testdatum", "Unknown at test date")}
+                        </span>
+                      ) : inheritedFallbackState === "none" || totalSupplements === 0 ? (
+                        <span className="mt-1 inline-flex rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
+                          {tr("Geen supplementen", "No supplements")}
+                        </span>
+                      ) : (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {visibleSupplements.map((supplement) => {
+                            const doseText = supplement.dose.trim();
+                            const hasKnownFrequency = supplement.frequency.trim().length > 0 && supplement.frequency.trim() !== "unknown";
+                            const frequencyText = hasKnownFrequency ? supplementFrequencyLabel(supplement.frequency, language) : "";
+                            const compactSuffix = doseText || frequencyText;
+                            const compactLabel = compactSuffix ? `${supplement.name} ${compactSuffix}` : supplement.name;
+                            const fullLabel = [supplement.name, doseText || null, frequencyText || null].filter(Boolean).join(" · ");
+                            return (
+                              <span
+                                key={supplement.id}
+                                className="inline-flex max-w-full items-center rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
+                                title={fullLabel}
+                              >
+                                <span className="truncate">{compactLabel}</span>
+                              </span>
+                            );
+                          })}
+                          {hiddenSupplementCount > 0 ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center rounded-full border border-slate-500/70 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100 hover:border-slate-400/80"
+                              onClick={() =>
+                                setExpandedSupplementReportIds((current) =>
+                                  current.includes(report.id) ? current : [...current, report.id]
+                                )
+                              }
+                            >
+                              {tr(`+${hiddenSupplementCount} meer`, `+${hiddenSupplementCount} more`)}
+                            </button>
+                          ) : null}
+                          {showAllSupplements && totalSupplements > supplementPreviewLimit ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center rounded-full border border-slate-500/70 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100 hover:border-slate-400/80"
+                              onClick={() =>
+                                setExpandedSupplementReportIds((current) => current.filter((id) => id !== report.id))
+                              }
+                            >
+                              {tr("Minder tonen", "Show less")}
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                    {symptomsText ? (
+                      <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
+                        <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
+                        <strong className="break-words text-sm text-slate-100">{symptomsText}</strong>
+                      </div>
+                    ) : null}
+                    {notesText ? (
+                      <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2 xl:col-span-2">
+                        <span className="block text-slate-400">{tr("Notities", "Notes")}</span>
+                        <strong className="break-words text-sm text-slate-100">{notesText}</strong>
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
