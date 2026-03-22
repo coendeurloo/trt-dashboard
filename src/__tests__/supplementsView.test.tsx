@@ -80,7 +80,7 @@ describe("SupplementsView UX feedback", () => {
     expect(screen.getByText("Vitamin D3 added to your active stack.")).toBeTruthy();
   });
 
-  it("asks confirmation before deleting a supplement", () => {
+  it("asks for a stop date when deleting from the active list", () => {
     const timeline: SupplementPeriod[] = [
       {
         id: "supp-1",
@@ -92,16 +92,47 @@ describe("SupplementsView UX feedback", () => {
       }
     ];
     const props = buildProps(timeline);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-15T09:00:00.000Z"));
     render(<SupplementsView {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(props.onDeleteSupplementPeriod).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Delete from list" }));
+    expect(screen.getByText("Delete from active list")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    confirmSpy.mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(props.onDeleteSupplementPeriod).toHaveBeenCalledWith("supp-1");
+    expect(props.onStopSupplement).toHaveBeenCalledWith("supp-1", "2026-03-15");
+    expect(props.onDeleteSupplementPeriod).not.toHaveBeenCalled();
+  });
+
+  it("supports editing rows in supplement history", () => {
+    const timeline: SupplementPeriod[] = [
+      {
+        id: "supp-hist-1",
+        name: "Vitamin D3",
+        dose: "2000 IU",
+        frequency: "daily",
+        startDate: "2026-01-01",
+        endDate: "2026-02-15"
+      }
+    ];
+    const props = buildProps(timeline);
+    render(<SupplementsView {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByPlaceholderText("Dose"), {
+      target: { value: "3000 IU" }
+    });
+    fireEvent.change(screen.getByDisplayValue("2026-02-15"), {
+      target: { value: "2026-02-20" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(props.onUpdateSupplementPeriod).toHaveBeenCalledWith("supp-hist-1", {
+      dose: "3000 IU",
+      frequency: "daily",
+      startDate: "2026-01-01",
+      endDate: "2026-02-20"
+    });
   });
 
   it("shows a labeled cancel action while editing a supplement", () => {

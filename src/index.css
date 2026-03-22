@@ -811,11 +811,20 @@ body.light .stability-pill-label {
 body.light .stability-header-tooltip {
   background-color: #fff !important;
   border-color: rgba(203, 213, 225, 0.9) !important;
-  color: #475569 !important;
+  color: #334155 !important;
+  box-shadow: 0 14px 30px -22px rgba(15, 23, 42, 0.45) !important;
 }
 
 body.light .stability-tooltip-title {
   color: #0f172a !important;
+}
+
+.stability-header-tooltip .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+body.light .stability-header-tooltip .text-slate-400 {
+  color: #475569 !important;
 }
 
 .welcome-hero-halo {

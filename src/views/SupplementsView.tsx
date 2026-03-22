@@ -83,9 +83,19 @@ const SupplementsView = ({
   const [editDoseInput, setEditDoseInput] = useState("");
   const [editFrequencyInput, setEditFrequencyInput] = useState("unknown");
   const [editStartDateInput, setEditStartDateInput] = useState(todayIso());
+  const [stopDialogPeriod, setStopDialogPeriod] = useState<SupplementPeriod | null>(null);
+  const [stopDateInput, setStopDateInput] = useState(todayIso());
+  const [stopDateError, setStopDateError] = useState("");
+  const [editingHistoryPeriodId, setEditingHistoryPeriodId] = useState<string | null>(null);
+  const [historyDoseInput, setHistoryDoseInput] = useState("");
+  const [historyFrequencyInput, setHistoryFrequencyInput] = useState("unknown");
+  const [historyStartDateInput, setHistoryStartDateInput] = useState(todayIso());
+  const [historyEndDateInput, setHistoryEndDateInput] = useState("");
+  const [historyEditError, setHistoryEditError] = useState("");
   const addFormRef = useRef<HTMLDivElement | null>(null);
   const addNameInputRef = useRef<HTMLInputElement | null>(null);
   const addStartDateInputRef = useRef<HTMLInputElement | null>(null);
+  const currentDateIso = todayIso();
 
   const sortedTimeline = useMemo(
     () =>
@@ -225,6 +235,70 @@ const SupplementsView = ({
       endDate: null
     });
     cancelEditDose();
+  };
+
+  const openStopDateModal = (period: SupplementPeriod) => {
+    setStopDialogPeriod(period);
+    setStopDateInput(currentDateIso);
+    setStopDateError("");
+  };
+
+  const closeStopDateModal = () => {
+    setStopDialogPeriod(null);
+    setStopDateInput(currentDateIso);
+    setStopDateError("");
+  };
+
+  const confirmStopDateModal = () => {
+    if (!stopDialogPeriod) {
+      return;
+    }
+    if (!stopDateInput) {
+      setStopDateError(tr("Kies een stopdatum.", "Please choose a stop date."));
+      return;
+    }
+    if (stopDateInput < stopDialogPeriod.startDate) {
+      setStopDateError(tr("Stopdatum kan niet voor de startdatum liggen.", "Stop date cannot be before start date."));
+      return;
+    }
+    onStopSupplement(stopDialogPeriod.id, stopDateInput);
+    closeStopDateModal();
+  };
+
+  const startEditHistoryPeriod = (period: SupplementPeriod) => {
+    setEditingHistoryPeriodId(period.id);
+    setHistoryDoseInput(period.dose);
+    setHistoryFrequencyInput(period.frequency);
+    setHistoryStartDateInput(period.startDate);
+    setHistoryEndDateInput(period.endDate ?? "");
+    setHistoryEditError("");
+  };
+
+  const cancelEditHistoryPeriod = () => {
+    setEditingHistoryPeriodId(null);
+    setHistoryDoseInput("");
+    setHistoryFrequencyInput("unknown");
+    setHistoryStartDateInput(todayIso());
+    setHistoryEndDateInput("");
+    setHistoryEditError("");
+  };
+
+  const saveEditedHistoryPeriod = (period: SupplementPeriod) => {
+    if (!historyStartDateInput) {
+      setHistoryEditError(tr("Kies een startdatum.", "Please choose a start date."));
+      return;
+    }
+    if (historyEndDateInput && historyEndDateInput < historyStartDateInput) {
+      setHistoryEditError(tr("Einddatum kan niet voor de startdatum liggen.", "End date cannot be before start date."));
+      return;
+    }
+    onUpdateSupplementPeriod(period.id, {
+      dose: historyDoseInput.trim(),
+      frequency: historyFrequencyInput,
+      startDate: historyStartDateInput,
+      endDate: historyEndDateInput || null
+    });
+    cancelEditHistoryPeriod();
   };
 
   return (
@@ -370,7 +444,7 @@ const SupplementsView = ({
           <div className="mt-2 space-y-2">
             {activeStack.map((period) => {
               const isEditing = editingPeriodId === period.id;
-              const activeDays = daysBetween(period.startDate, todayIso());
+              const activeDays = daysBetween(period.startDate, currentDateIso);
               return (
                 <article key={period.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -441,28 +515,15 @@ const SupplementsView = ({
                         onClick={() => onStopSupplement(period.id)}
                         disabled={isShareMode}
                       >
-                        {tr("Stop", "Stop")}
+                        {tr("Stop vandaag", "Stop today")}
                       </button>
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200 disabled:opacity-50"
-                        onClick={() => {
-                          if (
-                            typeof window !== "undefined" &&
-                            !window.confirm(
-                              tr(
-                                `Weet je zeker dat je ${period.name} wilt verwijderen?`,
-                                `Are you sure you want to delete ${period.name}?`
-                              )
-                            )
-                          ) {
-                            return;
-                          }
-                          onDeleteSupplementPeriod(period.id);
-                        }}
+                        onClick={() => openStopDateModal(period)}
                         disabled={isShareMode}
                       >
-                        <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijderen", "Delete")}
+                        <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijder uit lijst", "Delete from list")}
                       </button>
                     </div>
                   )}
@@ -483,24 +544,180 @@ const SupplementsView = ({
               <article key={name} className="rounded-xl border border-slate-700 bg-slate-900/50 p-3">
                 <h5 className="text-sm font-semibold text-slate-100">{name}</h5>
                 <div className="mt-2 space-y-1.5">
-                  {periods.map((period) => (
-                    <div key={period.id} className="supplement-history-row rounded-lg border border-slate-700/70 bg-slate-800/40 px-2.5 py-2 text-xs text-slate-200">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          {formatDate(period.startDate)} → {period.endDate ? formatDate(period.endDate) : tr("nu", "now")}
-                        </span>
-                        <span className="font-medium text-slate-100">
-                          {period.dose || tr("geen dosis", "no dose")} · {supplementFrequencyLabel(period.frequency, language)}
-                        </span>
+                  {periods.map((period) => {
+                    const isEditingHistory = editingHistoryPeriodId === period.id;
+                    return (
+                      <div key={period.id} className="supplement-history-row rounded-lg border border-slate-700/70 bg-slate-800/40 px-2.5 py-2 text-xs text-slate-200">
+                        {isEditingHistory ? (
+                          <div className="space-y-2">
+                            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_150px_150px]">
+                              <input
+                                value={historyDoseInput}
+                                onChange={(event) => {
+                                  setHistoryDoseInput(event.target.value);
+                                  setHistoryEditError("");
+                                }}
+                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                                placeholder={tr("Dosis", "Dose")}
+                              />
+                              <select
+                                value={historyFrequencyInput}
+                                onChange={(event) => {
+                                  setHistoryFrequencyInput(event.target.value);
+                                  setHistoryEditError("");
+                                }}
+                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                              >
+                                {SUPPLEMENT_FREQUENCY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {tr(option.label.nl, option.label.en)}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="date"
+                                value={historyStartDateInput}
+                                onChange={(event) => {
+                                  setHistoryStartDateInput(event.target.value);
+                                  setHistoryEditError("");
+                                }}
+                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                              />
+                              <input
+                                type="date"
+                                value={historyEndDateInput}
+                                onChange={(event) => {
+                                  setHistoryEndDateInput(event.target.value);
+                                  setHistoryEditError("");
+                                }}
+                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                              />
+                            </div>
+                            {historyEditError ? <p className="text-xs text-rose-300">{historyEditError}</p> : null}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 disabled:opacity-50"
+                                onClick={() => saveEditedHistoryPeriod(period)}
+                                disabled={isShareMode}
+                              >
+                                <Save className="h-3.5 w-3.5" /> {tr("Opslaan", "Save")}
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-200 disabled:opacity-50"
+                                onClick={cancelEditHistoryPeriod}
+                                disabled={isShareMode}
+                              >
+                                <X className="h-3.5 w-3.5" /> {tr("Annuleren", "Cancel")}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              {formatDate(period.startDate)} → {period.endDate ? formatDate(period.endDate) : tr("nu", "now")}
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-slate-100">
+                                {period.dose || tr("geen dosis", "no dose")} · {supplementFrequencyLabel(period.frequency, language)}
+                              </span>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 disabled:opacity-50"
+                                onClick={() => startEditHistoryPeriod(period)}
+                                disabled={isShareMode}
+                              >
+                                <Pencil className="h-3.5 w-3.5" /> {tr("Bewerk", "Edit")}
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200 disabled:opacity-50"
+                                onClick={() => {
+                                  if (
+                                    typeof window !== "undefined" &&
+                                    !window.confirm(
+                                      tr(
+                                        `Weet je zeker dat je deze supplement-periode wilt verwijderen?`,
+                                        "Are you sure you want to delete this supplement period?"
+                                      )
+                                    )
+                                  ) {
+                                    return;
+                                  }
+                                  onDeleteSupplementPeriod(period.id);
+                                }}
+                                disabled={isShareMode}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijder periode", "Delete period")}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </article>
             ))}
           </div>
         )}
       </div>
+
+      {stopDialogPeriod ? (
+        <div
+          className="app-modal-overlay z-[96]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="supplement-stop-date-modal-title"
+          onClick={closeStopDateModal}
+        >
+          <div className="app-modal-shell w-full max-w-md bg-slate-900 p-5 shadow-soft" onClick={(event) => event.stopPropagation()}>
+            <h4 id="supplement-stop-date-modal-title" className="text-base font-semibold text-slate-100">
+              {tr("Verwijderen uit actieve lijst", "Delete from active list")}
+            </h4>
+            <p className="mt-2 text-sm text-slate-300">
+              {tr(
+                `Geef aan sinds wanneer je met ${stopDialogPeriod.name} bent gestopt. We bewaren de periode in je historie.`,
+                `Choose since when you stopped ${stopDialogPeriod.name}. We keep the period in your history.`
+              )}
+            </p>
+            <label className="mt-3 block text-xs uppercase tracking-wide text-slate-400">
+              {tr("Gestopt sinds", "Stopped since")}
+              <input
+                type="date"
+                min={stopDialogPeriod.startDate}
+                max={currentDateIso}
+                value={stopDateInput}
+                onChange={(event) => {
+                  setStopDateInput(event.target.value);
+                  setStopDateError("");
+                }}
+                className={`review-context-input mt-1 w-full rounded-md border bg-slate-800/70 px-3 py-2 text-sm text-slate-100 ${
+                  stopDateError ? "border-rose-500/80 focus:border-rose-400" : "border-slate-600"
+                }`}
+              />
+            </label>
+            {stopDateError ? <p className="mt-1 text-xs text-rose-300">{stopDateError}</p> : null}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+                onClick={closeStopDateModal}
+              >
+                <X className="h-4 w-4" /> {tr("Annuleren", "Cancel")}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
+                onClick={confirmStopDateModal}
+              >
+                <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {unknownReports.length > 0 ? (
         <div className="app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-3">
