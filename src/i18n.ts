@@ -220,6 +220,8 @@ const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
   MCHC: { nl: "MCHC", en: "MCHC" },
   "RDW-CV": { nl: "RDW-CV", en: "RDW-CV" },
   Platelets: { nl: "Bloedplaatjes", en: "Platelets" },
+  PDW: { nl: "PDW", en: "PDW" },
+  "PCT-plateletcrit": { nl: "PCT-plateletcrit", en: "PCT-plateletcrit" },
   "Monocytes Abs.": { nl: "Monocyten abs.", en: "Monocytes Abs." },
   "Basophils Abs.": { nl: "Basofielen abs.", en: "Basophils Abs." },
   "Lymphocytes Abs.": { nl: "Lymfocyten abs.", en: "Lymphocytes Abs." },
@@ -228,6 +230,11 @@ const MARKER_NAME_TRANSLATIONS: Record<string, LocalizedText> = {
   "Free Testosterone (calculated)": { nl: "Vrij Testosteron (berekend)", en: "Free Testosterone (calculated)" },
   Leukocyten: { nl: "Leukocyten", en: "Leukocytes" },
   MPV: { nl: "MPV", en: "MPV" },
+  FSH: { nl: "FSH", en: "FSH" },
+  LH: { nl: "LH", en: "LH" },
+  Prolactin: { nl: "Prolactine", en: "Prolactin" },
+  Cortisol: { nl: "Cortisol", en: "Cortisol" },
+  "Free T4": { nl: "Vrij T4", en: "Free T4" },
   "Carbon Dioxide": { nl: "Koolstofdioxide", en: "Carbon Dioxide" },
   "IGF-1": { nl: "IGF-1", en: "IGF-1" },
   "IGF-1 SDS": { nl: "IGF-1 SDS", en: "IGF-1 SDS" }
@@ -555,6 +562,44 @@ const MARKER_META: Record<string, MarkerMeta> = {
     high: {
       nl: "Hoog: kan passen bij grotere, actievere bloedplaatjes of herstel na verbruik.",
       en: "High: can fit larger, more active platelets or recovery after consumption."
+    }
+  },
+  PDW: {
+    name: { nl: "PDW", en: "PDW" },
+    what: {
+      nl: "Platelet Distribution Width: maat voor de spreiding in grootte van bloedplaatjes.",
+      en: "Platelet Distribution Width: measure of how variable platelet size is."
+    },
+    why: {
+      nl: "Geeft extra context over heterogeniteit en activiteit van bloedplaatjes naast aantal en MPV.",
+      en: "Adds context on platelet heterogeneity and activity alongside platelet count and MPV."
+    },
+    low: {
+      nl: "Laag: betekent vaak een uniformere plaatjesgrootte en is zonder verdere context vaak minder specifiek.",
+      en: "Low: often reflects more uniform platelet size and is usually less specific without other context."
+    },
+    high: {
+      nl: "Hoog: kan passen bij meer variatie in plaatjesgrootte, verhoogde turnover of reactieve plaatjesactiviteit.",
+      en: "High: can fit greater variation in platelet size, increased turnover, or reactive platelet activity."
+    }
+  },
+  "PCT-plateletcrit": {
+    name: { nl: "PCT-plateletcrit", en: "PCT-plateletcrit" },
+    what: {
+      nl: "Plateletcrit is het totale volumeaandeel van bloedplaatjes in het bloed, vergelijkbaar met hematocriet voor rode bloedcellen.",
+      en: "Plateletcrit is the total platelet volume fraction in blood, comparable to hematocrit for red blood cells."
+    },
+    why: {
+      nl: "Helpt het bloedplaatjesbeeld completer maken samen met trombocytenaantal, MPV en PDW.",
+      en: "Helps complete the platelet picture together with platelet count, MPV, and PDW."
+    },
+    low: {
+      nl: "Laag: kan passen bij een laag totaal plaatjesvolume door minder bloedplaatjes of kleinere plaatjes.",
+      en: "Low: can fit lower total platelet volume due to fewer platelets or smaller platelets."
+    },
+    high: {
+      nl: "Hoog: kan passen bij een hoger totaal plaatjesvolume door meer of grotere bloedplaatjes.",
+      en: "High: can fit higher total platelet volume because of more or larger platelets."
     }
   },
   "Carbon Dioxide": {
@@ -1127,6 +1172,82 @@ const MARKER_META: Record<string, MarkerMeta> = {
       en: "High: can fit relatively high androgen effect."
     }
   },
+  FSH: {
+    name: { nl: "FSH", en: "FSH" },
+    what: {
+      nl: "Follikelstimulerend hormoon uit de hypofyse dat bij mannen informatie geeft over testiculaire stimulatie en spermatogenese.",
+      en: "Follicle-stimulating hormone from the pituitary that helps reflect testicular stimulation and spermatogenesis in men."
+    },
+    why: {
+      nl: "Wordt gebruikt om de hypothalamus-hypofyse-gonade-as te duiden, vooral naast LH, testosteron en vruchtbaarheidscontext.",
+      en: "Used to interpret the hypothalamic-pituitary-gonadal axis, especially alongside LH, testosterone, and fertility context."
+    },
+    low: {
+      nl: "Laag: past vaak bij onderdrukking van de hypofyse-as, bijvoorbeeld door externe androgenen of andere centrale remming.",
+      en: "Low: often fits pituitary-axis suppression, for example from exogenous androgens or other central suppression."
+    },
+    high: {
+      nl: "Hoog: kan passen bij verminderde testiculaire feedback of primaire gonadale disfunctie.",
+      en: "High: can fit reduced testicular feedback or primary gonadal dysfunction."
+    }
+  },
+  LH: {
+    name: { nl: "LH", en: "LH" },
+    what: {
+      nl: "Luteïniserend hormoon uit de hypofyse dat de aansturing van testosteronproductie in de testes weerspiegelt.",
+      en: "Luteinizing hormone from the pituitary that reflects signaling for testosterone production in the testes."
+    },
+    why: {
+      nl: "Belangrijk om samen met FSH en testosteron te bepalen of suppressie centraal of testiculair lijkt.",
+      en: "Important with FSH and testosterone to judge whether suppression appears central or testicular."
+    },
+    low: {
+      nl: "Laag: past vaak bij centrale suppressie van de HPG-as, bijvoorbeeld tijdens TRT of andere androgene blootstelling.",
+      en: "Low: often fits central HPG-axis suppression, for example during TRT or other androgen exposure."
+    },
+    high: {
+      nl: "Hoog: kan passen bij verminderde feedback vanuit de testes of primaire gonadale insufficiëntie.",
+      en: "High: can fit reduced feedback from the testes or primary gonadal insufficiency."
+    }
+  },
+  Prolactin: {
+    name: { nl: "Prolactine", en: "Prolactin" },
+    what: {
+      nl: "Hypofysehormoon dat naast reproductieve functies ook libido, stemming en dopaminerge balans kan beïnvloeden.",
+      en: "Pituitary hormone that, beyond reproductive roles, can also affect libido, mood, and dopaminergic balance."
+    },
+    why: {
+      nl: "Relevant bij libido-, erectie-, vruchtbaarheids- of hypofysecontext, vooral naast testosteron en LH/FSH.",
+      en: "Relevant in libido, erectile, fertility, or pituitary context, especially alongside testosterone and LH/FSH."
+    },
+    low: {
+      nl: "Laag: is vaak minder klinisch relevant en kan passen bij hogere dopaminerge remming of meetvariatie.",
+      en: "Low: is often less clinically relevant and can fit stronger dopaminergic inhibition or assay variation."
+    },
+    high: {
+      nl: "Hoog: kan samengaan met lager libido, erectieklachten, gynaecomastiecontext of hypofyseprikkeling.",
+      en: "High: can be associated with lower libido, erectile symptoms, gynecomastia context, or pituitary stimulation."
+    }
+  },
+  Cortisol: {
+    name: { nl: "Cortisol", en: "Cortisol" },
+    what: {
+      nl: "Belangrijk stresshormoon uit de bijnieren met sterke dag-nachtvariatie.",
+      en: "Key adrenal stress hormone with strong day-night variation."
+    },
+    why: {
+      nl: "Wordt gebruikt om stressrespons, circadiaans patroon en bijniercontext te beoordelen.",
+      en: "Used to assess stress response, circadian pattern, and adrenal context."
+    },
+    low: {
+      nl: "Laag: kan passen bij onvoldoende stimulatie, timing-effecten of bijnier/hypofysecontext, afhankelijk van afnametijd.",
+      en: "Low: can fit reduced stimulation, timing effects, or adrenal/pituitary context depending on draw time."
+    },
+    high: {
+      nl: "Hoog: kan passen bij acute stress, slechte slaap, training, ziekte of excessieve cortisolactiviteit.",
+      en: "High: can fit acute stress, poor sleep, training load, illness, or excessive cortisol activity."
+    }
+  },
   "HOMA-IR": {
     name: { nl: "HOMA-IR", en: "HOMA-IR" },
     what: {
@@ -1376,6 +1497,17 @@ const MARKER_META_ALIAS_LOOKUP: Record<string, string> = {
   mpv: "MPV",
   "mean platelet volume": "MPV",
   "m p v": "MPV",
+  pdw: "PDW",
+  "platelet distribution width": "PDW",
+  "platelet dist width": "PDW",
+  "pct plateletcrit": "PCT-plateletcrit",
+  "pct-plateletcrit": "PCT-plateletcrit",
+  plateletcrit: "PCT-plateletcrit",
+  fsh: "FSH",
+  lh: "LH",
+  prolactin: "Prolactin",
+  prolactine: "Prolactin",
+  cortisol: "Cortisol",
   "carbon dioxide": "Carbon Dioxide",
   co2: "Carbon Dioxide",
   "total co2": "Carbon Dioxide",

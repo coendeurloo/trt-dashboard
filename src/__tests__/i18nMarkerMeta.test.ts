@@ -19,4 +19,21 @@ describe("i18n marker meta", () => {
     expect(meta.title).toBe("IGF-1 SDS");
     expect(meta.what.toLowerCase()).toContain("z-score");
   });
+
+  it("resolves detailed tooltip content for Latvian report platelet and hormone markers", () => {
+    const pdw = getMarkerMeta("PDW", "en");
+    const plateletcrit = getMarkerMeta("PCT-plateletcrit", "en");
+    const fsh = getMarkerMeta("FSH", "en");
+    const lh = getMarkerMeta("LH", "en");
+    const prolactin = getMarkerMeta("Prolactin", "en");
+    const cortisol = getMarkerMeta("Cortisol", "en");
+
+    expect(pdw.what).not.toContain("No detailed description");
+    expect(pdw.why).toContain("platelet");
+    expect(plateletcrit.what).toContain("platelet");
+    expect(fsh.why).toContain("pituitary");
+    expect(lh.why).toContain("FSH");
+    expect(prolactin.what).toContain("Pituitary");
+    expect(cortisol.what).toContain("stress hormone");
+  });
 });
