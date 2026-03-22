@@ -799,10 +799,73 @@ describe("analyzeLabDataWithClaude", () => {
     const latestReportAllMarkers = data.latestReportAllMarkers as string[] | undefined;
 
     expect(markerPresenceAcrossScope?.["Vitamin D"]?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.["Vitamin D (D3+D2) OH"]?.everSeen).toBe(true);
     expect(markerPresenceAcrossScope?.["Vitamin D"]?.latestSeenDate).toBe("2025-08-12");
     expect(markerPresenceAcrossScope?.["CRP"]?.everSeen).toBe(true);
     expect(markerPresenceAcrossScope?.["Insulin"]?.countReportsSeen).toBe(1);
     expect(latestReportAllMarkers).toEqual(["Testosterone"]);
+  });
+
+  it("adds alias entries for app-canonical markers like Vitamin D and Insuline in prompt inventory", async () => {
+    const report: LabReport = {
+      ...sampleReport,
+      markers: [
+        {
+          ...sampleReport.markers[0],
+          id: "m-vitd",
+          marker: "Vitamin D (D3+D2) OH",
+          canonicalMarker: "Vitamin D (D3+D2) OH",
+          unit: "ng/mL",
+          value: 60.1
+        },
+        {
+          ...sampleReport.markers[0],
+          id: "m-ins",
+          marker: "Insuline",
+          canonicalMarker: "Insuline",
+          unit: "mIU/L",
+          value: 7.2
+        }
+      ]
+    };
+
+    let capturedPrompt = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    await analyzeLabDataWithClaude({
+      reports: [report],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const markerPresenceAcrossScope = data.markerPresenceAcrossScope as Record<string, { everSeen: boolean }> | undefined;
+    const latestReportAllMarkers = data.latestReportAllMarkers as string[] | undefined;
+
+    expect(markerPresenceAcrossScope?.["Vitamin D"]?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.["Vitamin D (D3+D2) OH"]?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.Insulin?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.Insuline?.everSeen).toBe(true);
+    expect(latestReportAllMarkers).toContain("Vitamin D");
+    expect(latestReportAllMarkers).toContain("Vitamin D (D3+D2) OH");
+    expect(latestReportAllMarkers).toContain("Insulin");
+    expect(latestReportAllMarkers).toContain("Insuline");
   });
 
   it("includes personal context and derives ageYears from date of birth", async () => {
@@ -886,6 +949,41 @@ describe("analyzeLabDataWithClaude", () => {
       weightKg: null,
       heightCm: null
     });
+  });
+
+  it("uses Dutch section headings when the run language is Dutch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            content: [
+              {
+                type: "text",
+                text: "## Direct antwoord\nKort antwoord.\n\n## Waarom dit past bij jouw data\nUitleg.\n\n## Wat nu te volgen\nPunt.\n\n## Voorgestelde volgende stap\nStap."
+              }
+            ],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "nl",
+      externalAiAllowed: true,
+      customQuestion: "Welke marker mis ik nog?"
+    });
+
+    expect(result.text).toContain("## Direct antwoord");
+    expect(result.text).toContain("## Waarom dit past bij jouw data");
+    expect(result.text).toContain("## Wat nu te volgen");
+    expect(result.text).toContain("## Voorgestelde volgende stap");
   });
 
   it("strips supplement section when output includes it but actions are not needed", async () => {

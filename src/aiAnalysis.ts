@@ -41,6 +41,7 @@ import {
 import { getActiveSupplementsAtDate, sortSupplementPeriods, supplementPeriodsToText } from "./supplementUtils";
 import { AnalystMemory } from "./types/analystMemory";
 import { coerceAnalystMemory } from "./analystMemory";
+import { canonicalizeMarker } from "./unitConversion";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -177,6 +178,30 @@ interface AnalysisMarkerPresenceEntry {
   countReportsSeen: number;
 }
 
+const QUESTION_REQUIRED_NARRATIVE_SECTION_KEYS = [
+  "direct_answer",
+  "why_this_fits_your_data",
+  "what_to_watch_next",
+  "suggested_next_step"
+] as const;
+const FULL_REQUIRED_NARRATIVE_SECTION_KEYS = [
+  "heres_where_you_stand",
+  "whats_driving_these_numbers",
+  "what_to_focus_on",
+  "next_steps"
+] as const;
+const COMPARISON_REQUIRED_NARRATIVE_SECTION_KEYS = [
+  "what_changed",
+  "why_it_moved",
+  "what_to_focus_on",
+  "next_steps"
+] as const;
+type NarrativeSectionKey =
+  | typeof QUESTION_REQUIRED_NARRATIVE_SECTION_KEYS[number]
+  | typeof FULL_REQUIRED_NARRATIVE_SECTION_KEYS[number]
+  | typeof COMPARISON_REQUIRED_NARRATIVE_SECTION_KEYS[number]
+  | "supplement_tweaks";
+
 const ANALYSIS_MODEL_CANDIDATES = [
   "claude-sonnet-4-20250514",
   "claude-3-7-sonnet-20250219",
@@ -291,8 +316,30 @@ const PROFILE_CRITICAL_MARKERS: Record<UserProfile, Set<string>> = {
   ])
 };
 
-const buildPersona = (profile: UserProfile, today: string): string => {
-  const base = `Today: ${today}. Language: English.`;
+const promptLanguageLabel = (language: AppLanguage): string => {
+  if (language === "nl") {
+    return "Dutch";
+  }
+  if (language === "de") {
+    return "German";
+  }
+  if (language === "es") {
+    return "Spanish";
+  }
+  if (language === "pt") {
+    return "Portuguese";
+  }
+  if (language === "ru") {
+    return "Russian";
+  }
+  if (language === "zh") {
+    return "Chinese";
+  }
+  return "English";
+};
+
+const buildPersona = (profile: UserProfile, today: string, language: AppLanguage): string => {
+  const base = `Today: ${today}. Reply language: ${promptLanguageLabel(language)}. Match the user's question language for headings and prose.`;
   const personas: Record<UserProfile, string> = {
     trt: `You are a knowledgeable TRT coach who helps people understand their blood work in the context of hormone replacement therapy. You explain things the way a well-informed friend would: clearly, directly, without unnecessary medical jargon. You care about safety (especially hematocrit and cardiovascular markers) but you are not alarmist.`,
     enhanced: `You are an experienced performance health coach who understands anabolic compounds, their effects on blood markers, and harm reduction. You speak directly and practically: no judgment about compound use, just clear guidance on what the blood work shows and what to watch. You prioritize liver function, kidney markers, lipid profile, and cardiovascular safety.`,
@@ -371,32 +418,74 @@ const buildLatestReportEvidence = (reports: AnalysisReportRow[]): {
   };
 };
 
+const markerPromptAliases = (markerName: string): string[] => {
+  const trimmed = markerName.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const aliases = new Set<string>([trimmed]);
+  const appCanonical = canonicalizeMarker(trimmed, { mode: "balanced" });
+  if (appCanonical && appCanonical !== "Unknown Marker") {
+    aliases.add(appCanonical);
+  }
+
+  const normalized = markerNameKey(trimmed);
+  if (
+    normalized.includes("vitamin d") ||
+    normalized.includes("vitamine d") ||
+    normalized.includes("25-oh") ||
+    normalized.includes("25 oh")
+  ) {
+    aliases.add("Vitamin D");
+    aliases.add("Vitamin D (D3+D2) OH");
+    aliases.add("25-OH- Vitamin D (D3+D2)");
+  }
+  if (normalized === "insuline" || normalized === "insulin") {
+    aliases.add("Insulin");
+    aliases.add("Insuline");
+  }
+  if (normalized === "glucose nuchter" || normalized === "fasting glucose" || normalized === "glucose") {
+    aliases.add("Glucose");
+    aliases.add("Fasting Glucose");
+    aliases.add("Glucose Nuchter");
+  }
+  if (normalized === "ferritine" || normalized === "ferritin") {
+    aliases.add("Ferritin");
+    aliases.add("Ferritine");
+  }
+
+  return Array.from(aliases);
+};
+
 const buildMarkerPresenceAcrossScope = (reports: AnalysisReportRow[]): Record<string, AnalysisMarkerPresenceEntry> => {
   const byMarker = new Map<string, { marker: string; latestSeenDate: string | null; countReportsSeen: number }>();
 
   reports.forEach((report) => {
     const seenInReport = new Set<string>();
     report.markers.forEach((marker) => {
-      const key = markerNameKey(marker.m);
-      if (seenInReport.has(key)) {
-        return;
-      }
-      seenInReport.add(key);
+      markerPromptAliases(marker.m).forEach((alias) => {
+        const key = markerNameKey(alias);
+        if (seenInReport.has(key)) {
+          return;
+        }
+        seenInReport.add(key);
 
-      const existing = byMarker.get(key);
-      if (!existing) {
-        byMarker.set(key, {
-          marker: marker.m,
-          latestSeenDate: report.date,
-          countReportsSeen: 1
-        });
-        return;
-      }
+        const existing = byMarker.get(key);
+        if (!existing) {
+          byMarker.set(key, {
+            marker: alias,
+            latestSeenDate: report.date,
+            countReportsSeen: 1
+          });
+          return;
+        }
 
-      existing.countReportsSeen += 1;
-      if (!existing.latestSeenDate || report.date > existing.latestSeenDate) {
-        existing.latestSeenDate = report.date;
-      }
+        existing.countReportsSeen += 1;
+        if (!existing.latestSeenDate || report.date > existing.latestSeenDate) {
+          existing.latestSeenDate = report.date;
+        }
+      });
     });
   });
 
@@ -419,7 +508,7 @@ const buildLatestReportAllMarkers = (reports: AnalysisReportRow[]): string[] => 
   if (!latest) {
     return [];
   }
-  return Array.from(new Set(latest.markers.map((marker) => marker.m)));
+  return Array.from(new Set(latest.markers.flatMap((marker) => markerPromptAliases(marker.m))));
 };
 
 const parsePositiveNumber = (value: number | null | undefined): number | null =>
@@ -452,48 +541,81 @@ const buildPersonalContext = (personalInfo: AnalyzeLabDataOptions["personalInfo"
   heightCm: parsePositiveNumber(personalInfo?.heightCm)
 });
 
-const buildFullSections = (supplementActionsNeeded: boolean): string => {
+const narrativeHeadingLabel = (key: NarrativeSectionKey, language: AppLanguage): string => {
+  const en: Record<NarrativeSectionKey, string> = {
+    direct_answer: "Direct answer",
+    why_this_fits_your_data: "Why this fits your data",
+    what_to_watch_next: "What to watch next",
+    suggested_next_step: "Suggested next step",
+    heres_where_you_stand: "Here's where you stand",
+    whats_driving_these_numbers: "What's driving these numbers",
+    what_to_focus_on: "What to focus on",
+    next_steps: "Next steps",
+    what_changed: "What changed",
+    why_it_moved: "Why it moved",
+    supplement_tweaks: "Supplement tweaks"
+  };
+  const nl: Record<NarrativeSectionKey, string> = {
+    direct_answer: "Direct antwoord",
+    why_this_fits_your_data: "Waarom dit past bij jouw data",
+    what_to_watch_next: "Wat nu te volgen",
+    suggested_next_step: "Voorgestelde volgende stap",
+    heres_where_you_stand: "Waar je nu staat",
+    whats_driving_these_numbers: "Wat deze waarden waarschijnlijk drijft",
+    what_to_focus_on: "Waar je op moet focussen",
+    next_steps: "Volgende stappen",
+    what_changed: "Wat er veranderde",
+    why_it_moved: "Waarom het bewoog",
+    supplement_tweaks: "Supplement-aanpassingen"
+  };
+  return language === "nl" ? nl[key] : en[key];
+};
+
+const buildFullSections = (supplementActionsNeeded: boolean, language: AppLanguage): string => {
+  const supplementHeading = narrativeHeadingLabel("supplement_tweaks", language);
   const supplementSection = supplementActionsNeeded
-    ? `5) ## Supplement tweaks
+    ? `5) ## ${supplementHeading}
 For each suggestion: what to change, why (cite the specific signal), what to expect, and when to reassess. Only suggest changes justified by the current data.`
-    : `5) ## Supplement tweaks
+    : `5) ## ${supplementHeading}
 If the current stack looks appropriate given the data, say so briefly and explain which signals confirm it.`;
 
   return `Required sections in this order:
-1) ## Here's where you stand - a short narrative connecting your protocol history to your current numbers. Tell the story of how decisions led to outcomes. One paragraph, conversational.
-2) ## What's driving these numbers - 2-4 causal chains. Each follows: what changed -> why it likely had this effect -> what you're seeing. Skip anything you cannot connect to a concrete cause.
-3) ## What to focus on - max 3 priorities. Each must name a specific marker and value, not a category. Start each with the most actionable item.
-4) ## Next steps - what to do now, when to retest, and what would trigger a protocol change. If trend data supports it, add one forward-looking sentence about where things are heading.
+1) ## ${narrativeHeadingLabel("heres_where_you_stand", language)} - a short narrative connecting your protocol history to your current numbers. Tell the story of how decisions led to outcomes. One paragraph, conversational.
+2) ## ${narrativeHeadingLabel("whats_driving_these_numbers", language)} - 2-4 causal chains. Each follows: what changed -> why it likely had this effect -> what you're seeing. Skip anything you cannot connect to a concrete cause.
+3) ## ${narrativeHeadingLabel("what_to_focus_on", language)} - max 3 priorities. Each must name a specific marker and value, not a category. Start each with the most actionable item.
+4) ## ${narrativeHeadingLabel("next_steps", language)} - what to do now, when to retest, and what would trigger a protocol change. If trend data supports it, add one forward-looking sentence about where things are heading.
 ${supplementSection}`;
 };
 
-const buildQuestionSections = (supplementActionsNeeded: boolean): string => {
+const buildQuestionSections = (supplementActionsNeeded: boolean, language: AppLanguage): string => {
+  const supplementHeading = narrativeHeadingLabel("supplement_tweaks", language);
   const supplementSection = supplementActionsNeeded
-    ? `5) ## Supplement tweaks
+    ? `5) ## ${supplementHeading}
 Only include if directly relevant to the user question and current signals. Keep it brief and specific.`
-    : `5) ## Supplement tweaks
+    : `5) ## ${supplementHeading}
 Only include if directly relevant; otherwise one sentence saying no supplement change is clearly indicated from this question-focused review.`;
 
   return `Required sections in this order:
-1) ## Direct answer - answer the user question first in 2-4 sentences, with a clear stance.
-2) ## Why this fits your data - 2-3 concise evidence chains using specific markers/trends/protocol context.
-3) ## What to watch next - max 3 concise watch points tied to this question.
-4) ## Suggested next step - one practical next step and what to recheck next.
+1) ## ${narrativeHeadingLabel("direct_answer", language)} - answer the user question first in 2-4 sentences, with a clear stance.
+2) ## ${narrativeHeadingLabel("why_this_fits_your_data", language)} - 2-3 concise evidence chains using specific markers/trends/protocol context.
+3) ## ${narrativeHeadingLabel("what_to_watch_next", language)} - max 3 concise watch points tied to this question.
+4) ## ${narrativeHeadingLabel("suggested_next_step", language)} - one practical next step and what to recheck next.
 ${supplementSection}`;
 };
 
-const buildComparisonSections = (supplementActionsNeeded: boolean): string => {
+const buildComparisonSections = (supplementActionsNeeded: boolean, language: AppLanguage): string => {
+  const supplementHeading = narrativeHeadingLabel("supplement_tweaks", language);
   const supplementSection = supplementActionsNeeded
-    ? `5) ## Supplement tweaks
+    ? `5) ## ${supplementHeading}
 Brief, focused on what changed between reports. Only suggest changes justified by the new data.`
-    : `5) ## Supplement tweaks
+    : `5) ## ${supplementHeading}
 If no changes are needed, say so in one sentence.`;
 
   return `Required sections in this order:
-1) ## What changed - one paragraph on the key shifts since your last blood draw and the most likely reasons.
-2) ## Why it moved - 2-3 causal chains connecting protocol/supplement/lifestyle changes to the observed shifts. Skip anything stable.
-3) ## What to focus on - max 3 priorities from this comparison. Each must name a specific signal.
-4) ## Next steps - what to do now and when to retest.
+1) ## ${narrativeHeadingLabel("what_changed", language)} - one paragraph on the key shifts since your last blood draw and the most likely reasons.
+2) ## ${narrativeHeadingLabel("why_it_moved", language)} - 2-3 causal chains connecting protocol/supplement/lifestyle changes to the observed shifts. Skip anything stable.
+3) ## ${narrativeHeadingLabel("what_to_focus_on", language)} - max 3 priorities from this comparison. Each must name a specific signal.
+4) ## ${narrativeHeadingLabel("next_steps", language)} - what to do now and when to retest.
 ${supplementSection}`;
 };
 
@@ -824,6 +946,7 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
 interface FullAnalysisParams {
   today: string;
   unitSystem: UnitSystem;
+  language: AppLanguage;
   profile: UserProfile;
   personalContext: AnalysisPersonalContext;
   markerPresenceAcrossScope: Record<string, AnalysisMarkerPresenceEntry>;
@@ -843,6 +966,7 @@ interface FullAnalysisParams {
 interface ComparisonParams {
   today: string;
   unitSystem: UnitSystem;
+  language: AppLanguage;
   profile: UserProfile;
   personalContext: AnalysisPersonalContext;
   markerPresenceAcrossScope: Record<string, AnalysisMarkerPresenceEntry>;
@@ -862,7 +986,7 @@ interface ComparisonParams {
 
 function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
   const {
-    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
+    today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
     benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
@@ -874,12 +998,12 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
     : "No explicit user question was provided. Focus on the most important data-driven priorities.";
 
   return [
-    buildPersona(profile, today),
+    buildPersona(profile, today, language),
     "Target length: 300-450 words.",
     FORMAT_RULES(10, 5),
     buildCoreRules(profile),
     HALLUCINATION_GUARDRAILS,
-    buildFullSections(supplementActionsNeeded),
+    buildFullSections(supplementActionsNeeded, language),
     questionInstruction,
     SAFETY_FOOTER,
     benchmarkSection,
@@ -906,7 +1030,7 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
 
 function buildQuestionPrompt(params: FullAnalysisParams): string {
   const {
-    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
+    today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
     benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
@@ -914,13 +1038,13 @@ function buildQuestionPrompt(params: FullAnalysisParams): string {
   const safeQuestion = customQuestion?.trim() ? customQuestion.trim() : "No explicit user question was provided.";
 
   return [
-    buildPersona(profile, today),
+    buildPersona(profile, today, language),
     "Scope: answer the user question first. This is a targeted Q&A run, not a full timeline recap.",
     "Target length: 180-320 words.",
     FORMAT_RULES(8, 4),
     buildCoreRules(profile),
     HALLUCINATION_GUARDRAILS,
-    buildQuestionSections(supplementActionsNeeded),
+    buildQuestionSections(supplementActionsNeeded, language),
     `USER QUESTION:
 - "${safeQuestion}"`,
     `Question-first rules:
@@ -953,20 +1077,20 @@ function buildQuestionPrompt(params: FullAnalysisParams): string {
 
 function buildComparisonPrompt(params: ComparisonParams): string {
   const {
-    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, relevantComparison, latestComparison,
+    today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, relevantComparison, latestComparison,
     relevantPayload, relevantSupplementContext, comparisonSignals, comparisonPremiumInsightPack,
     comparisonActionability, comparisonSupplementActionability, relevantBenchmarkSection,
     supplementActionsNeeded
   } = params;
 
   return [
-    buildPersona(profile, today),
+    buildPersona(profile, today, language),
     "Scope: latest report vs the most comparable previous report (highest marker overlap; nearest date on tie).",
     "Target length: 220-320 words.",
     FORMAT_RULES(7, 4),
     buildCoreRules(profile),
     HALLUCINATION_GUARDRAILS,
-    buildComparisonSections(supplementActionsNeeded),
+    buildComparisonSections(supplementActionsNeeded, language),
     SAFETY_FOOTER,
     relevantBenchmarkSection,
     buildMemoryContext(memory),
@@ -2197,72 +2321,69 @@ interface QualityGuardResult {
 }
 
 const H2_HEADING_PATTERN = /^##\s+(.+?)\s*$/;
-const SUPPLEMENT_SECTION_HEADING = "Supplement tweaks";
-const FULL_REQUIRED_NARRATIVE_SECTIONS = ["Here's where you stand", "What's driving these numbers", "What to focus on", "Next steps"] as const;
-const COMPARISON_REQUIRED_NARRATIVE_SECTIONS = ["What changed", "Why it moved", "What to focus on", "Next steps"] as const;
-const QUESTION_REQUIRED_NARRATIVE_SECTIONS = [
-  "Direct answer",
-  "Why this fits your data",
-  "What to watch next",
-  "Suggested next step"
-] as const;
+const SUPPLEMENT_SECTION_HEADING_KEY = "supplement_tweaks";
 
-const canonicalNarrativeHeading = (heading: string): string => {
+const canonicalNarrativeHeading = (heading: string): NarrativeSectionKey | string => {
   const normalized = heading.trim().toLowerCase();
-  if (normalized.includes("what changed")) {
-    return "What changed";
+  if (normalized.includes("what changed") || normalized.includes("wat er veranderde")) {
+    return "what_changed";
   }
-  if (normalized.includes("direct answer") || normalized.includes("short answer")) {
-    return "Direct answer";
+  if (normalized.includes("direct answer") || normalized.includes("short answer") || normalized.includes("direct antwoord")) {
+    return "direct_answer";
   }
-  if (normalized.includes("why this fits your data") || normalized.includes("why this answer fits")) {
-    return "Why this fits your data";
+  if (
+    normalized.includes("why this fits your data") ||
+    normalized.includes("why this answer fits") ||
+    normalized.includes("waarom dit past bij jouw data")
+  ) {
+    return "why_this_fits_your_data";
   }
-  if (normalized.includes("what to watch next")) {
-    return "What to watch next";
+  if (normalized.includes("what to watch next") || normalized.includes("wat nu te volgen")) {
+    return "what_to_watch_next";
   }
-  if (normalized.includes("suggested next step")) {
-    return "Suggested next step";
+  if (normalized.includes("suggested next step") || normalized.includes("voorgestelde volgende stap")) {
+    return "suggested_next_step";
   }
-  if (normalized.includes("why it moved")) {
-    return "Why it moved";
+  if (normalized.includes("why it moved") || normalized.includes("waarom het bewoog")) {
+    return "why_it_moved";
   }
-  if (normalized.includes("here's where you stand")) {
-    return "Here's where you stand";
+  if (normalized.includes("here's where you stand") || normalized.includes("waar je nu staat")) {
+    return "heres_where_you_stand";
   }
-  if (normalized.includes("what's driving these numbers")) {
-    return "What's driving these numbers";
+  if (normalized.includes("what's driving these numbers") || normalized.includes("wat deze waarden waarschijnlijk drijft")) {
+    return "whats_driving_these_numbers";
   }
   if (normalized.includes("clinical story")) {
-    return "Here's where you stand";
+    return "heres_where_you_stand";
   }
   if (normalized.includes("the story so far")) {
-    return "Here's where you stand";
+    return "heres_where_you_stand";
   }
   if (normalized.includes("protocol, supplements, and wellbeing links")) {
-    return "What's driving these numbers";
+    return "whats_driving_these_numbers";
   }
   if (normalized.includes("why this likely happened")) {
-    return "What's driving these numbers";
+    return "whats_driving_these_numbers";
   }
-  if (normalized.includes("what to focus on")) {
-    return "What to focus on";
+  if (normalized.includes("what to focus on") || normalized.includes("waar je op moet focussen")) {
+    return "what_to_focus_on";
   }
   if (normalized.includes("what matters most now")) {
-    return "What to focus on";
+    return "what_to_focus_on";
   }
-  if (normalized.includes("next steps")) {
-    return "Next steps";
+  if (normalized.includes("next steps") || normalized.includes("volgende stappen")) {
+    return "next_steps";
   }
   if (normalized.includes("what to do next")) {
-    return "Next steps";
+    return "next_steps";
   }
   if (
     normalized.includes("supplement advice") ||
     normalized.includes("supplement changes") ||
-    normalized.includes("supplement tweaks")
+    normalized.includes("supplement tweaks") ||
+    normalized.includes("supplement-aanpassingen")
   ) {
-    return SUPPLEMENT_SECTION_HEADING;
+    return SUPPLEMENT_SECTION_HEADING_KEY;
   }
   return heading.trim();
 };
@@ -2298,7 +2419,15 @@ const parseNarrativeSections = (text: string): { preamble: string[]; sections: P
   };
 };
 
-const serializeNarrativeSections = ({ preamble, sections }: { preamble: string[]; sections: ParsedNarrativeSection[] }): string => {
+const serializeNarrativeSections = ({
+  preamble,
+  sections,
+  language
+}: {
+  preamble: string[];
+  sections: ParsedNarrativeSection[];
+  language: AppLanguage;
+}): string => {
   const lines: string[] = [];
   if (preamble.some((line) => line.trim().length > 0)) {
     lines.push(...preamble);
@@ -2308,7 +2437,14 @@ const serializeNarrativeSections = ({ preamble, sections }: { preamble: string[]
   }
 
   sections.forEach((section, index) => {
-    lines.push(`## ${section.heading}`);
+    const displayHeading =
+      typeof section.heading === "string" &&
+      (
+        [...QUESTION_REQUIRED_NARRATIVE_SECTION_KEYS, ...FULL_REQUIRED_NARRATIVE_SECTION_KEYS, ...COMPARISON_REQUIRED_NARRATIVE_SECTION_KEYS, SUPPLEMENT_SECTION_HEADING_KEY] as string[]
+      ).includes(section.heading)
+        ? narrativeHeadingLabel(section.heading as NarrativeSectionKey, language)
+        : section.heading;
+    lines.push(`## ${displayHeading}`);
     lines.push(...section.lines);
     if (index < sections.length - 1 && lines[lines.length - 1]?.trim() !== "") {
       lines.push("");
@@ -2319,18 +2455,20 @@ const serializeNarrativeSections = ({ preamble, sections }: { preamble: string[]
 };
 
 const hasSupplementSection = (sections: ParsedNarrativeSection[]): boolean =>
-  sections.some((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+  sections.some((section) => section.heading === SUPPLEMENT_SECTION_HEADING_KEY);
 
 const applyNarrativeQualityGuard = ({
   text,
   supplementActionsNeeded,
   analysisType,
-  questionMode
+  questionMode,
+  language
 }: {
   text: string;
   supplementActionsNeeded: boolean;
   analysisType: "full" | "latestComparison";
   questionMode: boolean;
+  language: AppLanguage;
 }): QualityGuardResult => {
   const qualityIssues: string[] = [];
   let qualityGuardApplied = false;
@@ -2339,12 +2477,12 @@ const applyNarrativeQualityGuard = ({
 
   if (questionMode) {
     const headingMap: Record<string, string> = {
-      "Here's where you stand": "Direct answer",
-      "What changed": "Direct answer",
-      "What's driving these numbers": "Why this fits your data",
-      "Why it moved": "Why this fits your data",
-      "What to focus on": "What to watch next",
-      "Next steps": "Suggested next step"
+      heres_where_you_stand: "direct_answer",
+      what_changed: "direct_answer",
+      whats_driving_these_numbers: "why_this_fits_your_data",
+      why_it_moved: "why_this_fits_your_data",
+      what_to_focus_on: "what_to_watch_next",
+      next_steps: "suggested_next_step"
     };
     const remapped: ParsedNarrativeSection[] = [];
     sections.forEach((section) => {
@@ -2369,7 +2507,7 @@ const applyNarrativeQualityGuard = ({
     sections = remapped;
   }
 
-  const supplementIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+  const supplementIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING_KEY);
 
   if (!supplementActionsNeeded && supplementIndex !== -1) {
     sections.splice(supplementIndex, 1);
@@ -2377,7 +2515,7 @@ const applyNarrativeQualityGuard = ({
     qualityGuardApplied = true;
   }
 
-  const supplementSectionIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING);
+  const supplementSectionIndex = sections.findIndex((section) => section.heading === SUPPLEMENT_SECTION_HEADING_KEY);
   if (supplementSectionIndex !== -1) {
     const section = sections[supplementSectionIndex];
     const filteredLines = section.lines.filter((line) => !hasForbiddenSupplementAdviceLanguage(line));
@@ -2395,83 +2533,122 @@ const applyNarrativeQualityGuard = ({
   }
 
   const requiredNarrativeSections = questionMode
-    ? QUESTION_REQUIRED_NARRATIVE_SECTIONS
+    ? QUESTION_REQUIRED_NARRATIVE_SECTION_KEYS
     : analysisType === "latestComparison"
-      ? COMPARISON_REQUIRED_NARRATIVE_SECTIONS
-      : FULL_REQUIRED_NARRATIVE_SECTIONS;
+      ? COMPARISON_REQUIRED_NARRATIVE_SECTION_KEYS
+      : FULL_REQUIRED_NARRATIVE_SECTION_KEYS;
   const sectionHeadings = new Set(sections.map((section) => section.heading));
   requiredNarrativeSections.forEach((heading) => {
     if (sectionHeadings.has(heading)) {
       return;
     }
     qualityGuardApplied = true;
-    qualityIssues.push(`missing_section_${heading.toLowerCase().replace(/\s+/g, "_")}`);
-    if (heading === "Direct answer") {
+    qualityIssues.push(`missing_section_${heading}`);
+    if (heading === "direct_answer") {
       sections.unshift({
         heading,
-        lines: ["Short answer: based on the available data, the direct conclusion was only partially clear."]
+        lines: [
+          language === "nl"
+            ? "Kort antwoord: op basis van de beschikbare data was de directe conclusie maar deels duidelijk."
+            : "Short answer: based on the available data, the direct conclusion was only partially clear."
+        ]
       });
       return;
     }
-    if (heading === "Why this fits your data") {
+    if (heading === "why_this_fits_your_data") {
       sections.push({
         heading,
-        lines: ["The evidence-to-conclusion chain was partially unclear due to limited or conflicting context signals."]
+        lines: [
+          language === "nl"
+            ? "De koppeling tussen bewijs en conclusie was deels onduidelijk door beperkte of conflicterende contextsignalen."
+            : "The evidence-to-conclusion chain was partially unclear due to limited or conflicting context signals."
+        ]
       });
       return;
     }
-    if (heading === "What to watch next") {
+    if (heading === "what_to_watch_next") {
       sections.push({
         heading,
-        lines: ["- Re-check the key marker linked to your question.", "- Keep protocol and sampling context stable until the next panel."]
+        lines:
+          language === "nl"
+            ? ["- Controleer de belangrijkste marker die aan je vraag gekoppeld is opnieuw.", "- Houd protocol en afnamemoment stabiel tot het volgende panel."]
+            : ["- Re-check the key marker linked to your question.", "- Keep protocol and sampling context stable until the next panel."]
       });
       return;
     }
-    if (heading === "Suggested next step") {
+    if (heading === "suggested_next_step") {
       sections.push({
         heading,
-        lines: ["- Discuss one focused next adjustment with your clinician and retest the relevant marker in a consistent context."]
+        lines: [
+          language === "nl"
+            ? "- Bespreek een gerichte volgende stap met je arts en herhaal de relevante marker onder consistente omstandigheden."
+            : "- Discuss one focused next adjustment with your clinician and retest the relevant marker in a consistent context."
+        ]
       });
       return;
     }
-    if (heading === "Here's where you stand" || heading === "What changed") {
+    if (heading === "heres_where_you_stand" || heading === "what_changed") {
       sections.unshift({
         heading,
-        lines: ["A clear narrative summary could not be fully inferred from the model output."]
+        lines: [
+          language === "nl"
+            ? "Er kon geen volledig heldere samenvatting uit de modeloutput worden afgeleid."
+            : "A clear narrative summary could not be fully inferred from the model output."
+        ]
       });
       return;
     }
-    if (heading === "What's driving these numbers" || heading === "Why it moved") {
+    if (heading === "whats_driving_these_numbers" || heading === "why_it_moved") {
       sections.push({
         heading,
-        lines: ["The likely drivers were partially unclear due to limited or conflicting context signals."]
+        lines: [
+          language === "nl"
+            ? "De waarschijnlijke drijvers waren deels onduidelijk door beperkte of conflicterende contextsignalen."
+            : "The likely drivers were partially unclear due to limited or conflicting context signals."
+        ]
       });
       return;
     }
-    if (heading === "What to focus on") {
+    if (heading === "what_to_focus_on") {
       sections.push({
         heading,
-        lines: ["- Prioritize stable protocol execution.", "- Re-check key risk markers on the next test."]
+        lines:
+          language === "nl"
+            ? ["- Geef prioriteit aan een stabiele uitvoering van je protocol.", "- Controleer belangrijke risicomarkers opnieuw bij de volgende test."]
+            : ["- Prioritize stable protocol execution.", "- Re-check key risk markers on the next test."]
       });
       return;
     }
     sections.push({
-      heading: "Next steps",
-      lines: [
-        "- Now: keep data collection consistent and avoid multiple simultaneous changes.",
-        "- Next test: repeat key markers in the same sampling context.",
-        "- Revisit decisions when the new panel confirms direction."
-      ]
+      heading: "next_steps",
+      lines:
+        language === "nl"
+          ? [
+              "- Nu: houd dataverzameling consistent en verander niet meerdere dingen tegelijk.",
+              "- Volgende test: herhaal belangrijke markers in dezelfde afnamecontext.",
+              "- Herzie keuzes wanneer het nieuwe panel de richting bevestigt."
+            ]
+          : [
+              "- Now: keep data collection consistent and avoid multiple simultaneous changes.",
+              "- Next test: repeat key markers in the same sampling context.",
+              "- Revisit decisions when the new panel confirms direction."
+            ]
     });
   });
 
   if (supplementActionsNeeded && !hasSupplementSection(sections)) {
     sections.push({
-      heading: SUPPLEMENT_SECTION_HEADING,
-      lines: [
-        "- A supplement change is likely warranted based on current risk signals.",
-        "- Discuss add/increase/decrease/switch options with your clinician."
-      ]
+      heading: SUPPLEMENT_SECTION_HEADING_KEY,
+      lines:
+        language === "nl"
+          ? [
+              "- Een supplementaanpassing lijkt waarschijnlijk zinvol op basis van de huidige risicosignalen.",
+              "- Bespreek toevoegen/verhogen/verlagen/wisselen met je arts."
+            ]
+          : [
+              "- A supplement change is likely warranted based on current risk signals.",
+              "- Discuss add/increase/decrease/switch options with your clinician."
+            ]
     });
     qualityIssues.push("supplement_section_added_from_actionability");
     qualityGuardApplied = true;
@@ -2479,7 +2656,8 @@ const applyNarrativeQualityGuard = ({
 
   const outputText = serializeNarrativeSections({
     preamble: parsed.preamble,
-    sections
+    sections,
+    language
   });
 
   return {
@@ -2564,6 +2742,7 @@ export const analyzeLabDataWithClaude = async ({
   const fullPrompt = buildFullAnalysisPrompt({
     today,
     unitSystem,
+    language: _language,
     profile,
     personalContext,
     markerPresenceAcrossScope,
@@ -2583,6 +2762,7 @@ export const analyzeLabDataWithClaude = async ({
     ? buildQuestionPrompt({
         today,
         unitSystem,
+        language: _language,
         profile,
         personalContext,
         markerPresenceAcrossScope,
@@ -2645,6 +2825,7 @@ export const analyzeLabDataWithClaude = async ({
       prompt: buildComparisonPrompt({
         today,
         unitSystem,
+        language: _language,
         profile,
         personalContext,
         markerPresenceAcrossScope,
@@ -2825,7 +3006,8 @@ export const analyzeLabDataWithClaude = async ({
             text: outputText,
             supplementActionsNeeded: supplementActionability.supplementActionsNeeded,
             analysisType,
-            questionMode
+            questionMode,
+            language: _language
           });
           return {
             text: qualityResult.text,
