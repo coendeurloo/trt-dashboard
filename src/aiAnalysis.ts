@@ -2554,7 +2554,7 @@ export const analyzeLabDataWithClaude = async ({
     provider: AnalysisProvider,
     promptText: string
   ): Promise<{ status: number; body: ClaudeResponse; retryAfterSeconds: number | null }> => {
-    const endpoint = provider === "gemini" ? "/api/gemini/analysis" : "/api/claude/messages";
+    const endpoint = provider === "gemini" ? "/api/gemini?action=analysis" : "/api/claude/messages";
     const providerMaxTokens = provider === "gemini" ? Math.max(maxTokens, GEMINI_MIN_OUTPUT_TOKENS) : maxTokens;
     const shouldStreamClaude = provider === "claude" && typeof onStreamEvent === "function";
     let response: Response;

@@ -1,8 +1,8 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
-import { encryptShareToken, ShareCryptoConfigError } from "../_lib/shareCrypto.js";
-import { saveShareRecord, ShareStoreUnavailableError } from "../_lib/shareStore.js";
+import { getRuntimeConfigWithFallback } from "../../api/_lib/adminRuntimeConfig.js";
+import { encryptShareToken, ShareCryptoConfigError } from "../../api/_lib/shareCrypto.js";
+import { saveShareRecord, ShareStoreUnavailableError } from "../../api/_lib/shareStore.js";
 
 interface ShortenRequestBody {
   token?: string;

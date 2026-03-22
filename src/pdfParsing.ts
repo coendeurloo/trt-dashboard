@@ -5032,7 +5032,7 @@ const callGeminiExtraction = async (
   const fetchGeminiRoute = async (): Promise<{ body: GeminiExtractionResponse | null; warningCode?: ExtractionWarningCode }> => {
     let response: Response | null = null;
     try {
-      response = await fetch("/api/gemini/extract", {
+      response = await fetch("/api/gemini?action=extract", {
         method: "POST",
         headers: {
           "content-type": "application/json"

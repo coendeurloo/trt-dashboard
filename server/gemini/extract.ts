@@ -1,7 +1,12 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { checkRateLimit } from "../_lib/rateLimit.js";
-import { RedisStoreUnavailableError, getCounter, incrementCounterWindow, incrementFloatWindow } from "../_lib/redisStore.js";
-import { requireAiEntitlement } from "../_lib/entitlements.js";
+import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import {
+  RedisStoreUnavailableError,
+  getCounter,
+  incrementCounterWindow,
+  incrementFloatWindow
+} from "../../api/_lib/redisStore.js";
+import { requireAiEntitlement } from "../../api/_lib/entitlements.js";
 
 interface GeminiExtractRequestBody {
   fileName?: string;

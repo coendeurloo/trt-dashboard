@@ -46,7 +46,7 @@ const parseError = async (response: Response): Promise<ShareClientError> => {
 export const createShortShareLink = async (token: string): Promise<ShortShareLinkResult> => {
   let response: Response;
   try {
-    response = await fetch("/api/share/shorten", {
+    response = await fetch("/api/share?action=shorten", {
       method: "POST",
       headers: {
         "content-type": "application/json"
@@ -81,7 +81,7 @@ export const resolveShortShareCode = async (code: string): Promise<ResolveShortS
 
   let response: Response;
   try {
-    response = await fetch(`/api/share/resolve?code=${encodeURIComponent(cleanCode)}`, {
+    response = await fetch(`/api/share?action=resolve&code=${encodeURIComponent(cleanCode)}`, {
       method: "GET"
     });
   } catch {

@@ -52,6 +52,6 @@ describe("shareClient", () => {
     const result = await resolveShortShareCode("abc12345");
     expect(result.token).toBe("s2.abc");
     expect(result.expiresAt).toBe("2026-03-25T00:00:00.000Z");
-    expect(fetchMock).toHaveBeenCalledWith("/api/share/resolve?code=abc12345", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/share?action=resolve&code=abc12345", { method: "GET" });
   });
 });

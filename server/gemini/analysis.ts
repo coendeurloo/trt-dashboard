@@ -1,8 +1,8 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
-import { checkRateLimit } from "../_lib/rateLimit.js";
-import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
-import { requireAiEntitlement } from "../_lib/entitlements.js";
+import { getRuntimeConfigWithFallback } from "../../api/_lib/adminRuntimeConfig.js";
+import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
+import { requireAiEntitlement } from "../../api/_lib/entitlements.js";
 
 interface GeminiAnalysisPayload {
   model: string;

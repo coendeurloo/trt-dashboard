@@ -13,8 +13,7 @@ vi.mock("../_lib/shareStore.js", () => ({
   }
 }));
 
-import shortenHandler from "../share/shorten";
-import resolveHandler from "../share/resolve";
+import shareHandler from "../share";
 
 interface MockResponseResult {
   res: ServerResponse;
@@ -76,13 +75,14 @@ describe("share endpoints", () => {
   it("roundtrips shorten -> resolve", async () => {
     const shortenReq = {
       method: "POST",
+      url: "/api/share?action=shorten",
       body: {
         token: "s2.mock-token"
       }
     } as unknown as IncomingMessage;
     const shortenRes = createMockResponse();
 
-    await shortenHandler(shortenReq, shortenRes.res);
+    await shareHandler(shortenReq, shortenRes.res);
 
     expect(shortenRes.res.statusCode).toBe(200);
     const shortenPayload = JSON.parse(shortenRes.readBody()) as { code: string; shareUrl: string };
@@ -91,11 +91,11 @@ describe("share endpoints", () => {
 
     const resolveReq = {
       method: "GET",
-      url: `/api/share/resolve?code=${shortenPayload.code}`
+      url: `/api/share?action=resolve&code=${shortenPayload.code}`
     } as unknown as IncomingMessage;
     const resolveRes = createMockResponse();
 
-    await resolveHandler(resolveReq, resolveRes.res);
+    await shareHandler(resolveReq, resolveRes.res);
 
     expect(resolveRes.res.statusCode).toBe(200);
     const resolvePayload = JSON.parse(resolveRes.readBody()) as { token: string };
@@ -105,13 +105,14 @@ describe("share endpoints", () => {
   it("returns 413 when token exceeds max size", async () => {
     const req = {
       method: "POST",
+      url: "/api/share?action=shorten",
       body: {
         token: "a".repeat(220_001)
       }
     } as unknown as IncomingMessage;
     const res = createMockResponse();
 
-    await shortenHandler(req, res.res);
+    await shareHandler(req, res.res);
 
     expect(res.res.statusCode).toBe(413);
     const payload = JSON.parse(res.readBody()) as { error: { code: string } };

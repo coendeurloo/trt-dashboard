@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { decryptShareToken, ShareCryptoConfigError } from "../_lib/shareCrypto.js";
-import { loadShareRecord, ShareStoreUnavailableError } from "../_lib/shareStore.js";
+import { decryptShareToken, ShareCryptoConfigError } from "../../api/_lib/shareCrypto.js";
+import { loadShareRecord, ShareStoreUnavailableError } from "../../api/_lib/shareStore.js";
 
 const SHARE_CODE_PATTERN = /^[A-Za-z0-9]{8,24}$/;
 

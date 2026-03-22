@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/share/:action",
+      "destination": "/api/share?action=:action"
+    },
+    {
+      "source": "/api/gemini/:action",
+      "destination": "/api/gemini?action=:action"
+    },
+    {
       "source": "/api/admin/:action",
       "destination": "/api/admin?action=:action"
     },
