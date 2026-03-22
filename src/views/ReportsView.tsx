@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, CalendarDays, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { buildMarkerSeries } from "../analytics";
-import { REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE } from "../constants";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -24,7 +23,6 @@ import { convertBySystem } from "../unitConversion";
 import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
-import { shortMarkerName } from "../utils/markerAbbreviations";
 
 const REVIEW_TOOLTIP_EDGE_PADDING = 10;
 const REVIEW_TOOLTIP_MIN_WIDTH = 240;
@@ -685,45 +683,13 @@ const ReportsView = ({
     });
   };
 
-  const getCompactHeaderOutOfRangeMarkers = (
-    report: LabReport
-  ): Array<{ canonicalMarker: string; marker: MarkerValue; abnormal: "high" | "low" }> => {
-    const byCanonical = new Map<string, MarkerValue>();
-    report.markers.forEach((marker) => {
-      if (!byCanonical.has(marker.canonicalMarker)) {
-        byCanonical.set(marker.canonicalMarker, marker);
+  const toggleReportSelection = (reportId: string) => {
+    setSelectedReports((current) => {
+      if (current.includes(reportId)) {
+        return current.filter((id) => id !== reportId);
       }
+      return [...current, reportId];
     });
-
-    const preferredSequence = Array.from(
-      new Set([
-        ...(settings.primaryMarkersSelection ?? []),
-        ...REPORTS_OVERVIEW_PRIMARY_MARKERS_BY_PROFILE[settings.userProfile]
-      ])
-    )
-      .map((marker) => marker.trim())
-      .filter((marker) => marker.length > 0);
-
-    const preferredOrderIndex = new Map(preferredSequence.map((marker, index) => [marker, index]));
-
-    return Array.from(byCanonical.entries())
-      .map(([canonicalMarker, marker]) => ({
-        canonicalMarker,
-        marker,
-        abnormal: markerAbnormalStatus(marker)
-      }))
-      .filter(
-        (entry): entry is { canonicalMarker: string; marker: MarkerValue; abnormal: "high" | "low" } =>
-          entry.abnormal === "high" || entry.abnormal === "low"
-      )
-      .sort((left, right) => {
-        const leftPreferredIndex = preferredOrderIndex.get(left.canonicalMarker) ?? Number.POSITIVE_INFINITY;
-        const rightPreferredIndex = preferredOrderIndex.get(right.canonicalMarker) ?? Number.POSITIVE_INFINITY;
-        if (leftPreferredIndex !== rightPreferredIndex) {
-          return leftPreferredIndex - rightPreferredIndex;
-        }
-        return getMarkerDisplayName(left.canonicalMarker, language).localeCompare(getMarkerDisplayName(right.canonicalMarker, language));
-      });
   };
 
   // Left border + health indicator color based on abnormal count
@@ -907,7 +873,6 @@ const ReportsView = ({
               ? []
               : inheritedFallbackSupplements;
         const abnormalCount = abnormalCountForReport(report);
-        const compactHeaderOutOfRangeMarkers = getCompactHeaderOutOfRangeMarkers(report);
         const baselineOverlapMarkers = baselineOverlapByReportId.get(report.id) ?? [];
         const baselineSetBlocked = !report.isBaseline && baselineOverlapMarkers.length > 0;
         const overlapPreview =
@@ -949,124 +914,108 @@ const ReportsView = ({
             className={`app-teal-glow-surface rounded-2xl border border-slate-700/70 border-l-2 ${cardHealthClass(report)} bg-slate-900/60 transition-colors hover:bg-slate-900/80`}
           >
             {/* ── Collapsed header ── */}
-            <button
-              type="button"
-              onClick={(event) => {
-                const target = event.target as HTMLElement | null;
-                const clickedProtocolChip = target?.closest("[data-report-protocol-chip='true']");
-                if (clickedProtocolChip && protocol && !isShareMode) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  openProtocolVersionEditor(report);
-                  return;
-                }
-                if (isExpanded && isEditing) {
-                  cancelEditingReport();
-                }
-                setExpandedReportIds((current) =>
-                  current.includes(report.id) ? current.filter((id) => id !== report.id) : [...current, report.id]
-                );
-              }}
-              className="flex w-full min-w-0 rounded-2xl px-2 py-1.5 text-left"
-              aria-label={isExpanded ? tr("Inklappen", "Collapse") : tr("Uitklappen", "Expand")}
-            >
-              <span className="flex w-full min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
-                <span className="flex min-w-0 items-start gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/65 text-cyan-300/85">
-                    <FileText className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[1.05rem] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[1.16rem]">
-                      {formatDate(report.testDate)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-slate-400">{report.sourceFileName}</span>
-                    <span className="mt-1 flex flex-wrap items-center gap-1">
-                      {report.isBaseline && (
-                        <span className="rounded-full border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
-                          Baseline
+            <div className="flex w-full min-w-0 items-start gap-2 px-2 py-1.5">
+              <span className="flex h-12 w-8 shrink-0 flex-col items-center justify-between py-0.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/65 text-cyan-300/85">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <button
+                  type="button"
+                  aria-label={tr("Selecteer rapport", "Select report")}
+                  aria-pressed={selectedReports.includes(report.id)}
+                  className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] transition-colors ${
+                    selectedReports.includes(report.id)
+                      ? "border-cyan-400/70 bg-cyan-500/25 text-cyan-100"
+                      : "border-slate-500/80 bg-slate-800/55 text-transparent hover:border-slate-400/90 hover:bg-slate-700/70"
+                  }`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleReportSelection(report.id);
+                  }}
+                >
+                  <Check className="h-2.5 w-2.5" />
+                </button>
+              </span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  const target = event.target as HTMLElement | null;
+                  const clickedProtocolChip = target?.closest("[data-report-protocol-chip='true']");
+                  if (clickedProtocolChip && protocol && !isShareMode) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openProtocolVersionEditor(report);
+                    return;
+                  }
+                  if (isExpanded && isEditing) {
+                    cancelEditingReport();
+                  }
+                  setExpandedReportIds((current) =>
+                    current.includes(report.id) ? current.filter((id) => id !== report.id) : [...current, report.id]
+                  );
+                }}
+                className="flex min-w-0 flex-1 rounded-xl text-left"
+                aria-label={isExpanded ? tr("Inklappen", "Collapse") : tr("Uitklappen", "Expand")}
+              >
+                <span className="flex w-full min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+                  <span className="flex min-w-0 items-start gap-2">
+                    <span className="min-w-0">
+                      <span className="block text-[1.05rem] font-semibold leading-tight tracking-tight text-slate-100 sm:text-[1.16rem]">
+                        {formatDate(report.testDate)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{report.sourceFileName}</span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                        {report.isBaseline && (
+                          <span className="rounded-full border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
+                            Baseline
+                          </span>
+                        )}
+                        {protocolLabel && (
+                          <span
+                            data-report-protocol-chip="true"
+                            title={
+                              !isShareMode && protocol
+                                ? tr(
+                                    "Klik om protocol voor dit rapport te bewerken",
+                                    "Click to edit protocol for this report"
+                                  )
+                                : undefined
+                            }
+                            className={`rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300 ${
+                              !isShareMode && protocol ? "cursor-pointer hover:border-violet-400/60 hover:bg-violet-500/20" : ""
+                            }`}
+                          >
+                            {protocolLabel}
+                          </span>
+                        )}
+                        <span className="rounded-full border border-slate-600/90 bg-slate-800/75 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                          {report.markers.length} {tr("markers", "markers")}
                         </span>
-                      )}
-                      {protocolLabel && (
-                        <span
-                          data-report-protocol-chip="true"
-                          title={
-                            !isShareMode && protocol
-                              ? tr(
-                                  "Klik om protocol voor dit rapport te bewerken",
-                                  "Click to edit protocol for this report"
-                                )
-                              : undefined
-                          }
-                          className={`rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300 ${
-                            !isShareMode && protocol ? "cursor-pointer hover:border-violet-400/60 hover:bg-violet-500/20" : ""
-                          }`}
-                        >
-                          {protocolLabel}
-                        </span>
-                      )}
-                      <span className="rounded-full border border-slate-600/90 bg-slate-800/75 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                        {report.markers.length} {tr("markers", "markers")}
                       </span>
                     </span>
                   </span>
-                </span>
 
-                <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-end sm:justify-between lg:justify-end lg:gap-2">
-                  <span className="flex min-w-0 flex-wrap items-center gap-1 lg:justify-end">
-                    {compactHeaderOutOfRangeMarkers.length > 0 ? (
-                      compactHeaderOutOfRangeMarkers.map((entry) => {
-                        const converted = convertBySystem(
-                          entry.marker.canonicalMarker,
-                          entry.marker.value,
-                          entry.marker.unit,
-                          settings.unitSystem
-                        );
-                        const markerLabel = getMarkerDisplayName(entry.canonicalMarker, language);
-                        const compactLabel = shortMarkerName(entry.canonicalMarker, markerLabel);
-                        const valueText = Math.abs(converted.value) >= 100 ? converted.value.toFixed(0) : converted.value.toFixed(1);
-                        const arrow = entry.abnormal === "high" ? "↑" : "↓";
-                        return (
-                          <span
-                            key={`${report.id}-${entry.canonicalMarker}`}
-                            title={markerLabel}
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                              entry.abnormal === "high"
-                                ? "border-rose-500/35 bg-rose-500/10 text-rose-200"
-                                : "border-amber-500/35 bg-amber-500/10 text-amber-200"
-                            }`}
-                          >
-                            <span className="truncate">{compactLabel}</span>
-                            <span className="font-semibold">
-                              {valueText} {converted.unit} {arrow}
-                            </span>
-                          </span>
-                        );
-                      })
-                    ) : (
-                      <span className="text-[11px] text-slate-500">{tr("Alles binnen bereik", "All in range")}</span>
+                  <span className="flex shrink-0 items-center justify-end gap-1">
+                    {abnormalCount > 0 && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          abnormalCount >= 3
+                            ? "bg-rose-500/15 text-rose-300"
+                            : "bg-amber-500/15 text-amber-300"
+                        }`}
+                        aria-label={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
+                        title={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        {abnormalCount}
+                      </span>
                     )}
+                    <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                   </span>
-
-                <span className="flex shrink-0 items-center justify-end gap-1">
-                  {abnormalCount > 0 && (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        abnormalCount >= 3
-                          ? "bg-rose-500/15 text-rose-300"
-                          : "bg-amber-500/15 text-amber-300"
-                      }`}
-                      aria-label={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
-                      title={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
-                    >
-                      <AlertTriangle className="h-3 w-3" />
-                      {abnormalCount}
-                    </span>
-                  )}
-                  <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                 </span>
-              </span>
-              </span>
-            </button>
+              </button>
+            </div>
 
             <AnimatePresence initial={false}>
               {isExpanded ? (
@@ -1084,14 +1033,7 @@ const ReportsView = ({
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1.5 text-xs text-slate-200 hover:border-slate-500"
-                    onClick={() => {
-                      setSelectedReports((current) => {
-                        if (current.includes(report.id)) {
-                          return current.filter((id) => id !== report.id);
-                        }
-                        return [...current, report.id];
-                      });
-                    }}
+                    onClick={() => toggleReportSelection(report.id)}
                   >
                     {selectedReports.includes(report.id) ? (
                       <CheckSquare className="h-4 w-4 text-cyan-300" />

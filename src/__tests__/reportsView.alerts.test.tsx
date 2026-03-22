@@ -130,7 +130,7 @@ describe("ReportsView alert logic", () => {
     expect(screen.getByRole("button", { name: "Edit details" })).toBeTruthy();
   });
 
-  it("renders compact collapsed header with filename and out-of-range pills while preserving expand controls", () => {
+  it("renders a clean collapsed header with alert count only and no out-of-range marker pills", () => {
     const report = baseReport({
       sourceFileName: "labrapport-compact.pdf",
       markers: [
@@ -206,11 +206,41 @@ describe("ReportsView alert logic", () => {
     render(<ReportsView {...buildProps(report)} />);
 
     expect(screen.getByText("labrapport-compact.pdf")).toBeTruthy();
-    expect(screen.getByTitle("Hematocrit")).toBeTruthy();
-    expect(screen.getByTitle("Estradiol")).toBeTruthy();
+    expect(screen.queryByTitle("Hematocrit")).toBeNull();
+    expect(screen.queryByTitle("Estradiol")).toBeNull();
     expect(screen.getAllByText("6 markers").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Expand" }).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Out-of-range markers in this report").length).toBeGreaterThan(0);
+  });
+
+  it("selects a report from collapsed row without expanding it", () => {
+    const report = baseReport({
+      markers: [
+        {
+          id: "m-1",
+          marker: "Testosterone",
+          canonicalMarker: "Testosterone",
+          value: 35,
+          unit: "nmol/L",
+          referenceMin: 8,
+          referenceMax: 29,
+          abnormal: "high",
+          confidence: 1
+        }
+      ]
+    });
+    const onDeleteReports = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<ReportsView {...{ ...buildProps(report), onDeleteReports }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Select report" }));
+
+    expect(screen.queryByRole("button", { name: "Edit details" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    expect(onDeleteReports).toHaveBeenCalledWith([report.id]);
+    confirmSpy.mockRestore();
   });
 });
 
