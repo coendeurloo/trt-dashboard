@@ -21,6 +21,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
   const [pendingAction, setPendingAction] = useState<"demo" | "upload" | null>(null);
+  const showCloudAuthCta = cloudConfigured || !import.meta.env.PROD;
 
   const steps = [
     {
@@ -238,7 +239,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
             <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">
               {tr("Jouw data blijft op jouw apparaat. AI alleen als jij dat wil.", "Your data stays on your device. AI only if you want it.")}
             </p>
-            {cloudConfigured ? (
+            {showCloudAuthCta ? (
               <p className="mt-2 text-xs text-slate-400 sm:text-sm">
                 {tr("Wil je sync tussen apparaten?", "Want to sync across devices?")}{" "}
                 <button

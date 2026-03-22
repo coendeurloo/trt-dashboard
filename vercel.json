@@ -4,5 +4,11 @@
       "source": "/s/:code",
       "destination": "/?s=:code"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/upstash/keepalive",
+      "schedule": "0 3 * * *"
+    }
   ]
 }

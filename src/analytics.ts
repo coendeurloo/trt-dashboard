@@ -1405,100 +1405,296 @@ const severityWeight = (alert: MarkerAlert): number => {
   return alert.severity === "high" ? 3 : alert.severity === "medium" ? 2 : 1;
 };
 
+const normalizeSuggestionMarkerKey = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildSuggestionMarkerKeySet = (marker: string): Set<string> => {
+  const canonical = canonicalizeMarker(marker);
+  return new Set([
+    normalizeSuggestionMarkerKey(marker),
+    normalizeSuggestionMarkerKey(canonical)
+  ]);
+};
+
+const markerMatchesAny = (markerKeys: Set<string>, aliases: string[]): boolean =>
+  aliases.some((alias) => markerKeys.has(normalizeSuggestionMarkerKey(alias)));
+
+interface TrendSuggestionContext {
+  strongChange?: boolean;
+  sustainedChange?: boolean;
+}
+
+const buildTrendLead = (
+  direction: "up" | "down",
+  language: AppLanguage,
+  context: TrendSuggestionContext = {}
+): string => {
+  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  if (direction === "up") {
+    if (context.strongChange) {
+      return tr("Deze sterke stijging", "This sharp rise");
+    }
+    if (context.sustainedChange) {
+      return tr("Deze aanhoudende stijging", "This sustained rise");
+    }
+    return tr("Deze stijging", "This rise");
+  }
+  if (context.strongChange) {
+    return tr("Deze sterke daling", "This sharp drop");
+  }
+  if (context.sustainedChange) {
+    return tr("Deze aanhoudende daling", "This sustained decline");
+  }
+  return tr("Deze daling", "This decline");
+};
+
 const trendSuggestionByMarker = (
   marker: string,
   direction: "up" | "down",
-  language: AppLanguage
+  language: AppLanguage,
+  context: TrendSuggestionContext = {}
 ): string => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const markerKeys = buildSuggestionMarkerKeySet(marker);
+  const markerIsAny = (...aliases: string[]): boolean => markerMatchesAny(markerKeys, aliases);
+  const trendLead = buildTrendLead(direction, language, context);
 
-  if (marker === "Testosterone") {
+  if (markerIsAny("Testosterone")) {
     return direction === "up"
       ? tr(
-          "Bespreek of dit past bij je klachtenprofiel en monitor gelijktijdig estradiol + hematocriet; check ook consistente trough/peak-timing.",
-          "Discuss whether this matches your symptom profile and monitor estradiol + hematocrit alongside it; also check consistent trough/peak timing."
+          `${trendLead} van testosteron past vaker bij hogere blootstelling door dosis, timing of absorptie. Leg dit naast vrij testosteron, estradiol, SHBG, hematocriet en je klachtenprofiel.`,
+          `${trendLead} in testosterone more often fits higher exposure from dose, timing, or absorption. Compare it with free testosterone, estradiol, SHBG, hematocrit, and your symptom profile.`
         )
       : tr(
-          "Bespreek mogelijke onderdosering of timing-effect; leg dit naast vrij testosteron, SHBG en symptomen.",
-          "Discuss possible underdosing or timing effects; compare this with free testosterone, SHBG, and symptoms."
+          `${trendLead} van testosteron past vaker bij lagere blootstelling, timingverschuiving of hogere SHBG-invloed. Vergelijk dit met vrij testosteron en veranderingen in energie, libido en herstel.`,
+          `${trendLead} in testosterone more often fits lower exposure, timing drift, or stronger SHBG influence. Compare it with free testosterone and changes in energy, libido, and recovery.`
         );
   }
 
-  if (marker === "Free Testosterone") {
+  if (markerIsAny("Free Testosterone")) {
     return direction === "up"
       ? tr(
-          "Vergelijk dit met SHBG en klachten (energie/libido/stemming) om te bepalen of de vrije fractie passend stijgt.",
-          "Compare this with SHBG and symptoms (energy/libido/mood) to assess whether the free fraction is rising appropriately."
+          `${trendLead} van vrij testosteron wijst op meer biologisch beschikbare androgenen. Kijk of dat ook zichtbaar is in lagere SHBG of in klachten zoals energie, libido en stemming.`,
+          `${trendLead} in free testosterone points to more biologically available androgen exposure. Check whether that also shows up in lower SHBG or in symptoms such as energy, libido, and mood.`
         )
       : tr(
-          "Bespreek of injectiefrequentie, timing of SHBG-verandering de daling verklaart.",
-          "Discuss whether injection frequency, timing, or SHBG changes explain the drop."
+          `${trendLead} van vrij testosteron kan passen bij hogere SHBG, lagere blootstelling of timing-effect. Plaats dit naast totaal testosteron en symptomen voordat je conclusies trekt.`,
+          `${trendLead} in free testosterone can fit higher SHBG, lower exposure, or timing effects. Place it next to total testosterone and symptoms before drawing conclusions.`
         );
   }
 
-  if (marker === "Estradiol") {
+  if (markerIsAny("Estradiol")) {
     return direction === "up"
       ? tr(
-          "Bespreek balans met testosteron en mogelijke estrogene klachten; overweeg trendcontrole na protocolstabilisatie.",
-          "Discuss balance versus testosterone and possible estrogenic symptoms; consider trend recheck after protocol stabilization."
+          `${trendLead} van estradiol past vaker bij meer aromatisatie of hogere testosteronblootstelling. Beoordeel dit samen met totaal/vrij testosteron en klachten zoals vochtretentie, gevoelige tepels of stemming.`,
+          `${trendLead} in estradiol more often fits more aromatization or higher testosterone exposure. Review it with total/free testosterone and symptoms such as water retention, nipple sensitivity, or mood changes.`
         )
       : tr(
-          "Bespreek of lagere estradiol past bij klachten (gewrichten/stemming/libido) en of de daling gewenst is.",
-          "Discuss whether lower estradiol aligns with symptoms (joints/mood/libido) and whether the decline is desirable."
+          `${trendLead} van estradiol kan gunstig zijn als eerdere waarden hoog waren, maar te laag kan samengaan met gewrichtsklachten, lager libido en stemmingseffecten. Plaats de trend daarom naast klachten en testosteroncontext.`,
+          `${trendLead} in estradiol can be favorable if previous values were high, but values that go too low may come with joint symptoms, lower libido, and mood effects. Place the trend next to symptoms and testosterone context.`
         );
   }
 
-  if (marker === "Hematocrit") {
+  if (markerIsAny("Hematocrit")) {
     return direction === "up"
       ? tr(
-          "Bespreek bloedviscositeitsrisico, hydratatie, slaapapneu-screening en of dosis/frequentie-aanpassing nodig is.",
-          "Discuss blood-viscosity risk, hydration, sleep-apnea screening, and whether dose/frequency adjustment is needed."
+          `${trendLead} van hematocriet kan wijzen op toenemende erytrocytenmassa en dikkere bloedviscositeit. Beoordeel dit samen met hemoglobine, ferritine, hydratatie en factoren zoals slaapapneu of rookblootstelling.`,
+          `${trendLead} in hematocrit can point to increasing red-cell mass and thicker blood viscosity. Review it with hemoglobin, ferritin, hydration, and factors such as sleep apnea or smoking exposure.`
         )
       : tr(
-          "Dalende trend kan gunstig zijn; bewaak tegelijk hemoglobine en ferritine om overcorrectie te voorkomen.",
-          "A declining trend can be favorable; monitor hemoglobin and ferritin to avoid overcorrection."
+          `${trendLead} van hematocriet is vaak gunstig als waarden eerder hoog waren, maar een te sterke daling kan ook passen bij ijzerdepletie of onderliggende anemie. Volg daarom hemoglobine en ferritine mee.`,
+          `${trendLead} in hematocrit is often favorable when values were previously high, but an excessive drop can also fit iron depletion or underlying anemia. Track hemoglobin and ferritin alongside it.`
         );
   }
 
-  if (marker === "Ferritine" || marker === "Ferritin") {
+  if (markerIsAny("Ferritine", "Ferritin")) {
     return direction === "up"
       ? tr(
-          "Bespreek of stijging past bij herstel of eerder inflammatie/ijzerstapeling; combineer met transferrine-saturatie.",
-          "Discuss whether the rise reflects recovery or rather inflammation/iron loading; combine with transferrin saturation."
+          `${trendLead} van ferritine kan passen bij herstel van ijzervoorraden, maar ook bij inflammatie, leverstress of ijzerstapeling. Interpretatie wordt sterker als je transferrinesaturatie, CRP en levermarkers meeneemt.`,
+          `${trendLead} in ferritin can fit recovery of iron stores, but also inflammation, liver stress, or iron overload. Interpretation is stronger when you include transferrin saturation, CRP, and liver markers.`
         )
       : tr(
-          "Bespreek mogelijke ijzerdepletie (bijv. door bloedafnames) en evalueer ferritine + transferrine-saturatie samen.",
-          "Discuss possible iron depletion (e.g., from phlebotomy) and evaluate ferritin with transferrin saturation together."
+          `${trendLead} van ferritine past vaker bij afnemende ijzervoorraden, bijvoorbeeld na bloedafnames of lagere inname. Beoordeel dit met transferrinesaturatie en hemoglobine om echt ijzertekort niet te missen.`,
+          `${trendLead} in ferritin more often fits falling iron stores, for example after phlebotomy or lower intake. Review it with transferrin saturation and hemoglobin so true iron deficiency is not missed.`
         );
   }
 
-  if (marker === "LDL Cholesterol" || marker === "Non-HDL Cholesterol" || marker === "Apolipoprotein B") {
+  if (markerIsAny("LDL Cholesterol", "Non-HDL Cholesterol", "Apolipoprotein B")) {
     return direction === "up"
       ? tr(
-          "Bespreek cardiovasculaire risicosturing (voeding, beweging, gewichtsfactoren) en follow-up van lipiden/ApoB.",
-          "Discuss cardiovascular risk control (diet, exercise, weight factors) and follow-up of lipids/ApoB."
+          `${trendLead} van deze atherogene marker wijst op meer circulerende risicodeeltjes of cholesterolbelasting. Plaats dit naast triglyceriden, HDL, gewicht, voeding, alcohol en eventuele protocolwijzigingen.`,
+          `${trendLead} in this atherogenic marker points to more circulating risk particles or cholesterol burden. Place it next to triglycerides, HDL, weight, diet, alcohol, and any protocol changes.`
         )
       : tr(
-          "Dalende trend is vaak gunstig; bespreek hoe je huidige aanpak behouden kan blijven.",
-          "A declining trend is often favorable; discuss how to maintain your current approach."
+          `${trendLead} van deze atherogene marker is meestal gunstig en wijst op lagere partikel- of cholesterolbelasting. Kijk welke onderdelen van voeding, activiteit of gewichtsregie waarschijnlijk bijdragen aan dit patroon.`,
+          `${trendLead} in this atherogenic marker is usually favorable and points to lower particle or cholesterol burden. Look at which parts of nutrition, activity, or weight management are likely supporting the pattern.`
         );
   }
 
-  if (marker === "eGFR") {
+  if (markerIsAny("eGFR")) {
     return direction === "down"
       ? tr(
-          "Bespreek nierfunctietrend met creatinine, hydratatie en bloeddruk in samenhang, liefst met herhaalmeting.",
-          "Discuss kidney-function trend alongside creatinine, hydration, and blood pressure, ideally with repeat testing."
+          `${trendLead} van eGFR past bij afnemende filtratie of bij tijdelijke invloeden zoals dehydratie en creatinineschommelingen. Beoordeel dit naast creatinine, ureum, bloeddruk en liefst een herhaalmeting onder stabiele omstandigheden.`,
+          `${trendLead} in eGFR fits declining filtration or temporary influences such as dehydration and creatinine shifts. Review it next to creatinine, urea, blood pressure, and ideally a repeat test under stable conditions.`
         )
       : tr(
-          "Stijgende trend is vaak geruststellend; bevestig stabiliteit met periodieke controle.",
-          "An upward trend is often reassuring; confirm stability with periodic checks."
+          `${trendLead} van eGFR is meestal geruststellend, zeker als creatinine tegelijk stabiel of dalend is. Bevestig de verbetering wel met periodieke controle in vergelijkbare meetomstandigheden.`,
+          `${trendLead} in eGFR is usually reassuring, especially if creatinine is stable or falling at the same time. Still confirm the improvement with periodic testing under similar conditions.`
+        );
+  }
+
+  if (markerIsAny("ALAT", "ALAT (GPT)", "ALT", "SGPT")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van ALAT past vaker bij levercelstress dan bij pure galwegproblemen. Kijk tegelijk naar ASAT en GGT en neem alcohol, vetleverrisico, medicatie/supplementen en recente training mee in de interpretatie.`,
+          `${trendLead} in ALT more often fits hepatocellular stress than isolated bile-duct issues. Look at AST and GGT at the same time and include alcohol, fatty-liver risk, medication/supplements, and recent training in the interpretation.`
+        )
+      : tr(
+          `${trendLead} van ALAT is meestal gunstig na eerdere verhoging en past bij minder levercelstress. Bevestig die daling wel met een herhaalmeting onder vergelijkbare omstandigheden.`,
+          `${trendLead} in ALT is usually favorable after earlier elevation and fits less liver-cell stress. Still confirm the decline with a repeat test under comparable conditions.`
+        );
+  }
+
+  if (markerIsAny("ASAT", "ASAT (GOT)", "AST", "SGOT")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van ASAT kan uit lever of spierweefsel komen. Juist daarom geeft de combinatie met ALAT, GGT en CK veel meer informatie, zeker na zware training of spierpijn.`,
+          `${trendLead} in AST can come from liver or muscle tissue. That is exactly why the combination with ALT, GGT, and CK is far more informative, especially after heavy training or muscle soreness.`
+        )
+      : tr(
+          `${trendLead} van ASAT wijst vaker op afnemende lever- of spierbelasting. Volg ALAT, GGT en eventueel CK mee om te zien uit welke hoek het herstel waarschijnlijk komt.`,
+          `${trendLead} in AST more often points to easing liver or muscle stress. Follow ALT, GGT, and if useful CK to see which source the recovery is most likely coming from.`
+        );
+  }
+
+  if (markerIsAny("GGT", "Gamma GT", "Gamma-GT")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van GGT past vaker bij lever- of galwegstress en wordt vaak beïnvloed door alcohol en metabole belasting. De combinatie met ALAT en ASAT helpt onderscheiden of er vooral hepatocellulaire of cholestatische context speelt.`,
+          `${trendLead} in GGT more often fits liver or bile-duct stress and is often influenced by alcohol and metabolic burden. The combination with ALT and AST helps separate hepatocellular from cholestatic context.`
+        )
+      : tr(
+          `${trendLead} van GGT is meestal gunstig en past bij minder lever- of galwegbelasting. Bevestig wel of die verbetering ook terugkomt in de andere leverenzymen.`,
+          `${trendLead} in GGT is usually favorable and fits less liver or bile-duct burden. Still confirm that the improvement also shows up in the other liver enzymes.`
+        );
+  }
+
+  if (markerIsAny("CK", "Creatine Kinase", "CPK")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van CK past vaak beter bij spierbelasting of spierschade dan bij een metabole verschuiving. Omdat CK na intensieve training flink kan stijgen, is een herhaalmeting na 48-72 uur relatieve rust vaak informatiever.`,
+          `${trendLead} in CK often fits muscle strain or muscle injury better than a metabolic shift. Because CK can rise substantially after intense exercise, a repeat test after 48-72 hours of relative rest is often more informative.`
+        )
+      : tr(
+          `${trendLead} van CK past meestal bij herstel na spierbelasting. Houd de timing van bloedafname ten opzichte van training wel consistent, anders vergelijk je snel appels met peren.`,
+          `${trendLead} in CK usually fits recovery after muscle strain. Keep blood-draw timing relative to training consistent, otherwise the comparisons quickly become uneven.`
+        );
+  }
+
+  if (markerIsAny("T/E2 Ratio", "Testosterone Estradiol Ratio", "Testosterone E2 Ratio")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van de T/E2-ratio wijst op relatief meer androgene invloed of minder estrogeeninvloed. Omdat deze ratio geen standaarddiagnose op zichzelf is, blijft de combinatie met absolute testosteron- en estradiolwaarden het belangrijkst.`,
+          `${trendLead} in the T/E2 ratio points to relatively more androgen influence or less estrogen influence. Because this ratio is not a standalone diagnosis, the combination with absolute testosterone and estradiol values remains most important.`
+        )
+      : tr(
+          `${trendLead} van de T/E2-ratio wijst op relatief meer estrogeeninvloed. Interpretatie wordt sterker als je tegelijk kijkt naar absolute testosteron- en estradiolwaarden en of de afnametiming gelijk bleef.`,
+          `${trendLead} in the T/E2 ratio points to relatively more estrogen influence. Interpretation is stronger when you also look at absolute testosterone and estradiol values and whether sampling timing stayed consistent.`
+        );
+  }
+
+  if (markerIsAny("Dihydrotestosteron (DHT)", "Dihydrotestosterone (DHT)", "DHT")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van DHT past vaker bij sterkere perifere androgeenwerking. Dat kan zichtbaarder worden in huid, haar en prostaatklachten dan in algemene energiek klachten, dus plaats het naast testosteron en symptoomprofiel.`,
+          `${trendLead} in DHT more often fits stronger peripheral androgen action. That can show up more in skin, hair, and prostate symptoms than in general energy symptoms, so place it next to testosterone and your symptom profile.`
+        )
+      : tr(
+          `${trendLead} van DHT kan wijzen op minder perifere omzetting van testosteron. Beoordeel of dat samenvalt met veranderingen in libido, erectiele functie of juist minder androgene bijwerkingen.`,
+          `${trendLead} in DHT can indicate less peripheral conversion of testosterone. Review whether that lines up with changes in libido, erectile function, or fewer androgen-related side effects.`
+        );
+  }
+
+  if (markerIsAny("Glucose Nuchter", "Fasting Glucose", "Glucose")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van nuchtere glucose past bij afnemende glucoseregulatie. Dat krijgt meer betekenis als je het naast HbA1c, insuline of HOMA-IR zet en meeneemt of slaap, stress, gewicht en voeding verslechterd zijn.`,
+          `${trendLead} in fasting glucose fits declining glucose regulation. It becomes more meaningful when you place it next to HbA1c, insulin, or HOMA-IR and factor in whether sleep, stress, weight, and nutrition have worsened.`
+        )
+      : tr(
+          `${trendLead} van nuchtere glucose is vaak gunstig zolang er geen klachten van hypoglykemie zijn. Bevestig de trend wel met vergelijkbare nuchtere meetcondities en kijk of HbA1c ook mee verbetert.`,
+          `${trendLead} in fasting glucose is often favorable as long as there are no hypoglycemia symptoms. Still confirm the trend under similar fasting conditions and see whether HbA1c improves as well.`
+        );
+  }
+
+  if (markerIsAny("PSA", "PSA (Total)", "Free PSA")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van PSA vraagt extra context, omdat PSA niet specifiek is voor kanker alleen. Benigne prostaatgroei, ontsteking, infectie, ejaculatie en fietsen rond de test kunnen allemaal meespelen, dus een gerichte herhaalmeting is vaak zinvol.`,
+          `${trendLead} in PSA needs extra context because PSA is not specific to cancer alone. Benign enlargement, inflammation, infection, ejaculation, and cycling around the test can all influence it, so a focused repeat test is often useful.`
+        )
+      : tr(
+          `${trendLead} van PSA is vaak geruststellend. Blijf wel vergelijken in dezelfde meetcontext, zeker als hormoonbehandeling of prostaatklachten deel van het plaatje zijn.`,
+          `${trendLead} in PSA is often reassuring. Still compare results in the same testing context, especially when hormone treatment or prostate symptoms are part of the picture.`
+        );
+  }
+
+  if (markerIsAny("Creatinine")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van creatinine kan passen bij dehydratie, meer spiermassa, zware training of minder nierklaring. De combinatie met eGFR, ureum en de hydratatiestatus maakt het verschil tussen die verklaringen vaak duidelijker.`,
+          `${trendLead} in creatinine can fit dehydration, more muscle mass, heavy training, or reduced kidney clearance. The combination with eGFR, urea, and hydration status often makes the difference between those explanations clearer.`
+        )
+      : tr(
+          `${trendLead} van creatinine kan passen bij betere hydratatie of minder spierbelasting, maar zegt pas echt iets in combinatie met eGFR. Volg beide daarom samen in plaats van creatinine los te beoordelen.`,
+          `${trendLead} in creatinine can fit better hydration or lower muscle load, but it becomes much more meaningful when paired with eGFR. Track both together instead of judging creatinine in isolation.`
+        );
+  }
+
+  if (markerIsAny("CRP")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van CRP past vaker bij actieve ontsteking, infectie of recente weefselschade dan bij een stabiele basistoestand. De klinische context en een herhaling na herstel bepalen vaak of dit tijdelijk of hardnekkig is.`,
+          `${trendLead} in CRP more often fits active inflammation, infection, or recent tissue stress than a stable baseline state. Clinical context and a repeat test after recovery often determine whether it is temporary or persistent.`
+        )
+      : tr(
+          `${trendLead} van CRP past meestal bij afnemende ontstekingsactiviteit. Kijk of die verbetering ook terugkomt in herstel, klachten en andere markers.`,
+          `${trendLead} in CRP usually fits easing inflammatory activity. Look for the same improvement in recovery, symptoms, and other markers as well.`
+        );
+  }
+
+  if (markerIsAny("Triglyceriden", "Triglycerides")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van triglyceriden past vaker bij insulineresistentie, alcoholinname of hoge geraffineerde koolhydraatbelasting. In combinatie met lage HDL en stijgende glucosemarkers wordt dat patroon sterker.`,
+          `${trendLead} in triglycerides more often fits insulin resistance, alcohol intake, or a high refined-carbohydrate load. The pattern becomes stronger when HDL is low and glucose markers are also rising.`
+        )
+      : tr(
+          `${trendLead} van triglyceriden is meestal gunstig en past vaak bij betere insulinegevoeligheid of voeding. Kijk welke veranderingen in koolhydraten, alcohol of gewicht waarschijnlijk hebben meegespeeld.`,
+          `${trendLead} in triglycerides is usually favorable and often fits better insulin sensitivity or nutrition. Look at which changes in carbohydrate intake, alcohol, or weight likely contributed.`
+        );
+  }
+
+  if (markerIsAny("Ureum", "Urea")) {
+    return direction === "up"
+      ? tr(
+          `${trendLead} van ureum past vaker bij dehydratie, hogere eiwitinname of minder nierklaring dan bij een losstaand probleem. De combinatie met creatinine, eGFR en hydratatie maakt de context veel duidelijker.`,
+          `${trendLead} in urea more often fits dehydration, higher protein intake, or reduced kidney clearance than a stand-alone problem. The combination with creatinine, eGFR, and hydration makes the context much clearer.`
+        )
+      : tr(
+          `${trendLead} van ureum kan passen bij betere hydratatie of lagere eiwitbelasting. Evalueer het samen met voedingscontext en niermarkers voordat je het als puur gunstig bestempelt.`,
+          `${trendLead} in urea can fit better hydration or a lower protein load. Evaluate it with nutrition context and kidney markers before calling it purely favorable.`
         );
   }
 
   return tr(
-    "Bespreek of meettiming, protocolwijziging of leefstijl deze trend verklaart en of extra controle zinvol is.",
-    "Discuss whether sampling timing, protocol changes, or lifestyle explain this trend and whether extra monitoring is useful."
+    `${trendLead} van ${marker} krijgt meer betekenis als je die naast referentiebereik, klachten, meettiming en verwante markers legt. Een herhaalmeting onder vergelijkbare omstandigheden helpt vaak om ruis van echte trend te scheiden.`,
+    `${trendLead} in ${marker} becomes more meaningful when placed next to the reference range, symptoms, sampling timing, and related markers. A repeat test under comparable conditions often helps separate noise from a real trend.`
   );
 };
 
@@ -1542,38 +1738,61 @@ const positiveTrendSuggestionByMarker = (
   language: AppLanguage
 ): string => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const markerKeys = buildSuggestionMarkerKeySet(marker);
+  const markerIsAny = (...aliases: string[]): boolean => markerMatchesAny(markerKeys, aliases);
 
-  if (marker === "Homocysteine" && direction === "down") {
+  if (markerIsAny("Homocysteine") && direction === "down") {
     return tr(
-      "Dalende homocysteïne is meestal gunstig; houd je huidige aanpak aan en bevestig de trend bij volgende controle.",
-      "Lower homocysteine is usually favorable; keep your current approach and confirm this trend at the next check."
+      "Dalende homocysteine is meestal gunstig en past bij minder methylatie- of vaatrisico. Bevestig de trend bij de volgende controle en let op of B12/folaat-context stabiel blijft.",
+      "Falling homocysteine is usually favorable and fits lower methylation or vascular risk. Confirm the trend at the next check and watch whether B12/folate context stays stable."
     );
   }
 
-  if (marker === "Vitamine B12" && direction === "up") {
+  if (markerIsAny("Vitamine B12", "Vitamin B12") && direction === "up") {
     return tr(
-      "Stijgende B12 is vaak gunstig in herstelcontext; blijf monitoren in combinatie met klachten en andere B-vitamine markers.",
-      "Rising B12 is often favorable in a recovery context; keep monitoring alongside symptoms and other B-vitamin markers."
+      "Stijgende B12 is vaak gunstig in herstel- of suppletiecontext. Blijf wel kijken of het patroon ook past bij klachtenverbetering en homocysteine.",
+      "Rising B12 is often favorable in a recovery or supplementation context. Still check whether the pattern also fits symptom improvement and homocysteine."
     );
   }
 
-  if ((marker === "Ferritine" || marker === "Ferritin") && direction === "up") {
+  if (markerIsAny("Ferritine", "Ferritin") && direction === "up") {
     return tr(
-      "Stijgende ferritine kan passen bij herstel van ijzervoorraden; volg de trend samen met transferrine-saturatie.",
-      "Rising ferritin can fit iron-store recovery; follow the trend together with transferrin saturation."
+      "Stijgende ferritine kan passen bij herstel van ijzervoorraden zolang transferrinesaturatie en ontstekingscontext rustig blijven.",
+      "Rising ferritin can fit recovery of iron stores as long as transferrin saturation and inflammatory context stay calm."
     );
   }
 
-  if ((marker === "Ferritine" || marker === "Ferritin") && direction === "down") {
+  if (markerIsAny("Ferritine", "Ferritin") && direction === "down") {
     return tr(
-      "Dalende ferritine vanaf een hoge waarde kan gunstig zijn; blijf monitoren om overcorrectie te voorkomen.",
-      "Falling ferritin from a high level can be favorable; keep monitoring to avoid overcorrection."
+      "Dalende ferritine vanaf een eerder hoge waarde kan gunstig zijn, mits hemoglobine en transferrinesaturatie niet mee onderuit gaan.",
+      "Falling ferritin from a previously high level can be favorable, as long as hemoglobin and transferrin saturation are not falling with it."
+    );
+  }
+
+  if (markerIsAny("Apolipoprotein B", "LDL Cholesterol", "Non-HDL Cholesterol", "Triglyceriden", "Triglycerides") && direction === "down") {
+    return tr(
+      "Dalende atherogene lipidentrend is meestal gunstig en past bij lagere cardiovasculaire partikelbelasting. Kijk welke veranderingen in voeding, gewicht of activiteit waarschijnlijk hebben geholpen.",
+      "A falling atherogenic lipid trend is usually favorable and fits a lower cardiovascular particle burden. Look at which changes in nutrition, weight, or activity likely helped."
+    );
+  }
+
+  if (markerIsAny("PSA") && direction === "down") {
+    return tr(
+      "Dalende PSA is vaak geruststellend. Blijf wel vergelijken onder dezelfde meetomstandigheden, omdat PSA gevoelig blijft voor tijdelijke invloeden.",
+      "Falling PSA is often reassuring. Still compare values under the same testing conditions because PSA remains sensitive to temporary influences."
+    );
+  }
+
+  if (markerIsAny("Glucose Nuchter", "Fasting Glucose", "Glucose") && direction === "down") {
+    return tr(
+      "Dalende nuchtere glucose is vaak gunstig en past bij betere glucoseregulatie, zeker als HbA1c of HOMA-IR mee verbeteren.",
+      "Falling fasting glucose is often favorable and fits better glucose regulation, especially when HbA1c or HOMA-IR improve as well."
     );
   }
 
   return tr(
-    "Deze trend lijkt gunstig; blijf monitoren met consistente meettiming.",
-    "This trend appears favorable; continue monitoring with consistent sampling timing."
+    "Deze trend lijkt gunstig. Bevestig hem met consistente meettiming en kijk welke andere verwante markers hetzelfde verhaal vertellen.",
+    "This trend looks favorable. Confirm it with consistent sampling timing and check which related markers tell the same story."
   );
 };
 
@@ -1583,70 +1802,192 @@ const abnormalSuggestionByMarker = (
   language: AppLanguage
 ): string => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const markerKeys = buildSuggestionMarkerKeySet(marker);
+  const markerIsAny = (...aliases: string[]): boolean => markerMatchesAny(markerKeys, aliases);
 
-  if (marker === "Hematocrit") {
+  if (markerIsAny("Hematocrit")) {
     return abnormal === "high"
       ? tr(
-          "Bespreek dosis/frequentie en hematologische follow-up; combineer met hemoglobine en ferritine.",
-          "Discuss dose/frequency and hematology follow-up; combine with hemoglobin and ferritin."
+          "Hoge hematocriet past vaker bij verhoogde erytrocytenmassa en dikkere bloedviscositeit. Beoordeel dit samen met hemoglobine, ferritine, hydratatie en mogelijke slaapapneu.",
+          "High hematocrit more often fits increased red-cell mass and thicker blood viscosity. Review it with hemoglobin, ferritin, hydration, and possible sleep apnea."
         )
       : tr(
-          "Lage hematocriet kan op depletie of anemie wijzen; bespreek volledige bloedbeeldcontext met je arts.",
-          "Low hematocrit may indicate depletion or anemia; discuss full blood-count context with your doctor."
+          "Lage hematocriet kan passen bij ijzerdepletie, bloedverlies of anemie. Plaats dit in de volledige bloedbeeldcontext met hemoglobine en MCV.",
+          "Low hematocrit can fit iron depletion, blood loss, or anemia. Place it in the full blood-count context with hemoglobin and MCV."
         );
   }
 
-  if (marker === "Ferritine" || marker === "Ferritin") {
+  if (markerIsAny("Ferritine", "Ferritin")) {
     return abnormal === "low"
       ? tr(
-          "Bespreek ijzerinname/suppletie en monitor ferritine, transferrine-saturatie en hemoglobine.",
-          "Discuss iron intake/supplementation and monitor ferritin, transferrin saturation, and hemoglobin."
+          "Lage ferritine wijst vaker op lage ijzervoorraden dan op een tijdelijk meeteffect. Beoordeel dit met transferrinesaturatie en hemoglobine om echt ijzertekort goed te duiden.",
+          "Low ferritin more often points to low iron stores than a temporary testing effect. Review it with transferrin saturation and hemoglobin to properly interpret true iron deficiency."
         )
       : tr(
-          "Bespreek oorzaken van hoge ferritine (inflammatie/lever/ijzerstapeling) en eventuele vervolgdiagnostiek.",
-          "Discuss causes of high ferritin (inflammation/liver/iron loading) and potential follow-up diagnostics."
+          "Hoge ferritine kan passen bij inflammatie, leverstress of ijzerstapeling en is dus niet automatisch gelijk aan teveel bruikbaar ijzer. CRP, levermarkers en transferrinesaturatie helpen de richting bepalen.",
+          "High ferritin can fit inflammation, liver stress, or iron overload, so it is not automatically the same as too much usable iron. CRP, liver markers, and transferrin saturation help define the direction."
         );
   }
 
-  if (marker === "Estradiol") {
+  if (markerIsAny("Estradiol")) {
     return abnormal === "high"
       ? tr(
-          "Bespreek verhouding met testosteron en klachtenpatroon; herhaal bij vergelijkbare meettiming.",
-          "Discuss ratio with testosterone and symptom pattern; repeat with consistent sampling timing."
+          "Hoge estradiol krijgt meer betekenis als testosteron tegelijk hoog is of als er estrogene klachten meespelen. De verhouding met testosteron en consistente afnametiming zijn hier belangrijker dan een losse waarde.",
+          "High estradiol becomes more meaningful if testosterone is also high or if estrogen-related symptoms are present. The relationship to testosterone and consistent sampling timing matter more here than a single value."
         )
       : tr(
-          "Bespreek mogelijke lage-E2-klachten en of protocolfactoren dit verklaren.",
-          "Discuss possible low-E2 symptoms and whether protocol factors explain this."
+          "Lage estradiol kan passen bij minder aromatisatie of overcorrectie en kan samengaan met gewrichts-, libido- of stemmingsklachten. Beoordeel dit naast testosteron en klachtenprofiel.",
+          "Low estradiol can fit less aromatization or overcorrection and may come with joint, libido, or mood symptoms. Review it next to testosterone and the symptom profile."
         );
   }
 
-  if (marker === "Testosterone" || marker === "Free Testosterone") {
+  if (markerIsAny("Testosterone", "Free Testosterone")) {
     return abnormal === "high"
       ? tr(
-          "Bespreek of hogere androgenen passen bij doelen en bijwerkingenprofiel; monitor estradiol en hematocriet mee.",
-          "Discuss whether higher androgen levels align with goals and side-effect profile; monitor estradiol and hematocrit alongside."
+          "Hoge androgenen passen soms bij hogere blootstelling door dosis of timing, maar de losse waarde is minder informatief dan de combinatie met estradiol, hematocriet en klachten. Kijk dus breder dan alleen het getal.",
+          "High androgens can sometimes fit higher exposure from dose or timing, but the single value is less informative than the combination with estradiol, hematocrit, and symptoms. Look beyond the number alone."
         )
       : tr(
-          "Bespreek mogelijk tekort/onderdosering in relatie tot symptomen en meettiming.",
-          "Discuss possible deficiency/underdosing in relation to symptoms and sampling timing."
+          "Lage androgenen kunnen passen bij onderexpositie, timing rond de injectie of hogere SHBG-invloed. De waarde krijgt pas echt betekenis samen met symptomen en verwante hormoonmarkers.",
+          "Low androgens can fit underexposure, injection timing, or stronger SHBG influence. The value becomes much more meaningful when paired with symptoms and related hormone markers."
         );
   }
 
-  if (marker === "LDL Cholesterol" || marker === "Non-HDL Cholesterol" || marker === "Apolipoprotein B") {
+  if (markerIsAny("LDL Cholesterol", "Non-HDL Cholesterol", "Apolipoprotein B")) {
     return abnormal === "high"
       ? tr(
-          "Bespreek lipidenmanagement (voeding, activiteit, metabole factoren) en opvolgpanel met je arts.",
-          "Discuss lipid management (diet, activity, metabolic factors) and follow-up panel with your doctor."
+          "Een hoge atherogene lipidenmarker past bij meer risicodeeltjes in omloop en dus meer cardiovasculaire belasting. ApoB en non-HDL zijn hierbij vaak informatiever dan totaal cholesterol alleen.",
+          "A high atherogenic lipid marker fits more risk-carrying particles in circulation and therefore more cardiovascular burden. ApoB and non-HDL are often more informative here than total cholesterol alone."
         )
       : tr(
-          "Lage waarden zijn vaak gunstig; bevestig dat dit past bij de totale context.",
-          "Low values are often favorable; confirm this fits the broader context."
+          "Lagere waarden zijn meestal gunstig, maar het patroon wordt sterker als triglyceriden en HDL dezelfde richting uit wijzen.",
+          "Lower values are usually favorable, but the pattern is stronger when triglycerides and HDL point in the same direction."
+        );
+  }
+
+  if (markerIsAny("Cholesterol", "Total Cholesterol")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge totaalcholesterol is op zichzelf minder precies dan LDL, non-HDL of ApoB. Kijk dus vooral of die atherogene markers en triglyceriden hetzelfde risicosignaal bevestigen.",
+          "High total cholesterol on its own is less precise than LDL, non-HDL, or ApoB. Focus on whether those atherogenic markers and triglycerides confirm the same risk signal."
+        )
+      : tr(
+          "Lagere totaalcholesterol is vaak gunstig, maar de echte context zit in LDL, HDL, non-HDL en ApoB samen.",
+          "Lower total cholesterol is often favorable, but the real context comes from LDL, HDL, non-HDL, and ApoB together."
+        );
+  }
+
+  if (markerIsAny("Triglyceriden", "Triglycerides")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge triglyceriden passen vaker bij insulineresistentie, alcohol, levervet of recente hoge koolhydraatbelasting. De combinatie met HDL en glucosemarkers maakt dit patroon sterker.",
+          "High triglycerides more often fit insulin resistance, alcohol, fatty liver, or a recent high-carbohydrate load. The combination with HDL and glucose markers strengthens that pattern."
+        )
+      : tr(
+          "Lage triglyceriden zijn meestal gunstig en passen vaak bij betere metabole controle.",
+          "Low triglycerides are usually favorable and often fit better metabolic control."
+        );
+  }
+
+  if (markerIsAny("Glucose Nuchter", "Fasting Glucose", "Glucose")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge nuchtere glucose past bij verminderde glucoseregulatie en kan, afhankelijk van de hoogte, richting prediabetes of diabetes wijzen. Kijk altijd tegelijk naar HbA1c en insulinecontext.",
+          "High fasting glucose fits impaired glucose regulation and, depending on the level, can point toward prediabetes or diabetes. Always review it alongside HbA1c and insulin context."
+        )
+      : tr(
+          "Lage nuchtere glucose kan onschuldig zijn, maar krijgt meer betekenis als er ook hypoglykemieklachten zijn.",
+          "Low fasting glucose can be harmless, but it becomes more meaningful if hypoglycemia symptoms are also present."
+        );
+  }
+
+  if (markerIsAny("PSA", "PSA (Total)", "Free PSA")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge PSA is niet specifiek voor kanker alleen en kan ook passen bij benigne prostaatgroei, ontsteking of tijdelijke prikkels rond de test. Een herhaalmeting onder rustige, vergelijkbare omstandigheden is vaak zinvol.",
+          "High PSA is not specific to cancer alone and can also fit benign enlargement, inflammation, or temporary triggers around the test. A repeat test under calm, comparable conditions is often useful."
+        )
+      : tr(
+          "Lage PSA is meestal geruststellend, maar blijft vooral nuttig als trend over tijd in vergelijkbare meetcontext.",
+          "Low PSA is usually reassuring, but it remains most useful as a trend over time in a comparable testing context."
+        );
+  }
+
+  if (markerIsAny("Creatinine")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge creatinine kan passen bij minder nierklaring, maar ook bij dehydratie, meer spiermassa of zware training. De combinatie met eGFR bepaalt hier veel van de betekenis.",
+          "High creatinine can fit reduced kidney clearance, but also dehydration, more muscle mass, or heavy training. The combination with eGFR determines much of the meaning here."
+        )
+      : tr(
+          "Lage creatinine past vaker bij lagere spiermassa of verdunning en is meestal minder zorgelijk dan een hoge waarde.",
+          "Low creatinine more often fits lower muscle mass or dilution and is usually less concerning than a high value."
+        );
+  }
+
+  if (markerIsAny("ALAT", "ALAT (GPT)", "ALT", "SGPT")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge ALAT past vaker bij levercelstress dan bij een galwegprobleem. De combinatie met ASAT, GGT, alcohol, medicatie en metabole context geeft hier de meeste extra informatie.",
+          "High ALT more often fits liver-cell stress than a bile-duct problem. The combination with AST, GGT, alcohol, medication, and metabolic context gives the most extra information here."
+        )
+      : tr(
+          "Lage ALAT is meestal niet klinisch relevant.",
+          "Low ALT is usually not clinically relevant."
+        );
+  }
+
+  if (markerIsAny("ASAT", "ASAT (GOT)", "AST", "SGOT")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge ASAT kan uit lever of spier komen. Kijk daarom altijd of ALAT, GGT of CK mee omhoog gaan voordat je het alleen als leverprobleem leest.",
+          "High AST can come from liver or muscle. Always check whether ALT, GGT, or CK rise with it before reading it as a liver issue alone."
+        )
+      : tr(
+          "Lage ASAT is meestal niet klinisch relevant.",
+          "Low AST is usually not clinically relevant."
+        );
+  }
+
+  if (markerIsAny("GGT", "Gamma GT", "Gamma-GT")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge GGT past vaker bij lever- of galwegbelasting en wordt vaak beinvloed door alcohol of metabole stress. Samen met ALAT en ASAT wordt het patroon pas echt interpreteerbaar.",
+          "High GGT more often fits liver or bile-duct stress and is often influenced by alcohol or metabolic stress. It becomes truly interpretable when viewed with ALT and AST."
+        )
+      : tr(
+          "Lage GGT is meestal niet klinisch relevant.",
+          "Low GGT is usually not clinically relevant."
+        );
+  }
+
+  if (markerIsAny("CK", "Creatine Kinase", "CPK")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge CK past vaak bij recente spierbelasting of spierschade en veel minder vaak bij een stille metabole afwijking. Zonder rust voor de bloedafname kan de waarde flink vertekend zijn.",
+          "High CK often fits recent muscle strain or muscle injury and much less often a silent metabolic abnormality. Without rest before the blood draw, the value can be heavily distorted."
+        )
+      : tr(
+          "Lage CK is meestal niet klinisch relevant.",
+          "Low CK is usually not clinically relevant."
+        );
+  }
+
+  if (markerIsAny("Dihydrotestosteron (DHT)", "DHT")) {
+    return abnormal === "high"
+      ? tr(
+          "Hoge DHT past vaker bij sterkere perifere androgeenwerking en kan zichtbaarder zijn in haar, huid en prostaat dan in algemene energie. Plaats dit naast testosteron en klachtenprofiel.",
+          "High DHT more often fits stronger peripheral androgen action and may show up more in hair, skin, and prostate than in general energy. Place it next to testosterone and the symptom profile."
+        )
+      : tr(
+          "Lage DHT kan passen bij minder perifere omzetting van testosteron. De context met libido, erectiele functie en totaal/vrij testosteron bepaalt hier veel.",
+          "Low DHT can fit less peripheral conversion of testosterone. Context with libido, erectile function, and total/free testosterone matters a lot here."
         );
   }
 
   return tr(
-    "Plaats deze afwijking in context van trend, referentiebereik en klachten voordat je iets aanpast.",
-    "Place this abnormality in trend, reference-range, and symptom context before adjusting anything."
+    "Plaats deze afwijking in de context van trend, referentiebereik, verwante markers en klachten voordat je iets aanpast.",
+    "Place this abnormality in the context of trend, reference range, related markers, and symptoms before changing anything."
   );
 };
 
@@ -1835,14 +2176,14 @@ export const buildAlerts = (
           message: tr(
             positiveTrend
               ? `${marker} laat een gunstige trend zien (${increasing ? "3 opeenvolgende stijgingen" : "3 opeenvolgende dalingen"}).`
-              : `${marker} heeft ${increasing ? "3 opeenvolgende stijgingen" : "3 opeenvolgende dalingen"}.`,
+              : `${marker} laat ${increasing ? "3 opeenvolgende stijgingen" : "3 opeenvolgende dalingen"} zien.`,
             positiveTrend
               ? `${marker} shows a favorable trend (${increasing ? "3 consecutive increases" : "3 consecutive decreases"}).`
-              : `${marker} has ${increasing ? "3 consecutive increases" : "3 consecutive decreases"}.`
+              : `${marker} shows ${increasing ? "3 consecutive increases" : "3 consecutive decreases"}.`
           ),
           suggestion: positiveTrend
             ? positiveTrendSuggestionByMarker(marker, direction, language)
-            : trendSuggestionByMarker(marker, direction, language),
+            : trendSuggestionByMarker(marker, direction, language, { sustainedChange: true }),
           date: latest.date
         });
       }
@@ -1862,16 +2203,16 @@ export const buildAlerts = (
           actionNeeded: !positiveTrend,
           message: positiveTrend
             ? tr(
-                `${marker} veranderde ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% in een gunstige richting.`,
-                `${marker} changed ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% in a favorable direction.`
+                `${marker} ${percent > 0 ? "bewoog" : "bewoog"} ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% in een gunstige richting.`,
+                `${marker} moved ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% in a favorable direction.`
               )
             : tr(
-                `${marker} veranderde ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% t.o.v. de vorige meting.`,
-                `${marker} changed ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% vs previous test.`
+                `${marker} ${percent > 0 ? (Math.abs(percent) >= 35 ? "steeg sterk" : "steeg") : (Math.abs(percent) >= 35 ? "daalde sterk" : "daalde")} ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% t.o.v. de vorige meting.`,
+                `${marker} ${percent > 0 ? (Math.abs(percent) >= 35 ? "rose sharply" : "rose") : (Math.abs(percent) >= 35 ? "fell sharply" : "fell")} ${percent > 0 ? "+" : ""}${ROUND_2(percent)}% vs the previous test.`
               ),
           suggestion: positiveTrend
             ? positiveTrendSuggestionByMarker(marker, direction, language)
-            : trendSuggestionByMarker(marker, direction, language),
+            : trendSuggestionByMarker(marker, direction, language, { strongChange: Math.abs(percent) >= 35 }),
           date: latest.date
         });
       }

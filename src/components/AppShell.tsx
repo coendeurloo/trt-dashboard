@@ -181,6 +181,7 @@ const AppShell = ({
     syncStatus === "error"
       ? tr("Open Instellingen om sync te herstellen", "Open Settings to resolve sync")
       : tr("Open Instellingen", "Open Settings");
+  const showCloudAuthEntryPoints = !isShareMode && (cloudConfigured || !import.meta.env.PROD);
 
   const renderTabButton = (key: TabKey, onAfterNavigate?: () => void, compact = false) => {
     if (!visibleTabKeys.has(key)) {
@@ -557,7 +558,7 @@ const AppShell = ({
                 : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
             )
         : null;
-    const showAccountTools = !isShareMode && cloudConfigured && !compact && Boolean(onAfterNavigate);
+    const showAccountTools = showCloudAuthEntryPoints && !compact && Boolean(onAfterNavigate);
     return (
       <>
         <div className={`brand-card mb-4 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/15 ${compact ? "p-2.5" : "p-3"}`}>
@@ -746,9 +747,9 @@ const AppShell = ({
                       </div>
                     </div>
                   ) : null}
-                  {!isShareMode && cloudConfigured && cloudAuthStatus === "authenticated"
+                  {showCloudAuthEntryPoints && cloudAuthStatus === "authenticated"
                     ? renderAccountStatusButton("header")
-                    : !isShareMode && cloudConfigured && cloudAuthStatus !== "authenticated" && cloudAuthStatus !== "loading"
+                    : showCloudAuthEntryPoints && cloudAuthStatus !== "authenticated" && cloudAuthStatus !== "loading"
                       ? renderHeaderAuthLinks()
                       : null}
                   <button

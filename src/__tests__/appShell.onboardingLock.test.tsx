@@ -259,6 +259,24 @@ describe("AppShell onboarding lock", () => {
     expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
   });
 
+  it("shows header auth links in development even when cloud auth is not configured", () => {
+    const props = buildProps({
+      isOnboardingLocked: false,
+      cloudConfigured: false,
+      cloudAuthStatus: "unauthenticated"
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+    expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signup");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
+  });
+
   it("shows account badge with sync status and opens Settings when authenticated", () => {
     const props = buildProps({
       isOnboardingLocked: false,

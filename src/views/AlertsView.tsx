@@ -199,7 +199,7 @@ const AlertsView = ({
                       }
                     >
                       <p className="text-[11px] uppercase tracking-wide opacity-80">
-                        {tr("Mogelijke bespreekactie", "Suggested discussion action")}
+                        {tr("Klinische context", "Clinical context")}
                       </p>
                       <p className="mt-1 text-xs leading-snug">{alert.suggestion}</p>
                     </div>

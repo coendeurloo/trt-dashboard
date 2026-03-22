@@ -99,6 +99,65 @@ describe("analytics", () => {
     ).toBe(true);
   });
 
+  it("uses marker-specific trend suggestion for ALAT rise instead of generic fallback text", () => {
+    const reports = [
+      mkReport("r1", "2025-01-01", 120, [{ marker: "ALAT (GPT)", value: 22, unit: "U/L" }]),
+      mkReport("r2", "2025-02-01", 120, [{ marker: "ALAT (GPT)", value: 39, unit: "U/L" }]),
+      mkReport("r3", "2025-03-01", 120, [{ marker: "ALAT (GPT)", value: 62, unit: "U/L" }])
+    ];
+
+    const alerts = buildAlerts(reports, ["ALAT (GPT)"], "eu", "en");
+    const trendAlert = alerts.find((alert) => alert.marker === "ALAT (GPT)" && alert.type === "trend" && alert.actionNeeded);
+
+    expect(trendAlert).toBeTruthy();
+    expect(trendAlert?.suggestion.toLowerCase()).toContain("liver");
+    expect(trendAlert?.suggestion).not.toContain(
+      "Discuss whether sampling timing, protocol changes, or lifestyle explain this trend and whether extra monitoring is useful."
+    );
+  });
+
+  it("uses marker-specific trend suggestion for falling PSA", () => {
+    const reports = [
+      mkReport("r1", "2025-01-01", 120, [{ marker: "PSA", value: 3.4, unit: "ug/L" }]),
+      mkReport("r2", "2025-02-01", 120, [{ marker: "PSA", value: 2.7, unit: "ug/L" }]),
+      mkReport("r3", "2025-03-01", 120, [{ marker: "PSA", value: 2.1, unit: "ug/L" }])
+    ];
+
+    const alerts = buildAlerts(reports, ["PSA"], "eu", "en");
+    const trendAlert = alerts.find((alert) => alert.marker === "PSA" && alert.type === "trend");
+
+    expect(trendAlert).toBeTruthy();
+    expect(trendAlert?.suggestion.toLowerCase()).toContain("reassuring");
+  });
+
+  it("uses marker-specific abnormal suggestion for high total cholesterol", () => {
+    const reports: LabReport[] = [
+      {
+        ...mkReport("r1", "2025-01-01", 120, [{ marker: "Cholesterol", value: 6.8, unit: "mmol/L" }]),
+        markers: [
+          {
+            id: "r1-0",
+            marker: "Cholesterol",
+            canonicalMarker: "Cholesterol",
+            value: 6.8,
+            unit: "mmol/L",
+            referenceMin: null,
+            referenceMax: 5.0,
+            abnormal: "high",
+            confidence: 1,
+            source: "measured"
+          }
+        ]
+      }
+    ];
+
+    const alerts = buildAlerts(reports, ["Cholesterol"], "eu", "en");
+    const thresholdAlert = alerts.find((alert) => alert.marker === "Cholesterol" && alert.type === "threshold");
+
+    expect(thresholdAlert).toBeTruthy();
+    expect(thresholdAlert?.suggestion).toContain("ApoB");
+  });
+
   it("calculatePercentChange handles edge cases", () => {
     expect(calculatePercentChange(120, 100)).toBe(20);
     expect(calculatePercentChange(80, 100)).toBe(-20);
