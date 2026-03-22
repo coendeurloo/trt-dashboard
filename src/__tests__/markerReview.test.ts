@@ -36,4 +36,40 @@ describe("markerReview", () => {
     expect(reviewed.rawMarker).toBe("hematocriet");
     expect(reviewed.marker).toBe("hematocriet");
   });
+
+  it("treats app canonical vitamin D names as strong review matches", () => {
+    const reviewed = enrichMarkerForReview({
+      id: "m-3",
+      marker: "Vitamin D (D3+D2) OH",
+      canonicalMarker: "Vitamin D (D3+D2) OH",
+      value: 60.1,
+      unit: "ng/mL",
+      referenceMin: 30,
+      referenceMax: 100,
+      abnormal: "normal",
+      confidence: 0.84
+    });
+
+    expect(reviewed._matchResult?.canonical?.canonicalName).toBe("Vitamin D");
+    expect(["alias", "exact", "normalized"]).toContain(reviewed._matchResult?.confidence);
+    expect(reviewed._confidence?.issues.some((issue) => /matched approximately/i.test(issue))).toBe(false);
+  });
+
+  it("uses PDW when the parser already supplies that canonical marker", () => {
+    const reviewed = enrichMarkerForReview({
+      id: "m-4",
+      marker: "Platelets",
+      canonicalMarker: "PDW",
+      value: 11.3,
+      unit: "fL",
+      referenceMin: 9.3,
+      referenceMax: 16.7,
+      abnormal: "normal",
+      confidence: 0.7
+    });
+
+    expect(reviewed._matchResult?.canonical?.canonicalName).toBe("PDW");
+    expect(reviewed._confidence?.unit).toBe("high");
+    expect(reviewed._confidence?.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
+  });
 });

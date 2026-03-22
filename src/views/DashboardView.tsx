@@ -14,7 +14,12 @@ import ChartSettingsDrawer from "../components/ChartSettingsDrawer";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { MARKER_DATABASE } from "../data/markerDatabase";
-import { buildDashboardPresetPatch, inferDashboardChartPresetFromSettings, stabilityColor } from "../chartHelpers";
+import {
+  buildDashboardPresetPatch,
+  enforceSingleClinicalLayer,
+  inferDashboardChartPresetFromSettings,
+  stabilityColor
+} from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { normalizeMarkerLookupKey } from "../markerNormalization";
 import { AppLanguage, AppSettings, DashboardViewMode, LabReport, PersonalInfo, SymptomCheckIn, TimeRangeKey, UserProfile } from "../types";
@@ -324,17 +329,30 @@ const DashboardView = ({
       >
     >
   ) => {
-    const nextVisualSettings = {
+    const nextVisualSettings = enforceSingleClinicalLayer({
       showReferenceRanges: patch.showReferenceRanges ?? settings.showReferenceRanges,
       showAbnormalHighlights: patch.showAbnormalHighlights ?? settings.showAbnormalHighlights,
       showAnnotations: patch.showAnnotations ?? settings.showAnnotations,
       showTrtTargetZone: patch.showTrtTargetZone ?? settings.showTrtTargetZone,
       showLongevityTargetZone: patch.showLongevityTargetZone ?? settings.showLongevityTargetZone,
       yAxisMode: patch.yAxisMode ?? settings.yAxisMode
-    };
+    }, patch.showLongevityTargetZone ? "showLongevityTargetZone" : patch.showTrtTargetZone ? "showTrtTargetZone" : patch.showReferenceRanges ? "showReferenceRanges" : undefined);
+    const normalizedPatch: Partial<AppSettings> = { ...patch };
+    if (patch.showReferenceRanges === true) {
+      normalizedPatch.showTrtTargetZone = false;
+      normalizedPatch.showLongevityTargetZone = false;
+    }
+    if (patch.showTrtTargetZone === true) {
+      normalizedPatch.showReferenceRanges = false;
+      normalizedPatch.showLongevityTargetZone = false;
+    }
+    if (patch.showLongevityTargetZone === true) {
+      normalizedPatch.showReferenceRanges = false;
+      normalizedPatch.showTrtTargetZone = false;
+    }
     const inferredPreset = inferDashboardChartPresetFromSettings(nextVisualSettings);
     onUpdateSettings({
-      ...patch,
+      ...normalizedPatch,
       dashboardChartPreset: inferredPreset
     });
   };

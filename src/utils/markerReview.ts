@@ -31,7 +31,7 @@ const resolveBestMatch = (marker: MarkerValue): MarkerMatchResult => {
   const rawName = (marker.rawMarker ?? "").trim();
   const currentCanonical = (marker.canonicalMarker ?? "").trim();
 
-  const base = matchMarker(displayName || currentCanonical || rawName);
+  const base = matchMarker(currentCanonical || displayName || rawName);
   let best = base;
 
   const compareAndTake = (candidate: MarkerMatchResult): void => {
@@ -44,7 +44,11 @@ const resolveBestMatch = (marker: MarkerValue): MarkerMatchResult => {
     }
   };
 
-  if (rawName && rawName !== displayName) {
+  if (displayName && displayName !== currentCanonical) {
+    compareAndTake(matchMarker(displayName));
+  }
+
+  if (rawName && rawName !== displayName && rawName !== currentCanonical) {
     compareAndTake(matchMarker(rawName));
   }
 

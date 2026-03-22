@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary, TrtStabilityResult } from "../analytics";
 import { AnalysisScopeNotice, buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
-import { AIConsentDecision, AppLanguage, AppSettings, LabReport, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
+import { AIConsentDecision, AppLanguage, AppSettings, LabReport, PersonalInfo, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
 import { AnalystMemory } from "../types/analystMemory";
 
 interface UseAnalysisOptions {
@@ -10,6 +10,7 @@ interface UseAnalysisOptions {
   language: AppLanguage;
   allReports: LabReport[];
   visibleReports: LabReport[];
+  personalInfo: PersonalInfo;
   checkIns: SymptomCheckIn[];
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
@@ -30,6 +31,7 @@ export const useAnalysis = ({
   language,
   allReports,
   visibleReports: _visibleReports,
+  personalInfo,
   checkIns,
   protocols,
   supplementTimeline,
@@ -187,6 +189,7 @@ export const useAnalysis = ({
         reports: selectedReports,
         protocols,
         supplementTimeline,
+        personalInfo,
         unitSystem: settings.unitSystem,
         profile: settings.userProfile,
         memory: analystMemory,

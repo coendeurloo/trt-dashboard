@@ -259,4 +259,81 @@ describe("markerConfidence", () => {
     expect(confidence.issues.some((issue) => /unit is missing/i.test(issue))).toBe(false);
     expect(confidence.overall).toBe("ok");
   });
+
+  it("accepts mU/L for insulin without a not-recognized warning", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Insulin",
+        value: 7,
+        unit: "mU/L",
+        referenceMin: 3,
+        referenceMax: 25
+      },
+      matchMarker("Insulin")
+    );
+
+    expect(confidence.unit).toBe("medium");
+    expect(confidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
+
+  it("accepts U/L for FSH and LH without a not-recognized warning", () => {
+    const fshConfidence = scoreMarkerConfidence(
+      {
+        name: "FSH",
+        value: 0.3,
+        unit: "U/L",
+        referenceMin: 1.4,
+        referenceMax: 18.1
+      },
+      matchMarker("FSH")
+    );
+    const lhConfidence = scoreMarkerConfidence(
+      {
+        name: "LH",
+        value: 0.1,
+        unit: "U/L",
+        referenceMin: 1.0,
+        referenceMax: 9.0
+      },
+      matchMarker("LH")
+    );
+
+    expect(fshConfidence.unit).toBe("medium");
+    expect(lhConfidence.unit).toBe("medium");
+    expect(fshConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+    expect(lhConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
+
+  it("accepts ng/mL for Vitamin D aliases without approximate-name or unit errors", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Vitamin D (D3+D2) OH",
+        value: 60.1,
+        unit: "ng/mL",
+        referenceMin: 30,
+        referenceMax: 100
+      },
+      matchMarker("Vitamin D (D3+D2) OH")
+    );
+
+    expect(confidence.name).toBe("high");
+    expect(confidence.issues.some((issue) => /matched approximately/i.test(issue))).toBe(false);
+    expect(confidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
+  });
+
+  it("keeps platelet count with fL under review instead of accepting it", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Platelets",
+        value: 11.3,
+        unit: "fL",
+        referenceMin: 9.3,
+        referenceMax: 16.7
+      },
+      matchMarker("Platelets")
+    );
+
+    expect(confidence.unit).toBe("low");
+    expect(confidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(true);
+  });
 });

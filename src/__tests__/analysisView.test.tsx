@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
 import { LabReport } from "../types";
 import AnalysisView from "../views/AnalysisView";
@@ -41,8 +41,19 @@ const sampleReport: LabReport = {
 };
 
 describe("AnalysisView", () => {
+  const scrollIntoViewMock = vi.fn();
+
   afterEach(() => {
     cleanup();
+    scrollIntoViewMock.mockReset();
+  });
+
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      value: scrollIntoViewMock,
+      writable: true,
+      configurable: true
+    });
   });
 
   const baseProps = {
@@ -191,5 +202,21 @@ describe("AnalysisView", () => {
 
     expect(screen.getByText(/Analyst memory active/i)).toBeTruthy();
     expect(screen.getByText(/4 analyses/i)).toBeTruthy();
+  });
+
+  it("scrolls to the output panel when streaming output appears", () => {
+    const { rerender } = render(<AnalysisView {...baseProps} />);
+
+    rerender(
+      <AnalysisView
+        {...baseProps}
+        analysisRequestState="streaming"
+        analysisResult="## Live output"
+        analysisResultDisplay="## Live output"
+        analysisKind="question"
+      />
+    );
+
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 });

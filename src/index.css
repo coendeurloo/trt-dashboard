@@ -988,7 +988,8 @@ body.light .medical-disclaimer {
 
 body.light .chart-tooltip,
 body.light .chart-tooltip-mini,
-body.light .marker-info-tooltip {
+body.light .marker-info-tooltip,
+body.light .review-tooltip {
   background: rgba(248, 252, 255, 0.97) !important;
   border-color: rgba(148, 163, 184, 0.55) !important;
   color: #1e293b !important;
@@ -997,30 +998,35 @@ body.light .marker-info-tooltip {
 
 body.light .chart-tooltip .text-slate-100,
 body.light .chart-tooltip-mini .text-slate-100,
-body.light .marker-info-tooltip .text-slate-100 {
+body.light .marker-info-tooltip .text-slate-100,
+body.light .review-tooltip .text-slate-100 {
   color: #0f172a !important;
 }
 
 body.light .chart-tooltip .text-slate-200,
 body.light .chart-tooltip-mini .text-slate-200,
-body.light .marker-info-tooltip .text-slate-200 {
+body.light .marker-info-tooltip .text-slate-200,
+body.light .review-tooltip .text-slate-200 {
   color: #1e293b !important;
 }
 
 body.light .chart-tooltip .text-slate-300,
 body.light .chart-tooltip-mini .text-slate-300,
-body.light .marker-info-tooltip .text-slate-300 {
+body.light .marker-info-tooltip .text-slate-300,
+body.light .review-tooltip .text-slate-300 {
   color: #334155 !important;
 }
 
 body.light .chart-tooltip .text-cyan-200,
 body.light .chart-tooltip-mini .text-cyan-200,
-body.light .marker-info-tooltip .text-cyan-200 {
+body.light .marker-info-tooltip .text-cyan-200,
+body.light .review-tooltip .text-cyan-200 {
   color: #0e7490 !important;
 }
 
 body.light .chart-tooltip .text-amber-200,
-body.light .chart-tooltip-mini .text-amber-200 {
+body.light .chart-tooltip-mini .text-amber-200,
+body.light .review-tooltip .text-amber-200 {
   color: #92400e !important;
 }
 

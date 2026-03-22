@@ -1,5 +1,15 @@
 import { sortReportsChronological } from "./utils";
-import { AIAnalysisProvider, AIConsentDecision, AppLanguage, LabReport, Protocol, SupplementPeriod, UnitSystem, UserProfile } from "./types";
+import {
+  AIAnalysisProvider,
+  AIConsentDecision,
+  AppLanguage,
+  LabReport,
+  PersonalInfo,
+  Protocol,
+  SupplementPeriod,
+  UnitSystem,
+  UserProfile
+} from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
   getProtocolCompoundsText,
@@ -50,6 +60,7 @@ interface AnalyzeLabDataOptions {
   reports: LabReport[];
   protocols: Protocol[];
   supplementTimeline?: SupplementPeriod[];
+  personalInfo?: Pick<PersonalInfo, "dateOfBirth" | "heightCm" | "weightKg"> | null;
   unitSystem: UnitSystem;
   profile?: UserProfile;
   memory?: AnalystMemory | null;
@@ -152,6 +163,18 @@ interface AnalysisSupplementContextRow {
   activeAtLatestTestDate: string;
   activeToday: string;
   recentDoseOrFrequencyChanges: AnalysisSupplementChangeRow[];
+}
+
+interface AnalysisPersonalContext {
+  ageYears: number | null;
+  weightKg: number | null;
+  heightCm: number | null;
+}
+
+interface AnalysisMarkerPresenceEntry {
+  everSeen: boolean;
+  latestSeenDate: string | null;
+  countReportsSeen: number;
 }
 
 const ANALYSIS_MODEL_CANDIDATES = [
@@ -302,8 +325,11 @@ ANALYSIS RULES:
 - State uncertainty and confounders plainly.
 - Do not recap stable markers unless they provide required context.
 - currentSupplements = current truth. Do not suggest supplements or changes the user is already doing.
-- Use latestReportEvidence as source of truth for marker presence in the newest report.
-- Never claim a marker was "not measured" or "missing" if latestReportEvidence.presence[marker] is true.
+- Use markerPresenceAcrossScope as source of truth for whether a marker was ever tracked.
+- Use latestReportAllMarkers as source of truth for what was measured in the newest report.
+- Only call a marker "never tracked", "not measured", or "missing historically" when markerPresenceAcrossScope[marker].everSeen is false.
+- Only call a marker "not in latest report" when it is absent from latestReportAllMarkers.
+- Use personalContext (ageYears, weightKg, heightCm) when present; if any field is null, treat it as unknown and do not infer it.
 
 WELLBEING INTEGRATION:
 - If wellbeing check-in data is present, treat it as first-class evidence.
@@ -317,10 +343,7 @@ SAFETY:
 - Cite studies only when they directly support a recommendation or risk statement (max 2).`;
 };
 
-const buildLatestReportEvidence = (
-  reports: AnalysisReportRow[],
-  profile: UserProfile
-): {
+const buildLatestReportEvidence = (reports: AnalysisReportRow[]): {
   latestDate: string | null;
   markerCount: number;
   markerNames: string[];
@@ -336,11 +359,9 @@ const buildLatestReportEvidence = (
     };
   }
   const markerNames = latest.markers.map((marker) => marker.m);
-  const markerSet = new Set(markerNames);
   const presence: Record<string, boolean> = {};
-  const keys = PROFILE_CRITICAL_MARKERS[profile] ?? PROFILE_CRITICAL_MARKERS.trt;
-  keys.forEach((marker) => {
-    presence[marker] = markerSet.has(marker);
+  markerNames.forEach((markerName) => {
+    presence[markerName] = true;
   });
   return {
     latestDate: latest.date,
@@ -349,6 +370,87 @@ const buildLatestReportEvidence = (
     presence
   };
 };
+
+const buildMarkerPresenceAcrossScope = (reports: AnalysisReportRow[]): Record<string, AnalysisMarkerPresenceEntry> => {
+  const byMarker = new Map<string, { marker: string; latestSeenDate: string | null; countReportsSeen: number }>();
+
+  reports.forEach((report) => {
+    const seenInReport = new Set<string>();
+    report.markers.forEach((marker) => {
+      const key = markerNameKey(marker.m);
+      if (seenInReport.has(key)) {
+        return;
+      }
+      seenInReport.add(key);
+
+      const existing = byMarker.get(key);
+      if (!existing) {
+        byMarker.set(key, {
+          marker: marker.m,
+          latestSeenDate: report.date,
+          countReportsSeen: 1
+        });
+        return;
+      }
+
+      existing.countReportsSeen += 1;
+      if (!existing.latestSeenDate || report.date > existing.latestSeenDate) {
+        existing.latestSeenDate = report.date;
+      }
+    });
+  });
+
+  return Object.fromEntries(
+    Array.from(byMarker.values())
+      .sort((left, right) => left.marker.localeCompare(right.marker))
+      .map((entry) => [
+        entry.marker,
+        {
+          everSeen: true,
+          latestSeenDate: entry.latestSeenDate,
+          countReportsSeen: entry.countReportsSeen
+        }
+      ])
+  );
+};
+
+const buildLatestReportAllMarkers = (reports: AnalysisReportRow[]): string[] => {
+  const latest = reports[reports.length - 1];
+  if (!latest) {
+    return [];
+  }
+  return Array.from(new Set(latest.markers.map((marker) => marker.m)));
+};
+
+const parsePositiveNumber = (value: number | null | undefined): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+
+const deriveAgeYears = (dateOfBirth: string | null | undefined, today: string): number | null => {
+  if (!dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+    return null;
+  }
+
+  const birthDate = new Date(`${dateOfBirth}T00:00:00.000Z`);
+  const todayDate = new Date(`${today}T00:00:00.000Z`);
+  if (Number.isNaN(birthDate.getTime()) || Number.isNaN(todayDate.getTime()) || birthDate > todayDate) {
+    return null;
+  }
+
+  let age = todayDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hasHadBirthdayThisYear =
+    todayDate.getUTCMonth() > birthDate.getUTCMonth() ||
+    (todayDate.getUTCMonth() === birthDate.getUTCMonth() && todayDate.getUTCDate() >= birthDate.getUTCDate());
+  if (!hasHadBirthdayThisYear) {
+    age -= 1;
+  }
+  return age >= 0 && age <= 130 ? age : null;
+};
+
+const buildPersonalContext = (personalInfo: AnalyzeLabDataOptions["personalInfo"], today: string): AnalysisPersonalContext => ({
+  ageYears: deriveAgeYears(personalInfo?.dateOfBirth, today),
+  weightKg: parsePositiveNumber(personalInfo?.weightKg),
+  heightCm: parsePositiveNumber(personalInfo?.heightCm)
+});
 
 const buildFullSections = (supplementActionsNeeded: boolean): string => {
   const supplementSection = supplementActionsNeeded
@@ -723,6 +825,9 @@ interface FullAnalysisParams {
   today: string;
   unitSystem: UnitSystem;
   profile: UserProfile;
+  personalContext: AnalysisPersonalContext;
+  markerPresenceAcrossScope: Record<string, AnalysisMarkerPresenceEntry>;
+  latestReportAllMarkers: string[];
   memory: AnalystMemory | null;
   payload: AnalysisReportRow[];
   supplementContext: AnalysisSupplementContextRow;
@@ -739,6 +844,9 @@ interface ComparisonParams {
   today: string;
   unitSystem: UnitSystem;
   profile: UserProfile;
+  personalContext: AnalysisPersonalContext;
+  markerPresenceAcrossScope: Record<string, AnalysisMarkerPresenceEntry>;
+  latestReportAllMarkers: string[];
   memory: AnalystMemory | null;
   relevantComparison: unknown;
   latestComparison: unknown;
@@ -754,7 +862,7 @@ interface ComparisonParams {
 
 function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
   const {
-    today, unitSystem, profile, memory, payload, supplementContext, signals,
+    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
     benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
@@ -781,8 +889,11 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
       type: "full",
       units: unitSystem,
       userProfile: profile,
+      personalContext,
       reports: payload,
-      latestReportEvidence: buildLatestReportEvidence(payload, profile),
+      latestReportEvidence: buildLatestReportEvidence(payload),
+      markerPresenceAcrossScope,
+      latestReportAllMarkers,
       currentSupplements: supplementContext,
       userQuestion: customQuestion,
       signals,
@@ -795,7 +906,7 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
 
 function buildQuestionPrompt(params: FullAnalysisParams): string {
   const {
-    today, unitSystem, profile, memory, payload, supplementContext, signals,
+    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
     benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
@@ -825,8 +936,11 @@ function buildQuestionPrompt(params: FullAnalysisParams): string {
       type: "questionFocusedFull",
       units: unitSystem,
       userProfile: profile,
+      personalContext,
       reports: payload,
-      latestReportEvidence: buildLatestReportEvidence(payload, profile),
+      latestReportEvidence: buildLatestReportEvidence(payload),
+      markerPresenceAcrossScope,
+      latestReportAllMarkers,
       currentSupplements: supplementContext,
       userQuestion: customQuestion,
       signals,
@@ -839,7 +953,7 @@ function buildQuestionPrompt(params: FullAnalysisParams): string {
 
 function buildComparisonPrompt(params: ComparisonParams): string {
   const {
-    today, unitSystem, profile, memory, relevantComparison, latestComparison,
+    today, unitSystem, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, relevantComparison, latestComparison,
     relevantPayload, relevantSupplementContext, comparisonSignals, comparisonPremiumInsightPack,
     comparisonActionability, comparisonSupplementActionability, relevantBenchmarkSection,
     supplementActionsNeeded
@@ -861,9 +975,12 @@ function buildComparisonPrompt(params: ComparisonParams): string {
       type: "latestComparison",
       units: unitSystem,
       userProfile: profile,
+      personalContext,
       latestComparison: relevantComparison ?? latestComparison,
       reports: relevantPayload,
-      latestReportEvidence: buildLatestReportEvidence(relevantPayload, profile),
+      latestReportEvidence: buildLatestReportEvidence(relevantPayload),
+      markerPresenceAcrossScope,
+      latestReportAllMarkers,
       currentSupplements: relevantSupplementContext,
       signals: comparisonSignals,
       premiumInsights: comparisonPremiumInsightPack,
@@ -2377,6 +2494,7 @@ export const analyzeLabDataWithClaude = async ({
   reports,
   protocols,
   supplementTimeline = [],
+  personalInfo,
   unitSystem,
   profile = "trt",
   memory = null,
@@ -2410,6 +2528,9 @@ export const analyzeLabDataWithClaude = async ({
     includeNotes: aiConsent?.includeNotes ?? false
   });
   const payload = compactReportsForPrompt(sanitizedPayload, analysisType);
+  const markerPresenceAcrossScope = buildMarkerPresenceAcrossScope(sanitizedPayload);
+  const latestReportAllMarkers = buildLatestReportAllMarkers(sanitizedPayload);
+  const personalContext = buildPersonalContext(personalInfo, today);
   const derivedSignals = buildDerivedSignals(sanitizedPayload);
   const criticalMarkers = PROFILE_CRITICAL_MARKERS[profile] ?? PROFILE_CRITICAL_MARKERS.trt;
   const signals = buildSignals(derivedSignals, context, criticalMarkers);
@@ -2444,6 +2565,9 @@ export const analyzeLabDataWithClaude = async ({
     today,
     unitSystem,
     profile,
+    personalContext,
+    markerPresenceAcrossScope,
+    latestReportAllMarkers,
     memory,
     payload,
     supplementContext,
@@ -2460,6 +2584,9 @@ export const analyzeLabDataWithClaude = async ({
         today,
         unitSystem,
         profile,
+        personalContext,
+        markerPresenceAcrossScope,
+        latestReportAllMarkers,
         memory,
         payload,
         supplementContext,
@@ -2519,6 +2646,9 @@ export const analyzeLabDataWithClaude = async ({
         today,
         unitSystem,
         profile,
+        personalContext,
+        markerPresenceAcrossScope,
+        latestReportAllMarkers,
         memory,
         relevantComparison,
         latestComparison,

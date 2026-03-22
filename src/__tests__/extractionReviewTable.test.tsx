@@ -332,7 +332,9 @@ describe("ExtractionReviewTable", () => {
 
     const reviewBadge = screen.getByText("Check");
     expect(reviewBadge.closest("span")?.getAttribute("title")).toBeNull();
-    expect(screen.getByRole("tooltip").textContent ?? "").toMatch(/approximately/i);
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip.textContent ?? "").toMatch(/approximately/i);
+    expect(tooltip.className).toContain("review-tooltip");
 
     fireEvent.click(screen.getByRole("button", { name: "Edit marker name" }));
     const markerInput = screen.getByDisplayValue("Leukocytes");

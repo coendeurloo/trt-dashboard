@@ -15,6 +15,7 @@ import { canonicalizeMarker, normalizeMarkerMeasurement } from "./unitConversion
 import { MarkerTrendSummary } from "./analytics";
 
 type DashboardPresetName = Exclude<DashboardChartPreset, "custom">;
+type ClinicalLayerKey = "showReferenceRanges" | "showTrtTargetZone" | "showLongevityTargetZone";
 type DashboardPresetVisualSettings = Pick<
   AppSettings,
   | "showReferenceRanges"
@@ -71,6 +72,34 @@ const dashboardSettingsMatch = (
   left.showTrtTargetZone === right.showTrtTargetZone &&
   left.showLongevityTargetZone === right.showLongevityTargetZone &&
   left.yAxisMode === right.yAxisMode;
+
+const CLINICAL_LAYER_KEYS: ClinicalLayerKey[] = [
+  "showReferenceRanges",
+  "showTrtTargetZone",
+  "showLongevityTargetZone"
+];
+
+export const enforceSingleClinicalLayer = <T extends Pick<AppSettings, ClinicalLayerKey>>(
+  settings: T,
+  preferredLayer?: ClinicalLayerKey
+): T => {
+  const enabledLayers = CLINICAL_LAYER_KEYS.filter((key) => settings[key]);
+  if (enabledLayers.length <= 1) {
+    return settings;
+  }
+
+  const winner =
+    preferredLayer && settings[preferredLayer]
+      ? preferredLayer
+      : CLINICAL_LAYER_KEYS.find((key) => settings[key]) ?? "showReferenceRanges";
+
+  return {
+    ...settings,
+    showReferenceRanges: winner === "showReferenceRanges",
+    showTrtTargetZone: winner === "showTrtTargetZone",
+    showLongevityTargetZone: winner === "showLongevityTargetZone"
+  };
+};
 
 export const getDashboardPresetVisualSettings = (preset: DashboardPresetName): DashboardPresetVisualSettings => ({
   ...DASHBOARD_PRESET_SETTINGS[preset]

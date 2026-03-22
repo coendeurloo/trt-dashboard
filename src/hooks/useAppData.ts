@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { dedupeMarkersInReport, markerSimilarity } from "../chartHelpers";
+import { dedupeMarkersInReport, enforceSingleClinicalLayer, inferDashboardChartPresetFromSettings, markerSimilarity } from "../chartHelpers";
 import { trLocale } from "../i18n";
-import { inferDashboardChartPresetFromSettings } from "../chartHelpers";
 import {
   AppSettings,
   LabReport,
@@ -154,12 +153,65 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     setMarkerAliasOverrides(appData.markerAliasOverrides);
   }, [appData.markerAliasOverrides]);
 
+  useEffect(() => {
+    const enabledClinicalLayers = [
+      appData.settings.showReferenceRanges,
+      appData.settings.showTrtTargetZone,
+      appData.settings.showLongevityTargetZone
+    ].filter(Boolean).length;
+    if (enabledClinicalLayers <= 1) {
+      return;
+    }
+
+    setAppData((prev) => {
+      const normalizedClinicalLayers = enforceSingleClinicalLayer({
+        showReferenceRanges: prev.settings.showReferenceRanges,
+        showTrtTargetZone: prev.settings.showTrtTargetZone,
+        showLongevityTargetZone: prev.settings.showLongevityTargetZone
+      });
+      const nextSettings: AppSettings = {
+        ...prev.settings,
+        ...normalizedClinicalLayers
+      };
+      nextSettings.dashboardChartPreset = inferDashboardChartPresetFromSettings({
+        showReferenceRanges: nextSettings.showReferenceRanges,
+        showAbnormalHighlights: nextSettings.showAbnormalHighlights,
+        showAnnotations: nextSettings.showAnnotations,
+        showTrtTargetZone: nextSettings.showTrtTargetZone,
+        showLongevityTargetZone: nextSettings.showLongevityTargetZone,
+        yAxisMode: nextSettings.yAxisMode
+      });
+      return {
+        ...prev,
+        settings: nextSettings
+      };
+    });
+  }, [appData.settings.showLongevityTargetZone, appData.settings.showReferenceRanges, appData.settings.showTrtTargetZone]);
+
   const updateSettings = (patch: Partial<AppSettings>) => {
     setAppData((prev) => {
       const nextSettings: AppSettings = {
         ...prev.settings,
         ...patch
       };
+      const preferredClinicalLayer = patch.showLongevityTargetZone
+        ? "showLongevityTargetZone"
+        : patch.showTrtTargetZone
+          ? "showTrtTargetZone"
+          : patch.showReferenceRanges
+            ? "showReferenceRanges"
+            : undefined;
+      const normalizedClinicalLayers = enforceSingleClinicalLayer(
+        {
+          showReferenceRanges: nextSettings.showReferenceRanges,
+          showTrtTargetZone: nextSettings.showTrtTargetZone,
+          showLongevityTargetZone: nextSettings.showLongevityTargetZone
+        },
+        preferredClinicalLayer
+      );
+      nextSettings.showReferenceRanges = normalizedClinicalLayers.showReferenceRanges;
+      nextSettings.showTrtTargetZone = normalizedClinicalLayers.showTrtTargetZone;
+      nextSettings.showLongevityTargetZone = normalizedClinicalLayers.showLongevityTargetZone;
       const visualSettingsTouched =
         patch.showReferenceRanges !== undefined ||
         patch.showAbnormalHighlights !== undefined ||

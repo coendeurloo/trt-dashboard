@@ -641,6 +641,7 @@ const App = () => {
     language: appData.settings.language,
     allReports: reports,
     visibleReports,
+    personalInfo: appData.personalInfo,
     checkIns: appData.checkIns,
     protocols: appData.protocols,
     supplementTimeline: appData.supplementTimeline,

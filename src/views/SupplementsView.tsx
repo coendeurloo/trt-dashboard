@@ -101,8 +101,8 @@ const SupplementsView = ({
     () =>
       [...timeline].sort(
         (left, right) =>
-          left.startDate.localeCompare(right.startDate) ||
-          (left.endDate ?? "9999-12-31").localeCompare(right.endDate ?? "9999-12-31") ||
+          right.startDate.localeCompare(left.startDate) ||
+          (right.endDate ?? "9999-12-31").localeCompare(left.endDate ?? "9999-12-31") ||
           left.name.localeCompare(right.name)
       ),
     [timeline]
@@ -117,7 +117,11 @@ const SupplementsView = ({
       current.push(period);
       byName.set(period.name, current);
     });
-    return Array.from(byName.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return Array.from(byName.entries()).sort((a, b) => {
+      const latestA = a[1][0]?.startDate ?? "";
+      const latestB = b[1][0]?.startDate ?? "";
+      return latestB.localeCompare(latestA) || a[0].localeCompare(b[0]);
+    });
   }, [sortedTimeline]);
 
   const suggestions = useMemo(() => buildSuggestions(nameInput, SUPPLEMENT_OPTIONS), [nameInput]);
@@ -550,7 +554,7 @@ const SupplementsView = ({
                       <div key={period.id} className="supplement-history-row rounded-lg border border-slate-700/70 bg-slate-800/40 px-2.5 py-2 text-xs text-slate-200">
                         {isEditingHistory ? (
                           <div className="space-y-2">
-                            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_150px_150px]">
+                            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px_170px_170px]">
                               <input
                                 value={historyDoseInput}
                                 onChange={(event) => {
@@ -574,27 +578,33 @@ const SupplementsView = ({
                                   </option>
                                 ))}
                               </select>
-                              <input
-                                type="date"
-                                value={historyStartDateInput}
-                                onChange={(event) => {
-                                  setHistoryStartDateInput(event.target.value);
-                                  setHistoryEditError("");
-                                }}
-                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                              />
-                              <input
-                                type="date"
-                                value={historyEndDateInput}
-                                onChange={(event) => {
-                                  setHistoryEndDateInput(event.target.value);
-                                  setHistoryEditError("");
-                                }}
-                                className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                              />
+                              <label className="text-[11px] text-slate-400">
+                                <span className="mb-1 block uppercase tracking-wide">{tr("Gestart", "Started")}</span>
+                                <input
+                                  type="date"
+                                  value={historyStartDateInput}
+                                  onChange={(event) => {
+                                    setHistoryStartDateInput(event.target.value);
+                                    setHistoryEditError("");
+                                  }}
+                                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                                />
+                              </label>
+                              <label className="text-[11px] text-slate-400">
+                                <span className="mb-1 block uppercase tracking-wide">{tr("Gestopt", "Stopped")}</span>
+                                <input
+                                  type="date"
+                                  value={historyEndDateInput}
+                                  onChange={(event) => {
+                                    setHistoryEndDateInput(event.target.value);
+                                    setHistoryEditError("");
+                                  }}
+                                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                                />
+                              </label>
                             </div>
                             {historyEditError ? <p className="text-xs text-rose-300">{historyEditError}</p> : null}
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               <button
                                 type="button"
                                 className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 disabled:opacity-50"

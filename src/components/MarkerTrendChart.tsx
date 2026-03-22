@@ -21,6 +21,68 @@ export interface MarkerTrendChartProps {
   checkIns?: SymptomCheckIn[];
 }
 
+type OverlayLayerKey = "reference" | "trt" | "longevity";
+type ThemeKey = "dark" | "light";
+
+interface OverlayStyle {
+  fill: string;
+  fillOpacity: number;
+  stroke: string;
+  strokeOpacity: number;
+  strokeWidth: number;
+}
+
+const OVERLAY_STYLES: Record<ThemeKey, Record<OverlayLayerKey, OverlayStyle>> = {
+  dark: {
+    reference: {
+      fill: "#22c55e",
+      fillOpacity: 0.1,
+      stroke: "#22c55e",
+      strokeOpacity: 0.45,
+      strokeWidth: 1
+    },
+    trt: {
+      fill: "#0ea5e9",
+      fillOpacity: 0.12,
+      stroke: "#0ea5e9",
+      strokeOpacity: 0.5,
+      strokeWidth: 1
+    },
+    longevity: {
+      fill: "#a855f7",
+      fillOpacity: 0.12,
+      stroke: "#a855f7",
+      strokeOpacity: 0.52,
+      strokeWidth: 1
+    }
+  },
+  light: {
+    reference: {
+      fill: "#16a34a",
+      fillOpacity: 0.14,
+      stroke: "#15803d",
+      strokeOpacity: 0.68,
+      strokeWidth: 1.2
+    },
+    trt: {
+      fill: "#0284c7",
+      fillOpacity: 0.16,
+      stroke: "#0369a1",
+      strokeOpacity: 0.75,
+      strokeWidth: 1.25
+    },
+    longevity: {
+      fill: "#9333ea",
+      fillOpacity: 0.15,
+      stroke: "#7e22ce",
+      strokeOpacity: 0.76,
+      strokeWidth: 1.25
+    }
+  }
+};
+
+export const resolveMarkerOverlayStyle = (theme: ThemeKey, layer: OverlayLayerKey): OverlayStyle => OVERLAY_STYLES[theme][layer];
+
 const MarkerTrendChart = ({
   marker,
   points,
@@ -64,7 +126,10 @@ const MarkerTrendChart = ({
   const areaBaseValue = Number.isFinite(chartMin) ? chartMin : 0;
   const availableKeys = new Set(points.map((point) => point.key));
   const compactTooltip = settings.tooltipDetailMode === "compact";
-  const referenceRangeFillOpacity = isDarkTheme ? 0.06 : 0.03;
+  const overlayTheme: ThemeKey = isDarkTheme ? "dark" : "light";
+  const referenceOverlayStyle = resolveMarkerOverlayStyle(overlayTheme, "reference");
+  const trtOverlayStyle = resolveMarkerOverlayStyle(overlayTheme, "trt");
+  const longevityOverlayStyle = resolveMarkerOverlayStyle(overlayTheme, "longevity");
   const phaseBlocksForSeries = phaseBlocks.filter(
     (block) => availableKeys.has(block.fromKey) || availableKeys.has(block.toKey)
   );
@@ -226,45 +291,57 @@ const MarkerTrendChart = ({
           <ReferenceArea
             y1={rangeMin}
             y2={rangeMax}
-            fill="#22c55e"
-            fillOpacity={referenceRangeFillOpacity}
-            stroke="#22c55e"
-            strokeOpacity={0.3}
+            fill={referenceOverlayStyle.fill}
+            fillOpacity={referenceOverlayStyle.fillOpacity}
+            stroke={referenceOverlayStyle.stroke}
+            strokeOpacity={referenceOverlayStyle.strokeOpacity}
+            strokeWidth={referenceOverlayStyle.strokeWidth}
           />
         ) : null}
         {settings.showReferenceRanges && hasLowerBound && !hasUpperBound && rangeMin !== undefined && chartMax > rangeMin ? (
           <ReferenceArea
             y1={rangeMin}
             y2={chartMax}
-            fill="#22c55e"
-            fillOpacity={referenceRangeFillOpacity}
-            stroke="#22c55e"
-            strokeOpacity={0.3}
+            fill={referenceOverlayStyle.fill}
+            fillOpacity={referenceOverlayStyle.fillOpacity}
+            stroke={referenceOverlayStyle.stroke}
+            strokeOpacity={referenceOverlayStyle.strokeOpacity}
+            strokeWidth={referenceOverlayStyle.strokeWidth}
           />
         ) : null}
         {settings.showReferenceRanges && hasUpperBound && !hasLowerBound && rangeMax !== undefined && chartMin < rangeMax ? (
           <ReferenceArea
             y1={chartMin}
             y2={rangeMax}
-            fill="#22c55e"
-            fillOpacity={referenceRangeFillOpacity}
-            stroke="#22c55e"
-            strokeOpacity={0.3}
+            fill={referenceOverlayStyle.fill}
+            fillOpacity={referenceOverlayStyle.fillOpacity}
+            stroke={referenceOverlayStyle.stroke}
+            strokeOpacity={referenceOverlayStyle.strokeOpacity}
+            strokeWidth={referenceOverlayStyle.strokeWidth}
           />
         ) : null}
 
         {trtZone && trtZone.min < trtZone.max ? (
-          <ReferenceArea y1={trtZone.min} y2={trtZone.max} fill="#0ea5e9" fillOpacity={0.15} stroke="#0ea5e9" strokeOpacity={0.3} />
+          <ReferenceArea
+            y1={trtZone.min}
+            y2={trtZone.max}
+            fill={trtOverlayStyle.fill}
+            fillOpacity={trtOverlayStyle.fillOpacity}
+            stroke={trtOverlayStyle.stroke}
+            strokeOpacity={trtOverlayStyle.strokeOpacity}
+            strokeWidth={trtOverlayStyle.strokeWidth}
+          />
         ) : null}
 
         {longevityZone && longevityZone.min < longevityZone.max ? (
           <ReferenceArea
             y1={longevityZone.min}
             y2={longevityZone.max}
-            fill="#a855f7"
-            fillOpacity={0.12}
-            stroke="#a855f7"
-            strokeOpacity={0.28}
+            fill={longevityOverlayStyle.fill}
+            fillOpacity={longevityOverlayStyle.fillOpacity}
+            stroke={longevityOverlayStyle.stroke}
+            strokeOpacity={longevityOverlayStyle.strokeOpacity}
+            strokeWidth={longevityOverlayStyle.strokeWidth}
           />
         ) : null}
 

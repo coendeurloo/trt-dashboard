@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkerTrendSummary } from "../analytics";
 import { AnalysisScopeNotice } from "../analysisScope";
 import { betaLimitsDisabled } from "../betaLimits";
@@ -120,6 +120,7 @@ const AnalysisView = ({
   });
 
   const [questionInput, setQuestionInput] = useState("");
+  const outputPanelRef = useRef<HTMLDivElement | null>(null);
   const canAskQuestion = !isAnalyzingLabs && questionInput.trim().length > 0 && reportsInScope > 0 && !blockedByLimits;
 
   useEffect(() => {
@@ -127,6 +128,17 @@ const AnalysisView = ({
       setQuestionInput(analysisQuestion);
     }
   }, [analysisQuestion]);
+
+  useEffect(() => {
+    const hasOutput = analysisResult.trim().length > 0;
+    if (!hasOutput) {
+      return;
+    }
+    if (analysisRequestState !== "streaming" && analysisRequestState !== "completed") {
+      return;
+    }
+    outputPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [analysisRequestState, analysisResult]);
 
   const usageLabel = limitsDisabled
     ? tr("Beta limieten uit", "Beta limits disabled")
@@ -254,48 +266,50 @@ const AnalysisView = ({
         onSelectSuggestion={setQuestionInput}
       />
 
-      <AIOutputPanel
-        analysisRequestState={analysisRequestState}
-        analysisError={analysisError}
-        analysisResult={analysisResult}
-        analysisResultDisplay={analysisResultDisplay}
-        analysisGeneratedAt={analysisGeneratedAt}
-        analysisCopied={analysisCopied}
-        analysisModelInfo={analysisModelInfo}
-        analysisKind={analysisKind}
-        analysisQuestion={analysisQuestion}
-        analysisScopeNotice={analysisScopeNotice}
-        relevantBenchmarks={relevantBenchmarks}
-        isDarkTheme={isDarkTheme}
-        titleOutput={tr("Analysis output", "Analysis output")}
-        titleLatestComparison={tr("Analysis output (latest vs previous)", "Analysis output (latest vs previous)")}
-        titleQuestionAnswer={tr("Answer to your question", "Answer to your question")}
-        copyLabel={tr("Kopieer analyse", "Copy analysis")}
-        copiedLabel={tr("Gekopieerd", "Copied")}
-        styleLabel={tr("Stijl", "Style")}
-        styleValue={tr("Narrative premium", "Narrative premium")}
-        modelLabel={tr("Model", "Model")}
-        providerLabel={tr("Provider", "Provider")}
-        supplementActionsLabel={tr("Supplement acties", "Supplement actions")}
-        noneLabel={tr("geen", "none")}
-        outputGuardLabel={tr("Output guard toegepast", "Output guard applied")}
-        lastRunLabel={tr("Laatste run", "Last run")}
-        loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
-        loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
-        emptyBody={tr("Start een analyse of stel een vraag om te beginnen.", "Run an analysis or ask a question to get started.")}
-        disclaimerLabel={tr(
-          "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
-          "Analysis may reference published research. Values vary between individuals. This is not medical advice."
-        )}
-        aiUsesPrefix={tr("AI gebruikt", "AI uses")}
-        aiUsesMiddle={tr("van", "of")}
-        aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
-        questionPrefixLabel={tr("Vraag:", "Question:")}
-        preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
-        streamingStatusLabel={tr("Generating response…", "Generating response...")}
-        streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
-        onCopyAnalysis={onCopyAnalysis}
-      />
+      <div ref={outputPanelRef}>
+        <AIOutputPanel
+          analysisRequestState={analysisRequestState}
+          analysisError={analysisError}
+          analysisResult={analysisResult}
+          analysisResultDisplay={analysisResultDisplay}
+          analysisGeneratedAt={analysisGeneratedAt}
+          analysisCopied={analysisCopied}
+          analysisModelInfo={analysisModelInfo}
+          analysisKind={analysisKind}
+          analysisQuestion={analysisQuestion}
+          analysisScopeNotice={analysisScopeNotice}
+          relevantBenchmarks={relevantBenchmarks}
+          isDarkTheme={isDarkTheme}
+          titleOutput={tr("Analysis output", "Analysis output")}
+          titleLatestComparison={tr("Analysis output (latest vs previous)", "Analysis output (latest vs previous)")}
+          titleQuestionAnswer={tr("Answer to your question", "Answer to your question")}
+          copyLabel={tr("Kopieer analyse", "Copy analysis")}
+          copiedLabel={tr("Gekopieerd", "Copied")}
+          styleLabel={tr("Stijl", "Style")}
+          styleValue={tr("Narrative premium", "Narrative premium")}
+          modelLabel={tr("Model", "Model")}
+          providerLabel={tr("Provider", "Provider")}
+          supplementActionsLabel={tr("Supplement acties", "Supplement actions")}
+          noneLabel={tr("geen", "none")}
+          outputGuardLabel={tr("Output guard toegepast", "Output guard applied")}
+          lastRunLabel={tr("Laatste run", "Last run")}
+          loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
+          loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
+          emptyBody={tr("Start een analyse of stel een vraag om te beginnen.", "Run an analysis or ask a question to get started.")}
+          disclaimerLabel={tr(
+            "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
+            "Analysis may reference published research. Values vary between individuals. This is not medical advice."
+          )}
+          aiUsesPrefix={tr("AI gebruikt", "AI uses")}
+          aiUsesMiddle={tr("van", "of")}
+          aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
+          questionPrefixLabel={tr("Vraag:", "Question:")}
+          preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
+          streamingStatusLabel={tr("Generating response…", "Generating response...")}
+          streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
+          onCopyAnalysis={onCopyAnalysis}
+        />
+      </div>
     </section>
   );
 };

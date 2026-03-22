@@ -219,7 +219,20 @@ const AIOutputPanel = ({
           <p className={isDarkTheme ? "mb-2 text-xs uppercase tracking-wide text-cyan-200" : "mb-2 text-xs uppercase tracking-wide text-cyan-700"}>
             {isPreparing ? preparingStatusLabel : streamingStatusLabel}
           </p>
-          <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed">{analysisResult}</pre>
+          <div className={isDarkTheme ? "prose-premium-dark overflow-x-auto" : "prose-premium-light overflow-x-auto"}>
+            <Suspense
+              fallback={
+                <div className={isDarkTheme ? "rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300" : "rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"}>
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+                    {loadingFormatLabel}
+                  </span>
+                </div>
+              }
+            >
+              <AnalysisMarkdownBlock content={analysisResultDisplay} isDarkTheme={isDarkTheme} />
+            </Suspense>
+          </div>
           <span className={isDarkTheme ? "mt-2 inline-flex items-center text-xs text-slate-400" : "mt-2 inline-flex items-center text-xs text-slate-600"}>
             <span className="mr-1 h-4 w-[2px] animate-pulse bg-current" /> {streamingHintLabel}
           </span>

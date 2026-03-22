@@ -718,6 +718,176 @@ describe("analyzeLabDataWithClaude", () => {
     expect(capturedPrompt.indexOf("## Analyst memory")).toBeLessThan(capturedPrompt.indexOf("DATA START"));
   });
 
+  it("includes marker presence inventory across scope and full latest-report marker list", async () => {
+    const olderReport: LabReport = {
+      ...sampleReport,
+      id: "r-old",
+      testDate: "2025-08-12",
+      createdAt: "2025-08-12T10:00:00.000Z",
+      markers: [
+        {
+          ...sampleReport.markers[0],
+          id: "m-vitd",
+          marker: "Vitamin D",
+          canonicalMarker: "Vitamin D",
+          unit: "nmol/L",
+          value: 82
+        },
+        {
+          ...sampleReport.markers[0],
+          id: "m-crp",
+          marker: "CRP",
+          canonicalMarker: "CRP",
+          unit: "mg/L",
+          value: 1.1
+        },
+        {
+          ...sampleReport.markers[0],
+          id: "m-ins",
+          marker: "Insulin",
+          canonicalMarker: "Insulin",
+          unit: "mIU/L",
+          value: 6.4
+        }
+      ]
+    };
+    const latestReport: LabReport = {
+      ...sampleReport,
+      id: "r-new",
+      testDate: "2026-02-04",
+      createdAt: "2026-02-04T10:00:00.000Z",
+      markers: [
+        {
+          ...sampleReport.markers[0],
+          id: "m-test-latest",
+          marker: "Testosterone",
+          canonicalMarker: "Testosterone",
+          value: 22.3
+        }
+      ]
+    };
+
+    let capturedPrompt = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    await analyzeLabDataWithClaude({
+      reports: [olderReport, latestReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const markerPresenceAcrossScope = data.markerPresenceAcrossScope as
+      | Record<string, { everSeen: boolean; latestSeenDate: string | null; countReportsSeen: number }>
+      | undefined;
+    const latestReportAllMarkers = data.latestReportAllMarkers as string[] | undefined;
+
+    expect(markerPresenceAcrossScope?.["Vitamin D"]?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.["Vitamin D"]?.latestSeenDate).toBe("2025-08-12");
+    expect(markerPresenceAcrossScope?.["CRP"]?.everSeen).toBe(true);
+    expect(markerPresenceAcrossScope?.["Insulin"]?.countReportsSeen).toBe(1);
+    expect(latestReportAllMarkers).toEqual(["Testosterone"]);
+  });
+
+  it("includes personal context and derives ageYears from date of birth", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-22T12:00:00.000Z"));
+
+    let capturedPrompt = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      personalInfo: {
+        dateOfBirth: "1990-05-10",
+        weightKg: 82,
+        heightCm: 183
+      }
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const personalContext = data.personalContext as { ageYears: number | null; weightKg: number | null; heightCm: number | null };
+    expect(personalContext).toEqual({
+      ageYears: 35,
+      weightKg: 82,
+      heightCm: 183
+    });
+  });
+
+  it("uses null personal context fields when values are missing or invalid", async () => {
+    let capturedPrompt = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      personalInfo: {
+        dateOfBirth: "invalid-date",
+        weightKg: -2,
+        heightCm: null
+      }
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const personalContext = data.personalContext as { ageYears: number | null; weightKg: number | null; heightCm: number | null };
+    expect(personalContext).toEqual({
+      ageYears: null,
+      weightKg: null,
+      heightCm: null
+    });
+  });
+
   it("strips supplement section when output includes it but actions are not needed", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(

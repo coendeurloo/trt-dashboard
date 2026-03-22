@@ -4307,6 +4307,21 @@ const parseLondonDoctorSummaryRows = (text: string, profile: ParserProfile): Par
   pushRange("MCH", /Mean Cell Haemoglobin\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*pg\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "pg");
   pushRange("MCHC", /Mean Cell Haemoglobin Concentration\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*g\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "g/L");
   pushRange("RDW-CV", /Red Cell Distribution Width\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*%\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "%");
+  pushRange(
+    "MPV-Mean Platelet Volume",
+    /MPV-Mean Platelet Volume\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*fL/i,
+    "fL"
+  );
+  pushRange(
+    "PCT-plateletcrit",
+    /PCT-plateletcrit\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*%/i,
+    "%"
+  );
+  pushRange(
+    "PDW-Platelet Distribution Width",
+    /PDW-Platelet Distribution Width\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)\s*fL/i,
+    "fL"
+  );
   pushRange("Platelets", /Platelet Count\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
   pushRange("Leukocyten", /White Cell Count\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");
   pushRange("Neutrophils Abs.", /Neutrophils\s+([<>≤≥]?\s*-?\d+(?:[.,]\d+)?)\s*X10\^?9\/L\s+(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/i, "10^9/L");

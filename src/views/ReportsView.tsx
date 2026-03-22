@@ -106,7 +106,7 @@ const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId }: Marke
           <div
             id={tooltipId}
             role="tooltip"
-            className="pointer-events-none fixed z-[120] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 shadow-lg"
+            className="review-tooltip pointer-events-none fixed z-[120] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 shadow-lg"
             style={{ top: tooltipPosition.top, left: tooltipPosition.left, width: tooltipPosition.width }}
           >
             {tooltip}

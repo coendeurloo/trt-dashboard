@@ -236,6 +236,14 @@ const RAW_ALIASES: Record<string, string[]> = {
     "trombocyten",
     "bloedplaatjes"
   ],
+  PDW: [
+    "pdw",
+    "pdw cv",
+    "pdw-cv",
+    "platelet distribution width",
+    "platelet dist width",
+    "distribution width platelet"
+  ],
   "Monocytes Abs.": ["monocytes abs", "monocytes abs.", "monocyten abs", "monocyten abs.", "absolute monocytes"],
   "Basophils Abs.": [
     "basophils abs",
@@ -321,7 +329,7 @@ const RAW_ALIASES: Record<string, string[]> = {
     "apo-b100"
   ],
   "Lipoprotein (a)": ["lipoprotein (a)", "lipoprotein(a)", "lipoprotein a", "lp(a)", "lpa"],
-  MPV: ["mpv", "m.p.v", "m p v", "mean platelet volume"],
+  MPV: ["mpv", "m.p.v", "m p v", "mean platelet volume", "platelet volume mean"],
   "LDL Particle Number": ["ldl particle number"],
   "LDL Small": ["ldl small"],
   "LDL Medium": ["ldl medium"],
@@ -371,5 +379,4 @@ export const TAB_ITEMS = [
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
 ] as const;
-
 

@@ -156,11 +156,27 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     id: "mpv",
     canonicalName: "MPV",
     category: "Complete Blood Count",
-    aliases: ["m.p.v", "m p v", "mean platelet volume"],
+    aliases: ["m.p.v", "m p v", "mean platelet volume", "platelet volume mean"],
     preferredUnit: "fL",
     alternateUnits: [],
     defaultRangeType: "min-max",
     defaultRange: { min: 7.5, max: 12.5 }
+  }),
+  marker({
+    id: "pdw",
+    canonicalName: "PDW",
+    category: "Complete Blood Count",
+    aliases: [
+      "platelet distribution width",
+      "platelet dist width",
+      "platelet width distribution",
+      "pdw-cv",
+      "pdw cv"
+    ],
+    preferredUnit: "fL",
+    alternateUnits: [],
+    defaultRangeType: "min-max",
+    defaultRange: { min: 9.0, max: 17.0 }
   }),
   marker({
     id: "neutrophils",
@@ -840,7 +856,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Hormones - Sex",
     aliases: ["luteiniserend hormoon", "luteinizing hormone", "luteinisierendes hormon"],
     preferredUnit: "IU/L",
-    alternateUnits: ["mIU/mL"],
+    alternateUnits: ["mIU/mL", "U/L", "mU/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 1.7, max: 8.6 }
   }),
@@ -850,7 +866,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Hormones - Sex",
     aliases: ["follikelstimulerend hormoon", "follicle stimulating hormone"],
     preferredUnit: "IU/L",
-    alternateUnits: ["mIU/mL"],
+    alternateUnits: ["mIU/mL", "U/L", "mU/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 1.5, max: 12.4 }
   }),
@@ -986,6 +1002,12 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Vitamins & Minerals",
     aliases: [
       "vitamine d",
+      "vitamin d (d3+d2) oh",
+      "25-oh- vitamin d (d3+d2)",
+      "25-oh vitamin d (d3+d2)",
+      "25-oh vitamin d",
+      "25-oh-vitamin d",
+      "25 oh vitamin d",
       "25-oh vitamine d",
       "25-hydroxyvitamine d",
       "25(oh)d",
@@ -1253,7 +1275,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Blood Glucose",
     aliases: ["insuline", "fasting insulin", "insuline nuchter"],
     preferredUnit: "mIU/L",
-    alternateUnits: ["uIU/mL", "pmol/L"],
+    alternateUnits: ["uIU/mL", "mU/L", "pmol/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 2, max: 25 },
     optimalRange: { min: 2, max: 10 }
