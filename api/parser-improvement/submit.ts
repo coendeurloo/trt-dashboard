@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import {
@@ -44,6 +45,17 @@ const logFailure = (params: { code: string; message: string; fileName?: string; 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } });
+    return;
+  }
+
+  const runtimeConfig = await getRuntimeConfigWithFallback();
+  if (!runtimeConfig.parserImprovementEnabled) {
+    sendJson(res, 403, {
+      error: {
+        code: "PARSER_IMPROVEMENT_DISABLED",
+        message: "Parser improvement submissions are disabled by admin runtime config."
+      }
+    });
     return;
   }
 

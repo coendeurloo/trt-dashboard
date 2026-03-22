@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IncomingMessage, ServerResponse } from "node:http";
-import consentHandler from "../cloud/consent";
+import cloudHandler from "../cloud";
 
 interface MockResponseResult {
   res: ServerResponse;
@@ -36,6 +36,7 @@ const createMockRequest = (
   const rawBody = body ? JSON.stringify(body) : "";
   const req = {
     method,
+    url: "/api/cloud?action=consent",
     headers: token ? { authorization: `Bearer ${token}` } : {},
     async *[Symbol.asyncIterator]() {
       if (rawBody) {
@@ -77,7 +78,7 @@ describe("/api/cloud/consent", () => {
   it("returns 401 for unauthorized requests", async () => {
     const req = createMockRequest("GET");
     const res = createMockResponse();
-    await consentHandler(req, res.res);
+    await cloudHandler(req, res.res);
     expect(res.res.statusCode).toBe(401);
     const payload = JSON.parse(res.readBody()) as { error: { code: string } };
     expect(payload.error.code).toBe("AUTH_REQUIRED");
@@ -91,7 +92,7 @@ describe("/api/cloud/consent", () => {
 
     const req = createMockRequest("GET", "token-1");
     const res = createMockResponse();
-    await consentHandler(req, res.res);
+    await cloudHandler(req, res.res);
 
     expect(res.res.statusCode).toBe(200);
     const payload = JSON.parse(res.readBody()) as { hasConsent: boolean };
@@ -118,7 +119,7 @@ describe("/api/cloud/consent", () => {
       privacyPolicyVersion: "2026-03-09"
     });
     const res = createMockResponse();
-    await consentHandler(req, res.res);
+    await cloudHandler(req, res.res);
 
     expect(res.res.statusCode).toBe(200);
     const payload = JSON.parse(res.readBody()) as {
@@ -139,7 +140,7 @@ describe("/api/cloud/consent", () => {
       privacyPolicyVersion: "2026-03-09"
     });
     const res = createMockResponse();
-    await consentHandler(req, res.res);
+    await cloudHandler(req, res.res);
 
     expect(res.res.statusCode).toBe(400);
     const payload = JSON.parse(res.readBody()) as { error: { code: string } };

@@ -106,6 +106,7 @@ const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
+const AdminView = lazy(() => import("./views/AdminView"));
 const ExtractionReviewTable = lazy(() => import("./components/ExtractionReviewTable"));
 const MarkerTrendChart = lazy(() => import("./components/MarkerTrendChart"));
 const AIConsentModal = lazy(() => import("./components/AIConsentModal"));
@@ -134,6 +135,7 @@ type UploadSummary =
     };
 
 type OnboardingEntryPoint = "first_report" | "replay";
+type TopLevelRouteMode = "app" | "admin";
 
 interface PendingUndoAction {
   id: number;
@@ -211,6 +213,14 @@ const loadWellbeingReminderDismissedDate = (): string | null => {
   }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+};
+
+const resolveTopLevelRouteMode = (): TopLevelRouteMode => {
+  if (typeof window === "undefined") {
+    return "app";
+  }
+  const normalizedPathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  return normalizedPathname === "/admin" ? "admin" : "app";
 };
 
 const buildFallbackParserAssessment = (draft: ExtractionDraft): ParserUncertaintyAssessment => {
@@ -307,6 +317,7 @@ const App = () => {
     });
   const showAdvancedParserActions =
     import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
+  const [topLevelRouteMode, setTopLevelRouteMode] = useState<TopLevelRouteMode>(() => resolveTopLevelRouteMode());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [onboardingReport, setOnboardingReport] = useState<LabReport | null>(null);
@@ -393,6 +404,19 @@ const App = () => {
 
   const hadGrantedCloudAuthRef = useRef(false);
   const undoTimeoutRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const syncRouteMode = () => {
+      setTopLevelRouteMode(resolveTopLevelRouteMode());
+    };
+    window.addEventListener("popstate", syncRouteMode);
+    return () => {
+      window.removeEventListener("popstate", syncRouteMode);
+    };
+  }, []);
+
   useEffect(() => {
     const cloudAuthGranted = cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted";
     if (cloudAuthGranted) {
@@ -2320,6 +2344,52 @@ const App = () => {
     !showDemoBanner;
   const wellbeingReminderDays = daysSinceWellbeingCheckIn ?? 7;
   const quickUploadDisabled = isShareMode || isProcessing;
+  const adminLoadFallback = (
+    <div className="min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6">
+      <section className="mx-auto w-full max-w-xl rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5 text-sm text-slate-200">
+        <div className="flex items-center gap-2 text-cyan-200">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {tr("Admin wordt geladen...", "Loading admin...")}
+        </div>
+      </section>
+    </div>
+  );
+
+  if (topLevelRouteMode === "admin") {
+    return (
+      <>
+        <Suspense fallback={adminLoadFallback}>
+          <AdminView
+            language={appData.settings.language}
+            theme={appData.settings.theme}
+            authStatus={cloudAuth.status}
+            authError={cloudAuth.error}
+            accessToken={cloudAuth.session?.accessToken ?? null}
+            sessionEmail={cloudAuth.session?.user.email ?? null}
+            onOpenCloudAuth={openCloudAuthModal}
+            onSignOut={cloudAuth.signOut}
+          />
+        </Suspense>
+
+        <CloudAuthModal
+          open={cloudAuthModalOpen}
+          language={appData.settings.language}
+          theme={appData.settings.theme}
+          configured={cloudAuth.configured}
+          initialView={cloudAuthModalView}
+          authStatus={cloudAuth.status}
+          authError={cloudAuth.error}
+          consentRequired={cloudAuth.status === "authenticated" && cloudAuth.consentStatus !== "granted"}
+          privacyPolicyVersion={CLOUD_PRIVACY_POLICY_VERSION}
+          onClose={closeCloudAuthModal}
+          onSignInGoogle={handleCloudGoogleSignIn}
+          onSignInEmail={handleCloudSignInEmail}
+          onSignUpEmail={handleCloudSignUpEmail}
+          onCompleteConsent={cloudAuth.completeConsent}
+        />
+      </>
+    );
+  }
 
   if (isShareResolving) {
     return (

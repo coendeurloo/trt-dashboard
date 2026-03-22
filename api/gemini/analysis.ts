@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import { requireAiEntitlement } from "../_lib/entitlements.js";
@@ -118,6 +119,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
     if (!apiKey) {
       sendJson(res, 401, { error: { message: "Missing GEMINI_API_KEY on server" } });
+      return;
+    }
+
+    const runtimeConfig = await getRuntimeConfigWithFallback();
+    if (!runtimeConfig.aiAnalysisEnabled) {
+      sendJson(res, 403, {
+        error: {
+          code: "AI_ANALYSIS_DISABLED",
+          message: "AI analysis is disabled by admin runtime config."
+        }
+      });
       return;
     }
 

@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/api/admin/:action",
+      "destination": "/api/admin?action=:action"
+    },
+    {
+      "source": "/api/cloud/:action",
+      "destination": "/api/cloud?action=:action"
+    },
+    {
+      "source": "/admin",
+      "destination": "/"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/"
+    },
+    {
       "source": "/s/:code",
       "destination": "/?s=:code"
     }

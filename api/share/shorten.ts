@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
+import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
 import { encryptShareToken, ShareCryptoConfigError } from "../_lib/shareCrypto.js";
 import { saveShareRecord, ShareStoreUnavailableError } from "../_lib/shareStore.js";
 
@@ -108,6 +109,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: { message: "Method not allowed" } });
+      return;
+    }
+
+    const runtimeConfig = await getRuntimeConfigWithFallback();
+    if (!runtimeConfig.shareLinksEnabled) {
+      sendJson(res, 403, {
+        error: {
+          code: "SHARE_LINKS_DISABLED",
+          message: "Share links are disabled by admin runtime config."
+        }
+      });
       return;
     }
 

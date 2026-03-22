@@ -4,12 +4,29 @@ import { IncomingMessage, ServerResponse } from "node:http";
 const { getCounter } = vi.hoisted(() => ({
   getCounter: vi.fn(async () => 0)
 }));
+const { getRuntimeConfig, resolveSupabaseEnv } = vi.hoisted(() => ({
+  getRuntimeConfig: vi.fn(async () => ({
+    upstashKeepaliveEnabled: true,
+    source: "database"
+  })),
+  resolveSupabaseEnv: vi.fn(() => ({
+    supabaseUrl: "https://example.supabase.co",
+    anonKey: "anon",
+    serviceRoleKey: "service"
+  }))
+}));
 
 vi.mock("../_lib/redisStore.js", () => ({
   getCounter,
   RedisStoreUnavailableError: class RedisStoreUnavailableError extends Error {
     code = "AI_LIMITS_UNAVAILABLE";
   }
+}));
+vi.mock("../_lib/adminRuntimeConfig.js", () => ({
+  getRuntimeConfig
+}));
+vi.mock("../_lib/supabaseAdmin.js", () => ({
+  resolveSupabaseEnv
 }));
 
 import keepaliveHandler from "../upstash/keepalive";
@@ -43,6 +60,12 @@ const createMockResponse = (): MockResponseResult => {
 describe("/api/upstash/keepalive", () => {
   beforeEach(() => {
     getCounter.mockClear();
+    getRuntimeConfig.mockClear();
+    resolveSupabaseEnv.mockClear();
+    getRuntimeConfig.mockResolvedValue({
+      upstashKeepaliveEnabled: true,
+      source: "database"
+    });
   });
 
   afterEach(() => {
@@ -59,9 +82,34 @@ describe("/api/upstash/keepalive", () => {
 
     expect(getCounter).toHaveBeenCalledWith("meta:keepalive");
     expect(res.res.statusCode).toBe(200);
-    const payload = JSON.parse(res.readBody()) as { ok: boolean; touchedAt: string };
+    const payload = JSON.parse(res.readBody()) as { ok: boolean; skipped: boolean; touchedAt: string };
     expect(payload.ok).toBe(true);
+    expect(payload.skipped).toBe(false);
     expect(typeof payload.touchedAt).toBe("string");
+  });
+
+  it("skips redis probe when runtime keepalive is disabled", async () => {
+    getRuntimeConfig.mockResolvedValueOnce({
+      upstashKeepaliveEnabled: false,
+      source: "database"
+    });
+    const req = {
+      method: "GET"
+    } as unknown as IncomingMessage;
+    const res = createMockResponse();
+
+    await keepaliveHandler(req, res.res);
+
+    expect(res.res.statusCode).toBe(200);
+    const payload = JSON.parse(res.readBody()) as {
+      ok: boolean;
+      skipped: boolean;
+      reason: string;
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.skipped).toBe(true);
+    expect(payload.reason).toBe("KEEPALIVE_DISABLED_BY_RUNTIME_CONFIG");
+    expect(getCounter).not.toHaveBeenCalled();
   });
 
   it("rejects non-GET requests", async () => {
