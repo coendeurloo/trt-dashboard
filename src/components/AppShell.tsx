@@ -244,11 +244,6 @@ const AppShell = ({
             <Lock className="h-3 w-3" />
           </span>
         ) : null}
-        {!compact && key === "analysis" ? (
-          <span className={`${isLocked ? "" : "ml-auto"} rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300 ring-1 ring-cyan-500/40`}>
-            Pro
-          </span>
-        ) : null}
       </button>
     );
   };

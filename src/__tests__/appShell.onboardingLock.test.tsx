@@ -277,6 +277,20 @@ describe("AppShell onboarding lock", () => {
     expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
   });
 
+  it("does not show a Pro badge on the AI Lab Analysis navigation item", () => {
+    const props = buildProps({
+      isOnboardingLocked: false,
+      hasReports: true
+    });
+    render(
+      <AppShell {...props}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("button", { name: /AI Lab Analysis/i }).textContent).not.toContain("Pro");
+  });
+
   it("shows account badge with sync status and opens Settings when authenticated", () => {
     const props = buildProps({
       isOnboardingLocked: false,

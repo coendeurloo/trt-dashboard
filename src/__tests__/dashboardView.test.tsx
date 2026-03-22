@@ -176,7 +176,19 @@ describe("DashboardView first-visit hero", () => {
     expect(screen.queryByText("Sync & backup")).toBeNull();
     expect(screen.getByText("Local processing by default")).toBeTruthy();
     expect(screen.getByText("Works with many lab formats")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create a free account ->" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create a free account" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  });
+
+  it("opens the existing auth flow from both welcome hero account actions", () => {
+    const { props } = buildProps();
+    render(<DashboardView {...{ ...props, reports: [], visibleReports: [] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create a free account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(props.onOpenCloudAuth).toHaveBeenNthCalledWith(1, "signup");
+    expect(props.onOpenCloudAuth).toHaveBeenNthCalledWith(2, "signin");
   });
 });
 

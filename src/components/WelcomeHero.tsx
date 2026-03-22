@@ -240,18 +240,32 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
               {tr("Jouw data blijft op jouw apparaat. AI alleen als jij dat wil.", "Your data stays on your device. AI only if you want it.")}
             </p>
             {showCloudAuthCta ? (
-              <p className="mt-2 text-xs text-slate-400 sm:text-sm">
-                {tr("Wil je sync tussen apparaten?", "Want to sync across devices?")}{" "}
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm">
+                <span className={isLightTheme ? "text-slate-600" : "text-slate-400"}>
+                  {tr("Wil je sync tussen apparaten?", "Want to sync across devices?")}
+                </span>
                 <button
                   type="button"
                   onClick={() => onOpenCloudAuth("signup")}
-                  className={`underline decoration-cyan-500/70 underline-offset-2 transition ${
+                  className={`font-medium underline decoration-cyan-500/70 underline-offset-2 transition ${
                     isLightTheme ? "text-cyan-700 hover:text-cyan-900" : "text-cyan-200 hover:text-cyan-100"
                   }`}
                 >
-                  {tr("Maak gratis een account ->", "Create a free account ->")}
+                  {tr("Maak gratis een account", "Create a free account")}
                 </button>
-              </p>
+                <span className={isLightTheme ? "text-slate-500" : "text-slate-500"}>{tr("of", "or")}</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenCloudAuth("signin")}
+                  className={`rounded-md px-1.5 py-0.5 transition ${
+                    isLightTheme
+                      ? "font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
+                  }`}
+                >
+                  {tr("Log in", "Sign in")}
+                </button>
+              </div>
             ) : null}
           </div>
 
