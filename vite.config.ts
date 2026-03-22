@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import claudeProxyPlugin from "./scripts/vite-claude-proxy.mjs";
 
 export default defineConfig({
+  cacheDir: ".vite-cache",
   plugins: [react(), claudeProxyPlugin()],
   server: {
     host: "0.0.0.0",
