@@ -516,18 +516,10 @@ const SupplementsView = ({
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 disabled:opacity-50"
-                        onClick={() => onStopSupplement(period.id)}
-                        disabled={isShareMode}
-                      >
-                        {tr("Stop vandaag", "Stop today")}
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200 disabled:opacity-50"
                         onClick={() => openStopDateModal(period)}
                         disabled={isShareMode}
                       >
-                        <Trash2 className="h-3.5 w-3.5" /> {tr("Verwijder uit lijst", "Delete from list")}
+                        {tr("Stop", "Stop")}
                       </button>
                     </div>
                   )}
@@ -684,12 +676,12 @@ const SupplementsView = ({
         >
           <div className="app-modal-shell w-full max-w-md bg-slate-900 p-5 shadow-soft" onClick={(event) => event.stopPropagation()}>
             <h4 id="supplement-stop-date-modal-title" className="text-base font-semibold text-slate-100">
-              {tr("Verwijderen uit actieve lijst", "Delete from active list")}
+              {tr("Supplement stoppen", "Stop supplement")}
             </h4>
             <p className="mt-2 text-sm text-slate-300">
               {tr(
-                `Geef aan sinds wanneer je met ${stopDialogPeriod.name} bent gestopt. We bewaren de periode in je historie.`,
-                `Choose since when you stopped ${stopDialogPeriod.name}. We keep the period in your history.`
+                `Kies wanneer je met ${stopDialogPeriod.name} bent gestopt. Je kunt een datum kiezen of direct vandaag stoppen.`,
+                `Choose when you stopped ${stopDialogPeriod.name}. You can pick a date or stop today directly.`
               )}
             </p>
             <label className="mt-3 block text-xs uppercase tracking-wide text-slate-400">
@@ -719,10 +711,20 @@ const SupplementsView = ({
               </button>
               <button
                 type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
+                onClick={() => {
+                  onStopSupplement(stopDialogPeriod.id, currentDateIso);
+                  closeStopDateModal();
+                }}
+              >
+                {tr("Stop vandaag", "Stop today")}
+              </button>
+              <button
+                type="button"
                 className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-200"
                 onClick={confirmStopDateModal}
               >
-                <Save className="h-4 w-4" /> {tr("Opslaan", "Save")}
+                <Save className="h-4 w-4" /> {tr("Stop op gekozen datum", "Stop on selected date")}
               </button>
             </div>
           </div>
@@ -751,7 +753,7 @@ const SupplementsView = ({
                   className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
                   onClick={() => onOpenReportForSupplementBackfill(report.id)}
                 >
-                  {tr("Open in All Reports", "Open in All Reports")}
+                  {tr("Open in Labuitslagen", "Open in Lab Results")}
                 </button>
               </div>
             ))}

@@ -4,6 +4,7 @@ import {
   BarChart3,
   ClipboardList,
   Cog,
+  FileText,
   Gauge,
   Heart,
   Lock,
@@ -21,7 +22,7 @@ import appIcon from "../../favicon.svg";
 import labtrackerLogoDark from "../assets/labtracker-logo-dark.svg";
 import labtrackerLogoLight from "../assets/labtracker-logo-light.svg";
 import { getTabLabel, t } from "../i18n";
-import { getPersonaNavSectionLabel, getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
+import { getPersonaStabilityShortLabel, getPersonaTabLabel } from "../personaConfig";
 import { stabilityColor } from "../chartHelpers";
 import { formatDate } from "../utils";
 import { AppMode, AppSettings, CompoundEntry, ParserStage, TabKey, UserProfile } from "../types";
@@ -154,7 +155,6 @@ const AppShell = ({
     isOnboardingLocked && key !== "dashboard" && key !== "settings";
   const isLightTheme = theme === "light";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
-  const protocolSectionLabel = getPersonaNavSectionLabel(userProfile, language);
   const showDashboardStabilityBadge = activeTab === "dashboard" && hasReports && !isReviewMode;
   const shouldShowHeaderStats = !isReviewMode && headerStats.length > 0;
   const syncBadgeLabel =
@@ -207,12 +207,22 @@ const AppShell = ({
       ) : key === "alerts" ? (
         <AlertTriangle className="h-4 w-4" />
       ) : key === "reports" ? (
-        <ClipboardList className="h-4 w-4" />
+        <FileText className="h-4 w-4" />
       ) : key === "analysis" ? (
         <Sparkles className="h-4 w-4" />
       ) : (
         <Cog className="h-4 w-4" />
       );
+
+    const navStateClass = isLocked
+      ? "cursor-not-allowed border border-l-transparent border-slate-800/80 text-slate-500 opacity-75"
+      : activeTab === key
+        ? isLightTheme
+          ? "border-l-cyan-600 bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent text-cyan-900 shadow-[inset_0_0_0_1px_rgba(8,145,178,0.18),0_0_12px_rgba(6,182,212,0.12)]"
+          : "border-l-cyan-300 bg-gradient-to-r from-cyan-500/22 via-cyan-500/10 to-transparent text-cyan-100 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.22),0_0_14px_rgba(34,211,238,0.15)]"
+        : isLightTheme
+          ? "border-l-transparent text-slate-700 hover:border-l-cyan-500 hover:bg-slate-100/90 hover:text-slate-900"
+          : "border-l-transparent text-slate-300 hover:border-l-cyan-500/65 hover:bg-slate-800/75 hover:text-slate-100";
 
     return (
         <button
@@ -229,15 +239,9 @@ const AppShell = ({
         aria-disabled={isLocked}
         aria-label={tabLabel}
         title={isLocked ? `${tabLabel} - ${lockedTitle}` : tabLabel}
-        className={`flex w-full items-center ${compact ? "justify-center px-2" : "gap-2 px-3"} rounded-lg py-2 text-sm transition ${
-          isLocked
-            ? "cursor-not-allowed border border-slate-800/80 text-slate-500 opacity-75"
-            : activeTab === key
-              ? "bg-cyan-500/15 text-cyan-200"
-              : "text-slate-300 hover:bg-slate-800/70 hover:text-slate-100"
-        }`}
+        className={`flex w-full items-center border-l-2 ${compact ? "justify-center px-2" : "gap-2 px-3"} rounded-lg py-2 text-sm transition-all duration-200 ease-out ${navStateClass}`}
       >
-        {icon}
+        <span className="shrink-0">{icon}</span>
         {!compact ? <span>{tabLabel}</span> : null}
         {!compact && isLocked ? (
           <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700/80 bg-slate-900/70 text-slate-500">
@@ -255,86 +259,38 @@ const AppShell = ({
       : tr("Zijbalk inklappen", "Collapse sidebar");
 
     return (
-    <nav className="space-y-0.5">
-      {visibleTabKeys.has("dashboard") || visibleTabKeys.has("reports") || visibleTabKeys.has("alerts") || visibleTabKeys.has("checkIns") ? (
-        <>
-          {!compact ? (
-            <div className={`mb-1 mt-0 flex items-center justify-between px-3 ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest">
-                {tr("Kern", "Core")}
-              </p>
-              {showDesktopSidebarToggle ? (
-                <button
-                  type="button"
-                  onClick={onToggleDesktopSidebar}
-                  title={sidebarToggleTitle}
-                  aria-label={sidebarToggleTitle}
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
-                    isLightTheme
-                      ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
-                      : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                  }`}
-                >
-                  {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-                </button>
-              ) : null}
-            </div>
-          ) : showDesktopSidebarToggle ? (
-            <div className="mb-1 mt-0 flex justify-end px-1">
-              <button
-                type="button"
-                onClick={onToggleDesktopSidebar}
-                title={sidebarToggleTitle}
-                aria-label={sidebarToggleTitle}
-                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
-                  isLightTheme
-                    ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
-                    : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                }`}
-              >
-                {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-          ) : null}
-          {renderTabButton("dashboard", onAfterNavigate, compact)}
-          {renderTabButton("checkIns", onAfterNavigate, compact)}
-          {renderTabButton("reports", onAfterNavigate, compact)}
-          {renderTabButton("alerts", onAfterNavigate, compact)}
-        </>
-      ) : null}
+      <nav className="space-y-0.5">
+        {showDesktopSidebarToggle ? (
+          <div className={`mb-1 mt-0 flex justify-end ${compact ? "px-1" : "px-3"}`}>
+            <button
+              type="button"
+              onClick={onToggleDesktopSidebar}
+              title={sidebarToggleTitle}
+              aria-label={sidebarToggleTitle}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+                isLightTheme
+                  ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
+                  : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+              }`}
+            >
+              {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        ) : null}
 
-      {visibleTabKeys.has("protocol") ||
-      visibleTabKeys.has("supplements") ||
-      visibleTabKeys.has("protocolImpact") ||
-      visibleTabKeys.has("doseResponse") ? (
-        <>
-          {!compact ? (
-            <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
-              {protocolSectionLabel}
-            </p>
-          ) : null}
+        {renderTabButton("dashboard", onAfterNavigate, compact)}
+        {renderTabButton("checkIns", onAfterNavigate, compact)}
+        {renderTabButton("reports", onAfterNavigate, compact)}
+        {renderTabButton("alerts", onAfterNavigate, compact)}
+
+        <div className="mt-2 space-y-0.5">
           {renderTabButton("protocol", onAfterNavigate, compact)}
           {renderTabButton("supplements", onAfterNavigate, compact)}
           {renderTabButton("protocolImpact", onAfterNavigate, compact)}
           {renderTabButton("doseResponse", onAfterNavigate, compact)}
-        </>
-      ) : null}
-
-      {visibleTabKeys.has("analysis") ? (
-        <>
-          {!compact ? (
-            <p className={`mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest ${isOnboardingLocked ? "text-slate-500" : "text-slate-600"}`}>
-              {tr("Pro", "Pro")}
-            </p>
-          ) : null}
           {renderTabButton("analysis", onAfterNavigate, compact)}
-        </>
-      ) : null}
-
-      {visibleTabKeys.has("settings") ? (
-        <div className={`mt-3 border-t border-slate-800 pt-3 ${compact ? "px-1" : ""}`}>{renderTabButton("settings", onAfterNavigate, compact)}</div>
-      ) : null}
-    </nav>
+        </div>
+      </nav>
     );
   };
 
@@ -601,6 +557,11 @@ const AppShell = ({
         {renderNavigationSections(onAfterNavigate, compact)}
         {isShareMode && !compact ? renderShareSnapshotCard() : null}
         {sidebarUploadPanel}
+        {visibleTabKeys.has("settings") ? (
+          <div className={`mt-4 border-t border-slate-800 pt-3 ${compact ? "px-1" : ""}`}>
+            {renderTabButton("settings", onAfterNavigate, compact)}
+          </div>
+        ) : null}
       </>
     );
   };

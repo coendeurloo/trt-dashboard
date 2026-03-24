@@ -60,11 +60,11 @@ const AIQuestionInput = ({
         {scopeHint ? <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-500"}>{scopeHint}</p> : null}
       </div>
 
-      <div className="mt-3.5 space-y-2">
-        <label htmlFor={inputId} className={isDarkTheme ? "text-xs font-medium uppercase tracking-wide text-slate-400" : "text-xs font-medium uppercase tracking-wide text-slate-500"}>
-          {inputLabel}
-        </label>
-        <div>
+      <div className={`mt-3.5 grid gap-4 lg:items-start lg:gap-6 ${suggestions.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
+        <div className="space-y-2">
+          <label htmlFor={inputId} className={isDarkTheme ? "text-xs font-medium uppercase tracking-wide text-slate-400" : "text-xs font-medium uppercase tracking-wide text-slate-500"}>
+            {inputLabel}
+          </label>
           <textarea
             id={inputId}
             value={value}
@@ -77,33 +77,33 @@ const AIQuestionInput = ({
                 : "min-h-[86px] w-full resize-y rounded-2xl border border-slate-300/90 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus-visible:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/20 sm:min-h-[96px]"
             }
           />
-          <div className="mt-2 flex justify-end">
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={!canSubmit}
-            className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[132px]"
-          >
-            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {askButtonLabel}
-          </button>
+          <div className="mt-2 flex justify-start">
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={!canSubmit}
+              className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[132px]"
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {askButtonLabel}
+            </button>
           </div>
         </div>
-      </div>
 
-      {suggestions.length > 0 ? (
-        <div className="mt-3 space-y-2">
-          <p className={isDarkTheme ? "text-[11px] font-medium uppercase tracking-wide text-slate-500" : "text-[11px] font-medium uppercase tracking-wide text-slate-500"}>
-            {suggestionsTitle}
-          </p>
-          <AISuggestedQuestions
-            suggestions={suggestions}
-            selectedQuestion={value}
-            onSelectSuggestion={onSelectSuggestion}
-            isDarkTheme={isDarkTheme}
-          />
-        </div>
-      ) : null}
+        {suggestions.length > 0 ? (
+          <div className="space-y-2">
+            <p className={isDarkTheme ? "text-[11px] font-medium uppercase tracking-wide text-slate-500" : "text-[11px] font-medium uppercase tracking-wide text-slate-500"}>
+              {suggestionsTitle}
+            </p>
+            <AISuggestedQuestions
+              suggestions={suggestions}
+              selectedQuestion={value}
+              onSelectSuggestion={onSelectSuggestion}
+              isDarkTheme={isDarkTheme}
+            />
+          </div>
+        ) : null}
+      </div>
 
       {actionsSlot}
 

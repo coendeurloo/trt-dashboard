@@ -39,8 +39,8 @@ export const UI_TEXT = {
     en: "Upload PDF"
   },
   addManualValue: {
-    nl: "Handmatige waarde toevoegen",
-    en: "Add manual value"
+    nl: "Handmatige waardes toevoegen",
+    en: "Add manual values"
   },
   reports: {
     nl: "Rapporten",
@@ -187,7 +187,7 @@ const TAB_LABELS: Record<TabKey, LocalizedText> = {
   doseResponse: { nl: "Dosis-simulator", en: "Dose Simulator" },
   protocolDose: { nl: "Protocol & Dosis", en: "Protocol & Dose" },
   alerts: { nl: "Alerts", en: "Alerts" },
-  reports: { nl: "Alle Rapporten", en: "All Reports" },
+  reports: { nl: "Labuitslagen", en: "Lab Results" },
   settings: { nl: "Instellingen", en: "Settings" },
   analysis: { nl: "AI Lab Analyse", en: "AI Lab Analysis" }
 };

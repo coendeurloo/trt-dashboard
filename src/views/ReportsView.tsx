@@ -180,6 +180,7 @@ const ReportsView = ({
   onFocusedReportHandled
 }: ReportsViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isDarkTheme = settings.theme === "dark";
 
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [expandedReportIds, setExpandedReportIds] = useState<string[]>([]);
@@ -856,6 +857,26 @@ const ReportsView = ({
         const inheritedSourceLabel = `${tr("op basis van schema op", "based on schedule on")} ${formatDate(report.testDate)}`;
         const symptomsText = report.annotations.symptoms.trim();
         const notesText = report.annotations.notes.trim();
+        const detailCardClass = isDarkTheme
+          ? "rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300"
+          : "rounded-lg border border-slate-200/90 bg-slate-50/90 p-2.5 text-xs text-slate-700";
+        const detailLabelClass = isDarkTheme ? "block text-slate-400" : "block text-slate-500";
+        const detailValueClass = isDarkTheme ? "text-sm text-slate-100" : "text-sm text-slate-900";
+        const protocolBadgeClass = isDarkTheme
+          ? "rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-left text-xs text-cyan-200 hover:border-cyan-400"
+          : "rounded-full border border-cyan-500/45 bg-cyan-500/10 px-2 py-0.5 text-left text-xs text-cyan-700 hover:border-cyan-500";
+        const supplementUnknownBadgeClass = isDarkTheme
+          ? "mt-1 inline-flex rounded-full border border-slate-500/60 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100"
+          : "mt-1 inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs text-slate-700";
+        const supplementNoneBadgeClass = isDarkTheme
+          ? "mt-1 inline-flex rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
+          : "mt-1 inline-flex rounded-full border border-amber-400/60 bg-amber-50 px-2 py-0.5 text-xs text-amber-700";
+        const supplementChipClass = isDarkTheme
+          ? "inline-flex max-w-full items-center rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
+          : "inline-flex max-w-full items-center rounded-full border border-cyan-400/55 bg-cyan-50 px-2 py-0.5 text-xs text-cyan-800";
+        const supplementToggleClass = isDarkTheme
+          ? "inline-flex items-center rounded-full border border-slate-500/70 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100 hover:border-slate-400/80"
+          : "inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs text-slate-700 hover:border-slate-400";
         const showAllSupplements = expandedSupplementReportIds.includes(report.id);
         const supplementPreviewLimit = 4;
         const totalSupplements = inheritedFallbackSupplements.length;
@@ -923,10 +944,14 @@ const ReportsView = ({
                   type="button"
                   aria-label={tr("Selecteer rapport", "Select report")}
                   aria-pressed={selectedReports.includes(report.id)}
-                  className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] transition-colors ${
+                  className={`mt-2 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border leading-none transition-colors ${
                     selectedReports.includes(report.id)
-                      ? "border-cyan-400/70 bg-cyan-500/25 text-cyan-100"
-                      : "border-slate-500/80 bg-slate-800/55 text-transparent hover:border-slate-400/90 hover:bg-slate-700/70"
+                      ? isDarkTheme
+                        ? "border-cyan-400/70 bg-cyan-500/25 text-cyan-100"
+                        : "border-cyan-500/70 bg-cyan-500/20 text-cyan-700"
+                      : isDarkTheme
+                        ? "border-slate-500/80 bg-slate-800/55 text-transparent hover:border-slate-400/90 hover:bg-slate-700/70"
+                        : "border-slate-400/85 bg-slate-200/70 text-transparent hover:border-slate-500 hover:bg-slate-300/70"
                   }`}
                   onClick={(event) => {
                     event.preventDefault();
@@ -1030,19 +1055,6 @@ const ReportsView = ({
                   <div className="border-t border-slate-700/50 px-4 pb-4 pt-3">
                 {/* Action buttons */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800/70 px-2 py-1.5 text-xs text-slate-200 hover:border-slate-500"
-                    onClick={() => toggleReportSelection(report.id)}
-                  >
-                    {selectedReports.includes(report.id) ? (
-                      <CheckSquare className="h-4 w-4 text-cyan-300" />
-                    ) : (
-                      <Square className="h-4 w-4" />
-                    )}
-                    {selectedReports.includes(report.id) ? tr("Geselecteerd", "Selected") : tr("Selecteer", "Select")}
-                  </button>
-
                   {!isShareMode && isEditing ? (
                     <>
                       <button
@@ -1398,44 +1410,44 @@ const ReportsView = ({
                   </div>
                 ) : (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Dosis", "Dose")}</span>
-                      <strong className="text-sm text-slate-100">{dose === null ? "-" : `${dose} mg/week`}</strong>
+                    <div className={detailCardClass}>
+                      <span className={detailLabelClass}>{tr("Dosis", "Dose")}</span>
+                      <strong className={detailValueClass}>{dose === null ? "-" : `${dose} mg/week`}</strong>
                     </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Protocol", "Protocol")}</span>
+                    <div className={detailCardClass}>
+                      <span className={detailLabelClass}>{tr("Protocol", "Protocol")}</span>
                       {protocol ? (
                         <button
                           type="button"
-                          className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-left text-xs text-cyan-200 hover:border-cyan-400"
+                          className={protocolBadgeClass}
                           onClick={() => openProtocolVersionEditor(report)}
                         >
                           {protocolLabel}
                         </button>
                       ) : (
-                        <strong className="text-sm text-slate-100">{protocolLabel || "-"}</strong>
+                        <strong className={detailValueClass}>{protocolLabel || "-"}</strong>
                       )}
                     </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Compound", "Compound")}</span>
-                      <strong className="break-words text-sm text-slate-100">{getProtocolCompoundsText(protocol) || "-"}</strong>
+                    <div className={detailCardClass}>
+                      <span className={detailLabelClass}>{tr("Compound", "Compound")}</span>
+                      <strong className={`break-words ${detailValueClass}`}>{getProtocolCompoundsText(protocol) || "-"}</strong>
                     </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Injectiefrequentie", "Injection frequency")}</span>
-                      <strong className="text-sm text-slate-100">{getProtocolFrequencyLabel(protocol, language)}</strong>
+                    <div className={detailCardClass}>
+                      <span className={detailLabelClass}>{tr("Injectiefrequentie", "Injection frequency")}</span>
+                      <strong className={detailValueClass}>{getProtocolFrequencyLabel(protocol, language)}</strong>
                     </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                      <span className="block text-slate-400">{tr("Meetmoment", "Sampling timing")}</span>
-                      <strong className="text-sm text-slate-100">{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
+                    <div className={detailCardClass}>
+                      <span className={detailLabelClass}>{tr("Meetmoment", "Sampling timing")}</span>
+                      <strong className={detailValueClass}>{samplingTimingLabel(report.annotations.samplingTiming)}</strong>
                     </div>
-                    <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2 xl:col-span-3">
-                      <span className="block text-slate-400">{tr("Supplementen", "Supplements")}</span>
+                    <div className={`${detailCardClass} sm:col-span-2 xl:col-span-3`}>
+                      <span className={detailLabelClass}>{tr("Supplementen", "Supplements")}</span>
                       {inheritedFallbackState === "unknown" ? (
-                        <span className="mt-1 inline-flex rounded-full border border-slate-500/60 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100">
+                        <span className={supplementUnknownBadgeClass}>
                           {tr("Onbekend op testdatum", "Unknown at test date")}
                         </span>
                       ) : inheritedFallbackState === "none" || totalSupplements === 0 ? (
-                        <span className="mt-1 inline-flex rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
+                        <span className={supplementNoneBadgeClass}>
                           {tr("Geen supplementen", "No supplements")}
                         </span>
                       ) : (
@@ -1450,7 +1462,7 @@ const ReportsView = ({
                             return (
                               <span
                                 key={supplement.id}
-                                className="inline-flex max-w-full items-center rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100"
+                                className={supplementChipClass}
                                 title={fullLabel}
                               >
                                 <span className="truncate">{compactLabel}</span>
@@ -1460,7 +1472,7 @@ const ReportsView = ({
                           {hiddenSupplementCount > 0 ? (
                             <button
                               type="button"
-                              className="inline-flex items-center rounded-full border border-slate-500/70 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100 hover:border-slate-400/80"
+                              className={supplementToggleClass}
                               onClick={() =>
                                 setExpandedSupplementReportIds((current) =>
                                   current.includes(report.id) ? current : [...current, report.id]
@@ -1473,7 +1485,7 @@ const ReportsView = ({
                           {showAllSupplements && totalSupplements > supplementPreviewLimit ? (
                             <button
                               type="button"
-                              className="inline-flex items-center rounded-full border border-slate-500/70 bg-slate-700/70 px-2 py-0.5 text-xs text-slate-100 hover:border-slate-400/80"
+                              className={supplementToggleClass}
                               onClick={() =>
                                 setExpandedSupplementReportIds((current) => current.filter((id) => id !== report.id))
                               }
@@ -1485,15 +1497,15 @@ const ReportsView = ({
                       )}
                     </div>
                     {symptomsText ? (
-                      <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300">
-                        <span className="block text-slate-400">{tr("Symptomen", "Symptoms")}</span>
-                        <strong className="break-words text-sm text-slate-100">{symptomsText}</strong>
+                      <div className={detailCardClass}>
+                        <span className={detailLabelClass}>{tr("Symptomen", "Symptoms")}</span>
+                        <strong className={`break-words ${detailValueClass}`}>{symptomsText}</strong>
                       </div>
                     ) : null}
                     {notesText ? (
-                      <div className="rounded-lg bg-slate-800/80 p-2 text-xs text-slate-300 sm:col-span-2 xl:col-span-2">
-                        <span className="block text-slate-400">{tr("Notities", "Notes")}</span>
-                        <strong className="break-words text-sm text-slate-100">{notesText}</strong>
+                      <div className={`${detailCardClass} sm:col-span-2 xl:col-span-2`}>
+                        <span className={detailLabelClass}>{tr("Notities", "Notes")}</span>
+                        <strong className={`break-words ${detailValueClass}`}>{notesText}</strong>
                       </div>
                     ) : null}
                   </div>

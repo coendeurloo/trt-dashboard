@@ -161,6 +161,10 @@ const MarkerTrendChart = ({
     const chartRight = offset?.left !== undefined && offset?.width !== undefined
       ? offset.left + offset.width
       : undefined;
+    // These must match the ComposedChart margin values below so pills can
+    // freely use the margin space without being clipped by the SVG viewport.
+    const CHART_MARGIN_LEFT = 2;
+    const CHART_MARGIN_RIGHT = 32;
 
     return (
       <g pointerEvents="none">
@@ -182,12 +186,17 @@ const MarkerTrendChart = ({
           const pillWidth = Math.max(36, textValue.length * 8 + 18);
           const pillHeight = 26;
           const rawPillX = cx - pillWidth / 2;
-          const pillEdgePadding = 4;
-          const minPillX = chartLeft !== undefined ? chartLeft + pillEdgePadding : rawPillX;
-          const maxPillX = chartRight !== undefined ? chartRight - pillWidth - pillEdgePadding : rawPillX;
-          const pillX = chartLeft !== undefined && chartRight !== undefined
-            ? Math.min(Math.max(rawPillX, minPillX), maxPillX)
+          const pillEdgePadding = 6;
+          // Clamp bounds extend into the chart margins so pills at the edges
+          // can center naturally on their data points instead of being pushed
+          // inward. This prevents clipping by the modal's overflow:hidden.
+          const minPillX = chartLeft !== undefined
+            ? chartLeft - CHART_MARGIN_LEFT + pillEdgePadding
             : rawPillX;
+          const maxPillX = chartRight !== undefined
+            ? chartRight + CHART_MARGIN_RIGHT - pillWidth - pillEdgePadding
+            : rawPillX;
+          const pillX = Math.min(Math.max(rawPillX, minPillX), maxPillX);
           const pillY = cy - 42;
           const textX = pillX + pillWidth / 2;
 
@@ -246,7 +255,7 @@ const MarkerTrendChart = ({
         </div>
       ) : null}
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={points} margin={{ left: 2, right: 8, top: 10, bottom: 5 }}>
+        <ComposedChart data={points} margin={{ left: 2, right: 32, top: 46, bottom: 5 }}>
         {showSeriesGradientFill ? (
           <defs>
             <linearGradient id={seriesGradientId} x1="0" y1="0" x2="0" y2="1">
