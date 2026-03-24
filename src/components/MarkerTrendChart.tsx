@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { format, parseISO } from "date-fns";
-import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Customized, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MarkerSeriesPoint, buildDosePhaseBlocks, getTargetZone } from "../analytics";
 import { AppLanguage, AppSettings, SymptomCheckIn } from "../types";
 import { formatDate } from "../utils";
@@ -18,6 +18,7 @@ export interface MarkerTrendChartProps {
   height: number;
   showYearHints?: boolean;
   showSeriesGradientFill?: boolean;
+  showValuePills?: boolean;
   checkIns?: SymptomCheckIn[];
 }
 
@@ -93,6 +94,7 @@ const MarkerTrendChart = ({
   height,
   showYearHints = false,
   showSeriesGradientFill = false,
+  showValuePills = false,
   checkIns = []
 }: MarkerTrendChartProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -143,6 +145,82 @@ const MarkerTrendChart = ({
     }))
     .filter((item, index, array) => array.findIndex((candidate) => candidate.label === item.label && candidate.protocol === item.protocol) === index)
     .slice(0, 4);
+  const renderValuePillsOverlay = (chartProps: any) => {
+    if (!showValuePills) {
+      return null;
+    }
+    const graphicalItems = chartProps?.formattedGraphicalItems as Array<{ props?: { points?: Array<{ x?: number; y?: number; payload?: MarkerSeriesPoint }> } }> | undefined;
+    const lineItem = graphicalItems?.find((item) => Array.isArray(item?.props?.points)) ?? graphicalItems?.[0];
+    const linePoints = lineItem?.props?.points ?? [];
+    if (linePoints.length === 0) {
+      return null;
+    }
+
+    const offset = chartProps?.offset as { left?: number; width?: number } | undefined;
+    const chartLeft = offset?.left;
+    const chartRight = offset?.left !== undefined && offset?.width !== undefined
+      ? offset.left + offset.width
+      : undefined;
+
+    return (
+      <g pointerEvents="none">
+        {linePoints.map((point, index) => {
+          const cx = point.x;
+          const cy = point.y;
+          const payload = point.payload ?? points[index];
+          if (cx === undefined || cy === undefined || !payload) {
+            return null;
+          }
+
+          const pillFill =
+            payload.abnormal === "high"
+              ? "#c2410c"
+              : payload.abnormal === "low"
+                ? "#b45309"
+                : "#0e7490";
+          const textValue = formatAxisTick(payload.value);
+          const pillWidth = Math.max(36, textValue.length * 8 + 18);
+          const pillHeight = 26;
+          const rawPillX = cx - pillWidth / 2;
+          const pillEdgePadding = 4;
+          const minPillX = chartLeft !== undefined ? chartLeft + pillEdgePadding : rawPillX;
+          const maxPillX = chartRight !== undefined ? chartRight - pillWidth - pillEdgePadding : rawPillX;
+          const pillX = chartLeft !== undefined && chartRight !== undefined
+            ? Math.min(Math.max(rawPillX, minPillX), maxPillX)
+            : rawPillX;
+          const pillY = cy - 42;
+          const textX = pillX + pillWidth / 2;
+
+          return (
+            <g key={`${payload.key}-pill`}>
+              <rect
+                x={pillX}
+                y={pillY}
+                width={pillWidth}
+                height={pillHeight}
+                rx={pillHeight / 2}
+                fill={pillFill}
+                fillOpacity={0.96}
+                stroke={isDarkTheme ? "#0f172a" : "#ffffff"}
+                strokeWidth={1.5}
+              />
+              <text
+                x={textX}
+                y={pillY + pillHeight / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#f8fafc"
+                fontSize="12"
+                fontWeight="700"
+              >
+                {textValue}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    );
+  };
 
   if (points.length === 0) {
     return (
@@ -368,6 +446,11 @@ const MarkerTrendChart = ({
           isAnimationActive={false}
           dot={(props) => {
             const payload = props.payload as MarkerSeriesPoint;
+            const cx = typeof props.cx === "number" ? props.cx : Number(props.cx);
+            const cy = typeof props.cy === "number" ? props.cy : Number(props.cy);
+            if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
+              return <g />;
+            }
             let fill = seriesColor;
             if (settings.showAbnormalHighlights) {
               if (payload.abnormal === "high") {
@@ -377,10 +460,11 @@ const MarkerTrendChart = ({
                 fill = "#f59e0b";
               }
             }
-            return <circle cx={props.cx} cy={props.cy} r={4} stroke="#0f172a" strokeWidth={1.5} fill={fill} />;
+            return <circle cx={cx} cy={cy} r={4} stroke="#0f172a" strokeWidth={1.5} fill={fill} />;
           }}
           activeDot={{ r: 6 }}
         />
+        {showValuePills ? <Customized component={renderValuePillsOverlay} /> : null}
 
         {/* Check-in overlay: vertical lines at nearest point to each check-in date */}
         {settings.showCheckInOverlay && checkIns.length > 0

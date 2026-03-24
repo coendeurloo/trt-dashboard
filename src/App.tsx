@@ -3257,6 +3257,7 @@ const App = () => {
                     phaseBlocks={dosePhaseBlocks}
                     height={460}
                     showYearHints
+                    showValuePills
                   />
                 </Suspense>
               </div>
