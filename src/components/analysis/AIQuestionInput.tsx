@@ -60,6 +60,8 @@ const AIQuestionInput = ({
         {scopeHint ? <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-500"}>{scopeHint}</p> : null}
       </div>
 
+      {actionsSlot}
+
       <div className={`mt-3.5 grid gap-4 lg:items-start lg:gap-6 ${suggestions.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
         <div className="space-y-2">
           <label htmlFor={inputId} className={isDarkTheme ? "text-xs font-medium uppercase tracking-wide text-slate-400" : "text-xs font-medium uppercase tracking-wide text-slate-500"}>
@@ -73,7 +75,7 @@ const AIQuestionInput = ({
             rows={2}
             className={
               isDarkTheme
-                ? "min-h-[86px] w-full resize-y rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm leading-relaxed text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 sm:min-h-[96px]"
+                ? "min-h-[86px] w-full resize-y rounded-2xl border border-slate-500/80 bg-slate-700/65 px-4 py-3 text-sm leading-relaxed text-slate-100 placeholder:text-slate-400 focus-visible:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 sm:min-h-[96px]"
                 : "min-h-[86px] w-full resize-y rounded-2xl border border-slate-300/90 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus-visible:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/20 sm:min-h-[96px]"
             }
           />
@@ -104,8 +106,6 @@ const AIQuestionInput = ({
           </div>
         ) : null}
       </div>
-
-      {actionsSlot}
 
       <div className={isDarkTheme ? "mt-2.5 border-t border-slate-800/90 pt-2.5 text-[11px] text-slate-500" : "mt-2.5 border-t border-slate-200/90 pt-2.5 text-[11px] text-slate-500"}>
         <p>{localNote}</p>

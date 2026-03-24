@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkerTrendSummary } from "../analytics";
 import { AnalysisScopeNotice } from "../analysisScope";
 import { betaLimitsDisabled } from "../betaLimits";
-import AIAnalysisHeader from "../components/analysis/AIAnalysisHeader";
 import AIInfoBar from "../components/analysis/AIInfoBar";
 import AIOutputPanel from "../components/analysis/AIOutputPanel";
 import AIQuestionInput from "../components/analysis/AIQuestionInput";
@@ -147,10 +146,6 @@ const AnalysisView = ({
     : monthLimitReached
       ? tr("Maandlimiet bereikt, probeer later opnieuw.", "Monthly limit reached, try again later.")
       : null;
-  const memoryLabel =
-    memory && memory.analysisCount >= 2
-      ? tr(`Analyst memory actief · ${memory.analysisCount} analyses`, `Analyst memory active · ${memory.analysisCount} analyses`)
-      : null;
   const scopeHint = hasActiveProtocol
     ? tr(
         `${reportsInScope} rapporten in scope · ${markersTracked} markers · ${unitSystemLabel} · ${activeProtocolLabel}`,
@@ -163,16 +158,6 @@ const AnalysisView = ({
 
   return (
     <section className="space-y-4 fade-in sm:space-y-5">
-      <AIAnalysisHeader
-        title={tr("AI Lab Assistant", "AI Lab Assistant")}
-        subtitle={tr(
-          "Krijg heldere, contextrijke analyse van je labtrends wanneer jij beslist te starten.",
-          "Get clear, context-rich analysis of your lab trends when you decide to run it."
-        )}
-        memoryLabel={memoryLabel}
-        isDarkTheme={isDarkTheme}
-      />
-
       <AIInfoBar
         isDarkTheme={isDarkTheme}
         hasDemoData={hasDemoData}
