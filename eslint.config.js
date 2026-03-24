@@ -9,8 +9,10 @@ export default tseslint.config(
     ignores: [
       "coverage/**",
       "dist/**",
+      "dist2/**",
       "node_modules/**",
       ".vite/**",
+      ".vite-cache/**",
       "*.tsbuildinfo",
       "vite.config.js",
       "vite.config.d.ts",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import { MarkerAlert, MarkerSeriesPoint } from "../analytics";
 import AlertTrendMiniChart from "../components/AlertTrendMiniChart";
@@ -101,7 +101,7 @@ const AlertsView = ({
   onFocusedMarkerHandled,
   onOpenDashboard
 }: AlertsViewProps) => {
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
   const isDarkTheme = settings.theme === "dark";
   const rootRef = useRef<HTMLElement | null>(null);
   const [expandedAlerts, setExpandedAlerts] = useState<Record<string, boolean>>({});
@@ -117,10 +117,10 @@ const AlertsView = ({
 
   const categoryLookup = useMemo(() => buildCategoryLookup(), []);
 
-  const resolveCategory = (marker: string): string => {
+  const resolveCategory = useCallback((marker: string): string => {
     const key = normalizeMarkerLookupKey(marker);
     return categoryLookup.get(key) ?? "Other";
-  };
+  }, [categoryLookup]);
 
   /* Sort actionable alerts: severity desc, then date desc */
   const sortedActionableAlerts = useMemo(
@@ -158,7 +158,7 @@ const AlertsView = ({
     return CATEGORY_ORDER
       .filter((cat) => groups[cat] && groups[cat].length > 0)
       .map((cat) => ({ category: cat, label: getCategoryLabel(cat, tr), alerts: groups[cat] }));
-  }, [remainingAlerts, categoryLookup, language]);
+  }, [remainingAlerts, resolveCategory, tr]);
 
   /* Executive summary one-liner */
   const buildSummaryLine = (): string => {
@@ -204,7 +204,7 @@ const AlertsView = ({
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     onFocusedMarkerHandled();
-  }, [focusedMarker, onFocusedMarkerHandled, positiveAlerts, sortedActionableAlerts]);
+  }, [focusedMarker, onFocusedMarkerHandled, positiveAlerts, resolveCategory, sortedActionableAlerts]);
 
   const toggleExpanded = (alertId: string) => {
     setExpandedAlerts((c) => ({ ...c, [alertId]: !c[alertId] }));

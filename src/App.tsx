@@ -632,7 +632,6 @@ const App = () => {
     analysisScopeNotice,
     betaUsage,
     betaLimits,
-    setAnalysisError,
     runAiAnalysis,
     runAiQuestion,
     copyAnalysis

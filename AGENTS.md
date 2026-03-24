@@ -55,6 +55,12 @@ Read `architecture.md` for the full map. Short version:
 - `App.tsx` holds top-level state. Add state there and pass it down via props.
 - After any change, run `npm run build` and keep TypeScript errors at zero.
 
+## CI hygiene checklist
+
+- Before commit/push, run `npm run lint` and `npm run build`.
+- Do not commit generated folders like `.vite-cache/`, `.vite/`, `dist/`, or `dist2/`.
+- If lint fails, fix source lint errors first before pushing.
+
 ## Common pitfalls
 
 - The storage key is still `trt_lab_tracker_v1` (legacy name). Do not rename it, existing users would lose data.

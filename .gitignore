@@ -1,7 +1,9 @@
 node_modules
 dist
+dist2
 coverage
 .vite
+.vite-cache
 .DS_Store
 *.tsbuildinfo
 .trash

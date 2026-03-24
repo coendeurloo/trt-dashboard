@@ -7,6 +7,7 @@ import { formatDate } from "../utils";
 import { buildYAxisDomain, compactTooltipText, formatAxisTick, markerColor, phaseColor } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { getCheckInAverage } from "../wellbeingMetrics";
+import { resolveMarkerOverlayStyle, ThemeKey } from "./markerTrendOverlayStyles";
 
 export interface MarkerTrendChartProps {
   marker: string;
@@ -22,67 +23,27 @@ export interface MarkerTrendChartProps {
   checkIns?: SymptomCheckIn[];
 }
 
-type OverlayLayerKey = "reference" | "trt" | "longevity";
-type ThemeKey = "dark" | "light";
-
-interface OverlayStyle {
-  fill: string;
-  fillOpacity: number;
-  stroke: string;
-  strokeOpacity: number;
-  strokeWidth: number;
+interface OverlayPoint {
+  x?: number;
+  y?: number;
+  payload?: MarkerSeriesPoint;
 }
 
-const OVERLAY_STYLES: Record<ThemeKey, Record<OverlayLayerKey, OverlayStyle>> = {
-  dark: {
-    reference: {
-      fill: "#22c55e",
-      fillOpacity: 0.1,
-      stroke: "#22c55e",
-      strokeOpacity: 0.45,
-      strokeWidth: 1
-    },
-    trt: {
-      fill: "#0ea5e9",
-      fillOpacity: 0.12,
-      stroke: "#0ea5e9",
-      strokeOpacity: 0.5,
-      strokeWidth: 1
-    },
-    longevity: {
-      fill: "#a855f7",
-      fillOpacity: 0.12,
-      stroke: "#a855f7",
-      strokeOpacity: 0.52,
-      strokeWidth: 1
-    }
-  },
-  light: {
-    reference: {
-      fill: "#16a34a",
-      fillOpacity: 0.14,
-      stroke: "#15803d",
-      strokeOpacity: 0.68,
-      strokeWidth: 1.2
-    },
-    trt: {
-      fill: "#0284c7",
-      fillOpacity: 0.16,
-      stroke: "#0369a1",
-      strokeOpacity: 0.75,
-      strokeWidth: 1.25
-    },
-    longevity: {
-      fill: "#9333ea",
-      fillOpacity: 0.15,
-      stroke: "#7e22ce",
-      strokeOpacity: 0.76,
-      strokeWidth: 1.25
-    }
-  }
-};
+interface OverlayGraphicalItem {
+  props?: {
+    points?: OverlayPoint[];
+  };
+}
 
-export const resolveMarkerOverlayStyle = (theme: ThemeKey, layer: OverlayLayerKey): OverlayStyle => OVERLAY_STYLES[theme][layer];
+interface ValuePillsChartProps {
+  formattedGraphicalItems?: OverlayGraphicalItem[];
+  offset?: {
+    left?: number;
+    width?: number;
+  };
+}
+
+const isValuePillsChartProps = (value: unknown): value is ValuePillsChartProps => typeof value === "object" && value !== null;
 
 const MarkerTrendChart = ({
   marker,
@@ -145,18 +106,19 @@ const MarkerTrendChart = ({
     }))
     .filter((item, index, array) => array.findIndex((candidate) => candidate.label === item.label && candidate.protocol === item.protocol) === index)
     .slice(0, 4);
-  const renderValuePillsOverlay = (chartProps: any) => {
+  const renderValuePillsOverlay = (chartProps: unknown) => {
     if (!showValuePills) {
       return null;
     }
-    const graphicalItems = chartProps?.formattedGraphicalItems as Array<{ props?: { points?: Array<{ x?: number; y?: number; payload?: MarkerSeriesPoint }> } }> | undefined;
+    const safeChartProps = isValuePillsChartProps(chartProps) ? chartProps : {};
+    const graphicalItems = safeChartProps.formattedGraphicalItems;
     const lineItem = graphicalItems?.find((item) => Array.isArray(item?.props?.points)) ?? graphicalItems?.[0];
     const linePoints = lineItem?.props?.points ?? [];
     if (linePoints.length === 0) {
       return null;
     }
 
-    const offset = chartProps?.offset as { left?: number; width?: number } | undefined;
+    const offset = safeChartProps.offset;
     const chartLeft = offset?.left;
     const chartRight = offset?.left !== undefined && offset?.width !== undefined
       ? offset.left + offset.width

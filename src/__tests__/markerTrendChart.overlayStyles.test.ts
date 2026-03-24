@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveMarkerOverlayStyle } from "../components/MarkerTrendChart";
+import { resolveMarkerOverlayStyle } from "../components/markerTrendOverlayStyles";
 
 describe("resolveMarkerOverlayStyle", () => {
   it("returns distinct styles for each layer in light mode", () => {
