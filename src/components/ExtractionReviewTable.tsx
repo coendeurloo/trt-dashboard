@@ -13,7 +13,8 @@ import {
   ParserDebugMode,
   Protocol,
   ReportAnnotations,
-  SupplementPeriod
+  SupplementPeriod,
+  ThemeMode
 } from "../types";
 import {
   canonicalizeSupplement,
@@ -41,6 +42,7 @@ export interface ExtractionReviewTableProps {
   selectedProtocolId: string | null;
   parserDebugMode?: ParserDebugMode;
   language: AppLanguage;
+  theme?: ThemeMode;
   onDraftChange: (draft: ExtractionDraft) => void;
   onAnnotationsChange: (annotations: ReportAnnotations) => void;
   onSelectedProtocolIdChange: (protocolId: string | null) => void;
@@ -68,6 +70,7 @@ const ExtractionReviewTable = ({
   selectedProtocolId,
   parserDebugMode = "text_ocr_ai",
   language,
+  theme = "dark",
   onDraftChange,
   onAnnotationsChange,
   onSelectedProtocolIdChange,
@@ -1373,6 +1376,7 @@ const ExtractionReviewTable = ({
           <MarkerUnitReviewPopover
             anchorRef={{ current: unitReviewAnchorRefs.current[activeUnitReviewRow.id] }}
             language={language}
+            theme={theme}
             open
             unitReview={activeUnitReviewRow._unitReview}
             selectedUnit={unitReviewSelection}

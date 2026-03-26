@@ -180,6 +180,51 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  "apo-b": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 0.2, max: 3.5 },
+        referenceMaxRange: { min: 0.4, max: 1.8 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 20, max: 350 },
+        referenceMaxRange: { min: 40, max: 180 }
+      }
+    ]
+  },
+  "apo-a1": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 0.4, max: 3.5 },
+        referenceMinRange: { min: 0.6, max: 2.2 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 40, max: 350 },
+        referenceMinRange: { min: 60, max: 220 }
+      }
+    ]
+  },
+  "lipoprotein-a": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 1, max: 1200 },
+        referenceMaxRange: { min: 30, max: 160 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.5, max: 250 },
+        referenceMaxRange: { min: 10, max: 80 }
+      }
+    ]
+  },
   creatinine: {
     allowValueOnly: true,
     candidates: [
@@ -197,6 +242,87 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  "total-bilirubin": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 1, max: 120 },
+        referenceMinRange: { min: 0, max: 8 },
+        referenceMaxRange: { min: 8, max: 40 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.1, max: 7 },
+        referenceMinRange: { min: 0, max: 0.4 },
+        referenceMaxRange: { min: 0.4, max: 2.5 }
+      }
+    ]
+  },
+  "direct-bilirubin": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 0.1, max: 50 },
+        referenceMaxRange: { min: 2, max: 14 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.05, max: 3 },
+        referenceMaxRange: { min: 0.1, max: 0.8 }
+      }
+    ]
+  },
+  "bilirubin-indirect": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 0.5, max: 100 },
+        referenceMaxRange: { min: 5, max: 30 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.05, max: 6 },
+        referenceMaxRange: { min: 0.2, max: 1.8 }
+      }
+    ]
+  },
+  albumin: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 15, max: 70 },
+        referenceMinRange: { min: 20, max: 45 },
+        referenceMaxRange: { min: 38, max: 60 }
+      },
+      {
+        unit: "g/dL",
+        valueRange: { min: 1.5, max: 7 },
+        referenceMinRange: { min: 2, max: 4.5 },
+        referenceMaxRange: { min: 3.8, max: 6 }
+      }
+    ]
+  },
+  "total-protein": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 30, max: 100 },
+        referenceMinRange: { min: 45, max: 72 },
+        referenceMaxRange: { min: 70, max: 95 }
+      },
+      {
+        unit: "g/dL",
+        valueRange: { min: 3, max: 10 },
+        referenceMinRange: { min: 4.5, max: 7.2 },
+        referenceMaxRange: { min: 7, max: 9.5 }
+      }
+    ]
+  },
   egfr: {
     allowValueOnly: true,
     candidates: [
@@ -204,6 +330,40 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         unit: "mL/min/1.73m2",
         valueRange: { min: 10, max: 180 },
         referenceMinRange: { min: 45, max: 90 }
+      }
+    ]
+  },
+  "uric-acid": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 80, max: 1200 },
+        referenceMinRange: { min: 120, max: 320 },
+        referenceMaxRange: { min: 250, max: 700 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 1.5, max: 20 },
+        referenceMinRange: { min: 2, max: 5.5 },
+        referenceMaxRange: { min: 4, max: 12 }
+      }
+    ]
+  },
+  urea: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 0.5, max: 40 },
+        referenceMinRange: { min: 1, max: 6 },
+        referenceMaxRange: { min: 5, max: 12 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 3, max: 250 },
+        referenceMinRange: { min: 5, max: 18 },
+        referenceMaxRange: { min: 15, max: 40 }
       }
     ]
   },
@@ -248,6 +408,91 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  "free-t4": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "pmol/L",
+        valueRange: { min: 3, max: 60 },
+        referenceMinRange: { min: 6, max: 16 },
+        referenceMaxRange: { min: 12, max: 32 }
+      },
+      {
+        unit: "ng/dL",
+        valueRange: { min: 0.2, max: 5 },
+        referenceMinRange: { min: 0.4, max: 1.2 },
+        referenceMaxRange: { min: 0.9, max: 2.5 }
+      }
+    ]
+  },
+  "free-t3": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "pmol/L",
+        valueRange: { min: 1, max: 15 },
+        referenceMinRange: { min: 2, max: 5 },
+        referenceMaxRange: { min: 4, max: 9 }
+      },
+      {
+        unit: "pg/mL",
+        valueRange: { min: 0.5, max: 10 },
+        referenceMinRange: { min: 1, max: 3.5 },
+        referenceMaxRange: { min: 2.5, max: 6.5 }
+      }
+    ]
+  },
+  "total-t4": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 10, max: 250 },
+        referenceMinRange: { min: 30, max: 100 },
+        referenceMaxRange: { min: 80, max: 220 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 1, max: 20 },
+        referenceMinRange: { min: 2, max: 8 },
+        referenceMaxRange: { min: 5, max: 18 }
+      }
+    ]
+  },
+  "total-t3": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 0.4, max: 8 },
+        referenceMinRange: { min: 0.6, max: 2 },
+        referenceMaxRange: { min: 1.6, max: 4.5 }
+      },
+      {
+        unit: "ng/dL",
+        valueRange: { min: 25, max: 500 },
+        referenceMinRange: { min: 40, max: 120 },
+        referenceMaxRange: { min: 100, max: 300 }
+      }
+    ]
+  },
+  "reverse-t3": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "ng/dL",
+        valueRange: { min: 1, max: 120 },
+        referenceMinRange: { min: 4, max: 18 },
+        referenceMaxRange: { min: 14, max: 40 }
+      },
+      {
+        unit: "pg/mL",
+        valueRange: { min: 10, max: 1200 },
+        referenceMinRange: { min: 40, max: 180 },
+        referenceMaxRange: { min: 140, max: 400 }
+      }
+    ]
+  },
   "testosterone-total": {
     allowValueOnly: false,
     candidates: [
@@ -282,6 +527,23 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  "testosterone-bioavailable": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 0.3, max: 40 },
+        referenceMinRange: { min: 0.8, max: 8 },
+        referenceMaxRange: { min: 5, max: 25 }
+      },
+      {
+        unit: "ng/dL",
+        valueRange: { min: 8, max: 1200 },
+        referenceMinRange: { min: 20, max: 250 },
+        referenceMaxRange: { min: 140, max: 700 }
+      }
+    ]
+  },
   estradiol: {
     allowValueOnly: false,
     candidates: [
@@ -296,6 +558,51 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         valueRange: { min: 3, max: 400 },
         referenceMinRange: { min: 5, max: 35 },
         referenceMaxRange: { min: 20, max: 70 }
+      }
+    ]
+  },
+  dht: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 0.1, max: 20 },
+        referenceMinRange: { min: 0.2, max: 2 },
+        referenceMaxRange: { min: 1.5, max: 8 }
+      },
+      {
+        unit: "ng/dL",
+        valueRange: { min: 5, max: 800 },
+        referenceMinRange: { min: 8, max: 80 },
+        referenceMaxRange: { min: 60, max: 300 }
+      }
+    ]
+  },
+  progesterone: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 0.1, max: 120 },
+        referenceMinRange: { min: 0.1, max: 2 },
+        referenceMaxRange: { min: 1, max: 20 }
+      },
+      {
+        unit: "ng/mL",
+        valueRange: { min: 0.03, max: 40 },
+        referenceMinRange: { min: 0.03, max: 0.7 },
+        referenceMaxRange: { min: 0.3, max: 8 }
+      }
+    ]
+  },
+  shbg: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 2, max: 250 },
+        referenceMinRange: { min: 5, max: 35 },
+        referenceMaxRange: { min: 20, max: 120 }
       }
     ]
   },
@@ -316,6 +623,23 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  aldosterone: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "pmol/L",
+        valueRange: { min: 5, max: 5000 },
+        referenceMinRange: { min: 15, max: 160 },
+        referenceMaxRange: { min: 120, max: 1200 }
+      },
+      {
+        unit: "ng/dL",
+        valueRange: { min: 0.2, max: 180 },
+        referenceMinRange: { min: 0.5, max: 6 },
+        referenceMaxRange: { min: 4, max: 45 }
+      }
+    ]
+  },
   "psa-total": {
     allowValueOnly: true,
     candidates: [
@@ -323,6 +647,23 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         unit: "ug/L",
         valueRange: { min: 0, max: 100 },
         referenceMaxRange: { min: 1.5, max: 8 }
+      }
+    ]
+  },
+  pth: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "pg/mL",
+        valueRange: { min: 3, max: 500 },
+        referenceMinRange: { min: 8, max: 35 },
+        referenceMaxRange: { min: 35, max: 150 }
+      },
+      {
+        unit: "pmol/L",
+        valueRange: { min: 0.3, max: 55 },
+        referenceMinRange: { min: 0.8, max: 3.8 },
+        referenceMaxRange: { min: 3.5, max: 16 }
       }
     ]
   },
@@ -343,6 +684,72 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  folate: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 1, max: 120 },
+        referenceMinRange: { min: 3, max: 18 }
+      },
+      {
+        unit: "ng/mL",
+        valueRange: { min: 0.3, max: 60 },
+        referenceMinRange: { min: 1, max: 8 }
+      }
+    ]
+  },
+  "vitamin-b12": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "pmol/L",
+        valueRange: { min: 40, max: 2000 },
+        referenceMinRange: { min: 80, max: 260 },
+        referenceMaxRange: { min: 350, max: 1200 }
+      },
+      {
+        unit: "pg/mL",
+        valueRange: { min: 60, max: 1500 },
+        referenceMinRange: { min: 100, max: 350 },
+        referenceMaxRange: { min: 400, max: 1200 }
+      }
+    ]
+  },
+  "vitamin-b6": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 5, max: 1200 },
+        referenceMinRange: { min: 10, max: 60 },
+        referenceMaxRange: { min: 70, max: 220 }
+      },
+      {
+        unit: "ug/L",
+        valueRange: { min: 1, max: 300 },
+        referenceMinRange: { min: 2, max: 15 },
+        referenceMaxRange: { min: 20, max: 55 }
+      }
+    ]
+  },
+  "vitamin-c": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 3, max: 450 },
+        referenceMinRange: { min: 8, max: 40 },
+        referenceMaxRange: { min: 70, max: 180 }
+      },
+      {
+        unit: "mg/L",
+        valueRange: { min: 0.05, max: 80 },
+        referenceMinRange: { min: 0.1, max: 1 },
+        referenceMaxRange: { min: 1.2, max: 3.5 }
+      }
+    ]
+  },
   ferritin: {
     allowValueOnly: false,
     candidates: [
@@ -357,6 +764,276 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         valueRange: { min: 1, max: 5000 },
         referenceMinRange: { min: 10, max: 80 },
         referenceMaxRange: { min: 120, max: 600 }
+      }
+    ]
+  },
+  tibc: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 10, max: 140 },
+        referenceMinRange: { min: 20, max: 60 },
+        referenceMaxRange: { min: 50, max: 95 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 50, max: 780 },
+        referenceMinRange: { min: 110, max: 330 },
+        referenceMaxRange: { min: 280, max: 540 }
+      }
+    ]
+  },
+  iron: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 1, max: 80 },
+        referenceMinRange: { min: 3, max: 15 },
+        referenceMaxRange: { min: 18, max: 40 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 10, max: 450 },
+        referenceMinRange: { min: 20, max: 90 },
+        referenceMaxRange: { min: 80, max: 240 }
+      }
+    ]
+  },
+  zinc: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 1, max: 60 },
+        referenceMinRange: { min: 4, max: 14 },
+        referenceMaxRange: { min: 12, max: 28 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 10, max: 400 },
+        referenceMinRange: { min: 30, max: 90 },
+        referenceMaxRange: { min: 80, max: 190 }
+      }
+    ]
+  },
+  copper: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 1, max: 70 },
+        referenceMinRange: { min: 5, max: 16 },
+        referenceMaxRange: { min: 12, max: 35 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 5, max: 450 },
+        referenceMinRange: { min: 30, max: 100 },
+        referenceMaxRange: { min: 70, max: 240 }
+      }
+    ]
+  },
+  selenium: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 0.1, max: 10 },
+        referenceMinRange: { min: 0.3, max: 1.2 },
+        referenceMaxRange: { min: 1.1, max: 2.8 }
+      },
+      {
+        unit: "ug/L",
+        valueRange: { min: 10, max: 800 },
+        referenceMinRange: { min: 30, max: 95 },
+        referenceMaxRange: { min: 90, max: 220 }
+      }
+    ]
+  },
+  magnesium: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 0.2, max: 3 },
+        referenceMinRange: { min: 0.4, max: 1.0 },
+        referenceMaxRange: { min: 0.7, max: 1.5 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.5, max: 7 },
+        referenceMinRange: { min: 1, max: 2.3 },
+        referenceMaxRange: { min: 1.8, max: 3.8 }
+      }
+    ]
+  },
+  calcium: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 1, max: 4 },
+        referenceMinRange: { min: 1.5, max: 2.4 },
+        referenceMaxRange: { min: 2.2, max: 3.2 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 4, max: 20 },
+        referenceMinRange: { min: 6, max: 9.5 },
+        referenceMaxRange: { min: 8, max: 12.5 }
+      }
+    ]
+  },
+  phosphate: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 0.2, max: 4 },
+        referenceMinRange: { min: 0.4, max: 1.2 },
+        referenceMaxRange: { min: 1.1, max: 2.5 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 0.6, max: 12 },
+        referenceMinRange: { min: 1.2, max: 3.8 },
+        referenceMaxRange: { min: 3, max: 7.5 }
+      }
+    ]
+  },
+  "d-dimer": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "mg/L FEU",
+        valueRange: { min: 0.01, max: 20 },
+        referenceMaxRange: { min: 0.2, max: 1.5 }
+      },
+      {
+        unit: "ng/mL FEU",
+        valueRange: { min: 10, max: 20000 },
+        referenceMaxRange: { min: 200, max: 1500 }
+      }
+    ]
+  },
+  fibrinogen: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 0.5, max: 10 },
+        referenceMinRange: { min: 1, max: 2.5 },
+        referenceMaxRange: { min: 3, max: 6 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 50, max: 1000 },
+        referenceMinRange: { min: 100, max: 250 },
+        referenceMaxRange: { min: 300, max: 600 }
+      }
+    ]
+  },
+  lactate: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 0.1, max: 20 },
+        referenceMinRange: { min: 0.2, max: 1.2 },
+        referenceMaxRange: { min: 1.2, max: 4.5 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 1, max: 180 },
+        referenceMinRange: { min: 2, max: 12 },
+        referenceMaxRange: { min: 10, max: 45 }
+      }
+    ]
+  },
+  "c-peptide": {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 0.05, max: 6 },
+        referenceMinRange: { min: 0.1, max: 0.8 },
+        referenceMaxRange: { min: 0.6, max: 3 }
+      },
+      {
+        unit: "ng/mL",
+        valueRange: { min: 0.2, max: 18 },
+        referenceMinRange: { min: 0.3, max: 2.5 },
+        referenceMaxRange: { min: 2, max: 9 }
+      }
+    ]
+  },
+  transferrin: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "g/L",
+        valueRange: { min: 0.5, max: 6 },
+        referenceMinRange: { min: 1, max: 3 },
+        referenceMaxRange: { min: 2.5, max: 5 }
+      },
+      {
+        unit: "mg/dL",
+        valueRange: { min: 50, max: 600 },
+        referenceMinRange: { min: 100, max: 300 },
+        referenceMaxRange: { min: 250, max: 500 }
+      }
+    ]
+  },
+  cortisol: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "nmol/L",
+        valueRange: { min: 20, max: 2000 },
+        referenceMinRange: { min: 60, max: 250 },
+        referenceMaxRange: { min: 250, max: 900 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 1, max: 70 },
+        referenceMinRange: { min: 2, max: 8 },
+        referenceMaxRange: { min: 8, max: 35 }
+      }
+    ]
+  },
+  "dhea-s": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 0.1, max: 40 },
+        referenceMinRange: { min: 0.5, max: 8 },
+        referenceMaxRange: { min: 2, max: 20 }
+      },
+      {
+        unit: "ug/dL",
+        valueRange: { min: 5, max: 1500 },
+        referenceMinRange: { min: 20, max: 250 },
+        referenceMaxRange: { min: 100, max: 700 }
+      }
+    ]
+  },
+  dhea: {
+    allowValueOnly: false,
+    candidates: [
+      {
+        unit: "ng/mL",
+        valueRange: { min: 0.1, max: 70 },
+        referenceMinRange: { min: 0.3, max: 3.5 },
+        referenceMaxRange: { min: 4, max: 18 }
+      },
+      {
+        unit: "umol/L",
+        valueRange: { min: 0.01, max: 250 },
+        referenceMinRange: { min: 0.8, max: 10 },
+        referenceMaxRange: { min: 12, max: 65 }
       }
     ]
   }

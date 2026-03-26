@@ -2483,6 +2483,7 @@ const App = () => {
                     selectedProtocolId={selectedProtocolId}
                     parserDebugMode={appData.settings.parserDebugMode}
                     language={appData.settings.language}
+                    theme={appData.settings.theme}
                     onDraftChange={setDraft}
                     onAnnotationsChange={setDraftAnnotations}
                     onSelectedProtocolIdChange={setSelectedProtocolId}

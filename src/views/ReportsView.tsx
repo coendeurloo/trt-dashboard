@@ -1783,6 +1783,7 @@ const ReportsView = ({
               unitReviewAnchorRefs.current[`${activeUnitReview.reportId}:${activeUnitReview.markerId}`]
           }}
           language={language}
+          theme={settings.theme}
           open
           unitReview={activeUnitReviewMarker._unitReview}
           selectedUnit={unitReviewSelection}
