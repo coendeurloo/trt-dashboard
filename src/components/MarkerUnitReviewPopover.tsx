@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, X } from "lucide-react";
 import { trLocale } from "../i18n";
@@ -33,7 +33,7 @@ const MarkerUnitReviewPopover = ({
   onConfirm,
   onClose
 }: MarkerUnitReviewPopoverProps) => {
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
   const isLightTheme = theme === "light";
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);

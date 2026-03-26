@@ -83,7 +83,7 @@ const AnalysisView = ({
   hasActiveProtocol,
   hasDemoData,
   isDemoMode,
-  memory,
+  memory: _memory,
   betaUsage,
   betaLimits,
   settings,

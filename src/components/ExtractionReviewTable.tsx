@@ -105,6 +105,7 @@ const ExtractionReviewTable = ({
   const [isProtocolModalReady, setIsProtocolModalReady] = useState(false);
   const [activeUnitReviewRowId, setActiveUnitReviewRowId] = useState<string | null>(null);
   const [unitReviewSelection, setUnitReviewSelection] = useState("");
+  const [activeUnitReviewAnchor, setActiveUnitReviewAnchor] = useState<HTMLButtonElement | null>(null);
   const unitReviewAnchorRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const closeCreateProtocolModal = useCallback(() => {
@@ -443,6 +444,7 @@ const ExtractionReviewTable = ({
     if (!activeUnitReviewRow?._unitReview?.isMissingUnit) {
       setActiveUnitReviewRowId(null);
       setUnitReviewSelection("");
+      setActiveUnitReviewAnchor(null);
     }
   }, [activeUnitReviewRow, activeUnitReviewRowId]);
 
@@ -539,11 +541,13 @@ const ExtractionReviewTable = ({
   const closeUnitReview = () => {
     setActiveUnitReviewRowId(null);
     setUnitReviewSelection("");
+    setActiveUnitReviewAnchor(null);
   };
 
   const openUnitReview = (row: ReviewMarker) => {
     setActiveUnitReviewRowId(row.id);
     setUnitReviewSelection(row._unitReview?.suggestion?.unit ?? "");
+    setActiveUnitReviewAnchor(unitReviewAnchorRefs.current[row.id] ?? null);
   };
 
   const confirmUnitReview = () => {
@@ -1374,7 +1378,7 @@ const ExtractionReviewTable = ({
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {activeUnitReviewRow?._unitReview ? (
           <MarkerUnitReviewPopover
-            anchorRef={{ current: unitReviewAnchorRefs.current[activeUnitReviewRow.id] }}
+            anchorRef={{ current: activeUnitReviewAnchor }}
             language={language}
             theme={theme}
             open

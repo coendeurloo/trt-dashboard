@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Check, Loader2, SlidersHorizontal } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
@@ -125,6 +125,8 @@ const MARKER_CATEGORY_ORDER: MarkerCategory[] = [
   "Other"
 ];
 
+const CATEGORY_FILTER_ORDER = ["hormones", "metabolic", "blood", "organs", "nutrients", "other"];
+
 const DashboardView = ({
   personalInfo,
   reports,
@@ -164,7 +166,7 @@ const DashboardView = ({
   checkIns,
   onNavigateToCheckIns
 }: DashboardViewProps) => {
-  const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
   const unitSystemLabel = (unitSystem: "eu" | "us"): string =>
     unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const hasReports = reports.length > 0;
@@ -243,11 +245,11 @@ const DashboardView = ({
     return lookup;
   }, []);
   const markersToRenderBase = dashboardView === "primary" ? primaryMarkers : allMarkers;
-  const resolveMarkerCategory = (marker: string): string => {
+  const resolveMarkerCategory = useCallback((marker: string): string => {
     const lookupKey = normalizeMarkerLookupKey(marker);
     return markerCategoryLookup.get(lookupKey) ?? "Other";
-  };
-  const getMarkerCategoryLabel = (category: string): string => {
+  }, [markerCategoryLookup]);
+  const getMarkerCategoryLabel = useCallback((category: string): string => {
     if (category === "Hormones - Sex") {
       return tr("Geslachtshormonen", "Hormones - Sex");
     }
@@ -291,7 +293,7 @@ const DashboardView = ({
       return tr("IJzerstatus", "Iron Studies");
     }
     return tr("Overig", "Other");
-  };
+  }, [tr]);
   const mapMarkerCategoryToFilterGroup = (category: string): string => {
     if (category === "Hormones - Sex" || category === "Hormones - Adrenal" || category === "Thyroid") {
       return "hormones";
@@ -328,7 +330,6 @@ const DashboardView = ({
     }
     return tr("Overig", "Other");
   };
-  const categoryFilterOrder = ["hormones", "metabolic", "blood", "organs", "nutrients", "other"];
   const dashboardCategoryOptions = useMemo(() => {
     if (dashboardView !== "all") {
       return [];
@@ -336,8 +337,8 @@ const DashboardView = ({
     const availableGroups = new Set(
       markersToRenderBase.map((marker) => mapMarkerCategoryToFilterGroup(resolveMarkerCategory(marker)))
     );
-    return categoryFilterOrder.filter((group) => availableGroups.has(group));
-  }, [dashboardView, markersToRenderBase]);
+    return CATEGORY_FILTER_ORDER.filter((group) => availableGroups.has(group));
+  }, [dashboardView, markersToRenderBase, resolveMarkerCategory]);
   useEffect(() => {
     if (dashboardView !== "all") {
       setMarkerSearchTerm("");
@@ -365,7 +366,7 @@ const DashboardView = ({
         const markerLabel = getMarkerDisplayName(marker, language).toLowerCase();
         return markerLabel.includes(normalizedMarkerSearchTerm) || marker.toLowerCase().includes(normalizedMarkerSearchTerm);
       }),
-    [dashboardView, language, markerCategoryFilter, markersToRenderBase, normalizedMarkerSearchTerm]
+    [dashboardView, language, markerCategoryFilter, markersToRenderBase, normalizedMarkerSearchTerm, resolveMarkerCategory]
   );
   const markerRenderIndexLookup = useMemo(
     () => new Map(markersToRender.map((marker, index) => [marker, index])),
@@ -396,7 +397,7 @@ const DashboardView = ({
           }
           return left.categoryLabel.localeCompare(right.categoryLabel);
         }),
-    [getMarkerCategoryLabel, language, markersToRender]
+    [getMarkerCategoryLabel, language, markersToRender, resolveMarkerCategory]
   );
 
   const togglePrimaryMarkerSelection = (marker: string) => {

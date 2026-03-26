@@ -213,6 +213,7 @@ const ReportsView = ({
   const [protocolVersionFeedback, setProtocolVersionFeedback] = useState("");
   const [activeUnitReview, setActiveUnitReview] = useState<{ reportId: string; markerId: string } | null>(null);
   const [unitReviewSelection, setUnitReviewSelection] = useState("");
+  const [activeUnitReviewAnchor, setActiveUnitReviewAnchor] = useState<HTMLButtonElement | null>(null);
   const unitReviewAnchorRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
@@ -342,6 +343,7 @@ const ReportsView = ({
     if (activeUnitReview && !ids.has(activeUnitReview.reportId)) {
       setActiveUnitReview(null);
       setUnitReviewSelection("");
+      setActiveUnitReviewAnchor(null);
     }
   }, [activeUnitReview, editingReportId, protocolVersionEditorReportId, reports]);
 
@@ -385,6 +387,7 @@ const ReportsView = ({
     if (!activeUnitReviewMarker?._unitReview?.isMissingUnit) {
       setActiveUnitReview(null);
       setUnitReviewSelection("");
+      setActiveUnitReviewAnchor(null);
     }
   }, [activeUnitReview, activeUnitReviewMarker]);
 
@@ -482,11 +485,13 @@ const ReportsView = ({
   const closeUnitReview = () => {
     setActiveUnitReview(null);
     setUnitReviewSelection("");
+    setActiveUnitReviewAnchor(null);
   };
 
   const openUnitReview = (reportId: string, marker: ReviewMarker) => {
     setActiveUnitReview({ reportId, markerId: marker.id });
     setUnitReviewSelection(marker._unitReview?.suggestion?.unit ?? "");
+    setActiveUnitReviewAnchor(unitReviewAnchorRefs.current[`${reportId}:${marker.id}`] ?? null);
   };
 
   const confirmUnitReview = () => {
@@ -1778,10 +1783,7 @@ const ReportsView = ({
 
       {activeUnitReview && activeUnitReviewMarker?._unitReview ? (
         <MarkerUnitReviewPopover
-          anchorRef={{
-            current:
-              unitReviewAnchorRefs.current[`${activeUnitReview.reportId}:${activeUnitReview.markerId}`]
-          }}
+          anchorRef={{ current: activeUnitReviewAnchor }}
           language={language}
           theme={settings.theme}
           open
