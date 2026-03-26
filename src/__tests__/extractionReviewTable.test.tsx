@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ExtractionReviewTable, { type ExtractionReviewTableProps } from "../components/ExtractionReviewTable";
 import { ExtractionDraft, ReportAnnotations } from "../types";
+import { enrichMarkerForReview } from "../utils/markerReview";
 
 const draft: ExtractionDraft = {
   sourceFileName: "Sep blood work clean.pdf",
@@ -447,5 +448,73 @@ describe("ExtractionReviewTable", () => {
 
     expect(screen.getByText(/Review this report carefully/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Send PDF to improve parser/i })).toBeNull();
+  });
+
+  it("opens missing-unit review, shows a suggestion, and confirms it into the draft", () => {
+    const onDraftChange = vi.fn();
+
+    renderTable(
+      {
+        markers: [
+          enrichMarkerForReview({
+            id: "m-unit",
+            marker: "Fasting Glucose",
+            canonicalMarker: "Glucose",
+            value: 4.6,
+            unit: "",
+            referenceMin: 4,
+            referenceMax: 6,
+            abnormal: "normal",
+            confidence: 0.8
+          })
+        ]
+      },
+      { onDraftChange }
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review missing unit" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Review unit" });
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText("Suggested")).toBeTruthy();
+    expect((within(dialog).getByRole("combobox") as HTMLSelectElement).value).toBe("mmol/L");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    expect(onDraftChange).toHaveBeenCalledTimes(1);
+    const nextDraft = onDraftChange.mock.calls[0]?.[0] as ExtractionDraft;
+    expect(nextDraft.markers[0]?.rawUnit).toBe("mmol/L");
+    expect(nextDraft.markers[0]?.unit).toBe("mmol/L");
+  });
+
+  it("keeps a marker on review when unit confirmation still leaves the range unresolved", () => {
+    const onDraftChange = vi.fn();
+
+    renderTable(
+      {
+        markers: [
+          enrichMarkerForReview({
+            id: "m-range",
+            marker: "Creatinine Urine",
+            canonicalMarker: "Creatinine Urine",
+            value: 8,
+            unit: "",
+            referenceMin: null,
+            referenceMax: null,
+            abnormal: "unknown",
+            confidence: 0.8
+          })
+        ]
+      },
+      { onDraftChange }
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review missing unit" }));
+    const dialog = screen.getByRole("dialog", { name: "Review unit" });
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "mmol/L" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    const nextDraft = onDraftChange.mock.calls[0]?.[0] as ExtractionDraft;
+    expect((nextDraft.markers[0] as any)?._confidence?.overall).toBe("review");
   });
 });

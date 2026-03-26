@@ -255,6 +255,7 @@ const App = () => {
     deleteReport: deleteReportFromData,
     deleteReports: deleteReportsFromData,
     updateReportAnnotations,
+    updateReportMarkerUnit,
     addProtocol,
     updateProtocol,
     deleteProtocol,
@@ -2813,6 +2814,7 @@ const App = () => {
                     onDeleteReport={deleteReportWithUndo}
                     onDeleteReports={deleteReportsWithUndo}
                     onUpdateReportAnnotations={updateReportAnnotations}
+                    onUpdateReportMarkerUnit={updateReportMarkerUnit}
                     onSetBaseline={setBaseline}
                     onRenameMarker={openRenameDialog}
                     onOpenProtocolTab={() => requestTabChange("protocol")}

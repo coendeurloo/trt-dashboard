@@ -49,6 +49,7 @@ const renderReportsView = (report: LabReport, supplementTimeline: SupplementPeri
       onDeleteReport={vi.fn()}
       onDeleteReports={vi.fn()}
       onUpdateReportAnnotations={vi.fn()}
+      onUpdateReportMarkerUnit={vi.fn()}
       onSetBaseline={vi.fn()}
       onRenameMarker={vi.fn()}
       onOpenProtocolTab={vi.fn()}

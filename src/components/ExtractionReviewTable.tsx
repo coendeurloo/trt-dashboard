@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Plus, Save, Trash2, X, XCircle, Wrench } from "lucide-react";
 import { getMarkerDisplayName, trLocale } from "../i18n";
-import { createId, deriveAbnormalFlag, safeNumber } from "../utils";
-import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
+import { createId, safeNumber } from "../utils";
+import { canonicalizeMarker } from "../unitConversion";
 import {
   AppLanguage,
   ExtractionDraft,
@@ -28,6 +28,8 @@ import EditableCell from "./EditableCell";
 import { RangeType } from "../data/markerDatabase";
 import VisualRangeBar from "./VisualRangeBar";
 import { ReviewMarker, applyMarkerAutoFix, enrichMarkerForReview } from "../utils/markerReview";
+import MarkerUnitReviewPopover from "./MarkerUnitReviewPopover";
+import { applyConfirmedMarkerUnit, normalizeMarkerWithSourceFields } from "../utils/unitReview";
 
 export interface ExtractionReviewTableProps {
   draft: ExtractionDraft;
@@ -98,6 +100,9 @@ const ExtractionReviewTable = ({
   const [showWarningDetails, setShowWarningDetails] = useState(false);
   const [markerNameDisplayMode, setMarkerNameDisplayMode] = useState<"report" | "canonical">("report");
   const [isProtocolModalReady, setIsProtocolModalReady] = useState(false);
+  const [activeUnitReviewRowId, setActiveUnitReviewRowId] = useState<string | null>(null);
+  const [unitReviewSelection, setUnitReviewSelection] = useState("");
+  const unitReviewAnchorRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const closeCreateProtocolModal = useCallback(() => {
     setShowCreateProtocol(false);
@@ -426,6 +431,17 @@ const ExtractionReviewTable = ({
     row._confidence?.autoFixable === true && (row._confidence?.overall ?? "ok") !== "ok";
   const markersNeedingReview = reviewMarkers.filter((row) => (row._confidence?.overall ?? "ok") !== "ok");
   const autoFixableMarkers = reviewMarkers.filter(isActionableAutoFix);
+  const activeUnitReviewRow = activeUnitReviewRowId ? reviewMarkers.find((row) => row.id === activeUnitReviewRowId) ?? null : null;
+
+  useEffect(() => {
+    if (!activeUnitReviewRowId) {
+      return;
+    }
+    if (!activeUnitReviewRow?._unitReview?.isMissingUnit) {
+      setActiveUnitReviewRowId(null);
+      setUnitReviewSelection("");
+    }
+  }, [activeUnitReviewRow, activeUnitReviewRowId]);
 
   const statusLabel = (row: ReviewMarker): string => {
     const overall = row._confidence?.overall ?? "ok";
@@ -515,6 +531,24 @@ const ExtractionReviewTable = ({
       ...draft,
       markers: reviewMarkers.map((row) => (row.id === rowId && isActionableAutoFix(row) ? applyMarkerAutoFix(row) : row))
     });
+  };
+
+  const closeUnitReview = () => {
+    setActiveUnitReviewRowId(null);
+    setUnitReviewSelection("");
+  };
+
+  const openUnitReview = (row: ReviewMarker) => {
+    setActiveUnitReviewRowId(row.id);
+    setUnitReviewSelection(row._unitReview?.suggestion?.unit ?? "");
+  };
+
+  const confirmUnitReview = () => {
+    if (!activeUnitReviewRowId || !unitReviewSelection.trim()) {
+      return;
+    }
+    updateRow(activeUnitReviewRowId, (current) => applyConfirmedMarkerUnit(current, unitReviewSelection));
+    closeUnitReview();
   };
 
   const cloneSupplementsAsDraftOverrides = (periods: SupplementPeriod[]): SupplementPeriod[] =>
@@ -612,28 +646,8 @@ const ExtractionReviewTable = ({
           return row;
         }
         const next = updater(row);
-        const sourceValue = typeof next.rawValue === "number" ? next.rawValue : next.value;
-        const sourceUnit = next.rawUnit ?? next.unit;
-        const sourceReferenceMin = next.rawReferenceMin !== undefined ? next.rawReferenceMin : next.referenceMin;
-        const sourceReferenceMax = next.rawReferenceMax !== undefined ? next.rawReferenceMax : next.referenceMax;
-        const normalized = normalizeMarkerMeasurement({
-          canonicalMarker: next.canonicalMarker,
-          value: sourceValue,
-          unit: sourceUnit,
-          referenceMin: sourceReferenceMin,
-          referenceMax: sourceReferenceMax
-        });
         return enrichMarkerForReview({
-          ...next,
-          rawValue: sourceValue,
-          rawUnit: sourceUnit,
-          rawReferenceMin: sourceReferenceMin,
-          rawReferenceMax: sourceReferenceMax,
-          value: normalized.value,
-          unit: normalized.unit,
-          referenceMin: normalized.referenceMin,
-          referenceMax: normalized.referenceMax,
-          abnormal: deriveAbnormalFlag(normalized.value, normalized.referenceMin, normalized.referenceMax)
+          ...normalizeMarkerWithSourceFields(next)
         });
       })
     });
@@ -1141,6 +1155,8 @@ const ExtractionReviewTable = ({
                 const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
                 const reviewTitle = reviewTooltip(row);
                 const reviewTooltipId = `review-tooltip-${row.id}`;
+                const hasInteractiveUnitReview = row._unitReview?.isMissingUnit === true;
+                const isUnitReviewOpen = activeUnitReviewRowId === row.id;
 
                 return (
                   <tr key={row.id} className="bg-slate-900/35">
@@ -1299,25 +1315,50 @@ const ExtractionReviewTable = ({
                   </button>
                 </td>
                 <td className="align-top whitespace-nowrap px-3 py-2 text-right">
-                  <div className="group relative inline-flex">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
-                      aria-describedby={reviewTitle ? reviewTooltipId : undefined}
-                      tabIndex={reviewTitle ? 0 : -1}
+                  {hasInteractiveUnitReview ? (
+                    <button
+                      type="button"
+                      ref={(element) => {
+                        unitReviewAnchorRefs.current[row.id] = element;
+                      }}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition hover:border-cyan-400/60 hover:text-cyan-100 ${
+                        isUnitReviewOpen ? "border-cyan-400/60 text-cyan-100" : statusClassName(row)
+                      }`}
+                      onClick={() => {
+                        if (isUnitReviewOpen) {
+                          closeUnitReview();
+                          return;
+                        }
+                        openUnitReview(row);
+                      }}
+                      aria-haspopup="dialog"
+                      aria-expanded={isUnitReviewOpen}
+                      aria-label={tr("Ontbrekende unit controleren", "Review missing unit")}
                     >
                       {statusIcon(row)}
                       {statusLabel(row)}
-                    </span>
-                    {reviewTitle ? (
-                      <div
-                        id={reviewTooltipId}
-                        role="tooltip"
-                        className="review-tooltip pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[320px] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                    </button>
+                  ) : (
+                    <div className="group relative inline-flex">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClassName(row)}`}
+                        aria-describedby={reviewTitle ? reviewTooltipId : undefined}
+                        tabIndex={reviewTitle ? 0 : -1}
                       >
-                        {reviewTitle}
-                      </div>
-                    ) : null}
-                  </div>
+                        {statusIcon(row)}
+                        {statusLabel(row)}
+                      </span>
+                      {reviewTitle ? (
+                        <div
+                          id={reviewTooltipId}
+                          role="tooltip"
+                          className="review-tooltip pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[320px] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                        >
+                          {reviewTitle}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </td>
                   </tr>
                 );
@@ -1328,6 +1369,18 @@ const ExtractionReviewTable = ({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
+        {activeUnitReviewRow?._unitReview ? (
+          <MarkerUnitReviewPopover
+            anchorRef={{ current: unitReviewAnchorRefs.current[activeUnitReviewRow.id] }}
+            language={language}
+            open
+            unitReview={activeUnitReviewRow._unitReview}
+            selectedUnit={unitReviewSelection}
+            onSelectedUnitChange={setUnitReviewSelection}
+            onConfirm={confirmUnitReview}
+            onClose={closeUnitReview}
+          />
+        ) : null}
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"

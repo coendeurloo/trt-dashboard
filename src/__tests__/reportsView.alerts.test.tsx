@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
 import ReportsView from "../views/ReportsView";
@@ -49,6 +49,7 @@ const buildProps = (report: LabReport) => {
     onDeleteReport: vi.fn(),
     onDeleteReports: vi.fn(),
     onUpdateReportAnnotations: vi.fn(),
+    onUpdateReportMarkerUnit: vi.fn(),
     onSetBaseline: vi.fn(),
     onRenameMarker: vi.fn(),
     onOpenProtocolTab: vi.fn()
@@ -241,6 +242,62 @@ describe("ReportsView alert logic", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
     expect(onDeleteReports).toHaveBeenCalledWith([report.id]);
     confirmSpy.mockRestore();
+  });
+
+  it("opens missing-unit review and confirms the suggested unit for a stored report marker", () => {
+    const report = baseReport({
+      markers: [
+        {
+          id: "m-1",
+          marker: "Fasting Glucose",
+          canonicalMarker: "Glucose",
+          value: 4.6,
+          unit: "",
+          referenceMin: 4,
+          referenceMax: 6,
+          abnormal: "normal",
+          confidence: 1
+        }
+      ]
+    });
+    const onUpdateReportMarkerUnit = vi.fn();
+
+    render(<ReportsView {...{ ...buildProps(report), onUpdateReportMarkerUnit }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review missing unit" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Review unit" });
+    expect(dialog).toBeTruthy();
+    expect((within(dialog).getByRole("combobox") as HTMLSelectElement).value).toBe("mmol/L");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    expect(onUpdateReportMarkerUnit).toHaveBeenCalledWith(report.id, "m-1", "mmol/L");
+  });
+
+  it("keeps missing-unit review read-only in share mode", () => {
+    const report = baseReport({
+      markers: [
+        {
+          id: "m-1",
+          marker: "Fasting Glucose",
+          canonicalMarker: "Glucose",
+          value: 4.6,
+          unit: "",
+          referenceMin: 4,
+          referenceMax: 6,
+          abnormal: "normal",
+          confidence: 1
+        }
+      ]
+    });
+
+    render(<ReportsView {...{ ...buildProps(report), isShareMode: true }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+
+    expect(screen.queryByRole("button", { name: "Review missing unit" })).toBeNull();
   });
 });
 

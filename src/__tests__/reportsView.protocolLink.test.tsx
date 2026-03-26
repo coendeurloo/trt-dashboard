@@ -48,6 +48,7 @@ const renderView = (protocols: Protocol[]) => {
       onDeleteReport={vi.fn()}
       onDeleteReports={vi.fn()}
       onUpdateReportAnnotations={vi.fn()}
+      onUpdateReportMarkerUnit={vi.fn()}
       onSetBaseline={vi.fn()}
       onRenameMarker={vi.fn()}
       onOpenProtocolTab={onOpenProtocolTab}
@@ -125,6 +126,7 @@ describe("ReportsView protocol linking", () => {
         onDeleteReport={vi.fn()}
         onDeleteReports={vi.fn()}
         onUpdateReportAnnotations={onUpdateReportAnnotations}
+        onUpdateReportMarkerUnit={vi.fn()}
         onSetBaseline={vi.fn()}
         onRenameMarker={vi.fn()}
         onOpenProtocolTab={vi.fn()}

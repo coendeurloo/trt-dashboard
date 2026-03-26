@@ -3,11 +3,13 @@ import { MatchConfidence, MarkerMatchResult, matchMarker } from "./markerMatcher
 import { MarkerParseConfidence, ParsedMarker, scoreMarkerConfidence } from "./markerConfidence";
 import { MarkerCategory } from "../data/markerDatabase";
 import { canonicalizeMarker } from "../unitConversion";
+import { MarkerUnitReview, buildMarkerUnitReview } from "./unitReview";
 
 export type ReviewMarker = MarkerValue & {
   category?: MarkerCategory;
   _confidence?: MarkerParseConfidence;
   _matchResult?: MarkerMatchResult;
+  _unitReview?: MarkerUnitReview;
 };
 
 const confidenceRank: Record<MatchConfidence, number> = {
@@ -83,6 +85,7 @@ const toParsedMarker = (marker: MarkerValue): ParsedMarker => ({
 export const enrichMarkerForReview = (marker: MarkerValue): ReviewMarker => {
   const matchResult = resolveBestMatch(marker);
   const confidence = scoreMarkerConfidence(toParsedMarker(marker), matchResult);
+  const unitReview = buildMarkerUnitReview(marker, matchResult);
 
   const resolvedUnit = confidence.autoFix?.unit ?? marker.unit;
 
@@ -94,7 +97,8 @@ export const enrichMarkerForReview = (marker: MarkerValue): ReviewMarker => {
     rawUnit: marker.rawUnit ?? marker.unit,
     category: matchResult.canonical?.category ?? "Other",
     _confidence: confidence,
-    _matchResult: matchResult
+    _matchResult: matchResult,
+    _unitReview: unitReview
   };
 };
 

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
 import ProtocolEditor from "../components/ProtocolEditor";
+import MarkerUnitReviewPopover from "../components/MarkerUnitReviewPopover";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
@@ -48,9 +49,13 @@ interface MarkerReviewBadgeProps {
   icon: ReactNode;
   tooltip?: string;
   tooltipId: string;
+  buttonRef?: (element: HTMLButtonElement | null) => void;
+  onClick?: () => void;
+  expanded?: boolean;
+  ariaLabel?: string;
 }
 
-const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId }: MarkerReviewBadgeProps) => {
+const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId, buttonRef, onClick, expanded = false, ariaLabel }: MarkerReviewBadgeProps) => {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -117,11 +122,21 @@ const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId }: Marke
     <span className="inline-flex">
       <button
         type="button"
-        ref={triggerRef}
+        ref={(element) => {
+          triggerRef.current = element;
+          buttonRef?.(element);
+        }}
         className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${className}`}
         aria-describedby={tooltip ? tooltipId : undefined}
-        aria-expanded={tooltip ? isOpen : undefined}
-        tabIndex={tooltip ? 0 : -1}
+        aria-expanded={onClick ? expanded : tooltip ? isOpen : undefined}
+        aria-haspopup={onClick ? "dialog" : undefined}
+        aria-label={ariaLabel}
+        tabIndex={tooltip || onClick ? 0 : -1}
+        onClick={() => {
+          if (onClick) {
+            onClick();
+          }
+        }}
         onMouseEnter={() => {
           if (tooltip) {
             setIsOpen(true);
@@ -155,6 +170,7 @@ interface ReportsViewProps {
   onDeleteReport: (reportId: string) => void;
   onDeleteReports: (reportIds: string[]) => void;
   onUpdateReportAnnotations: (reportId: string, annotations: ReportAnnotations) => void;
+  onUpdateReportMarkerUnit: (reportId: string, markerId: string, selectedUnit: string) => void;
   onSetBaseline: (reportId: string) => void;
   onRenameMarker: (sourceCanonical: string) => void;
   onOpenProtocolTab: () => void;
@@ -173,6 +189,7 @@ const ReportsView = ({
   onDeleteReport,
   onDeleteReports,
   onUpdateReportAnnotations,
+  onUpdateReportMarkerUnit,
   onSetBaseline,
   onRenameMarker,
   onOpenProtocolTab,
@@ -194,6 +211,9 @@ const ReportsView = ({
   const [protocolVersionInitialDraft, setProtocolVersionInitialDraft] = useState<ProtocolDraft>(blankProtocolDraft());
   const [protocolVersionLinkedInterventionId, setProtocolVersionLinkedInterventionId] = useState<string | null>(null);
   const [protocolVersionFeedback, setProtocolVersionFeedback] = useState("");
+  const [activeUnitReview, setActiveUnitReview] = useState<{ reportId: string; markerId: string } | null>(null);
+  const [unitReviewSelection, setUnitReviewSelection] = useState("");
+  const unitReviewAnchorRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [supplementNameInput, setSupplementNameInput] = useState("");
   const [supplementDoseInput, setSupplementDoseInput] = useState("");
   const [supplementFrequencyInput, setSupplementFrequencyInput] = useState("daily");
@@ -319,7 +339,11 @@ const ReportsView = ({
       setProtocolVersionLinkedInterventionId(null);
       setProtocolVersionFeedback("");
     }
-  }, [reports, editingReportId, protocolVersionEditorReportId]);
+    if (activeUnitReview && !ids.has(activeUnitReview.reportId)) {
+      setActiveUnitReview(null);
+      setUnitReviewSelection("");
+    }
+  }, [activeUnitReview, editingReportId, protocolVersionEditorReportId, reports]);
 
   useEffect(() => {
     if (!editingReportId) {
@@ -344,6 +368,25 @@ const ReportsView = ({
     }
     onFocusedReportHandled?.();
   }, [focusedReportId, reports, onFocusedReportHandled]);
+
+  const activeUnitReviewMarker = useMemo(() => {
+    if (!activeUnitReview) {
+      return null;
+    }
+    const report = reports.find((entry) => entry.id === activeUnitReview.reportId);
+    const marker = report?.markers.find((entry) => entry.id === activeUnitReview.markerId);
+    return marker ? enrichMarkerForReview(marker) : null;
+  }, [activeUnitReview, reports]);
+
+  useEffect(() => {
+    if (!activeUnitReview) {
+      return;
+    }
+    if (!activeUnitReviewMarker?._unitReview?.isMissingUnit) {
+      setActiveUnitReview(null);
+      setUnitReviewSelection("");
+    }
+  }, [activeUnitReview, activeUnitReviewMarker]);
 
   const sortedReportsForList = useMemo(() => {
     const withIndex = reports.map((report, index) => ({ report, index }));
@@ -434,6 +477,24 @@ const ReportsView = ({
     setSupplementNameInput("");
     setSupplementDoseInput("");
     setSupplementFrequencyInput("daily");
+  };
+
+  const closeUnitReview = () => {
+    setActiveUnitReview(null);
+    setUnitReviewSelection("");
+  };
+
+  const openUnitReview = (reportId: string, marker: ReviewMarker) => {
+    setActiveUnitReview({ reportId, markerId: marker.id });
+    setUnitReviewSelection(marker._unitReview?.suggestion?.unit ?? "");
+  };
+
+  const confirmUnitReview = () => {
+    if (!activeUnitReview || !unitReviewSelection.trim()) {
+      return;
+    }
+    onUpdateReportMarkerUnit(activeUnitReview.reportId, activeUnitReview.markerId, unitReviewSelection);
+    closeUnitReview();
   };
 
   const hasUnsavedProtocolVersionChanges =
@@ -1558,6 +1619,10 @@ const ReportsView = ({
                                   : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, settings.unitSystem).value;
                               const issuesTitle = markerReviewTooltip(marker);
                               const issuesTooltipId = `report-marker-review-tooltip-${report.id}-${group.category}-${marker.id}`;
+                              const unitReviewKey = `${report.id}:${marker.id}`;
+                              const hasInteractiveUnitReview = !isShareMode && marker._unitReview?.isMissingUnit === true;
+                              const isUnitReviewOpen =
+                                activeUnitReview?.reportId === report.id && activeUnitReview?.markerId === marker.id;
 
                               return (
                                 <tr key={marker.id} className="bg-slate-900/35 text-slate-200">
@@ -1598,8 +1663,24 @@ const ReportsView = ({
                                       className={markerReviewClassName(marker)}
                                       icon={markerReviewIcon(marker)}
                                       label={markerReviewLabel(marker)}
-                                      tooltip={issuesTitle}
+                                      tooltip={hasInteractiveUnitReview ? undefined : issuesTitle}
                                       tooltipId={issuesTooltipId}
+                                      buttonRef={(element) => {
+                                        unitReviewAnchorRefs.current[unitReviewKey] = element;
+                                      }}
+                                      onClick={
+                                        hasInteractiveUnitReview
+                                          ? () => {
+                                              if (isUnitReviewOpen) {
+                                                closeUnitReview();
+                                                return;
+                                              }
+                                              openUnitReview(report.id, marker);
+                                            }
+                                          : undefined
+                                      }
+                                      expanded={isUnitReviewOpen}
+                                      ariaLabel={hasInteractiveUnitReview ? tr("Ontbrekende unit controleren", "Review missing unit") : undefined}
                                     />
                                   </td>
                                   <td className="px-3 py-2 text-right">
@@ -1694,6 +1775,22 @@ const ReportsView = ({
             document.body
           )
         : null}
+
+      {activeUnitReview && activeUnitReviewMarker?._unitReview ? (
+        <MarkerUnitReviewPopover
+          anchorRef={{
+            current:
+              unitReviewAnchorRefs.current[`${activeUnitReview.reportId}:${activeUnitReview.markerId}`]
+          }}
+          language={language}
+          open
+          unitReview={activeUnitReviewMarker._unitReview}
+          selectedUnit={unitReviewSelection}
+          onSelectedUnitChange={setUnitReviewSelection}
+          onConfirm={confirmUnitReview}
+          onClose={closeUnitReview}
+        />
+      ) : null}
     </section>
   );
 };

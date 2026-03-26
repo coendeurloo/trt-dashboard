@@ -73,20 +73,20 @@ export const UNIT_NORMALIZATION: Record<string, string> = {
   fmol: "fmol"
 };
 
-const normalizeUnitUnicode = (value: string): string =>
+export const normalizeUnitUnicode = (value: string): string =>
   value
     .normalize("NFKC")
     .replace(/[μµ]/g, "u")
     .replace(/[⁄∕]/g, "/")
     .replace(/[×*]/g, "x");
 
-const unitCompareToken = (value: string): string =>
+export const unitCompareToken = (value: string): string =>
   normalizeUnitUnicode(value)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "");
 
-const unitSemanticToken = (value: string): string => {
+export const unitSemanticToken = (value: string): string => {
   const token = unitCompareToken(value);
 
   if (
@@ -168,7 +168,7 @@ const normalizeParsedUnit = (unit: string | null | undefined): { normalized: str
   };
 };
 
-const areUnitsEquivalent = (left: string, right: string): boolean => unitSemanticToken(left) === unitSemanticToken(right);
+export const areUnitsEquivalent = (left: string, right: string): boolean => unitSemanticToken(left) === unitSemanticToken(right);
 
 const hasDefaultRange = (matchResult: MarkerMatchResult): boolean => {
   const marker = matchResult.canonical;

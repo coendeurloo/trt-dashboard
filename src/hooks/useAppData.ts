@@ -24,6 +24,7 @@ import { normalizeMarkerAliasOverrides, setMarkerAliasOverrides } from "../marke
 import { canMergeMarkersBySpecimen } from "../markerSpecimen";
 import { canonicalizeMarker, normalizeMarkerMeasurement } from "../unitConversion";
 import { createId, deriveAbnormalFlag, sortReportsChronological } from "../utils";
+import { applyConfirmedMarkerUnit } from "../utils/unitReview";
 import { findBaselineOverlapMarkers, normalizeBaselineFlagsByMarkerOverlap } from "../baselineUtils";
 
 export interface MarkerMergeSuggestion {
@@ -357,6 +358,30 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
                   }
                 };
               })()
+            : report
+        )
+      }));
+    },
+    [isShareMode]
+  );
+
+  const updateReportMarkerUnit = useCallback(
+    (reportId: string, markerId: string, selectedUnit: string) => {
+      const trimmedUnit = selectedUnit.trim();
+      if (isShareMode || !trimmedUnit) {
+        return;
+      }
+
+      setAppData((prev) => ({
+        ...prev,
+        reports: prev.reports.map((report) =>
+          report.id === reportId
+            ? {
+                ...report,
+                markers: report.markers.map((marker) =>
+                  marker.id === markerId ? applyConfirmedMarkerUnit(marker, trimmedUnit) : marker
+                )
+              }
             : report
         )
       }));
@@ -861,6 +886,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     deleteReport,
     deleteReports,
     updateReportAnnotations,
+    updateReportMarkerUnit,
     addProtocol,
     updateProtocol,
     deleteProtocol,
