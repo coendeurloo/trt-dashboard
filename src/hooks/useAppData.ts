@@ -564,13 +564,13 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
   );
 
   const remapMarker = useCallback(
-    (sourceCanonical: string, targetLabel: string) => {
+    (sourceCanonical: string, targetLabel: string, forceSpecimenOverride = false) => {
       const cleanLabel = targetLabel.trim();
       if (!cleanLabel || isShareMode) {
         return;
       }
       const targetCanonical = canonicalizeMarker(cleanLabel);
-      if (!canMergeMarkersBySpecimen(sourceCanonical, targetCanonical)) {
+      if (!forceSpecimenOverride && !canMergeMarkersBySpecimen(sourceCanonical, targetCanonical)) {
         return;
       }
       setAppData((prev) => ({

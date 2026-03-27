@@ -96,9 +96,9 @@ describe("SupplementsView UX feedback", () => {
     vi.setSystemTime(new Date("2026-03-15T09:00:00.000Z"));
     render(<SupplementsView {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete from list" }));
-    expect(screen.getByText("Delete from active list")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(screen.getByText("Stop supplement")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stop on selected date" }));
 
     expect(props.onStopSupplement).toHaveBeenCalledWith("supp-1", "2026-03-15");
     expect(props.onDeleteSupplementPeriod).not.toHaveBeenCalled();

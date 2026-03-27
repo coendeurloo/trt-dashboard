@@ -104,7 +104,7 @@ const buildProps = (seriesByMarker: Record<string, MarkerSeriesPoint[]>) => {
 };
 
 describe("AlertsView order", () => {
-  it("shows predictive first, then actionable alerts, then positive signals", () => {
+  it("shows actionable first, then predictive trends, then positive signals", () => {
     const props = buildProps({
       Hematocrit: [
         makeSeriesPoint({ id: "h1", date: "2025-12-01", value: 49, unit: "%" }),
@@ -115,19 +115,17 @@ describe("AlertsView order", () => {
 
     const { container } = render(<AlertsView {...props} />);
 
-    const predictive = screen.getByRole("heading", { name: "Predictive" });
-    const actionable = screen.getByRole("heading", { name: "Actionable alerts" });
+    const actionable = screen.getByRole("heading", { name: "What to look at first" });
+    const predictive = screen.getByRole("heading", { name: "Predictive trends" });
     const positive = screen.getByRole("heading", { name: "Positive signals" });
 
-    expect(Boolean(predictive.compareDocumentPosition(actionable) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    expect(Boolean(actionable.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(actionable.compareDocumentPosition(predictive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(Boolean(predictive.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(actionable.compareDocumentPosition(positive) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(container.querySelector(".alerts-panel-predictive")).toBeTruthy();
     expect(container.querySelector(".alerts-panel-actionable")).toBeTruthy();
     expect(container.querySelector(".alerts-panel-positive")).toBeTruthy();
-    expect(container.querySelector(".alerts-card-predictive")).toBeTruthy();
-    expect(container.querySelector(".alerts-card-actionable")).toBeTruthy();
-    expect(container.querySelector(".alerts-card-positive")).toBeTruthy();
+    expect(screen.getByText("Hematocrit")).toBeTruthy();
   });
 
   it("hides predictive section when no predictive trends can be computed", () => {
@@ -137,7 +135,7 @@ describe("AlertsView order", () => {
 
     render(<AlertsView {...props} />);
 
-    expect(screen.queryByRole("heading", { name: "Predictive" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Predictive trends" })).toBeNull();
   });
 
   it("shows all-clear empty state when there are no alerts in the current filter", () => {

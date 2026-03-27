@@ -177,7 +177,7 @@ describe("AnalysisView", () => {
     expect(input.value).toMatch(/hematocrit/i);
   });
 
-  it("shows analyst memory status after enough analyses", () => {
+  it("renders normally when analyst memory data is present", () => {
     render(
       <AnalysisView
         {...baseProps}
@@ -200,8 +200,8 @@ describe("AnalysisView", () => {
       />
     );
 
-    expect(screen.getByText(/Analyst memory active/i)).toBeTruthy();
-    expect(screen.getByText(/4 analyses/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /ask ai/i })).toBeTruthy();
+    expect(screen.queryByText(/Analyst memory active/i)).toBeNull();
   });
 
   it("scrolls to the output panel when streaming output appears", () => {

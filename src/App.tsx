@@ -66,6 +66,7 @@ import {
   restoreSupplementsPatch
 } from "./deleteUndo";
 import { normalizeMarkerLookupKey } from "./markerNormalization";
+import { canMergeMarkersBySpecimen } from "./markerSpecimen";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
@@ -801,8 +802,12 @@ const App = () => {
     });
   };
 
-  const remapMarkerAcrossReports = (sourceCanonical: string, targetLabel: string) => {
-    remapMarker(sourceCanonical, targetLabel);
+  const remapMarkerAcrossReports = (
+    sourceCanonical: string,
+    targetLabel: string,
+    forceSpecimenOverride = false
+  ) => {
+    remapMarker(sourceCanonical, targetLabel, forceSpecimenOverride);
     setMarkerSuggestions((current) =>
       current.filter(
         (item) => item.sourceCanonical !== sourceCanonical && item.targetCanonical !== sourceCanonical
@@ -3390,7 +3395,28 @@ const App = () => {
                     if (!renameDialog.draftName.trim()) {
                       return;
                     }
-                    remapMarkerAcrossReports(renameDialog.sourceCanonical, renameDialog.draftName);
+                    const targetCanonical = canonicalizeMarker(renameDialog.draftName);
+                    const needsSpecimenOverride = !canMergeMarkersBySpecimen(
+                      renameDialog.sourceCanonical,
+                      targetCanonical
+                    );
+                    if (
+                      needsSpecimenOverride &&
+                      typeof window !== "undefined" &&
+                      !window.confirm(
+                        tr(
+                          "Deze marker lijkt van een ander specimen (bijv. urine vs bloed). Doorgaan met handmatige override?",
+                          "This marker appears to use a different specimen (for example urine vs blood). Continue with manual override?"
+                        )
+                      )
+                    ) {
+                      return;
+                    }
+                    remapMarkerAcrossReports(
+                      renameDialog.sourceCanonical,
+                      renameDialog.draftName,
+                      needsSpecimenOverride
+                    );
                     setRenameDialog(null);
                   }}
                 >
