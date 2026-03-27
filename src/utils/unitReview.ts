@@ -1123,43 +1123,83 @@ const inferFromSignal = (
     return null;
   }
 
-  const hasReference = signal.referenceMin !== null || signal.referenceMax !== null;
-  const matches = profile.candidates
+  const hasReferenceMin = signal.referenceMin !== null;
+  const hasReferenceMax = signal.referenceMax !== null;
+  const hasAnyReference = hasReferenceMin || hasReferenceMax;
+  const hasCompleteReference = hasReferenceMin && hasReferenceMax;
+  const valueMatches = profile.candidates
     .map((candidate) => {
       const valueMatches = isWithinBand(signal.value as number, candidate.valueRange);
       if (!valueMatches) {
         return null;
       }
 
-      if (signal.referenceMin !== null && !isWithinBand(signal.referenceMin, candidate.referenceMinRange)) {
-        return null;
-      }
-      if (signal.referenceMax !== null && !isWithinBand(signal.referenceMax, candidate.referenceMaxRange)) {
-        return null;
-      }
-      if (!hasReference && !profile.allowValueOnly) {
-        return null;
-      }
-
+      const referenceMinMatches = !hasReferenceMin || isWithinBand(signal.referenceMin as number, candidate.referenceMinRange);
+      const referenceMaxMatches = !hasReferenceMax || isWithinBand(signal.referenceMax as number, candidate.referenceMaxRange);
       return {
         unit: candidate.unit,
         matchedBy: {
           value: true,
-          referenceMin: signal.referenceMin !== null,
-          referenceMax: signal.referenceMax !== null
-        }
+          referenceMin: hasReferenceMin && referenceMinMatches,
+          referenceMax: hasReferenceMax && referenceMaxMatches
+        },
+        strictReferenceMatch: referenceMinMatches && referenceMaxMatches
       };
     })
-    .filter((candidate): candidate is { unit: string; matchedBy: UnitReviewSuggestion["matchedBy"] } => candidate !== null);
+    .filter(
+      (
+        candidate
+      ): candidate is {
+        unit: string;
+        matchedBy: UnitReviewSuggestion["matchedBy"];
+        strictReferenceMatch: boolean;
+      } => candidate !== null
+    );
 
-  if (matches.length !== 1) {
+  const strictMatches = valueMatches.filter((candidate) => candidate.strictReferenceMatch);
+  if (strictMatches.length === 1) {
+    return {
+      unit: strictMatches[0].unit,
+      confidence: "high",
+      matchedBy: strictMatches[0].matchedBy
+    };
+  }
+  if (strictMatches.length > 1) {
+    return null;
+  }
+
+  if (hasAnyReference && !hasCompleteReference && profile.allowValueOnly && valueMatches.length === 1) {
+    return {
+      unit: valueMatches[0].unit,
+      confidence: "high",
+      matchedBy: {
+        value: true,
+        referenceMin: false,
+        referenceMax: false
+      }
+    };
+  }
+
+  if (!hasAnyReference && !profile.allowValueOnly) {
+    return null;
+  }
+
+  if (hasAnyReference) {
+    return null;
+  }
+
+  if (valueMatches.length !== 1) {
     return null;
   }
 
   return {
-    unit: matches[0].unit,
+    unit: valueMatches[0].unit,
     confidence: "high",
-    matchedBy: matches[0].matchedBy
+    matchedBy: {
+      value: true,
+      referenceMin: false,
+      referenceMax: false
+    }
   };
 };
 

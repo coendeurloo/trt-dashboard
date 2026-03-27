@@ -201,6 +201,23 @@ describe("unitReview", () => {
     expect(review.options[0]).toBe("g/dL");
   });
 
+  it("still suggests from value when only one stale reference bound conflicts", () => {
+    const marker = baseMarker({
+      marker: "Albumin",
+      canonicalMarker: "Albumin",
+      value: 3,
+      unit: "mg/L",
+      referenceMin: 35,
+      referenceMax: null
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.issueKind).toBe("inferred-mismatch");
+    expect(review.suggestion?.unit).toBe("g/dL");
+    expect(review.options[0]).toBe("g/dL");
+  });
+
   it("does not suggest a replacement when the current unit already matches", () => {
     const marker = baseMarker({
       marker: "Albumin",
