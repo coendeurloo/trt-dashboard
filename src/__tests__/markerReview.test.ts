@@ -72,4 +72,28 @@ describe("markerReview", () => {
     expect(reviewed._confidence?.unit).toBe("high");
     expect(reviewed._confidence?.issues.some((issue) => /not recognized/i.test(issue))).toBe(false);
   });
+
+  it("prefers the edited display marker over stale canonical marker labels", () => {
+    const reviewed = enrichMarkerForReview({
+      id: "m-5",
+      marker: "Albumin",
+      rawMarker: "Urine Albumin",
+      canonicalMarker: "Microalbumin Urine",
+      value: 3,
+      rawValue: 45.2,
+      unit: "mg/L",
+      rawUnit: "mg/L",
+      referenceMin: null,
+      referenceMax: null,
+      rawReferenceMin: 35,
+      rawReferenceMax: 52,
+      abnormal: "normal",
+      confidence: 0.8
+    });
+
+    expect(reviewed._matchResult?.canonical?.id).toBe("albumin");
+    expect(reviewed._unitReview?.issueKind).toBe("inferred-mismatch");
+    expect(reviewed._unitReview?.suggestion?.unit).toBe("g/dL");
+    expect(reviewed._unitReview?.options[0]).toBe("g/dL");
+  });
 });

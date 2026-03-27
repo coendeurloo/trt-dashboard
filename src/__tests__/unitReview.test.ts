@@ -181,6 +181,26 @@ describe("unitReview", () => {
     expect(review.options[0]).toBe("g/dL");
   });
 
+  it("prefers the visible normalized value over stale raw values for high-confidence suggestions", () => {
+    const marker = baseMarker({
+      marker: "Albumin",
+      canonicalMarker: "Albumin",
+      value: 3,
+      rawValue: 45,
+      unit: "mg/L",
+      referenceMin: null,
+      referenceMax: null,
+      rawReferenceMin: 35,
+      rawReferenceMax: 52
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.issueKind).toBe("inferred-mismatch");
+    expect(review.suggestion?.unit).toBe("g/dL");
+    expect(review.options[0]).toBe("g/dL");
+  });
+
   it("does not suggest a replacement when the current unit already matches", () => {
     const marker = baseMarker({
       marker: "Albumin",

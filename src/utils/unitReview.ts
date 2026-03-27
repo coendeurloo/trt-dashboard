@@ -22,6 +22,12 @@ interface UnitInferenceProfile {
   candidates: UnitInferenceCandidate[];
 }
 
+interface InferenceSignal {
+  value: number | null;
+  referenceMin: number | null;
+  referenceMax: number | null;
+}
+
 export interface UnitReviewSuggestion {
   unit: string;
   confidence: "high";
@@ -1068,10 +1074,147 @@ const pushUniqueUnit = (units: string[], nextUnit: string): void => {
   units.push(trimmed);
 };
 
-const resolveUnitOptions = (profile: UnitInferenceProfile | undefined, marker: CanonicalMarker | null): string[] => {
+const buildInferenceSignal = (marker: MarkerValue, preferRaw: boolean): InferenceSignal => {
+  const preferredValue = preferRaw ? marker.rawValue : marker.value;
+  const fallbackValue = preferRaw ? marker.value : marker.rawValue;
+  const preferredReferenceMin = preferRaw
+    ? marker.rawReferenceMin !== undefined
+      ? marker.rawReferenceMin
+      : marker.referenceMin
+    : marker.referenceMin;
+  const fallbackReferenceMin = preferRaw ? marker.referenceMin : marker.referenceMin;
+  const preferredReferenceMax = preferRaw
+    ? marker.rawReferenceMax !== undefined
+      ? marker.rawReferenceMax
+      : marker.referenceMax
+    : marker.referenceMax;
+  const fallbackReferenceMax = preferRaw ? marker.referenceMax : marker.referenceMax;
+
+  return {
+    value: toNullableNumber(
+      typeof preferredValue === "number"
+        ? preferredValue
+        : typeof fallbackValue === "number"
+          ? fallbackValue
+          : null
+    ),
+    referenceMin: toNullableNumber(
+      typeof preferredReferenceMin === "number"
+        ? preferredReferenceMin
+        : typeof fallbackReferenceMin === "number"
+          ? fallbackReferenceMin
+          : null
+    ),
+    referenceMax: toNullableNumber(
+      typeof preferredReferenceMax === "number"
+        ? preferredReferenceMax
+        : typeof fallbackReferenceMax === "number"
+          ? fallbackReferenceMax
+          : null
+    )
+  };
+};
+
+const inferFromSignal = (
+  profile: UnitInferenceProfile,
+  signal: InferenceSignal
+): UnitReviewSuggestion | null => {
+  if (signal.value === null) {
+    return null;
+  }
+
+  const hasReference = signal.referenceMin !== null || signal.referenceMax !== null;
+  const matches = profile.candidates
+    .map((candidate) => {
+      const valueMatches = isWithinBand(signal.value as number, candidate.valueRange);
+      if (!valueMatches) {
+        return null;
+      }
+
+      if (signal.referenceMin !== null && !isWithinBand(signal.referenceMin, candidate.referenceMinRange)) {
+        return null;
+      }
+      if (signal.referenceMax !== null && !isWithinBand(signal.referenceMax, candidate.referenceMaxRange)) {
+        return null;
+      }
+      if (!hasReference && !profile.allowValueOnly) {
+        return null;
+      }
+
+      return {
+        unit: candidate.unit,
+        matchedBy: {
+          value: true,
+          referenceMin: signal.referenceMin !== null,
+          referenceMax: signal.referenceMax !== null
+        }
+      };
+    })
+    .filter((candidate): candidate is { unit: string; matchedBy: UnitReviewSuggestion["matchedBy"] } => candidate !== null);
+
+  if (matches.length !== 1) {
+    return null;
+  }
+
+  return {
+    unit: matches[0].unit,
+    confidence: "high",
+    matchedBy: matches[0].matchedBy
+  };
+};
+
+const scoreCandidateBySignal = (candidate: UnitInferenceCandidate, signal: InferenceSignal): number => {
+  if (signal.value === null) {
+    return 0;
+  }
+
+  let score = 0;
+  if (isWithinBand(signal.value, candidate.valueRange)) {
+    score += 4;
+  } else {
+    const min = candidate.valueRange.min;
+    const max = candidate.valueRange.max;
+    if (min !== undefined && signal.value < min) {
+      score -= Math.min(4, (min - signal.value) / Math.max(Math.abs(min), 1));
+    } else if (max !== undefined && signal.value > max) {
+      score -= Math.min(4, (signal.value - max) / Math.max(Math.abs(max), 1));
+    } else {
+      score -= 1;
+    }
+  }
+
+  if (signal.referenceMin !== null) {
+    score += isWithinBand(signal.referenceMin, candidate.referenceMinRange) ? 2 : -2;
+  }
+  if (signal.referenceMax !== null) {
+    score += isWithinBand(signal.referenceMax, candidate.referenceMaxRange) ? 2 : -2;
+  }
+
+  return score;
+};
+
+const rankProfileUnitsBySignal = (profile: UnitInferenceProfile, marker: MarkerValue): string[] => {
+  const signal = buildInferenceSignal(marker, false);
+  return profile.candidates
+    .map((candidate, index) => ({
+      unit: candidate.unit,
+      index,
+      score: scoreCandidateBySignal(candidate, signal)
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((entry) => entry.unit);
+};
+
+const resolveUnitOptions = (
+  profile: UnitInferenceProfile | undefined,
+  marker: CanonicalMarker | null,
+  markerValue: MarkerValue
+): string[] => {
   const options: string[] = [];
 
-  profile?.candidates.forEach((candidate) => pushUniqueUnit(options, candidate.unit));
+  if (profile) {
+    rankProfileUnitsBySignal(profile, markerValue).forEach((unit) => pushUniqueUnit(options, unit));
+  }
   if (marker) {
     pushUniqueUnit(options, marker.preferredUnit);
     marker.alternateUnits.forEach((unit) => pushUniqueUnit(options, unit));
@@ -1092,52 +1235,21 @@ const inferUnitFromSignals = (
     return null;
   }
 
-  const value = toNullableNumber(typeof marker.rawValue === "number" ? marker.rawValue : marker.value);
-  if (value === null) {
-    return null;
+  const normalizedSignal = buildInferenceSignal(marker, false);
+  const normalizedSuggestion = inferFromSignal(profile, normalizedSignal);
+  if (normalizedSuggestion) {
+    return normalizedSuggestion;
   }
 
-  const referenceMin = toNullableNumber(marker.rawReferenceMin !== undefined ? marker.rawReferenceMin ?? null : marker.referenceMin);
-  const referenceMax = toNullableNumber(marker.rawReferenceMax !== undefined ? marker.rawReferenceMax ?? null : marker.referenceMax);
-  const hasReference = referenceMin !== null || referenceMax !== null;
-
-  const matches = profile.candidates
-    .map((candidate) => {
-      const valueMatches = isWithinBand(value, candidate.valueRange);
-      if (!valueMatches) {
-        return null;
-      }
-
-      if (referenceMin !== null && !isWithinBand(referenceMin, candidate.referenceMinRange)) {
-        return null;
-      }
-      if (referenceMax !== null && !isWithinBand(referenceMax, candidate.referenceMaxRange)) {
-        return null;
-      }
-      if (!hasReference && !profile.allowValueOnly) {
-        return null;
-      }
-
-      return {
-        unit: candidate.unit,
-        matchedBy: {
-          value: true,
-          referenceMin: referenceMin !== null,
-          referenceMax: referenceMax !== null
-        }
-      };
-    })
-    .filter((candidate): candidate is { unit: string; matchedBy: UnitReviewSuggestion["matchedBy"] } => candidate !== null);
-
-  if (matches.length !== 1) {
+  const rawSignal = buildInferenceSignal(marker, true);
+  const hasRawSignalDelta =
+    normalizedSignal.value !== rawSignal.value ||
+    normalizedSignal.referenceMin !== rawSignal.referenceMin ||
+    normalizedSignal.referenceMax !== rawSignal.referenceMax;
+  if (!hasRawSignalDelta) {
     return null;
   }
-
-  return {
-    unit: matches[0].unit,
-    confidence: "high",
-    matchedBy: matches[0].matchedBy
-  };
+  return inferFromSignal(profile, rawSignal);
 };
 
 export const buildMarkerUnitReview = (
@@ -1166,7 +1278,7 @@ export const buildMarkerUnitReview = (
         : "none";
   const hasUnitIssue = issueKind !== "none";
   const suggestion = hasUnitIssue ? inferredSuggestion : null;
-  const baseOptions = resolveUnitOptions(profile, canonicalMarker);
+  const baseOptions = resolveUnitOptions(profile, canonicalMarker, marker);
   const options =
     suggestion === null
       ? baseOptions

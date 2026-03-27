@@ -32,6 +32,8 @@ const resolveBestMatch = (marker: MarkerValue): MarkerMatchResult => {
   const displayName = (marker.marker ?? "").trim();
   const rawName = (marker.rawMarker ?? "").trim();
   const currentCanonical = (marker.canonicalMarker ?? "").trim();
+  const likelyUserEditedLabel =
+    displayName.length > 0 && rawName.length > 0 && displayName.toLowerCase() !== rawName.toLowerCase();
 
   const base = matchMarker(currentCanonical || displayName || rawName);
   let best = base;
@@ -47,7 +49,16 @@ const resolveBestMatch = (marker: MarkerValue): MarkerMatchResult => {
   };
 
   if (displayName && displayName !== currentCanonical) {
-    compareAndTake(matchMarker(displayName));
+    const displayHit = matchMarker(displayName);
+    if (
+      likelyUserEditedLabel &&
+      confidenceRank[displayHit.confidence] === confidenceRank[best.confidence] &&
+      displayHit.score >= best.score
+    ) {
+      best = displayHit;
+    } else {
+      compareAndTake(displayHit);
+    }
   }
 
   if (rawName && rawName !== displayName && rawName !== currentCanonical) {
