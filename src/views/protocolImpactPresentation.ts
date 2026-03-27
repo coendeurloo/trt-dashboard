@@ -291,6 +291,18 @@ export const getEventSelectorLabel = (
   tr: (nl: string, en: string) => string,
   formatDate: (value: string) => string
 ): string => {
+  const compactCompoundLabel = (values: string[]): string => {
+    const cleaned = values.map((value) => value.trim()).filter(Boolean);
+    if (cleaned.length === 0) {
+      return "";
+    }
+    if (cleaned.length === 1) {
+      return cleaned[0] ?? "";
+    }
+    return `${cleaned[0]} +${cleaned.length - 1}`;
+  };
+
+  const compoundLabel = compactCompoundLabel(event.toCompounds) || compactCompoundLabel(event.fromCompounds);
   const dateLabel = formatDate(event.changeDate);
   const hasDose = event.fromDose !== event.toDose;
   const hasFrequency = event.fromFrequency !== event.toFrequency;
@@ -298,15 +310,27 @@ export const getEventSelectorLabel = (
   if (hasDose) {
     const fromLabel = event.fromDose === null ? "?" : `${formatAxisTick(event.fromDose)} mg/wk`;
     const toLabel = event.toDose === null ? "?" : `${formatAxisTick(event.toDose)} mg/wk`;
-    return `${dateLabel} · ${fromLabel} -> ${toLabel}`;
+    return compoundLabel
+      ? `${dateLabel} · ${fromLabel} -> ${toLabel} · ${compoundLabel}`
+      : `${dateLabel} · ${fromLabel} -> ${toLabel}`;
   }
   if (hasFrequency) {
     const fromLabel = event.fromFrequency === null ? "?" : `${formatAxisTick(event.fromFrequency)}/wk`;
     const toLabel = event.toFrequency === null ? "?" : `${formatAxisTick(event.toFrequency)}/wk`;
-    return `${dateLabel} · ${fromLabel} -> ${toLabel}`;
+    return compoundLabel
+      ? `${dateLabel} · ${fromLabel} -> ${toLabel} · ${compoundLabel}`
+      : `${dateLabel} · ${fromLabel} -> ${toLabel}`;
   }
   if (event.eventType === "compound") {
+    const fromCompound = compactCompoundLabel(event.fromCompounds);
+    const toCompound = compactCompoundLabel(event.toCompounds);
+    if (fromCompound || toCompound) {
+      return `${dateLabel} · ${fromCompound || "?"} -> ${toCompound || "?"}`;
+    }
     return `${dateLabel} · ${tr("Compoundwijziging", "Compound update")}`;
+  }
+  if (compoundLabel) {
+    return `${dateLabel} · ${tr("Protocolwijziging", "Protocol update")} · ${compoundLabel}`;
   }
   return `${dateLabel} · ${tr("Protocolwijziging", "Protocol update")}`;
 };

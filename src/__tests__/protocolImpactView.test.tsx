@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { DEFAULT_SETTINGS } from "../constants";
@@ -142,50 +142,57 @@ describe("ProtocolImpactView", () => {
     language: "en" as const
   };
 
-  it("renders page title, subtitle and compact selector", () => {
+  it("renders title, subtitle and selector", () => {
     render(<ProtocolImpactView {...baseProps} />);
     expect(screen.getByText("Protocol Impact")).toBeTruthy();
     expect(screen.getByText(/See what changed in your labs after each protocol update./i)).toBeTruthy();
     expect(screen.getByLabelText("Protocol change")).toBeTruthy();
   });
 
-  it("shows one selected protocol change at a time", () => {
+  it("shows the outcome hero as the primary insight", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText(/Date: 17 Jul 2024/i)).toBeTruthy();
-    expect(screen.queryByText(/Date: 01 Oct 2024/i)).toBeNull();
+    expect(screen.getByText("What changed after this update")).toBeTruthy();
+    expect(screen.getAllByText(/Testosterone/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/↑ 20%/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^Outcome$/i)).toBeNull();
+    expect(screen.queryByText(/Largest shifts:/i)).toBeNull();
   });
 
-  it("updates to a different event when selector changes", () => {
+  it("updates visible change details when a different event is selected", () => {
     render(<ProtocolImpactView {...baseProps} />);
+    const changesSection = screen.getByTestId("protocol-impact-protocol-changes");
+    expect(within(changesSection).getByText(/120 mg\/week -> 115 mg\/week/i)).toBeTruthy();
+
     fireEvent.change(screen.getByLabelText("Protocol change"), { target: { value: "event-2" } });
-    expect(screen.getByText(/Date: 01 Oct 2024/i)).toBeTruthy();
+    expect(within(changesSection).getByText(/115 mg\/week -> 105 mg\/week/i)).toBeTruthy();
     expect(screen.getByText("Limited data")).toBeTruthy();
   });
 
-  it("renders change summary with added, removed and kept compounds", () => {
+  it("shows three simplified marker cards for the same top three changes", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Added")).toBeTruthy();
-    expect(screen.getByText("Removed")).toBeTruthy();
-    expect(screen.getByText("Kept")).toBeTruthy();
-    expect(screen.getAllByText(/Testosterone Cypionate, hCG/).length).toBeGreaterThan(0);
+    const cards = screen.getAllByTestId("protocol-impact-key-marker-card");
+    expect(cards).toHaveLength(3);
+
+    const firstCard = cards[0] as HTMLElement;
+    expect(within(firstCard).queryByText(/Before/i)).toBeNull();
+    expect(within(firstCard).queryByText(/After/i)).toBeNull();
+    expect(within(firstCard).getByText(/->/)).toBeTruthy();
   });
 
-  it("renders concise outcome summary and largest shifts", () => {
+  it("renders compact metadata line with improved/worsened and confidence", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText(/2 improved • 1 worsened • 2 unchanged/i)).toBeTruthy();
-    expect(screen.getByText(/Largest shifts:/i)).toBeTruthy();
-  });
-
-  it("shows compact confidence badge only", () => {
-    render(<ProtocolImpactView {...baseProps} />);
+    expect(screen.getByText(/2 improved/i)).toBeTruthy();
+    expect(screen.getByText(/1 worsened/i)).toBeTruthy();
     expect(screen.getByText("High confidence")).toBeTruthy();
-    expect(screen.queryByText(/Not enough measured pre\/post data/i)).toBeNull();
   });
 
-  it("shows exactly three key markers by default", () => {
+  it("shows protocol changes as a secondary compact section", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Key markers")).toBeTruthy();
-    expect(screen.getAllByTestId("protocol-impact-key-marker-card")).toHaveLength(3);
+    const changesSection = screen.getByTestId("protocol-impact-protocol-changes");
+    expect(within(changesSection).getByText("Protocol changes")).toBeTruthy();
+    expect(within(changesSection).getByText("Added:")).toBeTruthy();
+    expect(within(changesSection).getByText("Removed:")).toBeTruthy();
+    expect(within(changesSection).queryByText(/^Kept:/i)).toBeNull();
   });
 
   it("keeps all disclosure sections collapsed by default", () => {

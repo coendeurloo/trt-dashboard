@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calendar, ChevronDown, CircleGauge, ListChecks, Sparkles } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -9,8 +9,6 @@ import {
   getConfidenceLabel,
   getEventOutcomeSummary,
   getEventSelectorLabel,
-  getLargestShiftsLabel,
-  getMarkerStatus,
   selectTopMeaningfulMarkers,
   summarizeCompounds
 } from "./protocolImpactPresentation";
@@ -25,16 +23,6 @@ type Translator = (nl: string, en: string) => string;
 const tone = (isDarkTheme: boolean, darkClass: string, lightClass: string): string =>
   isDarkTheme ? darkClass : lightClass;
 
-const sameCompoundSet = (left: string[], right: string[]): boolean => {
-  const normalize = (value: string) => value.trim().toLowerCase();
-  const leftSet = new Set(left.map(normalize).filter(Boolean));
-  const rightSet = new Set(right.map(normalize).filter(Boolean));
-  if (leftSet.size !== rightSet.size) {
-    return false;
-  }
-  return Array.from(leftSet).every((value) => rightSet.has(value));
-};
-
 const listOrFallback = (
   values: string[],
   tr: Translator,
@@ -46,12 +34,50 @@ const listOrFallback = (
   return values.join(", ");
 };
 
-const renderDelta = (value: number | null): string => {
+const hasMeasuredDelta = (row: ProtocolImpactMarkerRow): boolean =>
+  !row.insufficientData &&
+  row.beforeAvg !== null &&
+  row.afterAvg !== null &&
+  row.deltaPct !== null &&
+  Number.isFinite(row.deltaPct);
+
+const deltaArrow = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return "→";
+  }
+  if (value > 0) {
+    return "↑";
+  }
+  if (value < 0) {
+    return "↓";
+  }
+  return "→";
+};
+
+const deltaText = (value: number | null): string => {
   if (value === null || !Number.isFinite(value)) {
     return "-";
   }
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${formatAxisTick(value)}%`;
+  return `${Math.abs(Number(formatAxisTick(value)))}%`;
+};
+
+const deltaToneClass = (value: number | null, isDarkTheme: boolean): string => {
+  if (value === null || !Number.isFinite(value) || value === 0) {
+    return tone(isDarkTheme, "text-slate-300", "text-slate-600");
+  }
+  if (value > 0) {
+    return tone(isDarkTheme, "text-cyan-200", "text-cyan-700");
+  }
+  return tone(isDarkTheme, "text-rose-200", "text-rose-700");
+};
+
+const measurementLine = (row: ProtocolImpactMarkerRow): string => {
+  if (!hasMeasuredDelta(row)) {
+    return "-";
+  }
+  const beforeValue = formatAxisTick(row.beforeAvg ?? 0);
+  const afterValue = formatAxisTick(row.afterAvg ?? 0);
+  return `${beforeValue} -> ${afterValue} ${row.unit}`;
 };
 
 const ProtocolImpactHeader = ({ tr, isDarkTheme }: { tr: Translator; isDarkTheme: boolean }) => (
@@ -84,7 +110,7 @@ const ProtocolImpactEventSelector = ({
   <div
     className={`rounded-2xl p-3.5 ${
       isDarkTheme
-        ? "border border-cyan-500/20 bg-gradient-to-r from-slate-900/80 via-slate-900/55 to-cyan-900/20 shadow-[0_8px_28px_-18px_rgba(34,211,238,0.55)]"
+        ? "border border-cyan-500/20 bg-gradient-to-r from-slate-900/80 via-slate-900/55 to-cyan-900/20"
         : "border border-slate-200 bg-white shadow-sm"
     }`}
   >
@@ -113,235 +139,160 @@ const ProtocolImpactEventSelector = ({
   </div>
 );
 
-const ProtocolImpactPrimarySummaryCard = ({
-  event,
-  rows,
-  language,
-  tr,
-  isDarkTheme
-}: {
-  event: ProtocolImpactDoseEvent;
-  rows: ProtocolImpactMarkerRow[];
-  language: AppLanguage;
-  tr: Translator;
-  isDarkTheme: boolean;
-}) => {
-  const notSetLabel = tr("Niet ingesteld", "Not set");
-  const baselineLabel = tr("Startpunt", "Baseline");
-  const doseChanged = event.fromDose !== event.toDose;
-  const frequencyChanged = event.fromFrequency !== event.toFrequency;
-  const compoundChanged = !sameCompoundSet(event.fromCompounds, event.toCompounds);
-
-  const compoundSummary = useMemo(
-    () => summarizeCompounds(event.fromCompounds, event.toCompounds),
-    [event.fromCompounds, event.toCompounds]
-  );
-  const outcomeSummary = useMemo(() => getEventOutcomeSummary(rows, event), [rows, event]);
-  const largestShiftsLabel = useMemo(
-    () => getLargestShiftsLabel(rows, language, tr),
-    [rows, language, tr]
-  );
-  const confidence = useMemo(() => getConfidenceLabel(event.eventConfidence, tr), [event.eventConfidence, tr]);
-
-  const changeRows: Array<{ label: string; value: string }> = [];
-  if (doseChanged) {
-    const fromLabel = event.fromDose === null ? notSetLabel : `${formatAxisTick(event.fromDose)} mg/week`;
-    const toLabel = event.toDose === null ? notSetLabel : `${formatAxisTick(event.toDose)} mg/week`;
-    changeRows.push({ label: tr("Dosis", "Dose"), value: `${fromLabel} -> ${toLabel}` });
-  }
-  if (frequencyChanged) {
-    const fromLabel = event.fromFrequency === null ? notSetLabel : `${formatAxisTick(event.fromFrequency)}/week`;
-    const toLabel = event.toFrequency === null ? notSetLabel : `${formatAxisTick(event.toFrequency)}/week`;
-    changeRows.push({ label: tr("Frequentie", "Frequency"), value: `${fromLabel} -> ${toLabel}` });
-  }
-  if (!doseChanged && !frequencyChanged && !compoundChanged) {
-    changeRows.push({ label: tr("Type", "Type"), value: tr("Protocol-update", "Protocol update") });
-  }
-
-  return (
-    <article
-      className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 ${
-        isDarkTheme
-          ? "border border-cyan-500/20 bg-gradient-to-br from-slate-900/80 via-slate-900/65 to-cyan-950/20 shadow-[0_12px_40px_-26px_rgba(34,211,238,0.65)]"
-          : "border border-slate-200 bg-white shadow-sm"
-      }`}
-    >
-      {isDarkTheme ? <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-cyan-500/10 blur-3xl" /> : null}
-      <div className="relative flex flex-wrap items-start justify-between gap-2">
-        <p className={`inline-flex items-center gap-1.5 text-sm font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-          <Calendar className={`h-4 w-4 ${tone(isDarkTheme, "text-cyan-300", "text-cyan-600")}`} />
-          {tr("Datum", "Date")}: {formatDate(event.changeDate)}
-        </p>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${confidence.toneClass}`}>
-          <CircleGauge className="h-3.5 w-3.5" />
-          {confidence.label}
-        </span>
-      </div>
-
-      <div className="relative mt-4 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-        <section
-          className={`rounded-xl p-3.5 ${
-            isDarkTheme ? "border border-slate-700/50 bg-slate-950/25" : "border border-slate-200 bg-slate-50"
-          }`}
-        >
-          <p className={`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-cyan-200/90", "text-cyan-700")}`}>
-            <ListChecks className="h-3.5 w-3.5" />
-            {tr("Protocolwijziging", "Protocol change")}
-          </p>
-          <ul className={`mt-3 space-y-2 text-sm ${tone(isDarkTheme, "text-slate-200", "text-slate-700")}`}>
-            {changeRows.map((item) => (
-              <li key={item.label} className="flex flex-wrap items-center gap-2">
-                <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{item.label}</span>
-                <span>{item.value}</span>
-              </li>
-            ))}
-            <li className="flex flex-wrap items-center gap-2">
-              <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{tr("Toegevoegd", "Added")}</span>
-              <span>{listOrFallback(compoundSummary.added, tr)}</span>
-            </li>
-            <li className="flex flex-wrap items-center gap-2">
-              <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{tr("Verwijderd", "Removed")}</span>
-              <span>{listOrFallback(compoundSummary.removed, tr)}</span>
-            </li>
-            <li className="flex flex-wrap items-center gap-2">
-              <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{tr("Kept", "Kept")}</span>
-              <span>{listOrFallback(compoundSummary.kept, tr, baselineLabel)}</span>
-            </li>
-          </ul>
-        </section>
-
-        <section
-          className={`rounded-xl p-3.5 ${
-            isDarkTheme ? "border border-slate-700/50 bg-slate-950/25" : "border border-slate-200 bg-slate-50"
-          }`}
-        >
-          <p className={`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-cyan-200/90", "text-cyan-700")}`}>
-            <Sparkles className="h-3.5 w-3.5" />
-            {tr("Uitkomst", "Outcome")}
-          </p>
-          <p className={`mt-3 text-base font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-            {`${outcomeSummary.improved} ${tr("verbeterd", "improved")} • ${outcomeSummary.worsened} ${tr("verslechterd", "worsened")} • ${outcomeSummary.unchanged} ${tr("onveranderd", "unchanged")}`}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-200">
-              {outcomeSummary.improved} {tr("verbeterd", "improved")}
-            </span>
-            <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 font-semibold text-rose-200">
-              {outcomeSummary.worsened} {tr("verslechterd", "worsened")}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 font-semibold ${
-                isDarkTheme
-                  ? "border border-slate-600/70 bg-slate-800/70 text-slate-300"
-                  : "border border-slate-300 bg-white text-slate-600"
-              }`}
-            >
-              {outcomeSummary.unchanged} {tr("onveranderd", "unchanged")}
-            </span>
-          </div>
-          <p className={`mt-2 text-sm ${tone(isDarkTheme, "text-slate-300", "text-slate-700")}`}>
-            <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{tr("Grootste verschuivingen", "Largest shifts")}:</span>{" "}
-            {largestShiftsLabel}
-          </p>
-        </section>
-      </div>
-    </article>
-  );
-};
-
-const ProtocolImpactKeyMarkers = ({
-  event,
+const ProtocolImpactOutcomeHero = ({
   markers,
   language,
   tr,
   isDarkTheme
 }: {
-  event: ProtocolImpactDoseEvent;
   markers: ProtocolImpactMarkerRow[];
   language: AppLanguage;
   tr: Translator;
   isDarkTheme: boolean;
 }) => (
-  <section className="space-y-3">
-    <div className="flex items-center justify-between">
-      <h3 className={`text-sm font-semibold sm:text-base ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-        {tr("Belangrijkste markers", "Key markers")}
-      </h3>
-      <span className={`text-xs font-medium ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>{tr("Top 3 effecten", "Top 3 effects")}</span>
-    </div>
-
+  <section
+    className={`rounded-2xl p-4 sm:p-5 ${
+      isDarkTheme
+        ? "border border-cyan-500/20 bg-gradient-to-br from-slate-900/80 via-slate-900/65 to-cyan-950/20"
+        : "border border-slate-200 bg-white shadow-sm"
+    }`}
+  >
+    <p className={`text-sm font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-cyan-200/90", "text-cyan-700")}`}>
+      {tr("Wat veranderde na deze update", "What changed after this update")}
+    </p>
     {markers.length === 0 ? (
-      <p
-        className={`rounded-xl px-3 py-2 text-sm ${
-          isDarkTheme
-            ? "border border-slate-700/60 bg-slate-900/40 text-slate-300"
-            : "border border-slate-200 bg-white text-slate-600"
-        }`}
-      >
-        {tr("Nog geen duidelijke gemeten effecten.", "No clear measured effects yet.")}
+      <p className={`mt-3 text-lg font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+        {tr("Nog geen duidelijke verschuivingen gemeten.", "No clear shifts measured yet.")}
       </p>
     ) : (
-      <ul className="grid gap-3 md:grid-cols-3">
-        {markers.map((row) => {
-          const status = getMarkerStatus(row, event, tr);
-          const beforeValue = row.beforeAvg === null ? "-" : formatAxisTick(row.beforeAvg);
-          const afterValue = row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg);
-          const statusAccent =
-            status.label === tr("Verbeterd", "Improved")
-              ? "before:bg-emerald-400/70"
-              : status.label === tr("Bewaken", "Watch")
-                ? "before:bg-rose-400/70"
-                : "before:bg-slate-500/60";
-          return (
-            <li
-              key={`${event.id}-key-marker-${row.marker}`}
-              data-testid="protocol-impact-key-marker-card"
-              className={`relative overflow-hidden rounded-2xl p-3 transition before:absolute before:inset-y-0 before:left-0 before:w-0.5 ${statusAccent} ${
-                isDarkTheme
-                  ? "border border-slate-700/70 bg-gradient-to-b from-slate-900/55 to-slate-900/35 shadow-[0_10px_24px_-18px_rgba(8,145,178,0.75)] hover:border-cyan-400/30 hover:shadow-[0_16px_36px_-18px_rgba(34,211,238,0.7)]"
-                  : "border border-slate-200 bg-white shadow-sm hover:border-cyan-300 hover:shadow-md"
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <p className={`text-base font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-                  {getMarkerDisplayName(row.marker, language)}
-                </p>
-                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.toneClass}`}>
-                  {status.label}
-                </span>
-              </div>
-              <div className={`mt-3 grid grid-cols-2 gap-2 text-xs ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>
-                <div>
-                  <p className="uppercase tracking-wide">{tr("Voor", "Before")}</p>
-                  <p className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums ${tone(isDarkTheme, "text-slate-200", "text-slate-800")}`}>
-                    {beforeValue}
-                    <span className={`ml-1 text-xs font-normal ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>{row.unit}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="uppercase tracking-wide">{tr("Na", "After")}</p>
-                  <p className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-                    {afterValue}
-                    <span className={`ml-1 text-xs font-normal ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>{row.unit}</span>
-                  </p>
-                </div>
-              </div>
-              <p
-                className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-base font-semibold ${
-                  isDarkTheme
-                    ? "border border-cyan-500/25 bg-cyan-500/10 text-cyan-100"
-                    : "border border-cyan-300 bg-cyan-50 text-cyan-700"
-                }`}
-              >
-                {renderDelta(row.deltaPct)}
-              </p>
-            </li>
-          );
-        })}
+      <ul className="mt-3 space-y-2.5">
+        {markers.map((row) => (
+          <li key={`hero-${row.marker}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className={`text-base font-semibold sm:text-xl ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+              {getMarkerDisplayName(row.marker, language)}
+            </span>
+            <span className={`text-base font-semibold sm:text-xl ${deltaToneClass(row.deltaPct, isDarkTheme)}`}>
+              {deltaArrow(row.deltaPct)} {deltaText(row.deltaPct)}
+            </span>
+          </li>
+        ))}
       </ul>
     )}
   </section>
 );
+
+const ProtocolImpactMarkerCards = ({
+  markers,
+  language,
+  isDarkTheme
+}: {
+  markers: ProtocolImpactMarkerRow[];
+  language: AppLanguage;
+  isDarkTheme: boolean;
+}) => {
+  if (markers.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className="grid gap-3 md:grid-cols-3">
+      {markers.map((row) => (
+        <li
+          key={`card-${row.marker}`}
+          data-testid="protocol-impact-key-marker-card"
+          className={`rounded-2xl p-3 ${
+            isDarkTheme ? "border border-slate-700/70 bg-slate-900/35" : "border border-slate-200 bg-white shadow-sm"
+          }`}
+        >
+          <p className={`text-base font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+            {getMarkerDisplayName(row.marker, language)}
+          </p>
+          <p className={`mt-2 text-base ${tone(isDarkTheme, "text-slate-300", "text-slate-700")}`}>{measurementLine(row)}</p>
+          <p className={`mt-2 text-xl font-semibold ${deltaToneClass(row.deltaPct, isDarkTheme)}`}>
+            {deltaArrow(row.deltaPct)} {deltaText(row.deltaPct)}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+const ProtocolImpactMetaLine = ({
+  event,
+  rows,
+  tr,
+  isDarkTheme
+}: {
+  event: ProtocolImpactDoseEvent;
+  rows: ProtocolImpactMarkerRow[];
+  tr: Translator;
+  isDarkTheme: boolean;
+}) => {
+  const summary = getEventOutcomeSummary(rows, event);
+  const confidence = getConfidenceLabel(event.eventConfidence, tr);
+
+  return (
+    <div className={`flex flex-wrap items-center gap-2 text-sm ${tone(isDarkTheme, "text-slate-400", "text-slate-600")}`}>
+      <span>{summary.improved} {tr("verbeterd", "improved")}</span>
+      <span>•</span>
+      <span>{summary.worsened} {tr("verslechterd", "worsened")}</span>
+      <span>•</span>
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${confidence.toneClass}`}>
+        {confidence.label}
+      </span>
+    </div>
+  );
+};
+
+const ProtocolImpactProtocolChanges = ({
+  event,
+  tr,
+  isDarkTheme
+}: {
+  event: ProtocolImpactDoseEvent;
+  tr: Translator;
+  isDarkTheme: boolean;
+}) => {
+  const notSetLabel = tr("Niet ingesteld", "Not set");
+  const compoundSummary = summarizeCompounds(event.fromCompounds, event.toCompounds);
+  const doseChanged = event.fromDose !== event.toDose;
+  const frequencyChanged = event.fromFrequency !== event.toFrequency;
+
+  const rows: Array<{ label: string; value: string }> = [];
+  if (doseChanged) {
+    const fromLabel = event.fromDose === null ? notSetLabel : `${formatAxisTick(event.fromDose)} mg/week`;
+    const toLabel = event.toDose === null ? notSetLabel : `${formatAxisTick(event.toDose)} mg/week`;
+    rows.push({ label: tr("Dosis", "Dose"), value: `${fromLabel} -> ${toLabel}` });
+  }
+  if (frequencyChanged) {
+    const fromLabel = event.fromFrequency === null ? notSetLabel : `${formatAxisTick(event.fromFrequency)}/week`;
+    const toLabel = event.toFrequency === null ? notSetLabel : `${formatAxisTick(event.toFrequency)}/week`;
+    rows.push({ label: tr("Frequentie", "Frequency"), value: `${fromLabel} -> ${toLabel}` });
+  }
+  rows.push({ label: tr("Toegevoegd", "Added"), value: listOrFallback(compoundSummary.added, tr) });
+  rows.push({ label: tr("Verwijderd", "Removed"), value: listOrFallback(compoundSummary.removed, tr) });
+
+  return (
+    <section
+      data-testid="protocol-impact-protocol-changes"
+      className={`h-full rounded-2xl p-4 sm:p-5 ${
+        isDarkTheme ? "border border-slate-700/60 bg-slate-900/30" : "border border-slate-200 bg-slate-50"
+      }`}
+    >
+      <p className={`text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>
+        {tr("Protocolwijzigingen", "Protocol changes")}
+      </p>
+      <ul className={`mt-2 space-y-1.5 text-sm ${tone(isDarkTheme, "text-slate-300", "text-slate-700")}`}>
+        {rows.map((item) => (
+          <li key={item.label} className="flex flex-wrap items-center gap-2">
+            <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{item.label}:</span>
+            <span>{item.value}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 const ProtocolImpactDisclosures = ({
   event,
@@ -422,7 +373,7 @@ const ProtocolImpactDisclosures = ({
                   {row.afterAvg === null ? "-" : formatAxisTick(row.afterAvg)} {row.unit}
                 </p>
                 <p className={disclosureMutedTextClass}>
-                  {tr("Verandering", "Change")}: {renderDelta(row.deltaPct)}
+                  {tr("Verandering", "Change")}: {row.deltaPct === null ? "-" : `${row.deltaPct > 0 ? "+" : ""}${formatAxisTick(row.deltaPct)}%`}
                 </p>
               </div>
             ))}
@@ -542,7 +493,7 @@ const ProtocolImpactView = ({ protocolDoseEvents, settings, language }: Protocol
     [protocolDoseEvents, selectedEventId]
   );
 
-  const keyMarkers = useMemo(() => {
+  const topMarkers = useMemo(() => {
     if (!selectedEvent) {
       return [];
     }
@@ -582,17 +533,27 @@ const ProtocolImpactView = ({ protocolDoseEvents, settings, language }: Protocol
               tr={tr}
               isDarkTheme={isDarkTheme}
             />
-            <ProtocolImpactPrimarySummaryCard
-              event={selectedEvent}
-              rows={selectedEvent.rows}
+            <div className="grid gap-3 lg:grid-cols-2">
+              <ProtocolImpactOutcomeHero
+                markers={topMarkers}
+                language={settings.language}
+                tr={tr}
+                isDarkTheme={isDarkTheme}
+              />
+              <ProtocolImpactProtocolChanges
+                event={selectedEvent}
+                tr={tr}
+                isDarkTheme={isDarkTheme}
+              />
+            </div>
+            <ProtocolImpactMarkerCards
+              markers={topMarkers}
               language={settings.language}
-              tr={tr}
               isDarkTheme={isDarkTheme}
             />
-            <ProtocolImpactKeyMarkers
+            <ProtocolImpactMetaLine
               event={selectedEvent}
-              markers={keyMarkers}
-              language={settings.language}
+              rows={selectedEvent.rows}
               tr={tr}
               isDarkTheme={isDarkTheme}
             />
