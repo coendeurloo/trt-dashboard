@@ -735,15 +735,15 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
     candidates: [
       {
         unit: "pmol/L",
-        valueRange: { min: 40, max: 2000 },
-        referenceMinRange: { min: 80, max: 260 },
-        referenceMaxRange: { min: 350, max: 1200 }
+        valueRange: { min: 60, max: 2200 },
+        referenceMinRange: { min: 90, max: 320 },
+        referenceMaxRange: { min: 380, max: 1000 }
       },
       {
         unit: "pg/mL",
-        valueRange: { min: 60, max: 1500 },
-        referenceMinRange: { min: 100, max: 350 },
-        referenceMaxRange: { min: 400, max: 1200 }
+        valueRange: { min: 80, max: 1500 },
+        referenceMinRange: { min: 150, max: 450 },
+        referenceMaxRange: { min: 600, max: 1500 }
       }
     ]
   },

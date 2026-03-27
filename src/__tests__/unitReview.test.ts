@@ -164,6 +164,21 @@ describe("unitReview", () => {
     expect(review.options[0]).toBe("ug/L");
   });
 
+  it("suggests pmol/L for vitamin B12 values in common EU-style ranges", () => {
+    const marker = baseMarker({
+      marker: "Vitamin B12",
+      canonicalMarker: "Vitamin B12",
+      value: 430,
+      referenceMin: 148,
+      referenceMax: 584
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.suggestion?.unit).toBe("pmol/L");
+    expect(review.options[0]).toBe("pmol/L");
+  });
+
   it("suggests mmol/L for urea with a matching range", () => {
     const marker = baseMarker({
       marker: "Urea",
