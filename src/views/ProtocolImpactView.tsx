@@ -351,7 +351,7 @@ const ProtocolImpactProtocolChanges = ({
         isDarkTheme ? "border border-slate-700/60 bg-slate-900/30" : "border border-slate-200 bg-slate-50"
       }`}
     >
-      <p className={`text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>
+      <p className={`text-sm font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-cyan-200/90", "text-cyan-700")}`}>
         {tr("Protocolwijzigingen", "Protocol changes")}
       </p>
       <ul className="mt-3 space-y-2.5">
