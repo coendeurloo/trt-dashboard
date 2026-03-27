@@ -1,212 +1,219 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { DEFAULT_SETTINGS } from "../constants";
 import ProtocolImpactView from "../views/ProtocolImpactView";
 
 const row = (
   marker: string,
+  deltaPct: number,
   impactScore: number,
   confidenceScore: number
 ): ProtocolImpactMarkerRow => ({
   marker,
-  unit: "ng/dL",
-  beforeAvg: 500,
+  unit: marker === "Hematocrit" ? "%" : "mg/dL",
+  beforeAvg: 100,
   beforeSource: "window",
   comparisonBasis: "local_pre_post",
   baselineAgeDays: null,
-  afterAvg: 600,
-  deltaAbs: 100,
-  deltaPct: 20,
-  trend: "up",
+  afterAvg: 100 + (deltaPct / 100) * 100,
+  deltaAbs: (deltaPct / 100) * 100,
+  deltaPct,
+  trend: deltaPct > 0 ? "up" : deltaPct < 0 ? "down" : "flat",
   confidence: confidenceScore >= 75 ? "High" : confidenceScore >= 50 ? "Medium" : "Low",
   confidenceReason: "2 pre / 2 post",
   insufficientData: false,
   impactScore,
   confidenceScore,
-  lagDays: marker === "LDL Cholesterol" ? 28 : 10,
+  lagDays: 14,
   nBefore: 2,
   nAfter: 2,
   readinessStatus: "ready",
   recommendedNextTestDate: null,
   signalStatus: "established_pattern",
-  deltaDirectionLabel: "Increased",
+  deltaDirectionLabel: deltaPct > 0 ? "Increased" : "Decreased",
   contextHint: null,
-  narrativeShort: `${marker} increased by +20%.`,
+  narrativeShort: `${marker} changed by ${deltaPct}%.`,
   narrative: `${marker} moved after this event.`
 });
 
-const makeEvent = (): ProtocolImpactDoseEvent => {
-  const rows = [
-    row("Testosterone", 94, 82),
-    row("Free Testosterone", 89, 78),
-    row("Estradiol", 85, 74),
-    row("Hematocrit", 80, 66),
-    row("LDL Cholesterol", 72, 61)
-  ];
-
-  return {
-    id: "event-1",
-    fromDose: 120,
-    toDose: 115,
-    fromFrequency: 2,
-    toFrequency: 2,
-    fromCompounds: ["Testosterone Enanthate"],
-    toCompounds: ["Testosterone Enanthate"],
-    changeDate: "2024-07-17",
-    beforeCount: 2,
-    afterCount: 2,
-    beforeWindow: {
-      start: "2024-06-01",
-      end: "2024-07-16"
-    },
-    afterWindow: {
-      start: "2024-07-27",
-      end: "2024-09-10"
-    },
-    eventType: "dose",
-    eventSubType: "adjustment",
-    triggerStrength: 30,
-    eventConfidenceScore: 77,
-    eventConfidence: "High",
-    signalStatus: "established_pattern",
-    signalStatusLabel: "Established pattern",
-    signalNextStep: "Strong pattern detected. Keep your regular monitoring cadence to confirm stability.",
-    comparisonBasis: "local_pre_post",
-    headlineNarrative: "Testosterone Enanthate dose change from 120 mg/week to 115 mg/week on 17 Jul 2024.",
-    storyObserved: "Testosterone increased by +20%. Free Testosterone increased by +20%.",
-    storyInterpretation: "Not shown in facts-only card.",
-    storyContextHint: "No major extra factors detected in this event.",
-    storyChange: "Testosterone Enanthate dose change from 120 mg/week to 115 mg/week on 17 Jul 2024.",
-    storyEffect: "Testosterone increased by +20%. Free Testosterone increased by +20%.",
-    storyReliability: "This pattern is strongly consistent with the protocol change.",
-    storySummary: "Story summary",
-    confounders: {
-      samplingChanged: true,
-      supplementsChanged: true,
-      symptomsChanged: false
-    },
-    lagDaysByMarker: {
-      Testosterone: 10,
-      "Free Testosterone": 10,
-      Estradiol: 10,
-      Hematocrit: 21,
-      "LDL Cholesterol": 28
-    },
-    rows,
-    topImpacts: rows.slice(0, 4)
-  };
-};
+const makeEvent = (
+  id: string,
+  changeDate: string,
+  fromDose: number,
+  toDose: number,
+  confidence: ProtocolImpactDoseEvent["eventConfidence"],
+  markerRows: ProtocolImpactMarkerRow[],
+  fromCompounds: string[],
+  toCompounds: string[]
+): ProtocolImpactDoseEvent => ({
+  id,
+  fromDose,
+  toDose,
+  fromFrequency: 2,
+  toFrequency: 2,
+  fromCompounds,
+  toCompounds,
+  changeDate,
+  beforeCount: 2,
+  afterCount: 2,
+  beforeWindow: {
+    start: "2024-06-01",
+    end: "2024-07-16"
+  },
+  afterWindow: {
+    start: "2024-07-27",
+    end: "2024-09-10"
+  },
+  eventType: "dose",
+  eventSubType: "adjustment",
+  triggerStrength: 30,
+  eventConfidenceScore: confidence === "High" ? 77 : confidence === "Medium" ? 58 : 32,
+  eventConfidence: confidence,
+  signalStatus: "established_pattern",
+  signalStatusLabel: "Established pattern",
+  signalNextStep: "Continue monitoring.",
+  comparisonBasis: "local_pre_post",
+  headlineNarrative: "Narrative",
+  storyObserved: "Observed",
+  storyInterpretation: "Interpretation",
+  storyContextHint: "Context",
+  storyChange: "Change",
+  storyEffect: "Effect",
+  storyReliability: "Reliability",
+  storySummary: "Summary",
+  confounders: {
+    samplingChanged: true,
+    supplementsChanged: false,
+    symptomsChanged: false
+  },
+  lagDaysByMarker: {},
+  rows: markerRows,
+  topImpacts: markerRows.slice(0, 4)
+});
 
 describe("ProtocolImpactView", () => {
   afterEach(() => {
     cleanup();
   });
 
+  const firstRows = [
+    row("Testosterone", 20, 94, 82),
+    row("Creatinine", -15, 90, 78),
+    row("LDL Cholesterol", 15, 86, 74),
+    row("Hematocrit", 2, 80, 66),
+    row("Triglycerides", -5, 72, 61)
+  ];
+  const secondRows = [
+    row("Estradiol", 10, 91, 77),
+    row("PSA", 18, 88, 74),
+    row("LDL Cholesterol", 4, 70, 62)
+  ];
+
+  const firstEvent = makeEvent(
+    "event-1",
+    "2024-07-17",
+    120,
+    115,
+    "High",
+    firstRows,
+    ["Testosterone Enanthate"],
+    ["Testosterone Cypionate", "hCG"]
+  );
+  const secondEvent = makeEvent(
+    "event-2",
+    "2024-10-01",
+    115,
+    105,
+    "Medium",
+    secondRows,
+    ["Testosterone Cypionate", "hCG"],
+    ["Testosterone Cypionate"]
+  );
+
   const baseProps = {
-    protocolDoseOverview: [
-      { marker: "Estradiol", r: 0.88, n: 7 },
-      { marker: "Testosterone", r: 0.86, n: 7 }
-    ],
-    protocolDoseEvents: [makeEvent()],
-    protocolWindowSize: 45,
-    protocolMarkerSearch: "",
-    protocolCategoryFilter: "all" as const,
+    protocolDoseEvents: [firstEvent, secondEvent],
     settings: {
       ...DEFAULT_SETTINGS,
       language: "en" as const
     },
-    language: "en" as const,
-    onProtocolWindowSizeChange: vi.fn(),
-    onProtocolMarkerSearchChange: vi.fn(),
-    onProtocolCategoryFilterChange: vi.fn()
+    language: "en" as const
   };
 
-  it("renders minimal header copy", () => {
+  it("renders page title, subtitle and compact selector", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Change timeline")).toBeTruthy();
-    expect(screen.getByText(/For each protocol change, you see what factually changed in your measurements./i)).toBeTruthy();
+    expect(screen.getByText("Protocol Impact")).toBeTruthy();
+    expect(screen.getByText(/See what changed in your labs after each protocol update./i)).toBeTruthy();
+    expect(screen.getByLabelText("Protocol change")).toBeTruthy();
   });
 
-  it("renders narrative event title", () => {
+  it("shows one selected protocol change at a time", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("17 Jul 2024 · Protocol update")).toBeTruthy();
-    expect(screen.getByText("Dose")).toBeTruthy();
-    expect(screen.getByText("120 mg/week")).toBeTruthy();
-    expect(screen.getByText("115 mg/week")).toBeTruthy();
+    expect(screen.getByText(/Date: 17 Jul 2024/i)).toBeTruthy();
+    expect(screen.queryByText(/Date: 01 Oct 2024/i)).toBeNull();
   });
 
-  it("does not show reliability low/high badge text", () => {
+  it("updates to a different event when selector changes", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText(/Reliability:/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Protocol change"), { target: { value: "event-2" } });
+    expect(screen.getByText(/Date: 01 Oct 2024/i)).toBeTruthy();
+    expect(screen.getByText("Limited data")).toBeTruthy();
   });
 
-  it("does not render signal status pill", () => {
+  it("renders change summary with added, removed and kept compounds", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText(/Established pattern/)).toBeNull();
+    expect(screen.getByText("Added")).toBeTruthy();
+    expect(screen.getByText("Removed")).toBeTruthy();
+    expect(screen.getByText("Kept")).toBeTruthy();
+    expect(screen.getAllByText(/Testosterone Cypionate, hCG/).length).toBeGreaterThan(0);
   });
 
-  it("renders jump links to protocol changes", () => {
+  it("renders concise outcome summary and largest shifts", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByRole("link", { name: /17 Jul 2024/i })).toBeTruthy();
+    expect(screen.getByText(/2 improved • 1 worsened • 2 unchanged/i)).toBeTruthy();
+    expect(screen.getByText(/Largest shifts:/i)).toBeTruthy();
   });
 
-  it("keeps jump navigation in a sticky container", () => {
-    const { container } = render(<ProtocolImpactView {...baseProps} />);
-    expect(container.querySelector(".protocol-impact-jump-sticky")).toBeTruthy();
-  });
-
-  it("does not render overall conclusions block", () => {
+  it("shows compact confidence badge only", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText("Overall conclusions")).toBeNull();
+    expect(screen.getByText("High confidence")).toBeTruthy();
+    expect(screen.queryByText(/Not enough measured pre\/post data/i)).toBeNull();
   });
 
-  it("does not render filters block", () => {
+  it("shows exactly three key markers by default", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText("Filters")).toBeNull();
+    expect(screen.getByText("Key markers")).toBeTruthy();
+    expect(screen.getAllByTestId("protocol-impact-key-marker-card")).toHaveLength(3);
   });
 
-  it("shows top-4 effects by default in the grid", () => {
-    const { container } = render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Impact")).toBeTruthy();
-    const cards = container.querySelectorAll(".protocol-impact-effects-grid li");
-    expect(cards.length).toBe(4);
-  });
-
-  it("removes marker-card jargon and repeated measured-effect label", () => {
+  it("keeps all disclosure sections collapsed by default", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText(/Selected:/i)).toBeNull();
-    expect(screen.queryByText(/MEASURED EFFECT/i)).toBeNull();
+    const showAll = screen.getByText(/Show all markers/i).closest("details") as HTMLDetailsElement;
+    const confidence = screen.getByText(/Why confidence is limited/i).closest("details") as HTMLDetailsElement;
+    const factors = screen.getByText(/Other factors changed/i).closest("details") as HTMLDetailsElement;
+    const protocol = screen.getByText(/Full protocol details/i).closest("details") as HTMLDetailsElement;
+    const timeline = screen.getByText(/Timeline history/i).closest("details") as HTMLDetailsElement;
+
+    expect(showAll.open).toBe(false);
+    expect(confidence.open).toBe(false);
+    expect(factors.open).toBe(false);
+    expect(protocol.open).toBe(false);
+    expect(timeline.open).toBe(false);
   });
 
-  it("shows event-level improved/worsened summary chips", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText(/worsened/i)).toBeTruthy();
-    expect(screen.getByText(/neutral/i)).toBeTruthy();
-  });
-
-  it("does not show context tooltip chip on marker row", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText("💡 Context")).toBeNull();
-  });
-
-  it("does not show interpretation row in event card", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.queryByText(/Interpretation/i)).toBeNull();
-  });
-
-  it("keeps all markers details collapsed by default", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByRole("button", { name: /All markers/i })).toBeTruthy();
-    expect(screen.queryByText(/Δ%:/)).toBeNull();
-  });
-
-  it("renders medical note at the bottom, collapsed by default", () => {
-    render(<ProtocolImpactView {...baseProps} />);
-    const note = screen.getByText("Medical note").closest("details");
-    expect(note).toBeTruthy();
-    expect((note as HTMLDetailsElement).open).toBe(false);
+  it("renders clean empty state when no events are available", () => {
+    render(
+      <ProtocolImpactView
+        protocolDoseEvents={[]}
+        settings={{
+          ...DEFAULT_SETTINGS,
+          language: "en"
+        }}
+        language="en"
+      />
+    );
+    expect(screen.getByText(/No protocol-change events with usable before\/after data were found./i)).toBeTruthy();
   });
 });

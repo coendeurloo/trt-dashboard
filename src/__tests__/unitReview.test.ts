@@ -104,6 +104,66 @@ describe("unitReview", () => {
     expect(review.options.slice(0, 2)).toEqual(["g/L", "mg/dL"]);
   });
 
+  it("suggests mmol/L for hemoglobin values in mmol-style ranges", () => {
+    const marker = baseMarker({
+      marker: "Hemoglobin",
+      canonicalMarker: "Hemoglobin",
+      value: 10.9,
+      referenceMin: 8.5,
+      referenceMax: 11
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.suggestion?.unit).toBe("mmol/L");
+    expect(review.options[0]).toBe("mmol/L");
+  });
+
+  it("suggests umol/L for homocysteine values with a matching range", () => {
+    const marker = baseMarker({
+      marker: "Homocysteine",
+      canonicalMarker: "Homocysteine",
+      value: 9.9,
+      referenceMin: 5,
+      referenceMax: 15
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.suggestion?.unit).toBe("umol/L");
+    expect(review.options[0]).toBe("umol/L");
+  });
+
+  it("suggests percent for transferrin saturation", () => {
+    const marker = baseMarker({
+      marker: "Transferrin Saturation",
+      canonicalMarker: "Transferrin Saturation",
+      value: 13,
+      referenceMin: 20,
+      referenceMax: 50
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.suggestion?.unit).toBe("%");
+    expect(review.options[0]).toBe("%");
+  });
+
+  it("suggests ug/L for ferritin despite equivalent ng/mL alternate units", () => {
+    const marker = baseMarker({
+      marker: "Ferritin",
+      canonicalMarker: "Ferritin",
+      value: 65,
+      referenceMin: 30,
+      referenceMax: 400
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.suggestion?.unit).toBe("ug/L");
+    expect(review.options[0]).toBe("ug/L");
+  });
+
   it("suggests mmol/L for urea with a matching range", () => {
     const marker = baseMarker({
       marker: "Urea",

@@ -96,6 +96,29 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
       }
     ]
   },
+  hemoglobin: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "mmol/L",
+        valueRange: { min: 4, max: 13.5 },
+        referenceMinRange: { min: 6, max: 10 },
+        referenceMaxRange: { min: 8.5, max: 12.5 }
+      },
+      {
+        unit: "g/dL",
+        valueRange: { min: 6, max: 22 },
+        referenceMinRange: { min: 9, max: 15 },
+        referenceMaxRange: { min: 12, max: 19 }
+      },
+      {
+        unit: "g/L",
+        valueRange: { min: 60, max: 220 },
+        referenceMinRange: { min: 90, max: 150 },
+        referenceMaxRange: { min: 120, max: 190 }
+      }
+    ]
+  },
   insulin: {
     allowValueOnly: false,
     candidates: [
@@ -766,12 +789,6 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         valueRange: { min: 1, max: 5000 },
         referenceMinRange: { min: 10, max: 80 },
         referenceMaxRange: { min: 120, max: 600 }
-      },
-      {
-        unit: "ng/mL",
-        valueRange: { min: 1, max: 5000 },
-        referenceMinRange: { min: 10, max: 80 },
-        referenceMaxRange: { min: 120, max: 600 }
       }
     ]
   },
@@ -991,6 +1008,28 @@ const UNIT_INFERENCE_PROFILES: Record<string, UnitInferenceProfile> = {
         valueRange: { min: 50, max: 600 },
         referenceMinRange: { min: 100, max: 300 },
         referenceMaxRange: { min: 250, max: 500 }
+      }
+    ]
+  },
+  "transferrin-saturation": {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "%",
+        valueRange: { min: 1, max: 100 },
+        referenceMinRange: { min: 8, max: 35 },
+        referenceMaxRange: { min: 20, max: 65 }
+      }
+    ]
+  },
+  homocysteine: {
+    allowValueOnly: true,
+    candidates: [
+      {
+        unit: "umol/L",
+        valueRange: { min: 1, max: 100 },
+        referenceMinRange: { min: 2, max: 10 },
+        referenceMaxRange: { min: 8, max: 25 }
       }
     ]
   },

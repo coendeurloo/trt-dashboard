@@ -478,9 +478,7 @@ const App = () => {
   const [focusedReportId, setFocusedReportId] = useState<string | null>(null);
 
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
-  const [protocolWindowSize, setProtocolWindowSize] = useState(45);
-  const [protocolMarkerSearch, setProtocolMarkerSearch] = useState("");
-  const [protocolCategoryFilter, setProtocolCategoryFilter] = useState<"all" | "Hormones" | "Lipids" | "Hematology" | "Inflammation">("all");
+  const protocolWindowSize = 45;
   const [markerSuggestions, setMarkerSuggestions] = useState<MarkerMergeSuggestion[]>([]);
   const [renameDialog, setRenameDialog] = useState<{ sourceCanonical: string; draftName: string } | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
@@ -586,7 +584,6 @@ const App = () => {
   const {
     protocolImpactSummary,
     protocolDoseEvents,
-    protocolDoseOverview,
     dosePredictions,
     customDoseValue,
     hasCustomDose
@@ -2778,16 +2775,9 @@ const App = () => {
 
                 {activeTab === "protocolImpact" ? (
                   <ProtocolImpactView
-                    protocolDoseOverview={protocolDoseOverview}
                     protocolDoseEvents={protocolDoseEvents}
-                    protocolWindowSize={protocolWindowSize}
-                    protocolMarkerSearch={protocolMarkerSearch}
-                    protocolCategoryFilter={protocolCategoryFilter}
                     settings={appData.settings}
                     language={appData.settings.language}
-                    onProtocolWindowSizeChange={setProtocolWindowSize}
-                    onProtocolMarkerSearchChange={setProtocolMarkerSearch}
-                    onProtocolCategoryFilterChange={setProtocolCategoryFilter}
                   />
                 ) : null}
 
