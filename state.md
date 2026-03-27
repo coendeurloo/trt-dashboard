@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: March 19, 2026
+Last updated: March 27, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -13,6 +13,16 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Protocol Impact UX refinement shipped in multiple passes:
+  - View restructured to single-event insight flow with clear hierarchy and progressive disclosure
+  - Outcome is now primary: top "What changed after this update" summary with top 3 marker changes
+  - Marker cards simplified to name + `before -> after` + percent change (reduced dashboard noise)
+  - Compact metadata line added (`improved • worsened • confidence`) instead of a heavy summary card
+  - Protocol changes moved to a lighter secondary section and then merged into the top split layout to reduce unused space
+  - Top section now uses a 2-column desktop layout (Outcome + Protocol changes) and stacked mobile layout
+  - Hero typography reduced for readability while keeping strong scanability
+  - Protocol-change dropdown/timeline labels now include compound context (for example dose change + compound name)
+  - Protocol Impact view tests updated to match new hierarchy; targeted test suite and build both green
 - UX Remediation Wave 3 (resterende punten) shipped:
   - Uniforme header-stat chips per tab via `AppShell` (Dashboard, Reports, Alerts, Supplements, Protocols, Wellbeing)
   - Dashboard chart settings vervangen door echte `ChartSettingsDrawer` (desktop right drawer, mobile/tablet bottom sheet)

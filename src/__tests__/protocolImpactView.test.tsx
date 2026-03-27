@@ -163,7 +163,9 @@ describe("ProtocolImpactView", () => {
     const changesSection = screen.getByTestId("protocol-impact-protocol-changes");
     expect(within(changesSection).getByText(/120 mg\/week -> 115 mg\/week/i)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Protocol change"), { target: { value: "event-2" } });
+    fireEvent.click(screen.getByTestId("protocol-impact-event-selector-trigger"));
+    const listbox = screen.getByRole("listbox");
+    fireEvent.click(within(listbox).getByText(/01 Oct 2024/i));
     expect(within(changesSection).getByText(/115 mg\/week -> 105 mg\/week/i)).toBeTruthy();
     expect(screen.getByText("Limited data")).toBeTruthy();
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
@@ -106,38 +106,110 @@ const ProtocolImpactEventSelector = ({
   onSelect: (eventId: string) => void;
   tr: Translator;
   isDarkTheme: boolean;
-}) => (
-  <div
-    className={`rounded-2xl p-3.5 ${
-      isDarkTheme
-        ? "border border-cyan-500/20 bg-gradient-to-r from-slate-900/80 via-slate-900/55 to-cyan-900/20"
-        : "border border-slate-200 bg-white shadow-sm"
-    }`}
-  >
-    <label
-      htmlFor="protocol-impact-event-select"
-      className={`mb-2 block text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}
-    >
-      {tr("Protocolwijziging", "Protocol change")}
-    </label>
-    <select
-      id="protocol-impact-event-select"
-      className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition focus:ring-2 ${
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectedEvent = events.find((item) => item.id === selectedEventId) ?? events[0] ?? null;
+  const selectedLabel = selectedEvent ? getEventSelectorLabel(selectedEvent, tr, formatDate) : "";
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current) {
+        return;
+      }
+      if (containerRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setIsOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative rounded-2xl p-3.5 ${
         isDarkTheme
-          ? "border border-slate-600/80 bg-slate-950/70 text-slate-100 ring-cyan-400/50"
-          : "border border-slate-300 bg-slate-50 text-slate-900 ring-cyan-500/40"
+          ? "border border-cyan-500/20 bg-gradient-to-r from-slate-900/80 via-slate-900/55 to-cyan-900/20"
+          : "border border-slate-200 bg-white shadow-sm"
       }`}
-      value={selectedEventId}
-      onChange={(event) => onSelect(event.target.value)}
     >
-      {events.map((item) => (
-        <option key={item.id} value={item.id}>
-          {getEventSelectorLabel(item, tr, formatDate)}
-        </option>
-      ))}
-    </select>
-  </div>
-);
+      <p
+        id="protocol-impact-event-select-label"
+        className={`mb-2 block text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}
+      >
+        {tr("Protocolwijziging", "Protocol change")}
+      </p>
+
+      <button
+        type="button"
+        data-testid="protocol-impact-event-selector-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-labelledby="protocol-impact-event-select-label"
+        onClick={() => setIsOpen((current) => !current)}
+        className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm outline-none transition focus:ring-2 ${
+          isDarkTheme
+            ? "border border-slate-600/80 bg-slate-950/70 text-slate-100 ring-cyan-400/50"
+            : "border border-slate-300 bg-slate-50 text-slate-900 ring-cyan-500/40"
+        }`}
+      >
+        <span className="truncate pr-3">{selectedLabel}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen ? (
+        <ul
+          role="listbox"
+          aria-labelledby="protocol-impact-event-select-label"
+          className={`absolute left-3.5 right-3.5 top-[calc(100%-0.15rem)] z-30 max-h-72 overflow-auto rounded-xl border shadow-lg ${
+            isDarkTheme
+              ? "border-slate-700 bg-slate-900/95"
+              : "border-slate-300 bg-white"
+          }`}
+        >
+          {events.map((item) => {
+            const label = getEventSelectorLabel(item, tr, formatDate);
+            const isSelected = item.id === selectedEventId;
+            return (
+              <li key={item.id} role="option" aria-selected={isSelected}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(item.id);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3.5 py-2 text-left text-sm transition ${
+                    isSelected
+                      ? isDarkTheme
+                        ? "bg-cyan-500/20 text-cyan-100"
+                        : "bg-cyan-50 text-cyan-700"
+                      : isDarkTheme
+                        ? "text-slate-200 hover:bg-slate-800/90"
+                        : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+};
 
 const ProtocolImpactOutcomeHero = ({
   markers,
@@ -168,10 +240,10 @@ const ProtocolImpactOutcomeHero = ({
       <ul className="mt-3 space-y-2.5">
         {markers.map((row) => (
           <li key={`hero-${row.marker}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className={`text-base font-semibold sm:text-xl ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+            <span className={`text-sm font-semibold sm:text-lg ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
               {getMarkerDisplayName(row.marker, language)}
             </span>
-            <span className={`text-base font-semibold sm:text-xl ${deltaToneClass(row.deltaPct, isDarkTheme)}`}>
+            <span className={`text-sm font-semibold sm:text-lg ${deltaToneClass(row.deltaPct, isDarkTheme)}`}>
               {deltaArrow(row.deltaPct)} {deltaText(row.deltaPct)}
             </span>
           </li>
@@ -282,11 +354,15 @@ const ProtocolImpactProtocolChanges = ({
       <p className={`text-xs font-semibold uppercase tracking-wide ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>
         {tr("Protocolwijzigingen", "Protocol changes")}
       </p>
-      <ul className={`mt-2 space-y-1.5 text-sm ${tone(isDarkTheme, "text-slate-300", "text-slate-700")}`}>
+      <ul className="mt-3 space-y-2.5">
         {rows.map((item) => (
-          <li key={item.label} className="flex flex-wrap items-center gap-2">
-            <span className={tone(isDarkTheme, "text-slate-400", "text-slate-500")}>{item.label}:</span>
-            <span>{item.value}</span>
+          <li key={item.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className={`text-sm font-semibold sm:text-lg ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>
+              {item.label}:
+            </span>
+            <span className={`text-sm font-semibold sm:text-lg ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+              {item.value}
+            </span>
           </li>
         ))}
       </ul>
