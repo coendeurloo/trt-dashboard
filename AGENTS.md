@@ -24,6 +24,7 @@ Target audience: TRT users, enhanced athletes, general health optimizers, and bi
 ```bash
 npm run dev
 npm run build
+npm run ci:check
 npx vitest --run
 npx vitest --watch
 ```
@@ -57,7 +58,7 @@ Read `architecture.md` for the full map. Short version:
 
 ## CI hygiene checklist
 
-- Before commit/push, run `npm run lint` and `npm run build`.
+- Before commit/push, run `npm run ci:check` (lint + typecheck + tests + build).
 - Do not commit generated folders like `.vite-cache/`, `.vite/`, `dist/`, or `dist2/`.
 - If lint fails, fix source lint errors first before pushing.
 

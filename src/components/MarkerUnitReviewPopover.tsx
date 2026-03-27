@@ -106,6 +106,24 @@ const MarkerUnitReviewPopover = ({
 
   const suggestionReason = useMemo(() => {
     const suggestion = unitReview.suggestion;
+    if (unitReview.issueKind === "inferred-mismatch" && suggestion) {
+      if (suggestion.matchedBy.referenceMin || suggestion.matchedBy.referenceMax) {
+        return tr(
+          "Hoge zekerheid dat de huidige unit niet klopt op basis van marker, waarde en range.",
+          "High confidence the current unit is incorrect based on marker, value, and range."
+        );
+      }
+      return tr(
+        "Hoge zekerheid dat de huidige unit niet klopt op basis van marker en waarde.",
+        "High confidence the current unit is incorrect based on marker and value."
+      );
+    }
+    if (unitReview.issueKind !== "missing") {
+      return tr(
+        "Deze unit past niet bij deze marker. Kies de juiste unit.",
+        "This unit does not match this marker. Choose the correct unit."
+      );
+    }
     if (!suggestion) {
       return tr(
         "Geen veilige match. Kies hieronder zelf de unit.",
@@ -122,7 +140,7 @@ const MarkerUnitReviewPopover = ({
       "Hoge zekerheid op basis van marker en waarde.",
       "High confidence from the marker and value."
     );
-  }, [tr, unitReview.suggestion]);
+  }, [tr, unitReview.issueKind, unitReview.suggestion]);
 
   const shellClassName = isLightTheme
     ? "fixed z-[140] rounded-[22px] border border-slate-200 bg-white p-4 text-sm text-slate-900 shadow-[0_26px_72px_-40px_rgba(15,23,42,0.32)]"
@@ -167,7 +185,13 @@ const MarkerUnitReviewPopover = ({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className={titleClassName}>{tr("Ontbrekende unit", "Missing unit")}</p>
+          <p className={titleClassName}>
+            {unitReview.issueKind === "missing"
+              ? tr("Ontbrekende unit", "Missing unit")
+              : unitReview.issueKind === "inferred-mismatch"
+                ? tr("Waarschijnlijk foute unit", "Likely wrong unit")
+                : tr("Unit niet herkend", "Unit not recognized")}
+          </p>
           <p className={bodyClassName}>{suggestionReason}</p>
         </div>
         <button

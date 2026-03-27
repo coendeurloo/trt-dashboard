@@ -34,6 +34,8 @@ export interface UnitReviewSuggestion {
 
 export interface MarkerUnitReview {
   isMissingUnit: boolean;
+  hasUnitIssue: boolean;
+  issueKind: "none" | "missing" | "unsupported" | "inferred-mismatch";
   suggestion: UnitReviewSuggestion | null;
   options: string[];
 }
@@ -1081,7 +1083,7 @@ const resolveUnitOptions = (profile: UnitInferenceProfile | undefined, marker: C
   return options;
 };
 
-const inferMissingUnit = (
+const inferUnitFromSignals = (
   marker: MarkerValue,
   canonicalMarker: CanonicalMarker | null
 ): UnitReviewSuggestion | null => {
@@ -1142,10 +1144,28 @@ export const buildMarkerUnitReview = (
   marker: MarkerValue,
   matchResult: MarkerMatchResult
 ): MarkerUnitReview => {
-  const isMissingUnit = String(marker.unit ?? "").trim().length === 0;
+  const currentUnit = String(marker.unit ?? "").trim();
+  const isMissingUnit = currentUnit.length === 0;
   const canonicalMarker = matchResult.canonical;
   const profile = canonicalMarker ? UNIT_INFERENCE_PROFILES[canonicalMarker.id] : undefined;
-  const suggestion = isMissingUnit ? inferMissingUnit(marker, canonicalMarker) : null;
+  const allowedUnits = canonicalMarker ? [canonicalMarker.preferredUnit, ...canonicalMarker.alternateUnits].filter(Boolean) : [];
+  const isSupportedByCatalog =
+    currentUnit.length > 0 && allowedUnits.some((unit) => areUnitsEquivalent(unit, currentUnit));
+  const inferredSuggestion = inferUnitFromSignals(marker, canonicalMarker);
+  const hasUnsupportedUnit = currentUnit.length > 0 && canonicalMarker !== null && allowedUnits.length > 0 && !isSupportedByCatalog;
+  const hasInferredMismatch =
+    currentUnit.length > 0 &&
+    inferredSuggestion !== null &&
+    !areUnitsEquivalent(currentUnit, inferredSuggestion.unit);
+  const issueKind: MarkerUnitReview["issueKind"] = isMissingUnit
+    ? "missing"
+    : hasInferredMismatch
+      ? "inferred-mismatch"
+      : hasUnsupportedUnit
+        ? "unsupported"
+        : "none";
+  const hasUnitIssue = issueKind !== "none";
+  const suggestion = hasUnitIssue ? inferredSuggestion : null;
   const baseOptions = resolveUnitOptions(profile, canonicalMarker);
   const options =
     suggestion === null
@@ -1154,6 +1174,8 @@ export const buildMarkerUnitReview = (
 
   return {
     isMissingUnit,
+    hasUnitIssue,
+    issueKind,
     suggestion,
     options
   };

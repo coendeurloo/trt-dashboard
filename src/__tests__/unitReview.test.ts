@@ -162,4 +162,39 @@ describe("unitReview", () => {
     expect(review.suggestion?.unit).toBe("mg/L FEU");
     expect(review.options.slice(0, 2)).toEqual(["mg/L FEU", "ng/mL FEU"]);
   });
+
+  it("suggests g/dL when albumin has a likely wrong unit based on value", () => {
+    const marker = baseMarker({
+      marker: "Albumin",
+      canonicalMarker: "Albumin",
+      value: 3,
+      unit: "mg/L",
+      referenceMin: null,
+      referenceMax: null
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.issueKind).toBe("inferred-mismatch");
+    expect(review.hasUnitIssue).toBe(true);
+    expect(review.suggestion?.unit).toBe("g/dL");
+    expect(review.options[0]).toBe("g/dL");
+  });
+
+  it("does not suggest a replacement when the current unit already matches", () => {
+    const marker = baseMarker({
+      marker: "Albumin",
+      canonicalMarker: "Albumin",
+      value: 3,
+      unit: "g/dL",
+      referenceMin: null,
+      referenceMax: null
+    });
+
+    const review = buildMarkerUnitReview(marker, matchMarker(marker.marker));
+
+    expect(review.issueKind).toBe("none");
+    expect(review.hasUnitIssue).toBe(false);
+    expect(review.suggestion).toBeNull();
+  });
 });

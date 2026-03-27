@@ -299,6 +299,24 @@ const ReportsView = ({
     return undefined;
   };
 
+  const isInteractiveUnitReview = useCallback(
+    (marker: ReviewMarker): boolean => {
+      if (isShareMode) {
+        return false;
+      }
+      const unitReview = marker._unitReview;
+      if (!unitReview) {
+        return false;
+      }
+      if (unitReview.isMissingUnit || unitReview.hasUnitIssue) {
+        return true;
+      }
+      const unitConfidence = marker._confidence?.unit;
+      return unitConfidence === "low" || unitConfidence === "missing";
+    },
+    [isShareMode]
+  );
+
   const normalizeAnchorState = (annotations: ReportAnnotations): ReportAnnotations["supplementAnchorState"] => {
     if (
       annotations.supplementAnchorState === "inherit" ||
@@ -384,12 +402,12 @@ const ReportsView = ({
     if (!activeUnitReview) {
       return;
     }
-    if (!activeUnitReviewMarker?._unitReview?.isMissingUnit) {
+    if (!activeUnitReviewMarker || !isInteractiveUnitReview(activeUnitReviewMarker)) {
       setActiveUnitReview(null);
       setUnitReviewSelection("");
       setActiveUnitReviewAnchor(null);
     }
-  }, [activeUnitReview, activeUnitReviewMarker]);
+  }, [activeUnitReview, activeUnitReviewMarker, isInteractiveUnitReview]);
 
   const sortedReportsForList = useMemo(() => {
     const withIndex = reports.map((report, index) => ({ report, index }));
@@ -1625,9 +1643,12 @@ const ReportsView = ({
                               const issuesTitle = markerReviewTooltip(marker);
                               const issuesTooltipId = `report-marker-review-tooltip-${report.id}-${group.category}-${marker.id}`;
                               const unitReviewKey = `${report.id}:${marker.id}`;
-                              const hasInteractiveUnitReview = !isShareMode && marker._unitReview?.isMissingUnit === true;
+                              const hasInteractiveUnitReview = isInteractiveUnitReview(marker);
                               const isUnitReviewOpen =
                                 activeUnitReview?.reportId === report.id && activeUnitReview?.markerId === marker.id;
+                              const unitReviewAriaLabel = marker._unitReview?.isMissingUnit
+                                ? tr("Ontbrekende unit controleren", "Review missing unit")
+                                : tr("Eenheid controleren", "Review unit");
 
                               return (
                                 <tr key={marker.id} className="bg-slate-900/35 text-slate-200">
@@ -1685,7 +1706,7 @@ const ReportsView = ({
                                           : undefined
                                       }
                                       expanded={isUnitReviewOpen}
-                                      ariaLabel={hasInteractiveUnitReview ? tr("Ontbrekende unit controleren", "Review missing unit") : undefined}
+                                      ariaLabel={hasInteractiveUnitReview ? unitReviewAriaLabel : undefined}
                                     />
                                   </td>
                                   <td className="px-3 py-2 text-right">

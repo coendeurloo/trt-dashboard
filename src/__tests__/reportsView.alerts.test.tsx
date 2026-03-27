@@ -276,6 +276,38 @@ describe("ReportsView alert logic", () => {
     expect(onUpdateReportMarkerUnit).toHaveBeenCalledWith(report.id, "m-1", "mmol/L");
   });
 
+  it("opens unit review for a likely wrong unit and preselects the high-confidence suggestion", () => {
+    const report = baseReport({
+      markers: [
+        {
+          id: "m-1",
+          marker: "Albumin",
+          canonicalMarker: "Albumin",
+          value: 3,
+          unit: "mg/L",
+          referenceMin: null,
+          referenceMax: null,
+          abnormal: "normal",
+          confidence: 1
+        }
+      ]
+    });
+    const onUpdateReportMarkerUnit = vi.fn();
+
+    render(<ReportsView {...{ ...buildProps(report), onUpdateReportMarkerUnit }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review unit" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Review unit" });
+    const unitSelect = within(dialog).getByRole("combobox") as HTMLSelectElement;
+    expect(unitSelect.value).toBe("g/dL");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    expect(onUpdateReportMarkerUnit).toHaveBeenCalledWith(report.id, "m-1", "g/dL");
+  });
+
   it("keeps missing-unit review read-only in share mode", () => {
     const report = baseReport({
       markers: [

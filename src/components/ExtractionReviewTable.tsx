@@ -437,16 +437,28 @@ const ExtractionReviewTable = ({
   const autoFixableMarkers = reviewMarkers.filter(isActionableAutoFix);
   const activeUnitReviewRow = activeUnitReviewRowId ? reviewMarkers.find((row) => row.id === activeUnitReviewRowId) ?? null : null;
 
+  const isInteractiveUnitReview = useCallback((row: ReviewMarker): boolean => {
+    const unitReview = row._unitReview;
+    if (!unitReview) {
+      return false;
+    }
+    if (unitReview.isMissingUnit || unitReview.hasUnitIssue) {
+      return true;
+    }
+    const unitConfidence = row._confidence?.unit;
+    return unitConfidence === "low" || unitConfidence === "missing";
+  }, []);
+
   useEffect(() => {
     if (!activeUnitReviewRowId) {
       return;
     }
-    if (!activeUnitReviewRow?._unitReview?.isMissingUnit) {
+    if (!activeUnitReviewRow || !isInteractiveUnitReview(activeUnitReviewRow)) {
       setActiveUnitReviewRowId(null);
       setUnitReviewSelection("");
       setActiveUnitReviewAnchor(null);
     }
-  }, [activeUnitReviewRow, activeUnitReviewRowId]);
+  }, [activeUnitReviewRow, activeUnitReviewRowId, isInteractiveUnitReview]);
 
   const statusLabel = (row: ReviewMarker): string => {
     const overall = row._confidence?.overall ?? "ok";
@@ -1162,8 +1174,11 @@ const ExtractionReviewTable = ({
                 const hasVisualRange = rangeType !== "none" && (rangeMin !== undefined || rangeMax !== undefined);
                 const reviewTitle = reviewTooltip(row);
                 const reviewTooltipId = `review-tooltip-${row.id}`;
-                const hasInteractiveUnitReview = row._unitReview?.isMissingUnit === true;
+                const hasInteractiveUnitReview = isInteractiveUnitReview(row);
                 const isUnitReviewOpen = activeUnitReviewRowId === row.id;
+                const unitReviewAriaLabel = row._unitReview?.isMissingUnit
+                  ? tr("Ontbrekende unit controleren", "Review missing unit")
+                  : tr("Eenheid controleren", "Review unit");
 
                 return (
                   <tr key={row.id} className="bg-slate-900/35">
@@ -1340,7 +1355,7 @@ const ExtractionReviewTable = ({
                       }}
                       aria-haspopup="dialog"
                       aria-expanded={isUnitReviewOpen}
-                      aria-label={tr("Ontbrekende unit controleren", "Review missing unit")}
+                      aria-label={unitReviewAriaLabel}
                     >
                       {statusIcon(row)}
                       {statusLabel(row)}
