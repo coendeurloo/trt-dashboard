@@ -1457,8 +1457,8 @@ const App = () => {
     setAiCandidateDraft(null);
     setUploadNotice(
       tr(
-        "Lokale extractie is behouden. Je kunt markers handmatig aanpassen en opslaan.",
-        "Local extraction was kept. You can edit markers manually and save."
+        "Lokale extractie is behouden. Je kunt biomarkers handmatig aanpassen en opslaan.",
+        "Local extraction was kept. You can edit biomarkers manually and save."
       )
     );
   };
@@ -1620,7 +1620,7 @@ const App = () => {
     });
 
     if (sanitizedMarkers.length === 0) {
-      setUploadError(tr("Geen geldige markerrijen gevonden. Voeg minimaal één marker toe voordat je opslaat.", "No valid marker rows found. Add at least one marker before saving."));
+      setUploadError(tr("Geen geldige biomarker-rijen gevonden. Voeg minimaal één biomarker toe voordat je opslaat.", "No valid biomarker rows found. Add at least one biomarker before saving."));
       return;
     }
 
@@ -1890,8 +1890,8 @@ const App = () => {
         "AI rescue is active. We first do local preparation and then - with your consent - send the original PDF to AI for a full rescue pass."
       )
     : tr(
-        "Markerwaarden, eenheden en referentiebereiken worden lokaal uitgelezen (zonder externe AI). Bij lage kwaliteit kun je daarna optioneel AI-rescue starten (na toestemming).",
-        "Markers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
+        "Biomarkerwaarden, eenheden en referentiebereiken worden lokaal uitgelezen (zonder externe AI). Bij lage kwaliteit kun je daarna optioneel AI-rescue starten (na toestemming).",
+        "Biomarkers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
       );
 
   const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
@@ -1911,12 +1911,12 @@ const App = () => {
   const activeTabSubtitle = (() => {
     if (isShareMode) {
       return activeTab === "dashboard"
-        ? tr("Gedeelde read-only snapshot van tijdlijntrends en markercontext.", "Shared read-only snapshot of timeline trends and marker context.")
+        ? tr("Gedeelde read-only snapshot van tijdlijntrends en biomarkercontext.", "Shared read-only snapshot of timeline trends and biomarker context.")
         : null;
     }
-    if (activeTab === "dashboard") return hasReports ? tr("Je gezondheidsmarkers in één oogopslag.", "Your health markers at a glance.") : null;
+    if (activeTab === "dashboard") return hasReports ? tr("Je biomarkers in één oogopslag.", "Your biomarkers at a glance.") : null;
     if (activeTab === "reports") return tr("Alle geüploade labresultaten in één overzicht.", "All uploaded lab reports in one overview.");
-    if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je markers.", "Trend and threshold alerts for your markers.");
+    if (activeTab === "alerts") return tr("Trends en drempelwaarschuwingen voor je biomarkers.", "Trend and threshold alerts for your biomarkers.");
     if (activeTab === "protocol") {
       const protocolProfile = appData.settings.userProfile === "trt" || appData.settings.userProfile === "enhanced";
       return protocolProfile
@@ -1928,12 +1928,12 @@ const App = () => {
     if (activeTab === "supplements") return tr("Bijhoud supplementen naast je labresultaten.", "Track your supplements alongside lab results.");
     if (activeTab === "protocolImpact") {
       if (appData.settings.userProfile === "health") {
-        return tr("Interventiewijzigingen afgezet tegen je gemeten markers.", "Measured impact of intervention changes on your markers.");
+        return tr("Interventiewijzigingen afgezet tegen je gemeten biomarkers.", "Measured impact of intervention changes on your biomarkers.");
       }
       if (appData.settings.userProfile === "biohacker") {
-        return tr("Stack-wijzigingen afgezet tegen je gemeten markers.", "Measured impact of stack changes on your markers.");
+        return tr("Stack-wijzigingen afgezet tegen je gemeten biomarkers.", "Measured impact of stack changes on your biomarkers.");
       }
-      return tr("Protocolwijzigingen afgezet tegen je gemeten markers.", "Measured impact of protocol changes on your markers.");
+      return tr("Protocolwijzigingen afgezet tegen je gemeten biomarkers.", "Measured impact of protocol changes on your biomarkers.");
     }
     if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
     if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
@@ -1980,7 +1980,7 @@ const App = () => {
         {
           id: "markers",
           value: String(allMarkers.length),
-          label: tr("markers gevolgd", "markers tracked")
+          label: tr("biomarkers gevolgd", "biomarkers tracked")
         },
         {
           id: "out-of-range",
@@ -3232,7 +3232,7 @@ const App = () => {
                   <h3 className="text-base font-semibold text-slate-100">
                     {getMarkerDisplayName(expandedMarker, appData.settings.language)}
                   </h3>
-                  <p className="text-xs text-slate-400">{tr("Gedetailleerde markergrafiek", "Detailed marker chart")}</p>
+                  <p className="text-xs text-slate-400">{tr("Gedetailleerde biomarkergrafiek", "Detailed biomarker chart")}</p>
                 </div>
                 <button
                   type="button"
@@ -3279,12 +3279,12 @@ const App = () => {
             >
               <div className="border-b border-slate-700/70 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-100">
-                  {tr("Marker review nodig", "Marker review needed")}
+                  {tr("Biomarker review nodig", "Biomarker review needed")}
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">
                   {tr(
-                    "Deze markers lijken mogelijk dubbel. Je kunt nu meteen mergen of later via Settings > Marker Manager.",
-                    "These markers may be duplicates. Merge now or do it later in Settings > Marker Manager."
+                    "Deze biomarkers lijken mogelijk dubbel. Je kunt nu meteen mergen of later via Settings > Biomarker Manager.",
+                    "These biomarkers may be duplicates. Merge now or do it later in Settings > Biomarker Manager."
                   )}
                 </p>
               </div>
@@ -3354,13 +3354,13 @@ const App = () => {
               onClick={(event) => event.stopPropagation()}
             >
               <div className="border-b border-slate-700/70 px-4 py-3">
-                <h3 className="text-base font-semibold text-slate-100">{tr("Marker hernoemen", "Rename marker")}</h3>
+                <h3 className="text-base font-semibold text-slate-100">{tr("Biomarker hernoemen", "Rename biomarker")}</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  {tr("Wijzigt alle rapporten met deze marker.", "This updates all reports containing this marker.")}
+                  {tr("Wijzigt alle rapporten met deze biomarker.", "This updates all reports containing this biomarker.")}
                 </p>
               </div>
               <div className="px-4 py-3">
-                <label className="block text-xs uppercase tracking-wide text-slate-400">{tr("Nieuwe markernaam", "New marker name")}</label>
+                <label className="block text-xs uppercase tracking-wide text-slate-400">{tr("Nieuwe biomarkernaam", "New biomarker name")}</label>
                 <input
                   className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
                   value={renameDialog.draftName}
@@ -3395,8 +3395,8 @@ const App = () => {
                       typeof window !== "undefined" &&
                       !window.confirm(
                         tr(
-                          "Deze marker lijkt van een ander specimen (bijv. urine vs bloed). Doorgaan met handmatige override?",
-                          "This marker appears to use a different specimen (for example urine vs blood). Continue with manual override?"
+                          "Deze biomarker lijkt van een ander specimen (bijv. urine vs bloed). Doorgaan met handmatige override?",
+                          "This biomarker appears to use a different specimen (for example urine vs blood). Continue with manual override?"
                         )
                       )
                     ) {

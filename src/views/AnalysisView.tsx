@@ -148,12 +148,12 @@ const AnalysisView = ({
       : null;
   const scopeHint = hasActiveProtocol
     ? tr(
-        `${reportsInScope} rapporten in scope · ${markersTracked} markers · ${unitSystemLabel} · ${activeProtocolLabel}`,
-        `${reportsInScope} reports in scope · ${markersTracked} markers · ${unitSystemLabel} · ${activeProtocolLabel}`
+        `${reportsInScope} rapporten in scope · ${markersTracked} biomarkers · ${unitSystemLabel} · ${activeProtocolLabel}`,
+        `${reportsInScope} reports in scope · ${markersTracked} biomarkers · ${unitSystemLabel} · ${activeProtocolLabel}`
       )
     : tr(
-        `${reportsInScope} rapporten in scope · ${markersTracked} markers · ${unitSystemLabel}`,
-        `${reportsInScope} reports in scope · ${markersTracked} markers · ${unitSystemLabel}`
+        `${reportsInScope} rapporten in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`,
+        `${reportsInScope} reports in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`
       );
 
   return (

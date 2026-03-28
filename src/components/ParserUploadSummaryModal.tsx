@@ -33,9 +33,9 @@ interface ParserUploadSummaryModalProps {
 
 const formatMarkerCountLabel = (count: number, language: AppLanguage): string => {
   if (language === "nl") {
-    return count === 1 ? "1 marker gevonden" : `${count} markers gevonden`;
+    return count === 1 ? "1 biomarker gevonden" : `${count} biomarkers gevonden`;
   }
-  return count === 1 ? "1 marker found" : `${count} markers found`;
+  return count === 1 ? "1 biomarker found" : `${count} biomarkers found`;
 };
 
 const ParserUploadSummaryModal = ({
@@ -58,7 +58,7 @@ const ParserUploadSummaryModal = ({
       ? tr("AI-rescue voltooid", "AI rescue completed")
       : summary.markerCount > 0
         ? formatMarkerCountLabel(summary.markerCount, language)
-        : tr("Geen markers gevonden", "No markers found");
+        : tr("Geen biomarkers gevonden", "No biomarkers found");
 
   const subtitle =
     summary.kind === "ai_rescue"
@@ -77,8 +77,8 @@ const ParserUploadSummaryModal = ({
             "This report needs review before saving."
           )
         : tr(
-            "Controleer de markers en sla het rapport op wanneer je klaar bent.",
-            "Review the markers and save the report when you're ready."
+            "Controleer de biomarkers en sla het rapport op wanneer je klaar bent.",
+            "Review the biomarkers and save the report when you're ready."
           );
 
   const routeText =
@@ -90,18 +90,18 @@ const ParserUploadSummaryModal = ({
     summary.kind === "ai_rescue"
       ? summary.warnings > 0
         ? tr(
-            "Parserwaarschuwingen blijven zichtbaar in het review-scherm. Controleer de markers zorgvuldig.",
-            "Parser warnings remain in the review screen. Check the markers carefully."
+            "Parserwaarschuwingen blijven zichtbaar in het review-scherm. Controleer de biomarkers zorgvuldig.",
+            "Parser warnings remain in the review screen. Check the biomarkers carefully."
           )
         : tr(
-            "Bekijk de gevonden markers nog even voordat je opslaat.",
-            "Take one more look at the extracted markers before saving."
+            "Bekijk de gevonden biomarkers nog even voordat je opslaat.",
+            "Take one more look at the extracted biomarkers before saving."
           )
       : summary.needsReview
         ? summary.warnings > 0
           ? tr(
-              "Er zijn parserwaarschuwingen gevonden. Controleer de gevonden markers zorgvuldig voordat je opslaat.",
-              "Parser warnings were detected. Review the extracted markers carefully before saving."
+              "Er zijn parserwaarschuwingen gevonden. Controleer de gevonden biomarkers zorgvuldig voordat je opslaat.",
+              "Parser warnings were detected. Review the extracted biomarkers carefully before saving."
             )
           : tr(
               "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
@@ -109,19 +109,19 @@ const ParserUploadSummaryModal = ({
             )
         : summary.warnings > 0
           ? tr(
-              "Er zijn parserwaarschuwingen gevonden. Controleer de markers nog even voordat je opslaat.",
-              "Parser warnings were detected. Give the markers a quick review before saving."
+              "Er zijn parserwaarschuwingen gevonden. Controleer de biomarkers nog even voordat je opslaat.",
+              "Parser warnings were detected. Give the biomarkers a quick review before saving."
             )
           : "";
   const footerHint =
     summary.kind === "upload" && summary.needsReview
       ? tr(
-          "Je kunt nu alle markers controleren en aanpassen voordat je opslaat.",
-          "You can now review and edit all markers before saving."
+          "Je kunt nu alle biomarkers controleren en aanpassen voordat je opslaat.",
+          "You can now review and edit all biomarkers before saving."
         )
       : tr(
-          "Controleer de markers en ga verder wanneer je klaar bent.",
-          "Review the markers and continue when you're ready."
+          "Controleer de biomarkers en ga verder wanneer je klaar bent.",
+          "Review the biomarkers and continue when you're ready."
         );
 
   return (
@@ -168,7 +168,7 @@ const ParserUploadSummaryModal = ({
               </span>
               {summary.kind === "ai_rescue" ? (
                 <span className="rounded-full border border-slate-600/80 bg-slate-900/70 px-2.5 py-1 text-slate-300">
-                  {tr("Markers", "Markers")}: {summary.baselineMarkerCount} {"->"} {summary.finalMarkerCount}
+                  {tr("Biomarkers", "Biomarkers")}: {summary.baselineMarkerCount} {"->"} {summary.finalMarkerCount}
                 </span>
               ) : null}
             </div>
@@ -209,7 +209,7 @@ const ParserUploadSummaryModal = ({
               className="rounded-md border border-cyan-500/60 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-100 hover:border-cyan-400 hover:bg-cyan-500/20"
               onClick={onContinue}
             >
-              {tr("Controleer markers", "Review markers")}
+              {tr("Controleer biomarkers", "Review biomarkers")}
             </button>
           </div>
         </div>

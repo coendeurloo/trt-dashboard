@@ -142,12 +142,12 @@ const DoseResponseView = ({
             </h3>
             <p className="mt-1 text-sm text-slate-300">
               {tr(
-                "Modelleer hoe je markers waarschijnlijk reageren bij een dosisaanpassing.",
-                "Model how your markers are likely to respond when your dose changes."
+                "Modelleer hoe je biomarkers waarschijnlijk reageren bij een dosisaanpassing.",
+                "Model how your biomarkers are likely to respond when your dose changes."
               )}
             </p>
             <p className="mt-1 text-sm text-slate-400">
-              {tr("{focus} van {total} markers", "{focus} of {total} markers")
+              {tr("{focus} van {total} biomarkers", "{focus} of {total} biomarkers")
                 .replace("{focus}", String(Math.min(8, premiumPredictions.length)))
                 .replace("{total}", String(premiumPredictions.length))}
             </p>
@@ -312,7 +312,7 @@ const DoseResponseView = ({
                     : "border border-transparent text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
                 }`}
               >
-                {tr("Alle markers", "All markers")}
+                {tr("Alle biomarkers", "All Biomarkers")}
               </button>
             </div>
           ) : null}

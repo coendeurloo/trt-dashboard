@@ -203,12 +203,12 @@ const DashboardView = ({
   );
   const trtTargetZoneTooltip = isGeneralProfile
     ? tr(
-        "Toont de streefzone voor markers met een bekende doelband.",
-        "Shows the target zone for markers with a known target band."
+        "Toont de streefzone voor biomarkers met een bekende doelband.",
+        "Shows the target zone for biomarkers with a known target band."
       )
     : tr(
-        "Toont de TRT-streefzone voor markers met een bekende doelband.",
-        "Shows the TRT target zone for markers with a known target band."
+        "Toont de TRT-streefzone voor biomarkers met een bekende doelband.",
+        "Shows the TRT target zone for biomarkers with a known target band."
       );
   const longevityZoneTooltip = tr(
     "Toont een conservatievere streefzone gericht op lange termijn risicobeperking.",
@@ -610,16 +610,16 @@ const DashboardView = ({
                   type="search"
                   value={markerSearchTerm}
                   onChange={(event) => setMarkerSearchTerm(event.target.value)}
-                  placeholder={tr("Zoek marker...", "Search markers...")}
+                  placeholder={tr("Zoek biomarker...", "Search biomarkers...")}
                   className={
                     isDarkTheme
                       ? "w-full rounded-md border border-slate-700/80 bg-slate-900/70 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 sm:w-64"
                       : "w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-500 sm:w-64"
                   }
-                  aria-label={tr("Zoek marker", "Search marker")}
+                  aria-label={tr("Zoek biomarker", "Search biomarker")}
                 />
                 <p className={isDarkTheme ? "text-xs text-slate-400" : "text-xs text-slate-600"}>
-                  {tr(`${markersToRender.length} markers zichtbaar`, `${markersToRender.length} markers shown`)}
+                  {tr(`${markersToRender.length} biomarkers zichtbaar`, `${markersToRender.length} biomarkers shown`)}
                 </p>
                 <label className="ml-auto flex items-center gap-2 text-xs">
                   <span className={isDarkTheme ? "text-slate-400" : "text-slate-600"}>{tr("Categorie", "Category")}</span>
@@ -678,13 +678,13 @@ const DashboardView = ({
                     }`}
                     onClick={() => onDashboardModeChange("compare2")}
                   >
-                    {tr("Vergelijk 2 markers", "Compare 2 markers")}
+                    {tr("Vergelijk 2 biomarkers", "Compare 2 biomarkers")}
                   </button>
                 </div>
                 {!isCompareMode ? (
                   <div className="mt-3 border-t border-slate-700/60 pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Primaire markers", "Primary markers")}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Belangrijke biomarkers", "Key Biomarkers")}</p>
                       <button
                         type="button"
                         onClick={() => setShowPrimaryMarkerPicker((current) => !current)}
@@ -722,7 +722,7 @@ const DashboardView = ({
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t border-slate-700/60 pt-2">
                           <p className="text-[11px] text-slate-400">
-                            {tr("Minimaal 1 marker geselecteerd", "At least 1 marker must remain selected")}
+                            {tr("Minimaal 1 biomarker geselecteerd", "At least 1 biomarker must remain selected")}
                           </p>
                           <button
                             type="button"
@@ -1109,9 +1109,9 @@ const DashboardView = ({
           </div>
         ) : markersToRender.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-10 text-center">
-            <p className="text-base font-semibold text-slate-200">{tr("Geen markers gevonden", "No markers found")}</p>
+            <p className="text-base font-semibold text-slate-200">{tr("Geen biomarkers gevonden", "No biomarkers found")}</p>
             <p className="mt-1 text-sm text-slate-400">
-              {tr("Pas je zoekterm of categorie aan om markers te tonen.", "Adjust your search term or category filter to show markers.")}
+              {tr("Pas je zoekterm of categorie aan om biomarkers te tonen.", "Adjust your search term or category filter to show biomarkers.")}
             </p>
           </div>
         ) : dashboardView === "all" ? (
@@ -1221,8 +1221,8 @@ const DashboardView = ({
                 <p className="text-xs font-medium text-slate-200">{tr("Hormoonestabiliteit", "Hormone stability")}</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
                   {tr(
-                    "Meet hoe consistent je markers zijn over je recente rapporten. Weinig schommeling betekent een hoge score - een goed teken dat je protocol zijn werk doet. 80-100: stabiel | 60-79: matig | onder 60: wisselend.",
-                    "Measures how consistent your markers have been across your recent reports. Little fluctuation means a high score - a good sign your protocol is working. 80-100: stable | 60-79: moderate | below 60: variable."
+                    "Meet hoe consistent je biomarkers zijn over je recente rapporten. Weinig schommeling betekent een hoge score - een goed teken dat je protocol zijn werk doet. 80-100: stabiel | 60-79: matig | onder 60: wisselend.",
+                    "Measures how consistent your biomarkers have been across your recent reports. Little fluctuation means a high score - a good sign your protocol is working. 80-100: stable | 60-79: moderate | below 60: variable."
                   )}
                 </p>
               </div>

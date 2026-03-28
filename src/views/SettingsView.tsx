@@ -262,7 +262,7 @@ const SettingsView = ({
             <div className="mt-6 border-t border-slate-800 pt-6">
               <h3 className="text-sm font-semibold text-slate-300">{tr("Profiel", "Profile")}</h3>
               <p className="mt-1 text-xs text-slate-400">
-                {tr("Bepaalt toon, focusmarkers en AI-context. Later altijd aanpasbaar.", "Sets tone, focus markers, and AI context. You can change this any time.")}
+                {tr("Bepaalt toon, focusbiomarkers en AI-context. Later altijd aanpasbaar.", "Sets tone, focus biomarkers, and AI context. You can change this any time.")}
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {USER_PROFILES.map((profile) => {
@@ -368,8 +368,8 @@ const SettingsView = ({
                   <p className="text-sm font-medium text-red-400">{tr("Verwijder alle data", "Delete all data")}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
                     {tr(
-                      "Verwijder permanent alle rapporten, markers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
-                      "Permanently delete all reports, markers, protocols, supplements, and settings. This cannot be undone."
+                      "Verwijder permanent alle rapporten, biomarkers, protocollen, supplementen en instellingen. Dit kan niet ongedaan worden gemaakt.",
+                      "Permanently delete all reports, biomarkers, protocols, supplements, and settings. This cannot be undone."
                     )}
                   </p>
                   <button
@@ -444,7 +444,7 @@ const SettingsView = ({
             <div>
               <h2 className="text-lg font-semibold text-slate-100">{tr("Lab & data", "Lab & Data")}</h2>
               <p className="mt-1 text-sm text-slate-400">
-                {tr("AI, eenheden, backup, delen en markerbeheer.", "AI, units, backup, sharing and marker management.")}
+                {tr("AI, eenheden, backup, delen en biomarkerbeheer.", "AI, units, backup, sharing and biomarker management.")}
               </p>
             </div>
 
@@ -631,17 +631,17 @@ const SettingsView = ({
             </div>
 
             <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Marker Manager", "Marker Manager")}</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tr("Biomarker Manager", "Biomarker Manager")}</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {tr(
-                  "Beheer markernaam-normalisatie zonder je dashboard te verstoren. Je kunt markers handmatig samenvoegen of hernoemen.",
-                  "Manage marker-name normalization without cluttering the dashboard. You can manually merge or rename markers."
+                  "Beheer biomarkernaam-normalisatie zonder je dashboard te verstoren. Je kunt biomarkers handmatig samenvoegen of hernoemen.",
+                  "Manage biomarker-name normalization without cluttering the dashboard. You can manually merge or rename biomarkers."
                 )}
               </p>
               <p className="mt-2 text-xs text-slate-400">
                 {tr(
-                  "Gebruik merge wanneer twee markers inhoudelijk hetzelfde zijn maar net anders heten (bijv. spelling, afkorting, lab-variant).",
-                  "Use merge when two markers mean the same thing but have slightly different names (spelling, abbreviation, lab variant)."
+                  "Gebruik merge wanneer twee biomarkers inhoudelijk hetzelfde zijn maar net anders heten (bijv. spelling, afkorting, lab-variant).",
+                  "Use merge when two biomarkers mean the same thing but have slightly different names (spelling, abbreviation, lab variant)."
                 )}
               </p>
 
@@ -652,7 +652,7 @@ const SettingsView = ({
                   onChange={(event) => setMergeFromMarker(event.target.value)}
                 >
                   {editableMarkers.length === 0 ? (
-                    <option value="">{tr("Geen markers beschikbaar", "No markers available")}</option>
+                    <option value="">{tr("Geen biomarkers beschikbaar", "No biomarkers available")}</option>
                   ) : (
                     editableMarkers.map((marker) => (
                       <option key={`from-${marker}`} value={marker}>
@@ -691,13 +691,13 @@ const SettingsView = ({
                     onRemapMarker(mergeFromMarker, mergeIntoMarker);
                   }}
                 >
-                  {tr("Voer merge uit", "Merge markers")}
+                  {tr("Voer merge uit", "Merge biomarkers")}
                 </button>
               </div>
               <p className="mt-2 text-xs text-slate-400">
                 {tr(
-                  "Veilige merge: urine-markers en bloed-markers worden nooit samengevoegd.",
-                  "Safe merge: urine markers and blood markers are never merged."
+                  "Veilige merge: urine-biomarkers en bloed-biomarkers worden nooit samengevoegd.",
+                  "Safe merge: urine biomarkers and blood biomarkers are never merged."
                 )}
               </p>
 
@@ -705,7 +705,7 @@ const SettingsView = ({
                 <table className="min-w-full divide-y divide-slate-700 text-sm">
                   <thead className="bg-slate-900/70 text-slate-300">
                     <tr>
-                      <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
+                      <th className="px-3 py-2 text-left">{tr("Biomarker", "Biomarker")}</th>
                       <th className="px-3 py-2 text-right">{tr("Waarden", "Values")}</th>
                       <th className="px-3 py-2 text-right">{tr("Rapporten", "Reports")}</th>
                       <th className="px-3 py-2 text-right">{tr("Actie", "Action")}</th>
@@ -722,7 +722,7 @@ const SettingsView = ({
                             type="button"
                             className="rounded p-1 text-slate-400 transition hover:text-cyan-200"
                             onClick={() => onOpenRenameDialog(item.marker)}
-                            aria-label={tr("Marker hernoemen", "Rename marker")}
+                            aria-label={tr("Biomarker hernoemen", "Rename biomarker")}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -769,8 +769,8 @@ const SettingsView = ({
             </h3>
             <p className={isLightTheme ? "mt-2 text-sm text-slate-600" : "mt-2 text-sm text-slate-400"}>
               {tr(
-                "Dit verwijdert permanent al je rapporten, markers, protocollen, supplementen en instellingen. Je kunt dit alleen herstellen met een eerdere backup.",
-                "This will permanently delete all your reports, markers, protocols, supplements, and settings. There is no way to recover this data unless you have a backup."
+                "Dit verwijdert permanent al je rapporten, biomarkers, protocollen, supplementen en instellingen. Je kunt dit alleen herstellen met een eerdere backup.",
+                "This will permanently delete all your reports, biomarkers, protocols, supplements, and settings. There is no way to recover this data unless you have a backup."
               )}
             </p>
 

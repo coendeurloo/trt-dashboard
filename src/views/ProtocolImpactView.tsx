@@ -408,8 +408,8 @@ const ProtocolImpactDisclosures = ({
         )
       : event.eventConfidence === "Medium"
         ? tr(
-            "Er is een bruikbaar signaal, maar een deel van de markers mist nog sterke pre/post dekking.",
-            "There is a useful signal, but part of the markers still miss strong before and after coverage."
+            "Er is een bruikbaar signaal, maar een deel van de biomarkers mist nog sterke pre/post dekking.",
+            "There is a useful signal, but part of the biomarkers still miss strong before and after coverage."
           )
         : tr(
             "De vergelijking is gebaseerd op beperkte matched data en vraagt om extra metingen.",
@@ -436,7 +436,7 @@ const ProtocolImpactDisclosures = ({
     <section className="space-y-2">
       <details className={`group rounded-xl ${disclosurePanelClass}`}>
         <summary className={`flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium ${tone(isDarkTheme, "text-slate-200", "text-slate-800")}`}>
-          {tr("Toon alle markers", "Show all markers")} ({rows.length})
+          {tr("Toon alle biomarkers", "Show all biomarkers")} ({rows.length})
           <ChevronDown className={`h-4 w-4 transition group-open:rotate-180 ${tone(isDarkTheme, "text-slate-500 group-open:text-cyan-300", "text-slate-400 group-open:text-cyan-600")}`} />
         </summary>
         <div className={`${disclosureDividerClass} px-3 py-3`}>
@@ -465,7 +465,7 @@ const ProtocolImpactDisclosures = ({
         <div className={`${disclosureDividerClass} px-3 py-3 text-sm ${disclosureBodyTextClass}`}>
           <p>{confidenceExplanation}</p>
           <p className={`mt-2 ${disclosureMutedTextClass}`}>
-            {tr("Gemeten markers", "Measured markers")}: {measuredRows.length} · {tr("Nog onvoldoende data", "Insufficient data")}: {insufficientRows.length}
+            {tr("Gemeten biomarkers", "Measured biomarkers")}: {measuredRows.length} · {tr("Nog onvoldoende data", "Insufficient data")}: {insufficientRows.length}
           </p>
         </div>
       </details>

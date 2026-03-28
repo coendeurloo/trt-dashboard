@@ -194,8 +194,8 @@ const ExtractionReviewTable = ({
     .map((code) => {
       if (code === "PDF_TEXT_LAYER_EMPTY") {
         return tr(
-          "Deze PDF heeft geen bruikbare tekstlaag. OCR is gebruikt; controleer de uitgelezen markers extra goed.",
-          "This PDF has no usable text layer. OCR was used; review extracted markers carefully."
+          "Deze PDF heeft geen bruikbare tekstlaag. OCR is gebruikt; controleer de uitgelezen biomarkers extra goed.",
+          "This PDF has no usable text layer. OCR was used; review extracted biomarkers carefully."
         );
       }
       if (code === "PDF_TEXT_EXTRACTION_FAILED") {
@@ -206,20 +206,20 @@ const ExtractionReviewTable = ({
       }
       if (code === "PDF_OCR_INIT_FAILED") {
         return tr(
-          "OCR kon niet worden gestart voor dit bestand. Voeg ontbrekende markers handmatig toe.",
-          "OCR could not be started for this file. Add missing markers manually."
+          "OCR kon niet worden gestart voor dit bestand. Voeg ontbrekende biomarkers handmatig toe.",
+          "OCR could not be started for this file. Add missing biomarkers manually."
         );
       }
       if (code === "PDF_OCR_PARTIAL") {
         return tr(
-          "OCR was slechts gedeeltelijk succesvol. Sommige markers kunnen ontbreken of onjuist zijn.",
-          "OCR was only partially successful. Some markers may be missing or incorrect."
+          "OCR was slechts gedeeltelijk succesvol. Sommige biomarkers kunnen ontbreken of onjuist zijn.",
+          "OCR was only partially successful. Some biomarkers may be missing or incorrect."
         );
       }
       if (code === "PDF_LOW_CONFIDENCE_LOCAL") {
         return tr(
-          "De parserzekerheid is laag. Controleer datum, markerwaarden en referentiebereiken voordat je opslaat.",
-          "Parser confidence is low. Check date, marker values, and reference ranges before saving."
+          "De parserzekerheid is laag. Controleer datum, biomarkerwaarden en referentiebereiken voordat je opslaat.",
+          "Parser confidence is low. Check date, biomarker values, and reference ranges before saving."
         );
       }
       if (code === "PDF_UNKNOWN_LAYOUT") {
@@ -236,8 +236,8 @@ const ExtractionReviewTable = ({
       }
       if (code === "PDF_AI_TEXT_ONLY_INSUFFICIENT") {
         return tr(
-          "AI op tekst-only vond onvoldoende markerregels. De parser probeerde extra herstelstappen waar mogelijk.",
-          "AI text-only extraction found too few marker rows. The parser attempted extra rescue steps when possible."
+          "AI op tekst-only vond onvoldoende biomarker-rijen. De parser probeerde extra herstelstappen waar mogelijk.",
+          "AI text-only extraction found too few biomarker rows. The parser attempted extra rescue steps when possible."
         );
       }
       if (code === "PDF_AI_PDF_RESCUE_SKIPPED_COST_MODE") {
@@ -254,8 +254,8 @@ const ExtractionReviewTable = ({
       }
       if (code === "PDF_AI_PDF_RESCUE_FAILED") {
         return tr(
-          "PDF-rescue met AI is mislukt. Controleer markers handmatig of probeer opnieuw met een kleiner bestand.",
-          "AI PDF rescue failed. Review markers manually or try again with a smaller file."
+          "PDF-rescue met AI is mislukt. Controleer biomarkers handmatig of probeer opnieuw met een kleiner bestand.",
+          "AI PDF rescue failed. Review biomarkers manually or try again with a smaller file."
         );
       }
       if (code === "PDF_AI_SKIPPED_BUDGET") {
@@ -306,17 +306,17 @@ const ExtractionReviewTable = ({
         )
       : draft.markers.length > 1
       ? tr(
-          "Er zijn maar {count} markers uit dit rapport gehaald. Controleer ze zorgvuldig voordat je opslaat.",
-          "Only {count} markers were extracted from this report. Review them carefully before saving."
+          "Er zijn maar {count} biomarkers uit dit rapport gehaald. Controleer ze zorgvuldig voordat je opslaat.",
+          "Only {count} biomarkers were extracted from this report. Review them carefully before saving."
         ).replace("{count}", String(draft.markers.length))
       : draft.markers.length === 1
         ? tr(
-            "Er is maar 1 marker uit dit rapport gehaald. Controleer die zorgvuldig voordat je opslaat.",
-            "Only 1 marker was extracted from this report. Review it carefully before saving."
+            "Er is maar 1 biomarker uit dit rapport gehaald. Controleer die zorgvuldig voordat je opslaat.",
+            "Only 1 biomarker was extracted from this report. Review it carefully before saving."
           )
       : tr(
-          "Er zijn nog geen bruikbare markers uit dit rapport gehaald. Controleer het resultaat zorgvuldig voordat je opslaat.",
-          "No usable markers were extracted from this report yet. Review the result carefully before saving."
+          "Er zijn nog geen bruikbare biomarkers uit dit rapport gehaald. Controleer het resultaat zorgvuldig voordat je opslaat.",
+          "No usable biomarkers were extracted from this report yet. Review the result carefully before saving."
         );
 
   const selectedProtocol = useMemo(
@@ -408,7 +408,7 @@ const ExtractionReviewTable = ({
   const displayReferenceMin = (row: MarkerValue): number | null => (hasRawReferenceMin(row) ? row.rawReferenceMin ?? null : row.referenceMin);
   const displayReferenceMax = (row: MarkerValue): number | null => (hasRawReferenceMax(row) ? row.rawReferenceMax ?? null : row.referenceMax);
   const isCanonicalNameMode = markerNameDisplayMode === "canonical";
-  const reportNameFallback = tr("Onbekende marker", "Unknown marker");
+  const reportNameFallback = tr("Onbekende biomarker", "Unknown biomarker");
   const resolveCanonicalName = (row: ReviewMarker): string | null => {
     const canonicalFromMatch = row._matchResult?.canonical?.canonicalName?.trim();
     if (canonicalFromMatch) {
@@ -832,7 +832,7 @@ const ExtractionReviewTable = ({
           {!isManualEntry ? (
             <>
               <p className="text-sm text-slate-300">
-                {draft.sourceFileName} | {draft.markers.length} {tr("markers", "markers")}
+                {draft.sourceFileName} | {draft.markers.length} {tr("biomarkers", "biomarkers")}
                 <span
                   className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
                     resultOrigin === "ai"
@@ -916,8 +916,8 @@ const ExtractionReviewTable = ({
           </div>
           <p className="mt-1 text-xs text-amber-100/95 sm:text-sm">
             {tr(
-              "Controleer testdatum, markerwaarden en referenties voordat je opslaat.",
-              "Check test date, marker values, and references before saving."
+              "Controleer testdatum, biomarkerwaarden en referenties voordat je opslaat.",
+              "Check test date, biomarker values, and references before saving."
             )}
           </p>
           <ul className="mt-2 space-y-1 text-xs sm:text-sm">
@@ -940,7 +940,7 @@ const ExtractionReviewTable = ({
               <div className="mt-2 rounded-md border border-amber-500/20 bg-slate-950/30 p-2 text-xs text-amber-100/95">
                 <p className="font-medium">{tr("Checklist voor opslaan", "Checklist before saving")}</p>
                 <p>- {tr("Controleer of de testdatum klopt.", "Confirm the test date is correct.")}</p>
-                <p>- {tr("Controleer kritieke markers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical markers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
+                <p>- {tr("Controleer kritieke biomarkers (Testosterone, Estradiol, SHBG, Hematocrit).", "Verify critical biomarkers (Testosterone, Estradiol, SHBG, Hematocrit).")}</p>
                 <p>- {tr("Vul ontbrekende referentiewaarden handmatig aan waar nodig.", "Fill in missing reference ranges manually where needed.")}</p>
               </div>
               {showParserDebugInfo && debugInfo ? (
@@ -962,8 +962,8 @@ const ExtractionReviewTable = ({
           <p className="font-medium">{tr("Volgende stap bij onbekend format", "Next step for unknown format")}</p>
           <p className="mt-1 text-xs text-rose-100/90 sm:text-sm">
             {tr(
-              "Parser kon nog geen bruikbare markers vinden. Kies een vervolgstap hieronder.",
-              "Parser could not find usable markers yet. Pick a follow-up action below."
+              "Parser kon nog geen bruikbare biomarkers vinden. Kies een vervolgstap hieronder.",
+              "Parser could not find usable biomarkers yet. Pick a follow-up action below."
             )}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -1078,15 +1078,15 @@ const ExtractionReviewTable = ({
         <div className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/40 p-3 text-amber-100">
           <p className="inline-flex items-center gap-2 text-sm font-semibold">
             <AlertTriangle className="h-4 w-4" />
-            {tr("{count} markers hebben controle nodig", "{count} markers need review").replace(
+            {tr("{count} biomarkers hebben controle nodig", "{count} biomarkers need review").replace(
               "{count}",
               String(markersNeedingReview.length)
             )}
           </p>
           <p className="mt-1 text-xs text-amber-100/90 sm:text-sm">
             {tr(
-              "We konden sommige marker-namen, eenheden of referentiebereiken niet volledig herkennen.",
-              "We could not fully recognize some marker names, units, or reference ranges."
+              "We konden sommige biomarkernamen, eenheden of referentiebereiken niet volledig herkennen.",
+              "We could not fully recognize some biomarker names, units, or reference ranges."
             )}
           </p>
           {autoFixableMarkers.length > 0 ? (
@@ -1096,7 +1096,7 @@ const ExtractionReviewTable = ({
               onClick={applyAutoFixToAll}
             >
               <Wrench className="h-4 w-4" />
-              {tr("Auto-fix {count} markers", "Auto-fix {count} markers").replace(
+              {tr("Auto-fix {count} biomarkers", "Auto-fix {count} biomarkers").replace(
                 "{count}",
                 String(autoFixableMarkers.length)
               )}
@@ -1107,7 +1107,7 @@ const ExtractionReviewTable = ({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-700/80 bg-slate-900/45 p-2.5">
         <p className="text-xs text-slate-300 sm:text-sm">
-          {tr("Markernaam weergave", "Marker name display")}
+          {tr("Biomarkernaam weergave", "Biomarker name display")}
         </p>
         <div className="inline-flex rounded-md border border-slate-700 bg-slate-900/70 p-0.5">
           <button
@@ -1151,7 +1151,7 @@ const ExtractionReviewTable = ({
             </colgroup>
             <thead className="bg-slate-900/80 text-left text-slate-300">
               <tr>
-                <th className="px-3 py-2">{tr("Marker", "Marker")}</th>
+                <th className="px-3 py-2">{tr("Biomarker", "Biomarker")}</th>
                 <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
                 <th className="px-3 py-2">{tr("Eenheid", "Unit")}</th>
                 <th className="px-3 py-2 text-right">{tr("Ref min", "Ref min")}</th>
@@ -1203,8 +1203,8 @@ const ExtractionReviewTable = ({
                             canonicalMarker: canonicalizeMarker(value)
                           }))
                         }
-                        placeholder={tr("Markernaam", "Marker name")}
-                        editLabel={tr("Markernaam bewerken", "Edit marker name")}
+                        placeholder={tr("Biomarkernaam", "Biomarker name")}
+                        editLabel={tr("Biomarkernaam bewerken", "Edit biomarker name")}
                       />
                       <p className="mt-1 break-words text-[11px] text-slate-500">
                         {tr("Gekoppeld aan", "Mapped to")}: {resolveCanonicalDisplayName(row)}
@@ -1409,7 +1409,7 @@ const ExtractionReviewTable = ({
           className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
           onClick={addRow}
         >
-          <Plus className="h-4 w-4" /> {tr("Markerrij toevoegen", "Add marker row")}
+          <Plus className="h-4 w-4" /> {tr("Biomarker-rij toevoegen", "Add biomarker row")}
         </button>
         {onEnableAiRescue ? (
           <button

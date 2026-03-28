@@ -693,8 +693,8 @@ const AppShell = ({
                         <p className="stability-tooltip-title font-semibold text-slate-100">{tr("Wat is dit?", "What is this?")}</p>
                         <p className="mt-1.5">
                           {tr(
-                            "Dit meet hoe stabiel je hormoonmarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling, een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
-                            "This measures how steady your hormone markers have been across your recent reports. A high score means little fluctuation, a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
+                            "Dit meet hoe stabiel je hormoonbiomarkers zijn over je recente rapporten. Een hoge score betekent weinig schommeling, een teken dat je protocol goed aanslaat. Lagere scores wijzen op meer variatie, wat kan komen door timing van meting, dosiswijzigingen of andere factoren.",
+                            "This measures how steady your hormone biomarkers have been across your recent reports. A high score means little fluctuation, a sign your protocol is working well. Lower scores point to more variation, which can come from measurement timing, dose changes, or other factors."
                           )}
                         </p>
                         <p className="mt-2 text-[11px] text-slate-400">

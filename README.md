@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-LabTracker is a privacy-first web app that turns messy lab PDFs into clear trends and actionable insights. Upload reports, validate extracted markers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
+LabTracker is a privacy-first web app that turns messy lab PDFs into clear trends and actionable insights. Upload reports, review extracted biomarkers, compare latest vs previous labs, and run AI-assisted analysis in one dashboard.
 
 Current beta focus: hormone and bloodwork tracking (including TRT-style workflows).  
 Roadmap direction: broader performance and general health lab tracking.
@@ -37,19 +37,19 @@ Live app: [labtracker.app](https://labtracker.app)
   - Symptoms
   - Notes
 - Dashboard charts (`recharts`):
-  - Primary markers: Testosterone, Free Testosterone, Estradiol, Hematocrit, SHBG
-  - All markers view
+  - Key Biomarkers: Testosterone, Free Testosterone, Estradiol, Hematocrit, SHBG
+  - All Biomarkers view
   - Reference range shading toggle
   - Abnormal highlight toggle
   - Annotation vertical lines toggle
   - Time range filter (3m/6m/12m/all/custom)
   - Unit conversion SI (Metric) / Conventional
-  - Multi-marker comparison mode with dual axes
+  - Multi-biomarker comparison mode with dual axes
 - Persistent storage in browser (`window.storage` fallback to `localStorage`)
 - Data management:
   - Delete report
   - Bulk delete
-  - Export CSV (selected markers)
+  - Export CSV (selected biomarkers)
   - Export PDF report screenshot (`html2canvas` + `jspdf`)
 - Responsive UI + dark/light mode persistence
 - Medical disclaimer

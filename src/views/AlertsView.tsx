@@ -163,7 +163,7 @@ const AlertsView = ({
   /* Executive summary one-liner */
   const buildSummaryLine = (): string => {
     if (topAlerts.length === 0) {
-      return tr("Geen markers vragen directe aandacht.", "No markers need immediate attention.");
+      return tr("Geen biomarkers vragen directe aandacht.", "No biomarkers need immediate attention.");
     }
     const parts = topAlerts.map((a) => {
       const name = getMarkerDisplayName(a.marker, language);
@@ -433,8 +433,8 @@ const AlertsView = ({
         <EmptyStateCard
           title={tr("Geen alerts in deze filter", "No alerts in this filter")}
           description={tr(
-            "Alles ziet er stabiel uit binnen je huidige selectie. Je kunt op het dashboard een ruimer tijdsbereik of andere markers kiezen.",
-            "Everything looks stable in your current selection. Use the dashboard to pick a wider range or different markers."
+            "Alles ziet er stabiel uit binnen je huidige selectie. Je kunt op het dashboard een ruimer tijdsbereik of andere biomarkers kiezen.",
+            "Everything looks stable in your current selection. Use the dashboard to pick a wider range or different biomarkers."
           )}
           actionLabel={tr("Naar dashboard", "Go to dashboard")}
           onAction={onOpenDashboard}
@@ -657,7 +657,7 @@ const AlertsView = ({
               : <ChevronRight className="h-4 w-4 opacity-40" />}
           </button>
           <p className={isDarkTheme ? "mt-0.5 text-xs text-slate-400" : "mt-0.5 text-xs text-slate-600"}>
-            {tr("Markers die de goede kant op gaan.", "Markers trending in the right direction.")}
+            {tr("Biomarkers die de goede kant op gaan.", "Biomarkers trending in the right direction.")}
           </p>
 
           {positiveExpanded && (

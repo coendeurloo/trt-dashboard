@@ -31,7 +31,7 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
       return tr("PDF heeft geen bruikbare tekstlaag.", "PDF has no usable text layer.");
     }
     if (reason === "marker_count_low") {
-      return tr("Er zijn weinig markers gevonden.", "Only a few markers were found.");
+      return tr("Er zijn weinig biomarkers gevonden.", "Only a few biomarkers were found.");
     }
     if (reason === "confidence_very_low") {
       return tr("Parser confidence is erg laag.", "Parser confidence is very low.");
@@ -70,7 +70,7 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
             ))}
           </ul>
           <p className="mt-3 text-xs text-slate-400">
-            {tr("Markers", "Markers")}: {assessment.markerCount} · {tr("Confidence", "Confidence")}:{" "}
+            {tr("Biomarkers", "Biomarkers")}: {assessment.markerCount} · {tr("Confidence", "Confidence")}:{" "}
             {Math.round(assessment.confidence * 100)}% · {tr("Unitdekking", "Unit coverage")}:{" "}
             {Math.round(assessment.unitCoverage * 100)}%
           </p>

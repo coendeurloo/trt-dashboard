@@ -809,7 +809,7 @@ const ReportsView = ({
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
               <FlaskConical className="h-4 w-4 text-cyan-400/70" />
               <span className="font-semibold text-slate-100">{reportStats.uniqueMarkers}</span>
-              <span className="text-slate-400">{tr("unieke markers", "unique markers")}</span>
+              <span className="text-slate-400">{tr("unieke biomarkers", "unique biomarkers")}</span>
             </div>
             {reportStats.reportsWithAbnormal > 0 && (
               <div className="flex items-center gap-1.5 text-sm">
@@ -886,7 +886,7 @@ const ReportsView = ({
           <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
             <thead className="bg-slate-900/70 text-slate-300">
               <tr>
-                <th className="px-2 py-2 text-left">{tr("Marker", "Marker")}</th>
+                <th className="px-2 py-2 text-left">{tr("Biomarker", "Biomarker")}</th>
                 {compareReports.map((report) => (
                   <th key={report.id} className="px-2 py-2 text-right">
                     {formatDate(report.testDate)}
@@ -1099,7 +1099,7 @@ const ReportsView = ({
                           </span>
                         )}
                         <span className="rounded-full border border-slate-600/90 bg-slate-800/75 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                          {report.markers.length} {tr("markers", "markers")}
+                          {report.markers.length} {tr("biomarkers", "biomarkers")}
                         </span>
                       </span>
                     </span>
@@ -1113,8 +1113,8 @@ const ReportsView = ({
                             ? "bg-rose-500/15 text-rose-300"
                             : "bg-amber-500/15 text-amber-300"
                         }`}
-                        aria-label={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
-                        title={tr("Afwijkende markers in dit rapport", "Out-of-range markers in this report")}
+                        aria-label={tr("Afwijkende biomarkers in dit rapport", "Out-of-range biomarkers in this report")}
+                        title={tr("Afwijkende biomarkers in dit rapport", "Out-of-range biomarkers in this report")}
                       >
                         <AlertTriangle className="h-3 w-3" />
                         {abnormalCount}
@@ -1620,7 +1620,7 @@ const ReportsView = ({
                         <table className="min-w-full divide-y divide-slate-700 text-xs sm:text-sm">
                           <thead className="bg-slate-900/70 text-slate-300">
                             <tr>
-                              <th className="px-3 py-2 text-left">{tr("Marker", "Marker")}</th>
+                              <th className="px-3 py-2 text-left">{tr("Biomarker", "Biomarker")}</th>
                               <th className="px-3 py-2 text-right">{tr("Waarde", "Value")}</th>
                               <th className="px-3 py-2 text-left">{tr("Eenheid", "Unit")}</th>
                               <th className="px-3 py-2 text-right">{tr("Bereik", "Range")}</th>
@@ -1661,8 +1661,8 @@ const ReportsView = ({
                                           type="button"
                                           className="rounded p-0.5 text-slate-400 transition hover:text-cyan-200"
                                           onClick={() => onRenameMarker(marker.canonicalMarker)}
-                                          aria-label={tr("Marker hernoemen", "Rename marker")}
-                                          title={tr("Marker hernoemen", "Rename marker")}
+                                          aria-label={tr("Biomarker hernoemen", "Rename biomarker")}
+                                          title={tr("Biomarker hernoemen", "Rename biomarker")}
                                         >
                                           <Pencil className="h-3.5 w-3.5" />
                                         </button>

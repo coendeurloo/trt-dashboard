@@ -48,13 +48,13 @@ const ExtractionComparisonModal = ({ open, language, summary, onKeepLocal, onApp
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
             <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Lokaal", "Local")}</p>
-            <p className="mt-1">{tr("Markers", "Markers")}: {summary.local.markerCount}</p>
+            <p className="mt-1">{tr("Biomarkers", "Biomarkers")}: {summary.local.markerCount}</p>
             <p>{tr("Confidence", "Confidence")}: {Math.round(summary.local.confidence * 100)}%</p>
             <p>{tr("Waarschuwingen", "Warnings")}: {summary.local.warnings.length}</p>
           </div>
           <div className="rounded-lg border border-cyan-500/35 bg-cyan-500/5 p-3 text-sm text-slate-200">
             <p className="text-xs uppercase tracking-wide text-cyan-300">{tr("AI kandidaat", "AI candidate")}</p>
-            <p className="mt-1">{tr("Markers", "Markers")}: {summary.ai.markerCount}</p>
+            <p className="mt-1">{tr("Biomarkers", "Biomarkers")}: {summary.ai.markerCount}</p>
             <p>{tr("Confidence", "Confidence")}: {Math.round(summary.ai.confidence * 100)}%</p>
             <p>{tr("Waarschuwingen", "Warnings")}: {summary.ai.warnings.length}</p>
           </div>

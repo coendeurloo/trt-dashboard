@@ -98,7 +98,7 @@ const getImpactSummary = (
 ): string => {
   const measuredChanges = changes.filter((change) => !change.insufficientData && change.deltaPct !== null);
   if (measuredChanges.length === 0) {
-    return tr("Markers verschoven na de protocolwijziging.", "Markers shifted after the protocol change.");
+    return tr("Biomarkers verschoven na de protocolwijziging.", "Biomarkers shifted after the protocol change.");
   }
 
   const positiveHormones = measuredChanges.filter(
@@ -123,11 +123,11 @@ const getImpactSummary = (
       doseWasIncreased(event)
         ? tr(
             "Hormoonmarkers stegen zoals verwacht na de dosisverhoging.",
-            "Hormone markers rose as expected after the dose increase."
+            "Hormone biomarkers rose as expected after the dose increase."
           )
         : tr(
             "Hormoonmarkers verschoven na de protocolwijziging.",
-            "Hormone markers shifted with the protocol change."
+            "Hormone biomarkers shifted with the protocol change."
           )
     );
   }
@@ -148,7 +148,7 @@ const getImpactSummary = (
     parts.push(tr(`${markerText}: extra monitoring aanbevolen.`, `${markerText} worth monitoring.`));
   }
 
-  return parts.join(" ") || tr("Markers verschoven na de protocolwijziging.", "Markers shifted after the protocol change.");
+  return parts.join(" ") || tr("Biomarkers verschoven na de protocolwijziging.", "Biomarkers shifted after the protocol change.");
 };
 
 const classifySentiment = (row: ProtocolImpactMarkerRow, event: ProtocolImpactDoseEvent): ChangeSentiment => {
@@ -492,7 +492,7 @@ const ProtocolImpactEventCard = ({
           className="flex w-full items-center justify-between px-5 py-4 text-sm font-medium text-slate-300 hover:text-slate-100"
         >
           <span>
-            {tr("Alle markers", "All markers")}
+            {tr("Alle biomarkers", "All biomarkers")}
             <span className="ml-1.5 text-slate-600">({rows.length})</span>
           </span>
           {showAllMarkers ? (

@@ -90,7 +90,7 @@ const ParserImprovementSubmissionCard = ({
                 )}
               </p>
               <p className="mt-2 text-xs text-slate-300">
-                {assessment.markerCount} {tr("markers gevonden", "markers found")} | {tr("Bestand", "File")}: {draft.sourceFileName}
+                {assessment.markerCount} {tr("biomarkers gevonden", "biomarkers found")} | {tr("Bestand", "File")}: {draft.sourceFileName}
               </p>
             </div>
           </div>

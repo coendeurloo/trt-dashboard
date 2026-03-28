@@ -92,8 +92,8 @@ function protocolWhy(profile: UserProfile, lang: AppLanguage): string {
       "This lets us link your blood values to your protocol and show changes over time."
     ],
     enhanced: [
-      "Zo zien we welke middelen welke markers beïnvloeden en houden we alles overzichtelijk.",
-      "This helps us see which compounds affect which markers and keeps everything organized."
+      "Zo zien we welke middelen welke biomarkers beïnvloeden en houden we alles overzichtelijk.",
+      "This helps us see which compounds affect which biomarkers and keeps everything organized."
     ],
     health: [
       "Zo kunnen we veranderingen in je bloedwaarden koppelen aan je behandeling.",
@@ -190,8 +190,8 @@ function StepSuccess({
       </h2>
       <p className={`text-sm mb-6 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
         {tr(
-          `We hebben ${total} markers uit je PDF gehaald.`,
-          `We extracted ${total} markers from your PDF.`
+          `We hebben ${total} biomarkers uit je PDF gehaald.`,
+          `We extracted ${total} biomarkers from your PDF.`
         )}
       </p>
 
@@ -687,16 +687,16 @@ function StepSummary({
       icon: "📊",
       title: tr("Dashboard", "Dashboard"),
       desc: tr(
-        "Je markers en trends in één oogopslag. Hier zie je hoe je waarden zich ontwikkelen.",
-        "Your markers and trends at a glance. See how your values develop over time."
+        "Je biomarkers en trends in één oogopslag. Hier zie je hoe je waarden zich ontwikkelen.",
+        "Your biomarkers and trends at a glance. See how your values develop over time."
       )
     },
     {
       icon: "🔔",
       title: tr("Alerts", "Alerts"),
       desc: tr(
-        "We waarschuwen je als een marker buiten bereik valt of een trend zorgelijk is.",
-        "We'll alert you when a marker goes out of range or shows a concerning trend."
+        "We waarschuwen je als een biomarker buiten bereik valt of een trend zorgelijk is.",
+        "We'll alert you when a biomarker goes out of range or shows a concerning trend."
       )
     },
     {

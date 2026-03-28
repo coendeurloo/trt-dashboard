@@ -28,8 +28,8 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
       icon: Upload,
       title: tr("Upload je lab-PDF", "Upload your lab PDF"),
       description: tr(
-        "Sleep je PDF in de app. We halen markers, waarden en referenties direct voor je op.",
-        "Drop your PDF into the app. Markers are extracted automatically."
+        "Sleep je PDF in de app. We halen biomarkers, waarden en referenties direct voor je op.",
+        "Drop your PDF into the app. Biomarkers are extracted automatically."
       ),
       preview: "upload" as const
     },
@@ -37,7 +37,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
       icon: BarChart3,
       title: tr("Bekijk je trends", "See your trends"),
       description: tr(
-        "Zie in seconden hoe je markers bewegen, inclusief referentiebereiken en trendrichting.",
+        "Zie in seconden hoe je biomarkers bewegen, inclusief referentiebereiken en trendrichting.",
         "Charts, reference ranges, and changes over time — visible immediately."
       ),
       preview: "trends" as const
