@@ -1,4 +1,4 @@
-export type ThemeMode = "light" | "dark";
+export type ThemeMode = "system" | "light" | "dark";
 export type UnitSystem = "eu" | "us";
 export type AppLanguage = "en" | "es" | "pt" | "de" | "nl" | "ru" | "zh";
 export type AICostMode = "balanced" | "ultra_low_cost" | "max_accuracy";
@@ -361,6 +361,7 @@ export interface PersonalInfo {
 
 export interface AppSettings {
   theme: ThemeMode;
+  interfaceDensity: "comfortable" | "compact";
   sidebarCollapsedDesktop: boolean;
   unitSystem: UnitSystem;
   language: AppLanguage;

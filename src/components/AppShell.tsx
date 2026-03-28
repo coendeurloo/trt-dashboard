@@ -58,6 +58,7 @@ export interface AppShellState {
   cloudUserEmail?: string | null;
   headerStats?: AppShellHeaderStat[];
   sidebarCollapsedDesktop?: boolean;
+  interfaceDensity?: AppSettings["interfaceDensity"];
 }
 
 export interface AppShellHeaderStat {
@@ -128,7 +129,8 @@ const AppShell = ({
     cloudAuthStatus = "unauthenticated",
     cloudUserEmail = null,
     headerStats = [],
-    sidebarCollapsedDesktop = false
+    sidebarCollapsedDesktop = false,
+    interfaceDensity = "comfortable"
   } = shellState;
   const {
     uploadPanelRef,
@@ -154,6 +156,7 @@ const AppShell = ({
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
     isOnboardingLocked && key !== "dashboard" && key !== "settings";
   const isLightTheme = theme === "light";
+  const isCompactDensity = interfaceDensity === "compact";
   const stabilityLabel = getPersonaStabilityShortLabel(userProfile, language);
   const showDashboardStabilityBadge = activeTab === "dashboard" && hasReports && !isReviewMode;
   const shouldShowHeaderStats = !isReviewMode && headerStats.length > 0;
@@ -580,7 +583,9 @@ const AppShell = ({
   };
 
   return (
-    <div className={`min-h-screen px-3 py-4 ${isLightTheme ? "text-slate-900" : "text-slate-100"} sm:px-5 lg:px-6`}>
+    <div
+      className={`min-h-screen ${isCompactDensity ? "px-2.5 py-3 sm:px-4 lg:px-5" : "px-3 py-4 sm:px-5 lg:px-6"} ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}
+    >
       <input
         ref={hiddenUploadInputRef}
         type="file"
@@ -601,24 +606,30 @@ const AppShell = ({
         closeLabel={tr("Navigatie sluiten", "Close navigation")}
         onClose={onCloseMobileMenu}
       >
-        <div className={isLightTheme ? "rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" : "rounded-2xl border border-slate-700/70 bg-slate-900/80 p-3"}>
+        <div
+          className={
+            isLightTheme
+              ? `rounded-2xl border border-slate-200 bg-white shadow-sm ${isCompactDensity ? "p-2.5" : "p-3"}`
+              : `rounded-2xl border border-slate-700/70 bg-slate-900/80 ${isCompactDensity ? "p-2.5" : "p-3"}`
+          }
+        >
           {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu, compact: false })}
         </div>
       </MobileNavDrawer>
 
-      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 lg:flex-row">
+      <div className={`mx-auto flex w-full max-w-[1400px] flex-col ${isCompactDensity ? "gap-3" : "gap-4"} lg:flex-row`}>
         <aside
           className={
             isLightTheme
-              ? `hidden w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-4 lg:block ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
-              : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3 lg:sticky lg:top-4 lg:block ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
+              ? `hidden w-full rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
+              : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
           }
         >
           {renderSidebarContent({ includeUploadPanel: true, compact: sidebarCollapsedDesktop })}
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-3" id="dashboard-export-root">
-          <header className={`space-y-3 px-1 py-0.5 ${hideDashboardDesktopHeader ? "lg:hidden" : ""}`}>
+        <main className={`min-w-0 flex-1 ${isCompactDensity ? "space-y-2.5" : "space-y-3"}`} id="dashboard-export-root">
+          <header className={`${isCompactDensity ? "space-y-2.5" : "space-y-3"} px-1 py-0.5 ${hideDashboardDesktopHeader ? "lg:hidden" : ""}`}>
             <div className="flex items-center gap-2 lg:hidden">
               <button
                 type="button"

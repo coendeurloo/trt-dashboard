@@ -16,8 +16,6 @@ import WelcomeHero from "../components/WelcomeHero";
 import { MARKER_DATABASE, type MarkerCategory } from "../data/markerDatabase";
 import {
   buildDashboardPresetPatch,
-  enforceSingleClinicalLayer,
-  inferDashboardChartPresetFromSettings,
   stabilityColor
 } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -63,49 +61,6 @@ interface DashboardViewProps {
   checkIns: SymptomCheckIn[];
   onNavigateToCheckIns: () => void;
 }
-
-interface ToggleSwitchProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  tooltip?: string;
-  disabled?: boolean;
-}
-
-const ToggleSwitch = ({ checked, onChange, label, tooltip, disabled = false }: ToggleSwitchProps) => (
-  <label
-    className={`group relative inline-flex items-center gap-2 text-xs sm:text-sm ${
-      disabled ? "cursor-not-allowed text-slate-500" : "cursor-pointer text-slate-300 hover:text-slate-100"
-    }`}
-  >
-    <button
-      type="button"
-      aria-pressed={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => {
-        if (!disabled) {
-          onChange(!checked);
-        }
-      }}
-      className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
-        checked ? "border-cyan-500/60 bg-cyan-500/20" : "border-slate-600 bg-slate-700"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-3 w-3 rounded-full transition-transform duration-200 ${
-          checked ? "translate-x-3 bg-cyan-400" : "translate-x-0.5 bg-slate-500"
-        }`}
-      />
-    </button>
-    {label}
-    {tooltip ? (
-      <span className="chart-tooltip pointer-events-none absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-slate-600 bg-slate-950/95 p-2.5 text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-        {tooltip}
-      </span>
-    ) : null}
-  </label>
-);
 
 const MARKER_CATEGORY_ORDER: MarkerCategory[] = [
   "Hormones - Sex",
@@ -171,7 +126,7 @@ const DashboardView = ({
     unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const hasReports = reports.length > 0;
   const isDarkTheme = settings.theme === "dark";
-  const isGeneralProfile = settings.userProfile === "health" || settings.userProfile === "biohacker";
+  const isCompactDensity = settings.interfaceDensity === "compact";
 
   // Wellbeing nudge: show when no check-ins or last one was >= 7 days ago
   const lastCheckIn = checkIns.length > 0
@@ -189,35 +144,6 @@ const DashboardView = ({
   const [markerSearchTerm, setMarkerSearchTerm] = useState("");
   const [markerCategoryFilter, setMarkerCategoryFilter] = useState("all");
 
-  const referenceRangesTooltip = tr(
-    "Toont per marker het normale referentiebereik als band in de grafiek.",
-    "Shows each marker's normal reference range as a band on the chart."
-  );
-  const abnormalHighlightsTooltip = tr(
-    "Markeert punten die onder of boven het referentiebereik vallen.",
-    "Highlights points that fall below or above the reference range."
-  );
-  const dosePhaseOverlaysTooltip = tr(
-    "Toont duidelijke faseblokken en grenslijnen per protocolfase, zodat je veranderingen direct aan een fase kunt koppelen.",
-    "Shows clear phase blocks and boundaries per protocol phase, so you can link marker changes to a phase at a glance."
-  );
-  const trtTargetZoneTooltip = isGeneralProfile
-    ? tr(
-        "Toont de streefzone voor biomarkers met een bekende doelband.",
-        "Shows the target zone for biomarkers with a known target band."
-      )
-    : tr(
-        "Toont de TRT-streefzone voor biomarkers met een bekende doelband.",
-        "Shows the TRT target zone for biomarkers with a known target band."
-      );
-  const longevityZoneTooltip = tr(
-    "Toont een conservatievere streefzone gericht op lange termijn risicobeperking.",
-    "Shows a more conservative target zone aimed at long-term risk reduction."
-  );
-  const yAxisDataRangeTooltip = tr(
-    "Past de Y-as aan op het bereik van je data. Uit = Y-as start op nul voor betere absolute vergelijking.",
-    "Fits the Y-axis to your data range. Off = Y-axis starts at zero for better absolute comparison."
-  );
   const showAllTimeForFirstReport = () => {
     onUpdateSettings({
       timeRange: "all",
@@ -225,7 +151,6 @@ const DashboardView = ({
       compareToBaseline: false
     });
   };
-  const hasPhaseBlocks = dosePhaseBlocks.length > 0;
   const isCompareMode = dashboardMode === "compare2";
   const currentPreset = settings.dashboardChartPreset;
   const selectedPrimaryMarkers = settings.primaryMarkersSelection.length > 0
@@ -416,42 +341,6 @@ const DashboardView = ({
     });
   };
 
-  const updateChartVisualSettings = (
-    patch: Partial<
-      Pick<
-        AppSettings,
-        "showReferenceRanges" | "showAbnormalHighlights" | "showAnnotations" | "showTrtTargetZone" | "showLongevityTargetZone" | "yAxisMode"
-      >
-    >
-  ) => {
-    const nextVisualSettings = enforceSingleClinicalLayer({
-      showReferenceRanges: patch.showReferenceRanges ?? settings.showReferenceRanges,
-      showAbnormalHighlights: patch.showAbnormalHighlights ?? settings.showAbnormalHighlights,
-      showAnnotations: patch.showAnnotations ?? settings.showAnnotations,
-      showTrtTargetZone: patch.showTrtTargetZone ?? settings.showTrtTargetZone,
-      showLongevityTargetZone: patch.showLongevityTargetZone ?? settings.showLongevityTargetZone,
-      yAxisMode: patch.yAxisMode ?? settings.yAxisMode
-    }, patch.showLongevityTargetZone ? "showLongevityTargetZone" : patch.showTrtTargetZone ? "showTrtTargetZone" : patch.showReferenceRanges ? "showReferenceRanges" : undefined);
-    const normalizedPatch: Partial<AppSettings> = { ...patch };
-    if (patch.showReferenceRanges === true) {
-      normalizedPatch.showTrtTargetZone = false;
-      normalizedPatch.showLongevityTargetZone = false;
-    }
-    if (patch.showTrtTargetZone === true) {
-      normalizedPatch.showReferenceRanges = false;
-      normalizedPatch.showLongevityTargetZone = false;
-    }
-    if (patch.showLongevityTargetZone === true) {
-      normalizedPatch.showReferenceRanges = false;
-      normalizedPatch.showTrtTargetZone = false;
-    }
-    const inferredPreset = inferDashboardChartPresetFromSettings(nextVisualSettings);
-    onUpdateSettings({
-      ...normalizedPatch,
-      dashboardChartPreset: inferredPreset
-    });
-  };
-
   const applyPreset = (preset: "clinical" | "protocol" | "minimal") => {
     onUpdateSettings(buildDashboardPresetPatch(preset));
   };
@@ -464,7 +353,7 @@ const DashboardView = ({
   })();
 
   return (
-    <section className="space-y-4 fade-in">
+    <section className={`${isCompactDensity ? "space-y-3" : "space-y-4"} fade-in`}>
       {/* Greeting + summary row */}
       {hasReports && personalInfo.name ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -787,28 +676,6 @@ const DashboardView = ({
                       </button>
                     ))}
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center px-1 text-xs font-medium text-slate-400">{tr("Y-as:", "Y-axis:")}</span>
-                    <button
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs ${
-                        settings.yAxisMode === "zero" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                      }`}
-                      onClick={() => updateChartVisualSettings({ yAxisMode: "zero" })}
-                    >
-                      {tr("Start op nul", "Start at zero")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs ${
-                        settings.yAxisMode === "data" ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                      }`}
-                      onClick={() => updateChartVisualSettings({ yAxisMode: "data" })}
-                    >
-                      {tr("Y-as op databereik", "Fit Y-axis to data")}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">{yAxisDataRangeTooltip}</p>
                   {isCompareMode ? (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300">{tr("Vergelijkschaal", "Comparison scale")}</span>
@@ -837,80 +704,13 @@ const DashboardView = ({
                     </div>
                   ) : null}
                 </div>
+                <p className="mt-3 text-[11px] text-slate-500">
+                  {tr(
+                    "Display-opties zoals referentiebereiken, overlays en highlights staan nu onder Instellingen > Vormgeving.",
+                    "Display options like reference ranges, overlays, and highlights now live under Settings > Appearance."
+                  )}
+                </p>
               </div>
-
-              {!isCompareMode ? (
-                <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Klinische lagen", "Clinical layers")}</p>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <ToggleSwitch
-                      checked={settings.showReferenceRanges}
-                      onChange={(checked) => updateChartVisualSettings({ showReferenceRanges: checked })}
-                      label={tr("Referentiebereiken", "Reference range")}
-                      tooltip={referenceRangesTooltip}
-                    />
-                    <ToggleSwitch
-                      checked={settings.showTrtTargetZone}
-                      onChange={(checked) => updateChartVisualSettings({ showTrtTargetZone: checked })}
-                      label={isGeneralProfile ? tr("Streefzone", "Target zone") : tr("TRT-streefzone", "TRT target zone")}
-                      tooltip={trtTargetZoneTooltip}
-                    />
-                    <ToggleSwitch
-                      checked={settings.showLongevityTargetZone}
-                      onChange={(checked) => updateChartVisualSettings({ showLongevityTargetZone: checked })}
-                      label={tr("Longevity-streefzone", "Longevity target zone")}
-                      tooltip={longevityZoneTooltip}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {!isCompareMode ? (
-                <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Contextlagen", "Context layers")}</p>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <ToggleSwitch
-                      checked={settings.showAnnotations}
-                      onChange={(checked) => updateChartVisualSettings({ showAnnotations: checked })}
-                      label={tr("Protocolfase-overlay", "Protocol phase overlay")}
-                      tooltip={dosePhaseOverlaysTooltip}
-                      disabled={!hasPhaseBlocks}
-                    />
-                    <ToggleSwitch
-                      checked={settings.showCheckInOverlay}
-                      onChange={(checked) => onUpdateSettings({ showCheckInOverlay: checked })}
-                      label={tr("Welzijns check-ins", "Wellbeing check-ins")}
-                      tooltip={tr(
-                        "Toont verticale lijnen op check-in datums in de grafieken, zodat je welzijn naast je labwaarden kunt zien.",
-                        "Shows vertical markers on check-in dates in the charts, so you can see how you felt alongside your lab values."
-                      )}
-                      disabled={checkIns.length === 0}
-                    />
-                  </div>
-                  {!hasPhaseBlocks ? (
-                    <p className="mt-2 text-xs text-slate-500">
-                      {tr(
-                        "Geen protocolfase-overlays in dit datumbereik. Voeg meer rapporten toe of kies een ruimer bereik.",
-                        "No protocol phase overlays in this date range. Add more reports or choose a wider range."
-                      )}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {!isCompareMode ? (
-                <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Highlights", "Highlights")}</p>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <ToggleSwitch
-                      checked={settings.showAbnormalHighlights}
-                      onChange={(checked) => updateChartVisualSettings({ showAbnormalHighlights: checked })}
-                      label={tr("Markeer waarden buiten bereik", "Highlight out-of-range values")}
-                      tooltip={abnormalHighlightsTooltip}
-                    />
-                  </div>
-                </div>
-              ) : null}
 
               {samplingControlsEnabled ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">

@@ -811,9 +811,19 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
         )
       )
     : DEFAULT_SETTINGS.primaryMarkersSelection;
+  const theme =
+    rest.theme === "system" || rest.theme === "light" || rest.theme === "dark"
+      ? rest.theme
+      : DEFAULT_SETTINGS.theme;
+  const interfaceDensity =
+    rest.interfaceDensity === "compact" || rest.interfaceDensity === "comfortable"
+      ? rest.interfaceDensity
+      : DEFAULT_SETTINGS.interfaceDensity;
   const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
+    theme,
+    interfaceDensity,
     aiExternalConsent: true,
     enableSamplingControls: true,
     enableCalculatedFreeTestosterone: true,

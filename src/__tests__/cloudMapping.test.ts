@@ -105,6 +105,7 @@ const makeSampleData = () =>
     },
     settings: {
       theme: "dark",
+      interfaceDensity: "comfortable",
       sidebarCollapsedDesktop: false,
       unitSystem: "eu",
       language: "en",

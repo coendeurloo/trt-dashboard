@@ -6,6 +6,7 @@ import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
 import { AppLanguage, AppSettings, BiologicalSex, PersonalInfo, UserProfile } from "../types";
 import { ImportResult, MarkerMergeSuggestion } from "../hooks/useAppData";
+import { inferDashboardChartPresetFromSettings } from "../chartHelpers";
 
 interface MarkerUsageRow {
   marker: string;
@@ -17,6 +18,7 @@ type SettingsTab = "profile" | "appearance" | "lab_data";
 
 interface SettingsViewProps {
   settings: AppSettings;
+  resolvedTheme: Exclude<AppSettings["theme"], "system">;
   language: AppLanguage;
   editableMarkers: string[];
   markerUsage: MarkerUsageRow[];
@@ -43,8 +45,54 @@ interface SettingsViewProps {
   onSignOut?: () => void;
 }
 
+interface AppearanceToggleProps {
+  checked: boolean;
+  label: string;
+  description?: string;
+  onChange: (checked: boolean) => void;
+  isLightTheme: boolean;
+}
+
+const AppearanceToggle = ({ checked, label, description, onChange, isLightTheme }: AppearanceToggleProps) => (
+  <button
+    type="button"
+    onClick={() => onChange(!checked)}
+    className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
+      isLightTheme
+        ? "border-slate-200 bg-white hover:border-cyan-300/70"
+        : "border-slate-700/70 bg-slate-900/45 hover:border-cyan-500/40"
+    }`}
+  >
+    <div className="min-w-0">
+      <p className={`text-sm font-medium ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{label}</p>
+      {description ? <p className={`mt-1 text-xs leading-5 ${isLightTheme ? "text-slate-600" : "text-slate-400"}`}>{description}</p> : null}
+    </div>
+    <span
+      className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full border transition ${
+        checked
+          ? isLightTheme
+            ? "border-cyan-400 bg-cyan-100"
+            : "border-cyan-500/60 bg-cyan-500/20"
+          : isLightTheme
+            ? "border-slate-300 bg-slate-100"
+            : "border-slate-600 bg-slate-800"
+      }`}
+      aria-hidden="true"
+    >
+      <span
+        className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition ${
+          checked
+            ? `translate-x-4 ${isLightTheme ? "bg-cyan-600" : "bg-cyan-300"}`
+            : `translate-x-0.5 ${isLightTheme ? "bg-slate-500" : "bg-slate-400"}`
+        }`}
+      />
+    </span>
+  </button>
+);
+
 const SettingsView = ({
   settings,
+  resolvedTheme,
   language,
   editableMarkers,
   markerUsage,
@@ -71,7 +119,7 @@ const SettingsView = ({
   onSignOut
 }: SettingsViewProps) => {
   const isNl = language === "nl";
-  const isLightTheme = settings.theme === "light";
+  const isLightTheme = resolvedTheme === "light";
   const tr = useCallback((nl: string, en: string): string => trLocale(language, nl, en), [language]);
 
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("profile");
@@ -157,12 +205,57 @@ const SettingsView = ({
     { id: "appearance", label: tr("Vormgeving", "Appearance") },
     { id: "lab_data", label: tr("Lab & data", "Lab & Data") }
   ];
+  const updateChartAppearanceSettings = useCallback(
+    (
+      patch: Partial<
+        Pick<
+          AppSettings,
+          "showReferenceRanges" | "showAbnormalHighlights" | "showAnnotations" | "showCheckInOverlay" | "yAxisMode" | "showTrtTargetZone" | "showLongevityTargetZone"
+        >
+      >
+    ) => {
+      const normalizedPatch: Partial<AppSettings> = { ...patch };
+      if (patch.showReferenceRanges === true) {
+        normalizedPatch.showTrtTargetZone = false;
+        normalizedPatch.showLongevityTargetZone = false;
+      }
+      const inferredPreset = inferDashboardChartPresetFromSettings({
+        showReferenceRanges: normalizedPatch.showReferenceRanges ?? settings.showReferenceRanges,
+        showAbnormalHighlights: normalizedPatch.showAbnormalHighlights ?? settings.showAbnormalHighlights,
+        showAnnotations: normalizedPatch.showAnnotations ?? settings.showAnnotations,
+        showTrtTargetZone: normalizedPatch.showTrtTargetZone ?? settings.showTrtTargetZone,
+        showLongevityTargetZone: normalizedPatch.showLongevityTargetZone ?? settings.showLongevityTargetZone,
+        yAxisMode: normalizedPatch.yAxisMode ?? settings.yAxisMode
+      });
+      onUpdateSettings({
+        ...normalizedPatch,
+        dashboardChartPreset: inferredPreset
+      });
+    },
+    [onUpdateSettings, settings]
+  );
+  const sectionGapClass = settings.interfaceDensity === "compact" ? "space-y-3 pt-3" : "space-y-4 pt-4";
+  const shellCardClass = isLightTheme
+    ? `settings-card app-teal-glow-surface rounded-2xl border border-slate-200 bg-white/90 shadow-sm ${settings.interfaceDensity === "compact" ? "p-3.5" : "p-4"}`
+    : `settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 ${settings.interfaceDensity === "compact" ? "p-3.5" : "p-4"}`;
+  const tabBarClass = isLightTheme
+    ? "sticky top-0 -mx-4 -mt-4 flex overflow-x-auto rounded-t-2xl border-b border-slate-200 bg-white/95 px-4 py-3"
+    : "sticky top-0 -mx-4 -mt-4 flex overflow-x-auto rounded-t-2xl border-b border-slate-700 bg-slate-900/60 px-4 py-3";
+  const sectionCardClass = isLightTheme
+    ? "rounded-xl border border-slate-200 bg-slate-50/70 p-4"
+    : "rounded-xl border border-slate-700 bg-slate-900/40 p-4";
+  const controlCardClass = isLightTheme
+    ? "rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm"
+    : "rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm";
+  const selectClass = isLightTheme
+    ? "mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-slate-900"
+    : "mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2";
 
   return (
     <section className="space-y-3 fade-in">
-      <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+      <div className={shellCardClass}>
         {/* Tab Bar */}
-        <div className="sticky top-0 -mx-4 -mt-4 flex overflow-x-auto rounded-t-2xl border-b border-slate-700 bg-slate-900/60 px-4 py-3">
+        <div className={tabBarClass}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -170,8 +263,12 @@ const SettingsView = ({
               onClick={() => setActiveSettingsTab(tab.id)}
               className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
                 activeSettingsTab === tab.id
-                  ? "bg-cyan-500/25 text-cyan-100"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? isLightTheme
+                    ? "bg-cyan-100 text-cyan-900"
+                    : "bg-cyan-500/25 text-cyan-100"
+                  : isLightTheme
+                    ? "text-slate-500 hover:text-slate-900"
+                    : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {tab.label}
@@ -387,31 +484,35 @@ const SettingsView = ({
 
         {/* Appearance Tab */}
         {activeSettingsTab === "appearance" && (
-          <div className="space-y-4 pt-4">
+          <div className={sectionGapClass}>
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">{tr("Vormgeving", "Appearance")}</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                {tr("Thema, taal en interfacedetails.", "Theme, language and interface details.")}
+              <h2 className={isLightTheme ? "text-lg font-semibold text-slate-900" : "text-lg font-semibold text-slate-100"}>{tr("Vormgeving", "Appearance")}</h2>
+              <p className={isLightTheme ? "mt-1 text-sm text-slate-600" : "mt-1 text-sm text-slate-400"}>
+                {tr("Thema, dichtheid en zichtbare interface-elementen.", "Theme, density and visible interface details.")}
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Thema", "Theme")}</span>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className={controlCardClass}>
+                <span className={isLightTheme ? "block text-xs uppercase tracking-wide text-slate-500" : "block text-xs uppercase tracking-wide text-slate-400"}>{tr("Theme mode", "Theme mode")}</span>
                 <select
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+                  className={selectClass}
                   value={settings.theme}
                   onChange={(event) => onUpdateSettings({ theme: event.target.value as AppSettings["theme"] })}
                 >
+                  <option value="system">{tr("Systeem", "System")}</option>
                   <option value="dark">{tr("Donker", "Dark")}</option>
                   <option value="light">{tr("Licht", "Light")}</option>
                 </select>
+                <p className={isLightTheme ? "mt-1 text-xs text-slate-500" : "mt-1 text-xs text-slate-400"}>
+                  {tr("Systeem volgt je apparaatvoorkeur.", "System follows your device preference.")}
+                </p>
               </label>
 
-              <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm">
-                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Taal", "Language")}</span>
+              <label className={controlCardClass}>
+                <span className={isLightTheme ? "block text-xs uppercase tracking-wide text-slate-500" : "block text-xs uppercase tracking-wide text-slate-400"}>{tr("Taal", "Language")}</span>
                 <select
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
+                  className={selectClass}
                   value={settings.language}
                   onChange={(event) => onUpdateSettings({ language: event.target.value as AppSettings["language"] })}
                 >
@@ -423,17 +524,164 @@ const SettingsView = ({
                 </select>
               </label>
 
-              <label className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm md:col-span-2">
-                <span className="block text-xs uppercase tracking-wide text-slate-400">{tr("Tooltip-detail", "Tooltip detail")}</span>
+              <label className={controlCardClass}>
+                <span className={isLightTheme ? "block text-xs uppercase tracking-wide text-slate-500" : "block text-xs uppercase tracking-wide text-slate-400"}>{tr("Interface density", "Interface density")}</span>
                 <select
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-2"
-                  value={settings.tooltipDetailMode}
-                  onChange={(event) => onUpdateSettings({ tooltipDetailMode: event.target.value as AppSettings["tooltipDetailMode"] })}
+                  className={selectClass}
+                  value={settings.interfaceDensity}
+                  onChange={(event) => onUpdateSettings({ interfaceDensity: event.target.value as AppSettings["interfaceDensity"] })}
                 >
-                  <option value="compact">{tr("Compact (snel overzicht)", "Compact (quick overview)")}</option>
-                  <option value="full">{tr("Uitgebreid (alle context)", "Extended (full context)")}</option>
+                  <option value="comfortable">{tr("Comfortabel", "Comfortable")}</option>
+                  <option value="compact">{tr("Compact", "Compact")}</option>
                 </select>
               </label>
+            </div>
+
+            <div className="grid gap-3 xl:grid-cols-12">
+              <div className={`${sectionCardClass} xl:col-span-7`}>
+                <h3 className={isLightTheme ? "text-sm font-semibold text-slate-900" : "text-sm font-semibold text-slate-100"}>{tr("Dashboard & grafieken", "Dashboard & Charts")}</h3>
+                <p className={isLightTheme ? "mt-1 text-xs text-slate-600" : "mt-1 text-xs text-slate-400"}>
+                  {tr("Bepaal hoeveel klinische context en visuele nadruk je standaard ziet.", "Control how much clinical context and visual emphasis you see by default.")}
+                </p>
+                <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                  <div className="sm:col-span-1">
+                    <AppearanceToggle
+                      checked={settings.showReferenceRanges}
+                      onChange={(checked) => updateChartAppearanceSettings({ showReferenceRanges: checked })}
+                      label={tr("Toon referentiebereiken", "Show reference ranges")}
+                      description={tr("Laat de klinische onder- en bovengrens in grafieken zien.", "Show the clinical lower and upper range inside charts.")}
+                      isLightTheme={isLightTheme}
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <AppearanceToggle
+                      checked={settings.showAbnormalHighlights}
+                      onChange={(checked) => updateChartAppearanceSettings({ showAbnormalHighlights: checked })}
+                      label={tr("Markeer afwijkende waarden", "Highlight out-of-range values")}
+                      description={tr("Geef visueel meer nadruk aan waarden buiten bereik.", "Give out-of-range values stronger visual emphasis.")}
+                      isLightTheme={isLightTheme}
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <AppearanceToggle
+                      checked={settings.showAnnotations}
+                      onChange={(checked) => updateChartAppearanceSettings({ showAnnotations: checked })}
+                      label={tr("Protocol-overlay", "Protocol overlay")}
+                      description={tr("Toon protocolfases en contextblokken op relevante grafieken.", "Show protocol phases and context blocks on relevant charts.")}
+                      isLightTheme={isLightTheme}
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <AppearanceToggle
+                      checked={settings.showCheckInOverlay}
+                      onChange={(checked) => updateChartAppearanceSettings({ showCheckInOverlay: checked })}
+                      label={tr("Welzijns check-ins", "Wellbeing check-ins")}
+                      description={tr("Toon check-in momenten als contextlaag boven je biomarkertrends.", "Show check-in moments as an extra context layer over biomarker trends.")}
+                      isLightTheme={isLightTheme}
+                    />
+                  </div>
+                  <div className={isLightTheme ? "rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:col-span-2" : "rounded-xl border border-slate-700/70 bg-slate-900/45 px-3 py-3 sm:col-span-2"}>
+                    <p className={isLightTheme ? "text-sm font-medium text-slate-900" : "text-sm font-medium text-slate-100"}>{tr("Y-as gedrag", "Y-axis behavior")}</p>
+                    <p className={isLightTheme ? "mt-1 text-xs text-slate-600" : "mt-1 text-xs text-slate-400"}>
+                      {tr("Kies of grafieken altijd op nul starten of strak om de data heen schalen.", "Choose whether charts always start at zero or fit tightly around the data.")}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateChartAppearanceSettings({ yAxisMode: "zero" })}
+                        className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                          settings.yAxisMode === "zero"
+                            ? isLightTheme
+                              ? "bg-cyan-100 text-cyan-900"
+                              : "bg-cyan-500/20 text-cyan-100"
+                            : isLightTheme
+                              ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                        }`}
+                      >
+                        {tr("Start op nul", "Start at zero")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateChartAppearanceSettings({ yAxisMode: "data" })}
+                        className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                          settings.yAxisMode === "data"
+                            ? isLightTheme
+                              ? "bg-cyan-100 text-cyan-900"
+                              : "bg-cyan-500/20 text-cyan-100"
+                            : isLightTheme
+                              ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                        }`}
+                      >
+                        {tr("Fit op data", "Fit to data")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${sectionCardClass} xl:col-span-5`}>
+                <h3 className={isLightTheme ? "text-sm font-semibold text-slate-900" : "text-sm font-semibold text-slate-100"}>{tr("Context & tooltips", "Context & Tooltips")}</h3>
+                <p className={isLightTheme ? "mt-1 text-xs text-slate-600" : "mt-1 text-xs text-slate-400"}>
+                  {tr("Bepaal hoeveel extra context zichtbaar is rond trends en hoverstates.", "Control how much extra context is visible around trends and hover states.")}
+                </p>
+                <div className="mt-3 space-y-3">
+                  <label className={isLightTheme ? "block rounded-xl border border-slate-200 bg-white p-3 shadow-sm" : "block rounded-xl border border-slate-700/70 bg-slate-900/45 p-3"}>
+                    <span className={isLightTheme ? "block text-xs uppercase tracking-wide text-slate-500" : "block text-xs uppercase tracking-wide text-slate-400"}>{tr("Tooltip-detail", "Tooltip detail")}</span>
+                    <select
+                      className={selectClass}
+                      value={settings.tooltipDetailMode}
+                      onChange={(event) => onUpdateSettings({ tooltipDetailMode: event.target.value as AppSettings["tooltipDetailMode"] })}
+                    >
+                      <option value="compact">{tr("Compact (snel overzicht)", "Compact (quick overview)")}</option>
+                      <option value="full">{tr("Uitgebreid (alle context)", "Extended (full context)")}</option>
+                    </select>
+                    <p className={isLightTheme ? "mt-2 text-xs text-slate-600" : "mt-2 text-xs text-slate-400"}>
+                      {tr("Wijzigt direct hoe context in grafiek-tooltips wordt getoond.", "Updates chart tooltip context instantly.")}
+                    </p>
+                  </label>
+
+                  <div className={isLightTheme ? "rounded-xl border border-cyan-200 bg-cyan-50/60 p-3 shadow-sm" : "rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3"}>
+                    <p className={isLightTheme ? "text-xs font-semibold uppercase tracking-wide text-cyan-800" : "text-xs font-semibold uppercase tracking-wide text-cyan-200"}>
+                      {tr("Live tooltip voorbeeld", "Live tooltip preview")}
+                    </p>
+                    <p className={isLightTheme ? "mt-0.5 text-xs text-slate-600" : "mt-0.5 text-xs text-slate-400"}>
+                      {tr("Voorbeeld biomarker: Testosterone", "Example biomarker: Testosterone")}
+                    </p>
+                    <div className={isLightTheme ? "mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" : "mt-2 rounded-xl border border-slate-700/70 bg-slate-900/70 p-3"}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className={isLightTheme ? "text-sm font-semibold text-slate-900" : "text-sm font-semibold text-slate-100"}>Testosterone</p>
+                        <span
+                          className={
+                            isLightTheme
+                              ? "rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700"
+                              : "rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-200"
+                          }
+                        >
+                          {settings.tooltipDetailMode === "compact" ? tr("Compact", "Compact") : tr("Uitgebreid", "Extended")}
+                        </span>
+                      </div>
+                      {settings.tooltipDetailMode === "compact" ? (
+                        <div className="mt-1.5 space-y-1">
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Datum: 14 Jan 2026", "Date: 14 Jan 2026")}</p>
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Waarde: 597 ng/dL", "Value: 597 ng/dL")}</p>
+                          <p className={isLightTheme ? "text-xs font-medium text-cyan-700" : "text-xs font-medium text-cyan-300"}>{tr("Verandering: +10.1%", "Change: +10.1%")}</p>
+                        </div>
+                      ) : (
+                        <div className="mt-1.5 space-y-1">
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Datum: 14 Jan 2026", "Date: 14 Jan 2026")}</p>
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Waarde: 597 ng/dL", "Value: 597 ng/dL")}</p>
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Referentiebereik: 250-1100 ng/dL", "Reference range: 250-1100 ng/dL")}</p>
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Status: binnen bereik", "Status: in range")}</p>
+                          <p className={isLightTheme ? "text-xs text-slate-700" : "text-xs text-slate-300"}>{tr("Protocol: 120 mg/week", "Protocol: 120 mg/week")}</p>
+                          <p className={isLightTheme ? "text-xs font-medium text-cyan-700" : "text-xs font-medium text-cyan-300"}>{tr("Verandering sinds vorige test: +10.1%", "Change since prior test: +10.1%")}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

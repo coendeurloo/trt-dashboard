@@ -42,7 +42,8 @@ export const DEFAULT_PERSONAL_INFO: PersonalInfo = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "dark",
+  theme: "system",
+  interfaceDensity: "comfortable",
   sidebarCollapsedDesktop: false,
   unitSystem: "us",
   language: "en",

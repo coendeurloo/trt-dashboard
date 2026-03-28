@@ -92,7 +92,8 @@ import {
   UserProfile,
   TabKey,
   DashboardViewMode,
-  TimeRangeKey
+  TimeRangeKey,
+  ThemeMode
 } from "./types";
 import { AnalystMemory } from "./types/analystMemory";
 import { createId, deriveAbnormalFlag, formatDate } from "./utils";
@@ -403,6 +404,7 @@ const App = () => {
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null);
   const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
   const [pendingUndoAction, setPendingUndoAction] = useState<PendingUndoAction | null>(null);
+  const [systemTheme, setSystemTheme] = useState<Exclude<ThemeMode, "system">>("dark");
 
   const hadGrantedCloudAuthRef = useRef(false);
   const undoTimeoutRef = useRef<number | null>(null);
@@ -610,7 +612,15 @@ const App = () => {
   }, [tr]);
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
-  const isDarkTheme = appData.settings.theme === "dark";
+  const resolvedTheme = appData.settings.theme === "system" ? systemTheme : appData.settings.theme;
+  const resolvedSettings = useMemo(
+    () => ({
+      ...appData.settings,
+      theme: resolvedTheme
+    }),
+    [appData.settings, resolvedTheme]
+  );
+  const isDarkTheme = resolvedTheme === "dark";
   const demoBannerClassName = isDarkTheme
     ? "rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4"
     : "rounded-2xl border border-cyan-200 bg-cyan-50 p-3 sm:p-4";
@@ -635,7 +645,7 @@ const App = () => {
     runAiQuestion,
     copyAnalysis
   } = useAnalysis({
-    settings: appData.settings,
+    settings: resolvedSettings,
     language: appData.settings.language,
     allReports: reports,
     visibleReports,
@@ -709,15 +719,37 @@ const App = () => {
   }, [draft]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", appData.settings.theme);
-    if (appData.settings.theme === "dark") {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncSystemTheme = () => {
+      setSystemTheme(mediaQuery.matches ? "dark" : "light");
+    };
+
+    syncSystemTheme();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncSystemTheme);
+      return () => mediaQuery.removeEventListener("change", syncSystemTheme);
+    }
+
+    mediaQuery.addListener(syncSystemTheme);
+    return () => mediaQuery.removeListener(syncSystemTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", resolvedTheme);
+    document.documentElement.setAttribute("data-theme-preference", appData.settings.theme);
+    document.documentElement.setAttribute("data-interface-density", appData.settings.interfaceDensity);
+    if (resolvedTheme === "dark") {
       document.documentElement.classList.add("dark");
       document.body.classList.remove("light");
     } else {
       document.documentElement.classList.remove("dark");
       document.body.classList.add("light");
     }
-  }, [appData.settings.theme]);
+  }, [appData.settings.interfaceDensity, appData.settings.theme, resolvedTheme]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2318,7 +2350,7 @@ const App = () => {
         <Suspense fallback={adminLoadFallback}>
           <AdminView
             language={appData.settings.language}
-            theme={appData.settings.theme}
+            theme={resolvedTheme}
             authStatus={cloudAuth.status}
             authError={cloudAuth.error}
             accessToken={cloudAuth.session?.accessToken ?? null}
@@ -2331,7 +2363,7 @@ const App = () => {
         <CloudAuthModal
           open={cloudAuthModalOpen}
           language={appData.settings.language}
-          theme={appData.settings.theme}
+          theme={resolvedTheme}
           configured={cloudAuth.configured}
           initialView={cloudAuthModalView}
           authStatus={cloudAuth.status}
@@ -2397,7 +2429,8 @@ const App = () => {
           isMobileMenuOpen,
           quickUploadDisabled,
           language: appData.settings.language,
-          theme: appData.settings.theme,
+          theme: resolvedTheme,
+          interfaceDensity: appData.settings.interfaceDensity,
           userProfile: appData.settings.userProfile,
           isShareMode,
           isNl,
@@ -2430,7 +2463,17 @@ const App = () => {
           onToggleMobileMenu: () => setIsMobileMenuOpen((current) => !current),
           onCloseMobileMenu: closeMobileMenu,
           onQuickUpload: startSecondUpload,
-          onToggleTheme: () => updateSettings({ theme: appData.settings.theme === "dark" ? "light" : "dark" }),
+          onToggleTheme: () =>
+            updateSettings({
+              theme:
+                appData.settings.theme === "system"
+                  ? resolvedTheme === "dark"
+                    ? "light"
+                    : "dark"
+                  : appData.settings.theme === "dark"
+                    ? "light"
+                    : "dark"
+            }),
           onUploadFileSelected: handleUpload,
           onUploadIntent: () => {
             void ensurePdfParsingModule();
@@ -2485,7 +2528,7 @@ const App = () => {
                     selectedProtocolId={selectedProtocolId}
                     parserDebugMode={appData.settings.parserDebugMode}
                     language={appData.settings.language}
-                    theme={appData.settings.theme}
+                    theme={resolvedTheme}
                     onDraftChange={setDraft}
                     onAnnotationsChange={setDraftAnnotations}
                     onSelectedProtocolIdChange={setSelectedProtocolId}
@@ -2685,7 +2728,7 @@ const App = () => {
                 trtStability={trtStability}
                 outOfRangeCount={outOfRangeCount}
                 personalInfo={appData.personalInfo}
-                settings={appData.settings}
+                settings={resolvedSettings}
                 language={appData.settings.language}
                 isShareMode={isShareMode}
                 samplingControlsEnabled={samplingControlsEnabled}
@@ -2764,7 +2807,7 @@ const App = () => {
                     actionableAlerts={actionableAlerts}
                     positiveAlerts={positiveAlerts}
                     alertSeriesByMarker={alertSeriesByMarker}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                     samplingControlsEnabled={samplingControlsEnabled}
                     focusedMarker={focusedAlertMarker}
@@ -2776,7 +2819,7 @@ const App = () => {
                 {activeTab === "protocolImpact" ? (
                   <ProtocolImpactView
                     protocolDoseEvents={protocolDoseEvents}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                   />
                 ) : null}
@@ -2789,7 +2832,7 @@ const App = () => {
                     doseResponseInput={doseResponseInput}
                     visibleReports={visibleReports}
                     protocols={appData.protocols}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                     currentProtocolDose={activeProtocolDose}
                     onDoseResponseInputChange={setDoseResponseInput}
@@ -2802,7 +2845,7 @@ const App = () => {
                     reports={reports}
                     protocols={appData.protocols}
                     supplementTimeline={appData.supplementTimeline}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                     samplingControlsEnabled={samplingControlsEnabled}
                     isShareMode={isShareMode}
@@ -2845,7 +2888,7 @@ const App = () => {
                     memory={isShareMode ? null : analystMemory}
                     betaUsage={betaUsage}
                     betaLimits={betaLimits}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                     onRunAnalysis={runAiAnalysisWithConsent}
                     onAskQuestion={runAiQuestionWithConsent}
@@ -2858,6 +2901,7 @@ const App = () => {
                     personalInfo={appData.personalInfo}
                     onUpdatePersonalInfo={updatePersonalInfo}
                     settings={appData.settings}
+                    resolvedTheme={resolvedTheme}
                     language={appData.settings.language}
                     editableMarkers={editableMarkers}
                     markerUsage={markerUsage}
@@ -2928,7 +2972,7 @@ const App = () => {
       <CloudAuthModal
         open={cloudAuthModalOpen}
         language={appData.settings.language}
-        theme={appData.settings.theme}
+        theme={resolvedTheme}
         configured={cloudAuth.configured}
         initialView={cloudAuthModalView}
         authStatus={cloudAuth.status}
@@ -3249,7 +3293,7 @@ const App = () => {
                     marker={expandedMarker}
                     points={expandedMarkerPoints}
                     colorIndex={expandedMarkerColorIndex}
-                    settings={appData.settings}
+                    settings={resolvedSettings}
                     language={appData.settings.language}
                     phaseBlocks={dosePhaseBlocks}
                     height={460}
@@ -3425,7 +3469,7 @@ const App = () => {
             <OnboardingWizard
               language={appData.settings.language}
               userProfile={appData.settings.userProfile}
-              theme={appData.settings.theme}
+              theme={resolvedTheme}
               report={onboardingReport}
               personalInfo={appData.personalInfo}
               onUpdatePersonalInfo={updatePersonalInfo}

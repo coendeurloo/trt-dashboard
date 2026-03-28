@@ -23,6 +23,7 @@ const createProps = () => {
       language: "en" as const,
       theme: "dark" as const
     },
+    resolvedTheme: "dark" as const,
     language: "en" as const,
     editableMarkers: ["Testosterone", "Estradiol"],
     markerUsage: [{ marker: "Testosterone", valueCount: 3, reportCount: 2 }],
@@ -73,7 +74,7 @@ describe("SettingsView", () => {
 
     expect(screen.getByText("Backup & Restore")).toBeTruthy();
     expect(screen.getByText("Share")).toBeTruthy();
-    expect(screen.getByText("Marker Manager")).toBeTruthy();
+    expect(screen.getByText("Biomarker Manager")).toBeTruthy();
     expect(screen.queryByText("Core toggles")).toBeNull();
     expect(screen.queryByRole("button", { name: "Export JSON" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Export CSV" })).toBeNull();
@@ -95,5 +96,41 @@ describe("SettingsView", () => {
     expect(props.onUpdatePersonalInfo).toHaveBeenNthCalledWith(3, { biologicalSex: "male" });
     expect(props.onUpdatePersonalInfo).toHaveBeenNthCalledWith(4, { heightCm: 187 });
     expect(props.onUpdatePersonalInfo).toHaveBeenNthCalledWith(5, { weightKg: 83 });
+  });
+
+  it("shows refined appearance controls with a live tooltip preview", () => {
+    const props = createProps();
+    const { rerender } = render(<SettingsView {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+
+    expect(screen.getByText("Dashboard & Charts")).toBeTruthy();
+    expect(screen.getByText("Context & Tooltips")).toBeTruthy();
+    expect(screen.getByText("Theme mode")).toBeTruthy();
+    expect(screen.getByText("Interface density")).toBeTruthy();
+    expect(screen.queryByText("Compact sidebar on desktop")).toBeNull();
+    expect(screen.getByText("Show reference ranges")).toBeTruthy();
+    expect(screen.getByText("Highlight out-of-range values")).toBeTruthy();
+    expect(screen.getByText("Protocol overlay")).toBeTruthy();
+    expect(screen.getByText("Wellbeing check-ins")).toBeTruthy();
+    expect(screen.getByText("Live tooltip preview")).toBeTruthy();
+    expect(screen.getByText("Example biomarker: Testosterone")).toBeTruthy();
+    expect(screen.getByText("Change: +10.1%")).toBeTruthy();
+
+    fireEvent.change(screen.getByDisplayValue("Compact (quick overview)"), { target: { value: "full" } });
+    expect(props.onUpdateSettings).toHaveBeenCalledWith({ tooltipDetailMode: "full" });
+
+    rerender(
+      <SettingsView
+        {...props}
+        settings={{
+          ...props.settings,
+          tooltipDetailMode: "full"
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    expect(screen.getByText("Reference range: 250-1100 ng/dL")).toBeTruthy();
+    expect(screen.getByText("Change since prior test: +10.1%")).toBeTruthy();
   });
 });
