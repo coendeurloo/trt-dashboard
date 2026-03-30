@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="600" height="160" fill="none">
   <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700');</style>
     <linearGradient id="wave" x1="10" y1="0" x2="70" y2="0" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#06b6d4"/>
       <stop offset="100%" stop-color="#10b981"/>
