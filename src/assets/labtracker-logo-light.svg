@@ -29,7 +29,9 @@
     <tspan fill="#0f172a">Lab</tspan><tspan fill="url(#textgrad)">Tracker</tspan>
   </text>
 
-  <!-- Subtitle — two lines -->
-  <text x="97" y="52" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="2.8" fill="#94a3b8">BLOOD WORK</text>
-  <text x="97" y="66" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="2.8" fill="#94a3b8">INTELLIGENCE</text>
+  <!-- Subtitle — width matches LabTracker via textLength + lengthAdjust -->
+  <text x="97" y="52" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600"
+        fill="#2d5a6a" textLength="139" lengthAdjust="spacing">BLOOD WORK</text>
+  <text x="97" y="66" font-family="'Space Grotesk','DM Sans',system-ui,sans-serif" font-size="10" font-weight="600"
+        fill="#2d5a6a" textLength="139" lengthAdjust="spacing">INTELLIGENCE</text>
 </svg>
