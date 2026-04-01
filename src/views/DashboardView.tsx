@@ -660,7 +660,7 @@ const DashboardView = ({
               {!isCompareMode ? (
                 <div className={isDarkTheme ? "rounded-xl border border-slate-700/70 bg-slate-900/50 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
                   <p className={isDarkTheme ? "text-[11px] font-semibold uppercase tracking-wide text-slate-400" : "text-[11px] font-semibold uppercase tracking-wide text-slate-500"}>
-                    {tr("Display", "Display")}
+                    {tr("Overlays", "Overlays")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <button
@@ -671,15 +671,6 @@ const DashboardView = ({
                       onClick={() => updateChartVisualSettings({ showReferenceRanges: !settings.showReferenceRanges })}
                     >
                       {tr("Referentiebereik", "Reference range")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs ${
-                        settings.showAbnormalHighlights ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
-                      }`}
-                      onClick={() => updateChartVisualSettings({ showAbnormalHighlights: !settings.showAbnormalHighlights })}
-                    >
-                      {tr("Markeer waarden buiten bereik", "Highlight out-of-range values")}
                     </button>
                     <button
                       type="button"
@@ -698,6 +689,24 @@ const DashboardView = ({
                       onClick={() => updateChartVisualSettings({ showCheckInOverlay: !settings.showCheckInOverlay })}
                     >
                       {tr("Welzijns check-ins", "Wellbeing check-ins")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {!isCompareMode ? (
+                <div className={isDarkTheme ? "rounded-xl border border-slate-700/70 bg-slate-900/50 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
+                  <p className={isDarkTheme ? "text-[11px] font-semibold uppercase tracking-wide text-slate-400" : "text-[11px] font-semibold uppercase tracking-wide text-slate-500"}>
+                    {tr("Display", "Display")}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showAbnormalHighlights ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showAbnormalHighlights: !settings.showAbnormalHighlights })}
+                    >
+                      {tr("Markeer waarden buiten bereik", "Highlight out-of-range values")}
                     </button>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
