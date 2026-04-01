@@ -34,14 +34,14 @@ describe("ParserUploadSummaryModal", () => {
       />
     );
 
-    expect(screen.getByText("2 markers found")).toBeTruthy();
+    expect(screen.getByText("2 biomarkers found")).toBeTruthy();
     expect(screen.getByText(/needs review before saving/i)).toBeTruthy();
     expect(screen.queryByText(/confidence/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Send PDF to improve parser" }));
     expect(onOpenParserImprovement).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Review markers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review biomarkers" }));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 

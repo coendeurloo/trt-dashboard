@@ -199,7 +199,7 @@ describe("ProtocolImpactView", () => {
 
   it("keeps all disclosure sections collapsed by default", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    const showAll = screen.getByText(/Show all markers/i).closest("details") as HTMLDetailsElement;
+    const showAll = screen.getByText(/Show all biomarkers/i).closest("details") as HTMLDetailsElement;
     const confidence = screen.getByText(/Why confidence is limited/i).closest("details") as HTMLDetailsElement;
     const factors = screen.getByText(/Other factors changed/i).closest("details") as HTMLDetailsElement;
     const protocol = screen.getByText(/Full protocol details/i).closest("details") as HTMLDetailsElement;

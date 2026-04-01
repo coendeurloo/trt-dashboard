@@ -75,7 +75,7 @@ describe("ExtractionReviewTable", () => {
   it("does not expose parser provider text and keeps review metadata compact", () => {
     renderTable();
 
-    expect(screen.getByText(/Sep blood work clean\.pdf \| 1 markers/i)).toBeTruthy();
+    expect(screen.getByText(/Sep blood work clean\.pdf \| 1 biomarkers/i)).toBeTruthy();
     expect(screen.queryByText(/confidence 90%/i)).toBeNull();
     expect(screen.queryByText(/\b90%\b/)).toBeNull();
     expect(screen.queryByText(/GEMINI|FALLBACK|CLAUDE/i)).toBeNull();
@@ -123,7 +123,7 @@ describe("ExtractionReviewTable", () => {
 
     const checklistButton = screen.getByRole("button", { name: /show details/i });
     fireEvent.click(checklistButton);
-    expect(screen.getByText(/AI text-only extraction found too few marker rows/i)).toBeTruthy();
+    expect(screen.getByText(/AI text-only extraction found too few biomarker rows/i)).toBeTruthy();
   });
 
   it("shows local vs AI-applied origin labels", () => {
@@ -195,7 +195,7 @@ describe("ExtractionReviewTable", () => {
     });
 
     expect(screen.getByText(/Review this report carefully/i)).toBeTruthy();
-    expect(screen.getByText(/Only 1 marker was extracted from this report/i)).toBeTruthy();
+    expect(screen.getByText(/Only 1 biomarker was extracted from this report/i)).toBeTruthy();
     expect(screen.queryByText(/Parser warnings \(1\)/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Send PDF to improve parser/i }));
@@ -254,7 +254,7 @@ describe("ExtractionReviewTable", () => {
       ]
     });
 
-    expect(screen.getByRole("button", { name: "Auto-fix 1 markers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Auto-fix 1 biomarkers" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Auto-fix" })).toBeTruthy();
     expect(screen.getByText("In report: leucocyten")).toBeTruthy();
     expect(screen.getByText("Mapped to: Leukocytes")).toBeTruthy();
@@ -337,7 +337,7 @@ describe("ExtractionReviewTable", () => {
     expect(tooltip.textContent ?? "").toMatch(/approximately/i);
     expect(tooltip.className).toContain("review-tooltip");
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit marker name" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit biomarker name" }));
     const markerInput = screen.getByDisplayValue("Leukocytes");
     expect(markerInput).toBeTruthy();
 

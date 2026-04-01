@@ -93,7 +93,7 @@ describe("ReportsView alert logic", () => {
 
     render(<ReportsView {...props} />);
 
-    expect(screen.queryByLabelText("Out-of-range markers in this report")).toBeNull();
+    expect(screen.queryByLabelText("Out-of-range biomarkers in this report")).toBeNull();
   });
 
   it("expands the report when clicking the alert badge", () => {
@@ -127,7 +127,7 @@ describe("ReportsView alert logic", () => {
 
     render(<ReportsView {...props} />);
 
-    fireEvent.click(screen.getByLabelText("Out-of-range markers in this report"));
+    fireEvent.click(screen.getByLabelText("Out-of-range biomarkers in this report"));
     expect(screen.getByRole("button", { name: "Edit details" })).toBeTruthy();
   });
 
@@ -209,9 +209,9 @@ describe("ReportsView alert logic", () => {
     expect(screen.getByText("labrapport-compact.pdf")).toBeTruthy();
     expect(screen.queryByTitle("Hematocrit")).toBeNull();
     expect(screen.queryByTitle("Estradiol")).toBeNull();
-    expect(screen.getAllByText("6 markers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("6 biomarkers").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Expand" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText("Out-of-range markers in this report").length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText("Out-of-range biomarkers in this report").length).toBeGreaterThan(0);
   });
 
   it("selects a report from collapsed row without expanding it", () => {

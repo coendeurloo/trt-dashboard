@@ -103,7 +103,7 @@ describe("AnalysisView", () => {
   it("renders compact scope hint", () => {
     render(<AnalysisView {...baseProps} />);
     expect(screen.getByText(/1 reports in scope/i)).toBeTruthy();
-    expect(screen.getByText(/35 markers/i)).toBeTruthy();
+    expect(screen.getByText(/35 biomarkers/i)).toBeTruthy();
   });
 
   it("keeps copy button in output area only when a result exists", () => {
