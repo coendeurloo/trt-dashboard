@@ -15,7 +15,7 @@ import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
 import { MARKER_DATABASE, type MarkerCategory } from "../data/markerDatabase";
 import {
-  buildDashboardPresetPatch,
+  inferDashboardChartPresetFromSettings,
   stabilityColor
 } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -152,7 +152,6 @@ const DashboardView = ({
     });
   };
   const isCompareMode = dashboardMode === "compare2";
-  const currentPreset = settings.dashboardChartPreset;
   const selectedPrimaryMarkers = settings.primaryMarkersSelection.length > 0
     ? settings.primaryMarkersSelection.filter((marker) => allMarkers.includes(marker))
     : primaryMarkers.filter((marker) => allMarkers.includes(marker));
@@ -341,9 +340,41 @@ const DashboardView = ({
     });
   };
 
-  const applyPreset = (preset: "clinical" | "protocol" | "minimal") => {
-    onUpdateSettings(buildDashboardPresetPatch(preset));
-  };
+  const updateChartVisualSettings = useCallback(
+    (
+      patch: Partial<
+        Pick<
+          AppSettings,
+          | "showReferenceRanges"
+          | "showAbnormalHighlights"
+          | "showAnnotations"
+          | "showCheckInOverlay"
+          | "showTrtTargetZone"
+          | "showLongevityTargetZone"
+          | "yAxisMode"
+        >
+      >
+    ) => {
+      const normalizedPatch: Partial<AppSettings> = { ...patch };
+      if (patch.showReferenceRanges === true) {
+        normalizedPatch.showTrtTargetZone = false;
+        normalizedPatch.showLongevityTargetZone = false;
+      }
+      const inferredPreset = inferDashboardChartPresetFromSettings({
+        showReferenceRanges: normalizedPatch.showReferenceRanges ?? settings.showReferenceRanges,
+        showAbnormalHighlights: normalizedPatch.showAbnormalHighlights ?? settings.showAbnormalHighlights,
+        showAnnotations: normalizedPatch.showAnnotations ?? settings.showAnnotations,
+        showTrtTargetZone: normalizedPatch.showTrtTargetZone ?? settings.showTrtTargetZone,
+        showLongevityTargetZone: normalizedPatch.showLongevityTargetZone ?? settings.showLongevityTargetZone,
+        yAxisMode: normalizedPatch.yAxisMode ?? settings.yAxisMode
+      });
+      onUpdateSettings({
+        ...normalizedPatch,
+        dashboardChartPreset: inferredPreset
+      });
+    },
+    [onUpdateSettings, settings]
+  );
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -626,34 +657,76 @@ const DashboardView = ({
                   </div>
                 ) : null}
               </div>
-              <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Preset", "Preset")}</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(
-                    [
-                      ["clinical", tr("Klinisch", "Clinical")],
-                      ["protocol", tr("Protocol", "Protocol")],
-                      ["minimal", tr("Minimaal", "Minimal")]
-                    ] as const
-                  ).map(([preset, label]) => (
+              {!isCompareMode ? (
+                <div className={isDarkTheme ? "rounded-xl border border-slate-700/70 bg-slate-900/50 p-3" : "rounded-xl border border-slate-200 bg-slate-50 p-3"}>
+                  <p className={isDarkTheme ? "text-[11px] font-semibold uppercase tracking-wide text-slate-400" : "text-[11px] font-semibold uppercase tracking-wide text-slate-500"}>
+                    {tr("Display", "Display")}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     <button
-                      key={preset}
                       type="button"
                       className={`rounded-md px-2.5 py-1 text-xs ${
-                        currentPreset === preset ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                        settings.showReferenceRanges ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
                       }`}
-                      onClick={() => applyPreset(preset)}
+                      onClick={() => updateChartVisualSettings({ showReferenceRanges: !settings.showReferenceRanges })}
                     >
-                      {label}
+                      {tr("Referentiebereik", "Reference range")}
                     </button>
-                  ))}
-                  {currentPreset === "custom" ? (
-                    <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200">
-                      {tr("Aangepast", "Custom")}
-                    </span>
-                  ) : null}
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showAbnormalHighlights ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showAbnormalHighlights: !settings.showAbnormalHighlights })}
+                    >
+                      {tr("Markeer waarden buiten bereik", "Highlight out-of-range values")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showAnnotations ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showAnnotations: !settings.showAnnotations })}
+                    >
+                      {tr("Protocolfase-overlay", "Protocol phase overlay")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showCheckInOverlay ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showCheckInOverlay: !settings.showCheckInOverlay })}
+                    >
+                      {tr("Welzijns check-ins", "Wellbeing check-ins")}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300">{tr("Y-as", "Y-axis")}</span>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.yAxisMode === "zero"
+                          ? "bg-cyan-500/20 text-cyan-200"
+                          : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ yAxisMode: "zero" })}
+                    >
+                      {tr("Start op nul", "Start at zero")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.yAxisMode === "data"
+                          ? "bg-cyan-500/20 text-cyan-200"
+                          : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ yAxisMode: "data" })}
+                    >
+                      {tr("Fit op data", "Fit to data")}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : null}
               <div className="rounded-xl border border-slate-700/70 bg-slate-900/50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Data & schaal", "Data & scale")}</p>
                 <div className="mt-3 space-y-2.5">
@@ -704,12 +777,6 @@ const DashboardView = ({
                     </div>
                   ) : null}
                 </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  {tr(
-                    "Display-opties zoals referentiebereiken, overlays en highlights staan nu onder Instellingen > Vormgeving.",
-                    "Display options like reference ranges, overlays, and highlights now live under Settings > Appearance."
-                  )}
-                </p>
               </div>
 
               {samplingControlsEnabled ? (

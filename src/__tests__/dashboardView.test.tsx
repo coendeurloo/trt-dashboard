@@ -224,16 +224,16 @@ describe("DashboardView chart controls", () => {
     expect(within(stabilitySection as HTMLElement).getAllByText("66").length).toBeGreaterThan(0);
   });
 
-  it("shows Compare 2 markers and Chart settings controls", async () => {
+  it("shows Compare 2 biomarkers and Chart settings controls", async () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
 
     expect(screen.getByRole("button", { name: "Chart settings" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
-    expect(screen.getByRole("button", { name: "Compare 2 markers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compare 2 biomarkers" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Compare 2 markers" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Compare 2 biomarkers" })).toBeNull();
     });
   });
 
@@ -272,24 +272,6 @@ describe("DashboardView chart controls", () => {
     expect(screen.queryByText("TRT target zone")).toBeNull();
     expect(screen.queryByText("Protocol phase overlay")).toBeNull();
     expect(screen.queryByText("Highlight out-of-range values")).toBeNull();
-  });
-
-  it("applies protocol preset values", () => {
-    const { props, onUpdateSettings } = buildProps();
-    render(<DashboardView {...{ ...props, visibleReports: [report], allMarkers: ["Testosterone", "Estradiol"] }} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Chart settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Protocol" }));
-
-    expect(onUpdateSettings).toHaveBeenCalledWith({
-      showReferenceRanges: false,
-      showAbnormalHighlights: true,
-      showAnnotations: true,
-      showTrtTargetZone: false,
-      showLongevityTargetZone: false,
-      yAxisMode: "data",
-      dashboardChartPreset: "protocol"
-    });
   });
 
   it("marks preset as custom after manual visual change", () => {
@@ -361,7 +343,7 @@ describe("DashboardView chart controls", () => {
       />
     );
 
-    const searchInput = screen.getByLabelText("Search marker");
+    const searchInput = screen.getByLabelText("Search biomarker");
     const categorySelect = screen.getByLabelText("Marker category");
     expect(searchInput).toBeTruthy();
     expect(categorySelect).toBeTruthy();
@@ -373,7 +355,7 @@ describe("DashboardView chart controls", () => {
     expect(screen.queryByText("Testosterone")).toBeNull();
 
     fireEvent.change(searchInput, { target: { value: "test" } });
-    expect(screen.getByText("No markers found")).toBeTruthy();
+    expect(screen.getByText("No biomarkers found")).toBeTruthy();
   });
 
   it("groups All markers by medical category with section headings", () => {
