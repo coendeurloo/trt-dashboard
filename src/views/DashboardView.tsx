@@ -360,6 +360,14 @@ const DashboardView = ({
         normalizedPatch.showTrtTargetZone = false;
         normalizedPatch.showLongevityTargetZone = false;
       }
+      if (patch.showTrtTargetZone === true) {
+        normalizedPatch.showReferenceRanges = false;
+        normalizedPatch.showLongevityTargetZone = false;
+      }
+      if (patch.showLongevityTargetZone === true) {
+        normalizedPatch.showReferenceRanges = false;
+        normalizedPatch.showTrtTargetZone = false;
+      }
       const inferredPreset = inferDashboardChartPresetFromSettings({
         showReferenceRanges: normalizedPatch.showReferenceRanges ?? settings.showReferenceRanges,
         showAbnormalHighlights: normalizedPatch.showAbnormalHighlights ?? settings.showAbnormalHighlights,
@@ -671,6 +679,24 @@ const DashboardView = ({
                       onClick={() => updateChartVisualSettings({ showReferenceRanges: !settings.showReferenceRanges })}
                     >
                       {tr("Referentiebereik", "Reference range")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showTrtTargetZone ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showTrtTargetZone: !settings.showTrtTargetZone })}
+                    >
+                      {tr("TRT-doelzone", "TRT target zone")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs ${
+                        settings.showLongevityTargetZone ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800 text-slate-300 hover:text-slate-100"
+                      }`}
+                      onClick={() => updateChartVisualSettings({ showLongevityTargetZone: !settings.showLongevityTargetZone })}
+                    >
+                      {tr("Longevity-doelzone", "Longevity target zone")}
                     </button>
                     <button
                       type="button"
