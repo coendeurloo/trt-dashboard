@@ -4,6 +4,10 @@ import { differenceInDays, format, parseISO } from "date-fns";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { X } from "lucide-react";
 import EmptyStateCard from "../components/EmptyStateCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { trLocale } from "../i18n";
 import { AppLanguage, SymptomCheckIn, UserProfile, WellbeingMetricId } from "../types";
 import { getCheckInAverage, getCheckInMetricValue, WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
@@ -118,13 +122,13 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
   return (
     <div className="space-y-5">
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Datum", "Date")}</label>
-        <input
+        <Label htmlFor="checkin-date" className="mb-2 block text-xs font-semibold uppercase tracking-wide">{tr("Datum", "Date")}</Label>
+        <Input
+          id="checkin-date"
           type="date"
           value={date}
           max={today}
           onChange={(event) => setDate(event.target.value)}
-          className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
         />
       </div>
 
@@ -145,33 +149,26 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <Label htmlFor="checkin-notes" className="mb-2 block text-xs font-semibold uppercase tracking-wide">
           {tr("Notities (optioneel)", "Notes (optional)")}
-        </label>
-        <textarea
+        </Label>
+        <Textarea
+          id="checkin-notes"
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           rows={2}
           placeholder={tr("Hoe voelde je je vandaag?", "How were you feeling today?")}
-          className="w-full resize-none rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+          className="resize-none"
         />
       </div>
 
       <div className="flex gap-2 border-t border-slate-800 pt-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          className="rounded-lg border border-cyan-500/40 bg-cyan-500/14 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/24"
-        >
+        <Button onClick={handleSave} variant="default">
           {tr("Opslaan", "Save check-in")}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-slate-600 bg-slate-800/70 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
-        >
+        </Button>
+        <Button onClick={onCancel} variant="outline">
           {tr("Annuleren", "Cancel")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -221,38 +218,38 @@ const CheckInCard = ({ checkIn, language, onEdit, onDelete }: CheckInCardProps) 
       {checkIn.notes ? <p className="mt-2.5 border-t border-slate-700/60 pt-2.5 text-sm text-slate-300 italic">{checkIn.notes}</p> : null}
 
       <div className="mt-2.5 flex items-center justify-end gap-1">
-        <button
-          type="button"
+        <Button
           onClick={onEdit}
-          className="rounded-md px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+          variant="ghost"
+          size="sm"
         >
           {tr("Bewerk", "Edit")}
-        </button>
+        </Button>
         {confirmDelete ? (
           <>
-            <button
-              type="button"
+            <Button
               onClick={onDelete}
-              className="rounded-md bg-red-500/20 px-2.5 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30"
+              variant="destructive"
+              size="sm"
             >
               {tr("Verwijder", "Delete")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={() => setConfirmDelete(false)}
-              className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800"
+              variant="ghost"
+              size="sm"
             >
               {tr("Annuleer", "Cancel")}
-            </button>
+            </Button>
           </>
         ) : (
-          <button
-            type="button"
+          <Button
             onClick={() => setConfirmDelete(true)}
-            className="rounded-md px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-800 hover:text-red-400"
+            variant="ghost"
+            size="sm"
           >
             ✕
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -463,13 +460,11 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
               {tr("Laatste gemiddelde", "Latest average")}: <span className="font-semibold text-slate-100">{recentAverage === null ? "—" : recentAverage.toFixed(1)}</span>
             </div>
             {!isShareMode ? (
-              <button
-                type="button"
+              <Button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="checkin-primary-btn rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-sm font-semibold text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
               >
                 {tr("Inchecken", "Check in")}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -483,13 +478,13 @@ const CheckInsView = ({ checkIns, userProfile, language, isShareMode, onAdd, onU
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{tr("Geschiedenis", "History")}</p>
             {sorted.length > 6 ? (
-              <button
-                type="button"
+              <Button
                 onClick={() => setShowAllHistory((current) => !current)}
-                className="rounded-md border border-slate-700 bg-slate-900/55 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-600 hover:text-slate-100"
+                variant="outline"
+                size="sm"
               >
                 {showAllHistory ? tr("Toon minder", "Show less") : tr("Toon alles", "Show all")}
-              </button>
+              </Button>
             ) : null}
           </div>
 

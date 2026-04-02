@@ -4,6 +4,7 @@ import { useId } from "react";
 import { useDropzone } from "react-dropzone";
 import { trLocale } from "../i18n";
 import { AppLanguage, ParserStage } from "../types";
+import { Badge } from "@/components/ui/badge";
 
 export interface UploadPanelProps {
   isProcessing: boolean;
@@ -90,9 +91,9 @@ const UploadPanel = ({ isProcessing, processingStage = null, onFileSelected, onU
             <div className="max-w-xs">
               <p className="text-sm font-semibold text-slate-100">{tr("Upload lab-PDF", "Upload lab PDF")}</p>
               <p className="mt-0.5 text-xs text-slate-300">{tr("Tekst-PDF werkt het best. Scan? Dan gebruiken we OCR.", "Text PDFs work best. Scanned file? We'll use OCR.")}</p>
-              <p className="mt-1 inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200">
+              <Badge variant="cyan" className="mt-1">
                 {tr("Klik of sleep PDF hier", "Click or drop PDF here")}
-              </p>
+              </Badge>
               <p id={stageId} className="sr-only">
                 {tr("Upload gereed.", "Upload ready.")}
               </p>

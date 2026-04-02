@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2, RotateCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
 import {

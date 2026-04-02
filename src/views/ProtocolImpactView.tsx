@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";

@@ -1,6 +1,9 @@
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, ParserUncertaintyAssessment } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ParserUncertaintyModalProps {
   open: boolean;
@@ -43,26 +46,28 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
   };
 
   return (
-    <div className="app-modal-overlay z-[88]" role="dialog" aria-modal="true">
-      <div className="app-modal-shell w-full max-w-xl border-amber-500/35 bg-slate-900 p-5 shadow-soft">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
-            <AlertTriangle className="h-5 w-5 text-amber-300" />
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
+              <AlertTriangle className="h-5 w-5 text-amber-300" />
+            </div>
+            <div>
+              <DialogTitle>
+                {tr("Parser is onzeker over dit rapport", "Parser is uncertain about this report")}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-slate-300">
+                {tr(
+                  "Je kunt doorgaan met lokaal resultaat, of AI een extra poging laten doen.",
+                  "You can continue with the local result, or let AI try an extra pass."
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              {tr("Parser is onzeker over dit rapport", "Parser is uncertain about this report")}
-            </h3>
-            <p className="mt-1 text-sm text-slate-300">
-              {tr(
-                "Je kunt doorgaan met lokaal resultaat, of AI een extra poging laten doen.",
-                "You can continue with the local result, or let AI try an extra pass."
-              )}
-            </p>
-          </div>
-        </div>
+        </DialogHeader>
 
-        <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+        <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Waarom onzeker?", "Why uncertain?")}</p>
           <ul className="mt-2 space-y-1 text-sm text-slate-200">
             {assessment.reasons.map((reason) => (
@@ -76,34 +81,31 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
           </p>
         </div>
 
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 p-2 text-xs text-cyan-100">
-          <ShieldCheck className="mt-0.5 h-3.5 w-3.5" />
-          <p>
+        <Alert variant="info">
+          <ShieldCheck className="h-4 w-4" />
+          <AlertDescription>
             {tr(
               "Er wordt niets extern verstuurd totdat je daar in de volgende stap expliciet toestemming voor geeft.",
               "Nothing is sent externally until you explicitly grant consent in the next step."
             )}
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+        <DialogFooter className="flex-wrap gap-2">
+          <Button
+            variant="outline"
             onClick={onSkip}
           >
             {tr("Niet nu (lokaal houden)", "Not now (keep local)")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100"
+          </Button>
+          <Button
             onClick={onUseAi}
           >
             {tr("Gebruik AI", "Use AI")}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

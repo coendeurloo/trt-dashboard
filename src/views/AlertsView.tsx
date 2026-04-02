@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MarkerAlert, MarkerSeriesPoint } from "../analytics";
 import AlertTrendMiniChart from "../components/AlertTrendMiniChart";
 import EmptyStateCard from "../components/EmptyStateCard";

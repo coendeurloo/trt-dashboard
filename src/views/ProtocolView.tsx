@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import EmptyStateCard from "../components/EmptyStateCard";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
@@ -281,14 +282,13 @@ const ProtocolView = ({
             <h3 className="text-base font-semibold text-slate-100">{entityTitle}</h3>
             <p className="text-sm text-slate-300">{entitySummary}</p>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 disabled:opacity-50"
+          <Button
             onClick={startCreate}
             disabled={isShareMode}
+            className="gap-1"
           >
             <Plus className="h-4 w-4" /> {tr(`Nieuw ${entitySingular}`, `New ${entitySingular}`)}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -338,22 +338,24 @@ const ProtocolView = ({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-xs text-cyan-200"
+                  <Button
                     onClick={() => startEdit(protocol)}
                     disabled={isShareMode}
+                    variant="default"
+                    size="sm"
+                    className="gap-1"
                   >
                     <Pencil className="h-3.5 w-3.5" /> {tr("Bewerken", "Edit")}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200"
+                  </Button>
+                  <Button
                     onClick={() => duplicateAndEdit(protocol)}
                     disabled={isShareMode}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
                   >
                     <Copy className="h-3.5 w-3.5" /> {tr("Dupliceer & bewerk", "Duplicate & edit")}
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200 disabled:opacity-50"

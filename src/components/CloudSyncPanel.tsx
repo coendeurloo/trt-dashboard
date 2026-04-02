@@ -4,6 +4,10 @@ import { trLocale } from "../i18n";
 import { AppLanguage, AppMode, ThemeMode } from "../types";
 import CloudSyncConflictModal from "./CloudSyncConflictModal";
 import { mapCloudAuthErrorToMessage, mapCloudSyncErrorToMessage } from "../lib/cloudErrorMessages";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 
 type CloudAuthStatus = "loading" | "authenticated" | "unauthenticated" | "error";
 type CloudSyncStatus = "idle" | "loading" | "syncing" | "pending" | "error";
@@ -107,13 +111,14 @@ const CloudSyncPanel = ({
   }, [authError, localError, syncError, tr]);
 
   return (
-    <div className="settings-card app-teal-glow-surface rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-100">{tr("Cloud Sync", "Cloud Sync")}</h2>
-        <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-0.5 text-xs text-cyan-200">
-          {modeBadge}
-        </span>
-      </div>
+    <Card className="settings-card app-teal-glow-surface border-slate-700/70 bg-slate-900/60 p-4">
+      <CardContent className="p-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-slate-100">{tr("Cloud Sync", "Cloud Sync")}</h2>
+          <Badge variant="cyan">
+            {modeBadge}
+          </Badge>
+        </div>
 
       {!configured ? (
         <p className="mt-2 text-sm text-amber-200">
@@ -125,57 +130,42 @@ const CloudSyncPanel = ({
       ) : null}
 
       {configured && authStatus !== "authenticated" ? (
-        <div
-          className={`mt-3 rounded-2xl p-4 ${
-            isLightTheme
-              ? "border border-slate-300/80 bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-              : "border border-slate-700/80 bg-slate-950/45"
-          }`}
-        >
-          {authStatus === "loading" ? (
-            <p className="inline-flex items-center gap-2 text-sm text-slate-300">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {tr("Cloud-account wordt gecontroleerd...", "Checking your cloud account...")}
-            </p>
-          ) : (
-            <>
-              <p className="text-sm font-medium text-slate-100">
-                {tr("Maak een account voor automatische cloud sync.", "Create an account for automatic cloud sync.")}
+        <Card className="mt-3">
+          <CardContent className="p-4">
+            {authStatus === "loading" ? (
+              <p className="inline-flex items-center gap-2 text-sm text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {tr("Cloud-account wordt gecontroleerd...", "Checking your cloud account...")}
               </p>
-              <p className="mt-1 text-sm text-slate-300">
-                {tr(
-                  "Cloud is optioneel. Zodra je inlogt, lopen back-up en sync vanzelf op de achtergrond.",
-                  "Cloud is optional. Once you sign in, backup and sync run automatically in the background."
-                )}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenAuthModal("signup")}
-                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
-                    isLightTheme
-                      ? "border border-cyan-600/40 bg-cyan-500/20 text-cyan-900 hover:border-cyan-700/60 hover:bg-cyan-500/30"
-                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/80 hover:bg-cyan-500/22"
-                  }`}
-                >
-                  {tr("Account maken", "Create account")}
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenAuthModal("signin")}
-                  className={`rounded-xl border px-4 py-2 text-sm transition ${
-                    isLightTheme
-                      ? "border-slate-300 text-slate-700 hover:border-slate-400 hover:text-slate-900"
-                      : "border-slate-600 text-slate-200 hover:border-slate-500 hover:text-slate-50"
-                  }`}
-                >
-                  {tr("Ik heb al een account", "I already have an account")}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-100">
+                  {tr("Maak een account voor automatische cloud sync.", "Create an account for automatic cloud sync.")}
+                </p>
+                <p className="mt-1 text-sm text-slate-300">
+                  {tr(
+                    "Cloud is optioneel. Zodra je inlogt, lopen back-up en sync vanzelf op de achtergrond.",
+                    "Cloud is optional. Once you sign in, backup and sync run automatically in the background."
+                  )}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => onOpenAuthModal("signup")}
+                  >
+                    {tr("Account maken", "Create account")}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => onOpenAuthModal("signin")}
+                  >
+                    {tr("Ik heb al een account", "I already have an account")}
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
 
       {configured && authStatus === "authenticated" ? (
@@ -194,52 +184,53 @@ const CloudSyncPanel = ({
                 : tr("Cloud sync staat uit op dit apparaat.", "Cloud sync is off on this device.")}
           </p>
           {consentStatus === "required" ? (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-              <p>
-                {tr(
-                  "Rond je consent af om cloud sync en back-up te activeren.",
-                  "Complete consent to enable cloud sync and backup."
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={onCompleteConsent}
-                className="mt-2 rounded-md border border-amber-400/60 bg-amber-500/20 px-3 py-1.5 text-sm"
-              >
-                {tr("Consent afronden", "Complete consent")}
-              </button>
-            </div>
+            <Alert variant="warning">
+              <AlertDescription className="flex flex-col gap-2">
+                <p>
+                  {tr(
+                    "Rond je consent af om cloud sync en back-up te activeren.",
+                    "Complete consent to enable cloud sync and backup."
+                  )}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onCompleteConsent}
+                >
+                  {tr("Consent afronden", "Complete consent")}
+                </Button>
+              </AlertDescription>
+            </Alert>
           ) : null}
           <div className="flex flex-wrap gap-2">
             {!cloudEnabled ? (
-              <button
-                type="button"
+              <Button
                 onClick={onEnableCloud}
                 disabled={isBusy || consentStatus !== "granted"}
-                className="inline-flex items-center gap-1 rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 disabled:opacity-50"
+                size="sm"
               >
                 <Cloud className="h-4 w-4" />
                 {tr("Cloud sync hervatten", "Resume cloud sync")}
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={onDisableCloud}
               disabled={!cloudEnabled || isBusy}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
+              size="sm"
             >
               <CloudOff className="h-4 w-4" />
               {tr("Lokaal-only modus", "Local-only mode")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => void run(onRefreshCloud)}
               disabled={isBusy}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
+              size="sm"
             >
               <RefreshCw className="h-4 w-4" />
               {tr("Ververs cloudstate", "Refresh cloud state")}
-            </button>
+            </Button>
           </div>
 
           <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-sm text-slate-300">
@@ -258,44 +249,45 @@ const CloudSyncPanel = ({
           </div>
 
           {actionRequired === "upload_local" ? (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-              <p>
-                {syncStatus === "error"
-                  ? tr("De eerste cloud-upload is niet gelukt. Probeer het opnieuw.", "The first cloud upload did not finish. Try again.")
-                  : tr("We zetten je lokale data automatisch in de cloud.", "We are automatically moving your local data into the cloud.")}
-              </p>
-              {syncStatus === "error" ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
+            <Alert variant="warning">
+              <AlertDescription className="flex flex-col gap-2">
+                <p>
+                  {syncStatus === "error"
+                    ? tr("De eerste cloud-upload is niet gelukt. Probeer het opnieuw.", "The first cloud upload did not finish. Try again.")
+                    : tr("We zetten je lokale data automatisch in de cloud.", "We are automatically moving your local data into the cloud.")}
+                </p>
+                {syncStatus === "error" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
                     onClick={() => void run(onUploadLocalData)}
-                    className="rounded-md border border-amber-400/60 bg-amber-500/20 px-3 py-1.5 text-sm"
                   >
                     {tr("Opnieuw proberen", "Try again")}
-                  </button>
-                </div>
-              ) : null}
-            </div>
+                  </Button>
+                ) : null}
+              </AlertDescription>
+            </Alert>
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onExportData}
-              className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200"
             >
               {tr("Exporteer data (JSON)", "Export data (JSON)")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => void run(onSignOut)}
               disabled={isBusy}
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
             >
               {tr("Uitloggen", "Sign out")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() =>
                 void run(async () => {
                   const confirmed = window.confirm(
@@ -311,37 +303,39 @@ const CloudSyncPanel = ({
                 })
               }
               disabled={isBusy}
-              className="rounded-md border border-rose-700/70 bg-rose-900/30 px-3 py-1.5 text-sm text-rose-200 disabled:opacity-50"
             >
               {tr("Verwijder cloudaccount", "Delete cloud account")}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
-      {isBusy ? (
-        <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {tr("Bezig...", "Working...")}
-        </p>
-      ) : null}
+        {isBusy ? (
+          <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {tr("Bezig...", "Working...")}
+          </p>
+        ) : null}
 
-      {displayError ? (
-        <p className="mt-2 text-xs text-rose-200">{displayError}</p>
-      ) : null}
+        {displayError ? (
+          <Alert variant="destructive" className="mt-2">
+            <AlertDescription className="text-xs">{displayError}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <CloudSyncConflictModal
-        open={configured && authStatus === "authenticated" && actionRequired === "choose_source"}
-        language={language}
-        conflictDetected={conflictDetected}
-        isBusy={isBusy}
-        onUseCloudCopy={onUseCloudCopy}
-        onReplaceCloudWithLocal={() => {
-          void run(onReplaceCloudWithLocal);
-        }}
-        onUseLocalOnly={onDisableCloud}
-      />
-    </div>
+        <CloudSyncConflictModal
+          open={configured && authStatus === "authenticated" && actionRequired === "choose_source"}
+          language={language}
+          conflictDetected={conflictDetected}
+          isBusy={isBusy}
+          onUseCloudCopy={onUseCloudCopy}
+          onReplaceCloudWithLocal={() => {
+            void run(onReplaceCloudWithLocal);
+          }}
+          onUseLocalOnly={onDisableCloud}
+        />
+      </CardContent>
+    </Card>
   );
 };
 

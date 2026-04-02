@@ -5,6 +5,8 @@ import { getMarkerDisplayName, trLocale } from "../i18n";
 import { trendVisual } from "../chartHelpers";
 import MarkerInfoBadge from "./MarkerInfoBadge";
 import MarkerTrendChart from "./MarkerTrendChart";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export interface MarkerChartCardProps {
   marker: string;
@@ -88,28 +90,32 @@ const MarkerChartCard = ({
           <h3 className="text-sm font-medium text-slate-100">{markerLabel}</h3>
           <MarkerInfoBadge marker={marker} language={language} />
           {isCalculatedMarker ? (
-            <span className="rounded bg-cyan-500/10 px-1 py-0.5 text-[10px] text-cyan-300">fx</span>
+            <Badge variant="cyan" className="text-[10px] px-1 py-0.5">fx</Badge>
           ) : null}
           {alertCount > 0 ? (
-            <button
+            <Button
               type="button"
               onClick={onOpenAlerts}
-              className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] leading-none text-rose-300 transition hover:bg-rose-500/20"
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-[10px] leading-none text-rose-300"
               aria-label={`${tr("Open alerts voor", "Open alerts for")} ${markerLabel}`}
             >
               {alertCount} {tr("alert", `alert${alertCount > 1 ? "s" : ""}`)}
-            </button>
+            </Button>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-slate-500">{points[0]?.unit ?? ""}</span>
-          <button
+          <Button
             type="button"
-            className="rounded px-1.5 py-0.5 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
+            variant="ghost"
+            size="sm"
+            className="text-[11px] text-slate-500 px-1.5 py-0.5"
             onClick={onOpenLarge}
           >
             {tr("Vergroot", "Enlarge")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -135,24 +141,27 @@ const MarkerChartCard = ({
         ) : null}
       </div>
 
-      <button
+      <Button
         type="button"
-        className="block w-full cursor-zoom-in text-left"
+        variant="ghost"
+        className="block w-full justify-start p-0 cursor-zoom-in"
         onClick={onOpenLarge}
         aria-label={`${tr("Open grotere grafiek voor", "Open larger chart for")} ${markerLabel}`}
       >
-        <MarkerTrendChart
-          marker={marker}
-          points={points}
-          colorIndex={colorIndex}
-          settings={settings}
-          language={language}
-          phaseBlocks={phaseBlocks}
-          height={200}
-          showSeriesGradientFill
-          checkIns={checkIns}
-        />
-      </button>
+        <div className="w-full">
+          <MarkerTrendChart
+            marker={marker}
+            points={points}
+            colorIndex={colorIndex}
+            settings={settings}
+            language={language}
+            phaseBlocks={phaseBlocks}
+            height={200}
+            showSeriesGradientFill
+            checkIns={checkIns}
+          />
+        </div>
+      </Button>
     </motion.div>
   );
 };

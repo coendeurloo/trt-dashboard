@@ -3,6 +3,9 @@ import { AlertTriangle, BadgeInfo, FlaskConical, Loader2, Sparkles } from "lucid
 import { DosePrediction, projectDosePredictionAt } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import DoseMarkerCard from "../components/DoseMarkerCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import useDoseResponsePremium from "../hooks/useDoseResponsePremium";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport, Protocol } from "../types";
@@ -168,10 +171,11 @@ const DoseResponseView = ({
 
           <div className="dose-control-grid mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div>
-              <label className="text-xs font-medium uppercase tracking-wide text-cyan-200">
+              <Label htmlFor="dose-slider" className="text-xs font-medium uppercase tracking-wide text-cyan-200">
                 {tr("Dose scenario (mg/week)", "Dose scenario (mg/week)")}
-              </label>
+              </Label>
               <input
+                id="dose-slider"
                 type="range"
                 min={sliderMin}
                 max={sliderMax}
@@ -184,25 +188,22 @@ const DoseResponseView = ({
                 {quickScenarios.map((scenario) => {
                   const active = Math.abs(scenarioDose - scenario.value) <= 0.2;
                   return (
-                    <button
+                    <Button
                       key={scenario.key}
-                      type="button"
                       onClick={() => onDoseResponseInputChange(String(scenario.value))}
-                      className={`rounded-lg px-2.5 py-1 text-xs ${
-                        active
-                          ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                          : "border border-transparent text-slate-300 hover:border-cyan-500/45 hover:text-cyan-200"
-                      }`}
+                      variant={active ? "default" : "outline"}
+                      size="sm"
+                      className="text-xs"
                     >
                       {scenarioLabel(scenario.delta)} ({formatAxisTick(scenario.value)} mg)
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
             </div>
 
             <div className="flex items-start gap-2">
-              <input
+              <Input
                 type="number"
                 step="0.1"
                 min="0"
@@ -210,15 +211,15 @@ const DoseResponseView = ({
                 value={doseResponseInput}
                 onChange={(event) => onDoseResponseInputChange(event.target.value)}
                 placeholder={tr("Bijv. 120", "e.g. 120")}
-                className="w-28 rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                className="w-28"
               />
-              <button
-                type="button"
+              <Button
                 onClick={() => onDoseResponseInputChange("")}
-                className="rounded-md border border-slate-600 px-2.5 py-1.5 text-xs text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
+                variant="outline"
+                size="sm"
               >
                 {tr("Auto", "Auto")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -278,13 +279,14 @@ const DoseResponseView = ({
                   "Go to the Protocol tab, add your current protocol with the correct testosterone dose, then come back here."
                 )}
               </p>
-              <button
-                type="button"
+              <Button
                 onClick={onNavigateToProtocol}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25"
+                variant="outline"
+                size="sm"
+                className="mt-1 text-amber-200 border-amber-500/40 hover:bg-amber-500/25"
               >
                 {tr("Naar Protocol →", "Go to Protocol →")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -292,28 +294,20 @@ const DoseResponseView = ({
         <>
           {premiumPredictions.length > 8 ? (
             <div className="inline-flex gap-1 rounded-xl border border-slate-700/80 bg-slate-900/45 p-1">
-              <button
-                type="button"
+              <Button
                 onClick={() => setMarkerScope("top")}
-                className={`rounded-lg px-3 py-1.5 text-xs ${
-                  markerScope === "top"
-                    ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                    : "border border-transparent text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                }`}
+                variant={markerScope === "top" ? "default" : "ghost"}
+                size="sm"
               >
                 {tr("Top 8 relevant", "Top 8 relevant")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={() => setMarkerScope("all")}
-                className={`rounded-lg px-3 py-1.5 text-xs ${
-                  markerScope === "all"
-                    ? "border border-cyan-300 bg-cyan-500/20 text-cyan-100"
-                    : "border border-transparent text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-                }`}
+                variant={markerScope === "all" ? "default" : "ghost"}
+                size="sm"
               >
                 {tr("Alle biomarkers", "All Biomarkers")}
-              </button>
+              </Button>
             </div>
           ) : null}
 

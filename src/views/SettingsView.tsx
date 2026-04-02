@@ -1,6 +1,12 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, FileText, Link2, Pencil } from "lucide-react";
 import { USER_PROFILES } from "../data/userProfiles";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { APP_LANGUAGE_OPTIONS, getMarkerDisplayName, trLocale } from "../i18n";
 import { inferSpecimenFromCanonicalMarker } from "../markerSpecimen";
 import { ShareOptions } from "../share";
@@ -50,44 +56,16 @@ interface AppearanceToggleProps {
   label: string;
   description?: string;
   onChange: (checked: boolean) => void;
-  isLightTheme: boolean;
 }
 
-const AppearanceToggle = ({ checked, label, description, onChange, isLightTheme }: AppearanceToggleProps) => (
-  <button
-    type="button"
-    onClick={() => onChange(!checked)}
-    className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
-      isLightTheme
-        ? "border-slate-200 bg-white hover:border-cyan-300/70"
-        : "border-slate-700/70 bg-slate-900/45 hover:border-cyan-500/40"
-    }`}
-  >
+const AppearanceToggle = ({ checked, label, description, onChange }: AppearanceToggleProps) => (
+  <div className="flex w-full items-start justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/45 px-3 py-3 text-left transition hover:border-cyan-500/40">
     <div className="min-w-0">
-      <p className={`text-sm font-medium ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{label}</p>
-      {description ? <p className={`mt-1 text-xs leading-5 ${isLightTheme ? "text-slate-600" : "text-slate-400"}`}>{description}</p> : null}
+      <p className="text-sm font-medium text-slate-100">{label}</p>
+      {description ? <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p> : null}
     </div>
-    <span
-      className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full border transition ${
-        checked
-          ? isLightTheme
-            ? "border-cyan-400 bg-cyan-100"
-            : "border-cyan-500/60 bg-cyan-500/20"
-          : isLightTheme
-            ? "border-slate-300 bg-slate-100"
-            : "border-slate-600 bg-slate-800"
-      }`}
-      aria-hidden="true"
-    >
-      <span
-        className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition ${
-          checked
-            ? `translate-x-4 ${isLightTheme ? "bg-cyan-600" : "bg-cyan-300"}`
-            : `translate-x-0.5 ${isLightTheme ? "bg-slate-500" : "bg-slate-400"}`
-        }`}
-      />
-    </span>
-  </button>
+    <Switch checked={checked} onCheckedChange={onChange} />
+  </div>
 );
 
 const SettingsView = ({
@@ -550,7 +528,6 @@ const SettingsView = ({
                       onChange={(checked) => updateChartAppearanceSettings({ showReferenceRanges: checked })}
                       label={tr("Toon referentiebereiken", "Show reference ranges")}
                       description={tr("Laat de klinische onder- en bovengrens in grafieken zien.", "Show the clinical lower and upper range inside charts.")}
-                      isLightTheme={isLightTheme}
                     />
                   </div>
                   <div className="sm:col-span-1">
@@ -559,7 +536,6 @@ const SettingsView = ({
                       onChange={(checked) => updateChartAppearanceSettings({ showAbnormalHighlights: checked })}
                       label={tr("Markeer afwijkende waarden", "Highlight out-of-range values")}
                       description={tr("Geef visueel meer nadruk aan waarden buiten bereik.", "Give out-of-range values stronger visual emphasis.")}
-                      isLightTheme={isLightTheme}
                     />
                   </div>
                   <div className="sm:col-span-1">
@@ -568,7 +544,6 @@ const SettingsView = ({
                       onChange={(checked) => updateChartAppearanceSettings({ showAnnotations: checked })}
                       label={tr("Protocol-overlay", "Protocol overlay")}
                       description={tr("Toon protocolfases en contextblokken op relevante grafieken.", "Show protocol phases and context blocks on relevant charts.")}
-                      isLightTheme={isLightTheme}
                     />
                   </div>
                   <div className="sm:col-span-1">
@@ -577,7 +552,6 @@ const SettingsView = ({
                       onChange={(checked) => updateChartAppearanceSettings({ showCheckInOverlay: checked })}
                       label={tr("Welzijns check-ins", "Wellbeing check-ins")}
                       description={tr("Toon check-in momenten als contextlaag boven je biomarkertrends.", "Show check-in moments as an extra context layer over biomarker trends.")}
-                      isLightTheme={isLightTheme}
                     />
                   </div>
                   <div className={isLightTheme ? "rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:col-span-2" : "rounded-xl border border-slate-700/70 bg-slate-900/45 px-3 py-3 sm:col-span-2"}>

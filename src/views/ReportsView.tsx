@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, CheckSquare, ChevronDown, ClipboardList, FileText, FlaskConical, Lock, Pencil, Save, Square, Trash2, X, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ProtocolEditor from "../components/ProtocolEditor";
 import MarkerUnitReviewPopover from "../components/MarkerUnitReviewPopover";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";

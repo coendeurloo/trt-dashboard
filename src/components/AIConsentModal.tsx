@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, ShieldCheck } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AIConsentAction, AIConsentDecision, AppLanguage } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AIConsentModalProps {
   open: boolean;
@@ -43,31 +47,33 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
   });
 
   return (
-    <div className="app-modal-overlay" role="dialog" aria-modal="true">
-      <div className="app-modal-shell ai-consent-modal w-full max-w-xl bg-slate-900 p-5 shadow-soft">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
-            <ShieldCheck className="h-5 w-5 text-cyan-300" />
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
+              <ShieldCheck className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <DialogTitle className="text-base">
+                {tr("Toestemming voor externe AI", "Consent for external AI")}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-slate-300">
+                {action === "analysis"
+                  ? tr(
+                      "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat je wilt meesturen voor AI-analyse.",
+                      "Your data stays local unless you grant consent below. Choose what to include for AI analysis."
+                    )
+                  : tr(
+                      "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat we extern mogen gebruiken om deze PDF beter uit te lezen.",
+                      "Your data stays local unless you grant consent below. Choose what we may send externally to improve extraction for this PDF."
+                    )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              {tr("Toestemming voor externe AI", "Consent for external AI")}
-            </h3>
-            <p className="mt-1 text-sm text-slate-300">
-              {action === "analysis"
-                ? tr(
-                    "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat je wilt meesturen voor AI-analyse.",
-                    "Your data stays local unless you grant consent below. Choose what to include for AI analysis."
-                  )
-                : tr(
-                    "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat we extern mogen gebruiken om deze PDF beter uit te lezen.",
-                    "Your data stays local unless you grant consent below. Choose what we may send externally to improve extraction for this PDF."
-                  )}
-            </p>
-          </div>
-        </div>
+        </DialogHeader>
 
-        <div className="ai-consent-panel mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
+        <div className="ai-consent-panel space-y-3 rounded-xl border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
           <p className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
             <FileText className="h-3.5 w-3.5" />
             {tr("Wat sturen we?", "What do we send?")}
@@ -77,21 +83,17 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             <>
               <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("AI gebruiken om extractie te verbeteren", "Use AI to improve extraction")}</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={parserRescueEnabled}
-                  onChange={(event) => setParserRescueEnabled(event.target.checked)}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
+                  onCheckedChange={(checked) => setParserRescueEnabled(checked as boolean)}
                 />
               </label>
               <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Volledig PDF-bestand meesturen voor parser-rescue", "Send full PDF for parser rescue")}</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={allowPdfAttachment}
-                  onChange={(event) => setAllowPdfAttachment(event.target.checked)}
+                  onCheckedChange={(checked) => setAllowPdfAttachment(checked as boolean)}
                   disabled={!parserRescueEnabled}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400 disabled:opacity-40"
                 />
               </label>
               <p className="text-xs text-slate-400">
@@ -105,20 +107,16 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             <>
               <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Symptomen meesturen", "Include symptoms")}</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeSymptoms}
-                  onChange={(event) => setIncludeSymptoms(event.target.checked)}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
+                  onCheckedChange={(checked) => setIncludeSymptoms(checked as boolean)}
                 />
               </label>
               <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
                 <span>{tr("Notities meesturen", "Include notes")}</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeNotes}
-                  onChange={(event) => setIncludeNotes(event.target.checked)}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
+                  onCheckedChange={(checked) => setIncludeNotes(checked as boolean)}
                 />
               </label>
               <p className="text-xs text-slate-400">
@@ -130,28 +128,23 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             </>
           )}
 
-          <div className="ai-consent-warning flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5" />
-            <p>
+          <Alert variant="warning">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
               {tr(
                 "Zonder toestemming wordt er niets extern verstuurd.",
                 "Without consent, nothing is sent externally."
               )}
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-            onClick={onClose}
-          >
+        <DialogFooter className="flex-wrap gap-2">
+          <Button variant="outline" onClick={onClose}>
             {tr("Sluiten", "Close")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100"
+          </Button>
+          <Button
+            variant="destructive"
             onClick={() =>
               onDecide({
                 action,
@@ -165,28 +158,24 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             }
           >
             {tr("Niet toestaan", "Do not allow")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100"
+          </Button>
+          <Button
             onClick={() => onDecide(commonDecision("once"))}
             disabled={action === "parser_rescue" && !parserRescueEnabled}
           >
             {tr("Alleen deze keer", "Only this time")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
+          </Button>
+          <Button
             onClick={() => onDecide(commonDecision("always"))}
             disabled={action === "parser_rescue" && !parserRescueEnabled}
           >
             {action === "parser_rescue"
               ? tr("Altijd toestaan voor parser-rescue", "Always allow parser rescue")
               : tr("Altijd toestaan", "Always allow")}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

@@ -3,6 +3,13 @@ import { AlertTriangle, Loader2, Send, ShieldCheck, X } from "lucide-react";
 import { trLocale } from "../i18n";
 import { ParserImprovementFormValues } from "../parserImprovementSubmission";
 import { AppLanguage, ExtractionDraft, ParserUncertaintyAssessment } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ParserImprovementSubmissionCardProps {
   open: boolean;
@@ -69,145 +76,145 @@ const ParserImprovementSubmissionCard = ({
   };
 
   return (
-    <div className="app-modal-overlay z-[92]" role="dialog" aria-modal="true">
-      <form
-        className="app-modal-shell w-full max-w-3xl border-amber-500/35 bg-slate-900 p-5 shadow-soft"
-        onSubmit={handleSubmit}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
-              <AlertTriangle className="h-5 w-5 text-amber-300" />
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" asChild>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle>
+                    {tr("Dit rapport is niet goed uitgelezen", "This report was not parsed well")}
+                  </DialogTitle>
+                  <p className="mt-1 text-sm text-slate-200">
+                    {tr(
+                      "Als je wilt, kun je het originele PDF-bestand veilig naar ons sturen zodat we de parser in deze beta kunnen verbeteren.",
+                      "If you want, you can safely send the original PDF to us so we can improve the parser during this beta."
+                    )}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-300">
+                    {assessment.markerCount} {tr("biomarkers gevonden", "biomarkers found")} | {tr("Bestand", "File")}: {draft.sourceFileName}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onClose}
+                disabled={isSubmitting}
+                aria-label={tr("Sluiten", "Close")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-base font-semibold text-slate-100">
-                {tr("Dit rapport is niet goed uitgelezen", "This report was not parsed well")}
-              </h3>
-              <p className="mt-1 text-sm text-slate-200">
-                {tr(
-                  "Als je wilt, kun je het originele PDF-bestand veilig naar ons sturen zodat we de parser in deze beta kunnen verbeteren.",
-                  "If you want, you can safely send the original PDF to us so we can improve the parser during this beta."
-                )}
-              </p>
-              <p className="mt-2 text-xs text-slate-300">
-                {assessment.markerCount} {tr("biomarkers gevonden", "biomarkers found")} | {tr("Bestand", "File")}: {draft.sourceFileName}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:border-slate-500"
-            onClick={onClose}
-            disabled={isSubmitting}
-            aria-label={tr("Sluiten", "Close")}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+          </DialogHeader>
 
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 p-2 text-xs text-cyan-100">
-          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <p>
-            {tr(
-              "We gebruiken dit alleen voor parserverbetering in de beta. Zonder jouw vinkje wordt er niets verstuurd.",
-              "We use this only for parser improvement during the beta. Nothing is sent unless you explicitly consent."
-            )}
-          </p>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-100">
-            <input
-              type="checkbox"
-              checked={values.consent}
-              disabled={isSubmitting}
-              onChange={(event) => setValues((current) => ({ ...current, consent: event.target.checked }))}
-              className="mt-0.5 h-4 w-4 rounded border border-slate-500 bg-slate-800 text-cyan-400"
-            />
-            <span>
+          <Alert variant="info">
+            <ShieldCheck className="h-4 w-4" />
+            <AlertDescription>
               {tr(
-                "Ik geef toestemming om dit originele PDF-bestand en de ingevulde metadata te versturen voor parserverbetering.",
-                "I consent to sending this original PDF and the metadata below to help improve the parser."
+                "We gebruiken dit alleen voor parserverbetering in de beta. Zonder jouw vinkje wordt er niets verstuurd.",
+                "We use this only for parser improvement during the beta. Nothing is sent unless you explicitly consent."
               )}
-            </span>
-          </label>
+            </AlertDescription>
+          </Alert>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="block text-sm text-slate-200">
-              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Land", "Country")}</span>
-              <input
-                type="text"
-                value={values.country}
+          <div className="space-y-3">
+            <label className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-100">
+              <Checkbox
+                checked={values.consent}
                 disabled={isSubmitting}
-                onChange={(event) => setValues((current) => ({ ...current, country: event.target.value }))}
-                className="w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                onCheckedChange={(checked) => setValues((current) => ({ ...current, consent: checked as boolean }))}
               />
+              <span>
+                {tr(
+                  "Ik geef toestemming om dit originele PDF-bestand en de ingevulde metadata te versturen voor parserverbetering.",
+                  "I consent to sending this original PDF and the metadata below to help improve the parser."
+                )}
+              </span>
             </label>
-            <label className="block text-sm text-slate-200">
-              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Lab / provider", "Lab / provider")}</span>
-              <input
-                type="text"
-                value={values.labProvider}
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <Label htmlFor="country" className="text-xs uppercase tracking-wide text-slate-400">{tr("Land", "Country")}</Label>
+                <Input
+                  id="country"
+                  type="text"
+                  value={values.country}
+                  disabled={isSubmitting}
+                  onChange={(event) => setValues((current) => ({ ...current, country: event.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="labProvider" className="text-xs uppercase tracking-wide text-slate-400">{tr("Lab / provider", "Lab / provider")}</Label>
+                <Input
+                  id="labProvider"
+                  type="text"
+                  value={values.labProvider}
+                  disabled={isSubmitting}
+                  onChange={(event) => setValues((current) => ({ ...current, labProvider: event.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="language" className="text-xs uppercase tracking-wide text-slate-400">{tr("Taal", "Language")}</Label>
+                <Input
+                  id="language"
+                  type="text"
+                  value={values.language}
+                  disabled={isSubmitting}
+                  onChange={(event) => setValues((current) => ({ ...current, language: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="note" className="text-xs uppercase tracking-wide text-slate-400">{tr("Opmerking", "Note")}</Label>
+              <Textarea
+                id="note"
+                value={values.note}
                 disabled={isSubmitting}
-                onChange={(event) => setValues((current) => ({ ...current, labProvider: event.target.value }))}
-                className="w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                onChange={(event) => setValues((current) => ({ ...current, note: event.target.value }))}
+                className="min-h-24"
+                placeholder={tr(
+                  "Optioneel: wat ging er mis of wat moeten we weten?",
+                  "Optional: what went wrong or what should we know?"
+                )}
               />
-            </label>
-            <label className="block text-sm text-slate-200">
-              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Taal", "Language")}</span>
-              <input
-                type="text"
-                value={values.language}
-                disabled={isSubmitting}
-                onChange={(event) => setValues((current) => ({ ...current, language: event.target.value }))}
-                className="w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
-              />
-            </label>
+            </div>
           </div>
 
-          <label className="block text-sm text-slate-200">
-            <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Opmerking", "Note")}</span>
-            <textarea
-              value={values.note}
+          {combinedError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{combinedError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <DialogFooter className="flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
               disabled={isSubmitting}
-              onChange={(event) => setValues((current) => ({ ...current, note: event.target.value }))}
-              className="min-h-24 w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr(
-                "Optioneel: wat ging er mis of wat moeten we weten?",
-                "Optional: what went wrong or what should we know?"
-              )}
-            />
-          </label>
-        </div>
-
-        {combinedError ? (
-          <div role="alert" className="mt-3 rounded-md border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
-            {combinedError}
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            {tr("Niet nu", "Not now")}
-          </button>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {isSubmitting
-              ? tr("PDF wordt verstuurd...", "Sending PDF...")
-              : "Send PDF to improve parser"}
-          </button>
-        </div>
-      </form>
-    </div>
+            >
+              {tr("Niet nu", "Not now")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isSubmitting
+                ? tr("PDF wordt verstuurd...", "Sending PDF...")
+                : "Send PDF to improve parser"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 };
 

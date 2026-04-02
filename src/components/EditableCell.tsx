@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export interface EditableCellProps {
   value: string | number | null;
@@ -29,7 +31,7 @@ const EditableCell = ({
 
   if (isEditing) {
     return (
-      <input
+      <Input
         autoFocus
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
@@ -48,9 +50,7 @@ const EditableCell = ({
           }
         }}
         placeholder={placeholder}
-        className={`w-full rounded-md border border-cyan-500/40 bg-slate-900/80 px-2 py-1 text-sm text-slate-100 focus:outline-none ${
-          align === "right" ? "text-right" : "text-left"
-        }`}
+        className={align === "right" ? "text-right" : "text-left"}
       />
     );
   }
@@ -61,9 +61,10 @@ const EditableCell = ({
   if (inlineIcon) {
     return (
       <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
-        <button
+        <Button
           type="button"
-          className={`group inline-flex w-full items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+          variant="ghost"
+          className={`group inline-flex w-full items-center gap-1 px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
             align === "right" ? "justify-end text-right" : "justify-start text-left"
           }`}
           onClick={startEditing}
@@ -71,7 +72,7 @@ const EditableCell = ({
         >
           <span>{renderedValue}</span>
           <Pencil className="h-3 w-3 text-slate-500/55 transition group-hover:text-slate-300" />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -79,9 +80,10 @@ const EditableCell = ({
   if (clickToEdit) {
     return (
       <div className={`min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
-        <button
+        <Button
           type="button"
-          className={`group inline-flex w-full items-center gap-1 rounded px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
+          variant="ghost"
+          className={`group inline-flex w-full items-center gap-1 px-0.5 text-sm text-slate-200 hover:text-cyan-200 ${
             align === "right" ? "justify-end text-right" : "justify-start text-left"
           }`}
           onClick={startEditing}
@@ -89,7 +91,7 @@ const EditableCell = ({
         >
           <span>{renderedValue}</span>
           <Pencil className="h-3 w-3 text-slate-500/50 transition group-hover:text-slate-300" />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -97,14 +99,16 @@ const EditableCell = ({
   return (
     <div className={`group relative min-h-7 ${align === "right" ? "text-right" : "text-left"}`}>
       <span className="pr-6 text-sm text-slate-200">{renderedValue}</span>
-      <button
+      <Button
         type="button"
-        className="absolute right-0 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-cyan-300"
+        variant="ghost"
+        size="icon"
+        className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-cyan-300"
         onClick={startEditing}
         aria-label={editLabel}
       >
         <Pencil className="h-3.5 w-3.5" />
-      </button>
+      </Button>
     </div>
   );
 };

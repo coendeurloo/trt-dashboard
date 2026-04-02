@@ -1,6 +1,8 @@
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, ExtractionDiffRowSnapshot, ExtractionDiffSummary } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface ExtractionComparisonModalProps {
   open: boolean;
@@ -26,24 +28,26 @@ const ExtractionComparisonModal = ({ open, language, summary, onKeepLocal, onApp
   }
 
   return (
-    <div className="app-modal-overlay z-[89]" role="dialog" aria-modal="true">
-      <div className="app-modal-shell w-full max-w-3xl border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
-            <Sparkles className="h-5 w-5 text-cyan-300" />
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-2">
+              <Sparkles className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <DialogTitle>
+                {tr("Vergelijk lokaal resultaat met AI-resultaat", "Compare local result with AI result")}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-slate-300">
+                {tr(
+                  "Bekijk wat AI extra vond of wijzigde, en kies daarna welke versie je wilt behouden.",
+                  "Review what AI found or changed, then choose which version you want to keep."
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              {tr("Vergelijk lokaal resultaat met AI-resultaat", "Compare local result with AI result")}
-            </h3>
-            <p className="mt-1 text-sm text-slate-300">
-              {tr(
-                "Bekijk wat AI extra vond of wijzigde, en kies daarna welke versie je wilt behouden.",
-                "Review what AI found or changed, then choose which version you want to keep."
-              )}
-            </p>
-          </div>
-        </div>
+        </DialogHeader>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3 text-sm text-slate-200">
@@ -118,24 +122,21 @@ const ExtractionComparisonModal = ({ open, language, summary, onKeepLocal, onApp
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200"
+        <DialogFooter className="flex-wrap gap-2">
+          <Button
+            variant="outline"
             onClick={onKeepLocal}
           >
             {tr("Huidige versie houden", "Keep current version")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100"
+          </Button>
+          <Button
             onClick={onApplyAi}
           >
             {tr("AI-resultaat toepassen", "Apply AI result")}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

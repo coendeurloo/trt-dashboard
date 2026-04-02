@@ -1,6 +1,8 @@
 import { AlertTriangle, Cloud, CloudOff, HardDrive } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface CloudSyncConflictModalProps {
   open: boolean;
@@ -28,31 +30,33 @@ const CloudSyncConflictModal = ({
   }
 
   return (
-    <div className="app-modal-overlay z-[91]" role="dialog" aria-modal="true">
-      <div className="app-modal-shell w-full max-w-2xl border-cyan-500/30 bg-slate-900 p-5 shadow-soft">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
-            <AlertTriangle className="h-5 w-5 text-amber-200" />
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">
+              <AlertTriangle className="h-5 w-5 text-amber-200" />
+            </div>
+            <div>
+              <DialogTitle>
+                {tr("Kies welke versie je wilt gebruiken", "Choose which version to use")}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-slate-300">
+                {conflictDetected
+                  ? tr(
+                      "Dit apparaat en de cloud zijn allebei gewijzigd. Kies welke versie leidend moet zijn.",
+                      "This device and the cloud were both changed. Choose which version should be treated as the source of truth."
+                    )
+                  : tr(
+                      "Je lokale data en clouddata verschillen van elkaar. Kies welke versie je wilt behouden.",
+                      "Your local data and cloud data are different. Choose which version you want to keep."
+                    )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              {tr("Kies welke versie je wilt gebruiken", "Choose which version to use")}
-            </h3>
-            <p className="mt-1 text-sm text-slate-300">
-              {conflictDetected
-                ? tr(
-                    "Dit apparaat en de cloud zijn allebei gewijzigd. Kies welke versie leidend moet zijn.",
-                    "This device and the cloud were both changed. Choose which version should be treated as the source of truth."
-                  )
-                : tr(
-                    "Je lokale data en clouddata verschillen van elkaar. Kies welke versie je wilt behouden.",
-                    "Your local data and cloud data are different. Choose which version you want to keep."
-                  )}
-            </p>
-          </div>
-        </div>
+        </DialogHeader>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-cyan-500/35 bg-cyan-500/10 p-4">
             <div className="flex items-center gap-2">
               <Cloud className="h-4 w-4 text-cyan-200" />
@@ -80,35 +84,31 @@ const CloudSyncConflictModal = ({
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
+        <DialogFooter className="flex-wrap gap-2">
+          <Button
+            variant="outline"
             onClick={onUseLocalOnly}
             disabled={isBusy}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
           >
             <CloudOff className="h-4 w-4" />
             {tr("Lokaal-only voor nu", "Local-only for now")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={onUseCloudCopy}
             disabled={isBusy}
-            className="rounded-md border border-cyan-500/45 bg-cyan-500/15 px-3 py-1.5 text-sm text-cyan-100 disabled:opacity-50"
           >
             {tr("Gebruik cloudkopie", "Use cloud copy")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
             onClick={onReplaceCloudWithLocal}
             disabled={isBusy}
-            className="rounded-md border border-rose-500/45 bg-rose-500/15 px-3 py-1.5 text-sm text-rose-100 disabled:opacity-50"
           >
             {tr("Vervang cloud met lokaal", "Replace cloud with local")}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

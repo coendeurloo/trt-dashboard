@@ -13,6 +13,8 @@ import ComparisonChart from "../components/ComparisonChart";
 import ChartSettingsDrawer from "../components/ChartSettingsDrawer";
 import MarkerChartCard from "../components/MarkerChartCard";
 import WelcomeHero from "../components/WelcomeHero";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { MARKER_DATABASE, type MarkerCategory } from "../data/markerDatabase";
 import {
   inferDashboardChartPresetFromSettings,
@@ -438,94 +440,64 @@ const DashboardView = ({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div data-testid="time-range-filter-group" className="flex flex-wrap items-center gap-1">
                 {timeRangeOptions.map(([value, label]) => (
-                  <button
+                  <Button
                     key={value}
-                    type="button"
-                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                      settings.timeRange === value
-                        ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                        : isDarkTheme
-                          ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
-                          : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
-                    }`}
+                    variant={settings.timeRange === value ? "default" : "ghost"}
+                    size="sm"
+                    className="text-xs h-auto px-2 py-1"
                     onClick={() => onUpdateSettings({ timeRange: value })}
                   >
                     {label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <span data-testid="dashboard-filter-divider" className="hidden h-4 w-px bg-slate-700/50 sm:block" />
               <div data-testid="marker-scope-filter-group" className="flex items-center gap-1">
-                <button
-                  type="button"
-                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                    dashboardView === "primary"
-                      ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                      : isDarkTheme
-                        ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
-                        : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
-                  }`}
+                <Button
+                  variant={dashboardView === "primary" ? "default" : "ghost"}
+                  size="sm"
+                  className="text-xs h-auto px-2 py-1"
                   onClick={() => onDashboardViewChange("primary")}
                 >
                   {tr("Primair", "Primary")}
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                    dashboardView === "all"
-                      ? "dashboard-filter-chip-active bg-cyan-500/15 font-medium text-cyan-300"
-                      : isDarkTheme
-                        ? "dashboard-filter-chip-inactive text-slate-400 hover:text-slate-200"
-                        : "dashboard-filter-chip-inactive text-slate-500 hover:text-slate-700"
-                  }`}
+                </Button>
+                <Button
+                  variant={dashboardView === "all" ? "default" : "ghost"}
+                  size="sm"
+                  className="text-xs h-auto px-2 py-1"
                   onClick={() => onDashboardViewChange("all")}
                 >
                   {tr("Alle", "All")}
-                </button>
+                </Button>
               </div>
               {settings.timeRange === "custom" ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
+                  <Input
                     type="date"
-                    className={
-                      isDarkTheme
-                        ? "rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
-                        : "rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                    }
                     value={settings.customRangeStart}
                     onChange={(event) => onUpdateSettings({ customRangeStart: event.target.value })}
+                    className="h-8 text-xs"
                   />
-                  <input
+                  <Input
                     type="date"
-                    className={
-                      isDarkTheme
-                        ? "rounded-md border border-slate-700/50 bg-slate-800/80 px-2 py-1 text-xs"
-                        : "rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                    }
                     value={settings.customRangeEnd}
                     onChange={(event) => onUpdateSettings({ customRangeEnd: event.target.value })}
+                    className="h-8 text-xs"
                   />
                 </div>
               ) : null}
               <div className="ml-auto">
-                <button
-                  type="button"
+                <Button
                   onClick={() => setShowChartSettings((current) => !current)}
-                  className={`inline-flex items-center gap-1 rounded-md p-1.5 text-xs transition-colors ${
-                    showChartSettings
-                      ? isDarkTheme
-                        ? "text-slate-100"
-                        : "text-slate-700"
-                      : isDarkTheme
-                        ? "text-slate-500 hover:text-slate-300"
-                        : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
                   aria-expanded={showChartSettings}
                   aria-controls="dashboard-chart-settings-drawer"
                   aria-label={tr("Grafiekinstellingen", "Chart settings")}
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
             </div>
             {dashboardView === "all" && !isCompareMode ? (
