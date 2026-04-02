@@ -2,7 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================
+   shadcn/ui CSS variabelen — dark mode (= LabTracker default)
+   LabTracker gebruikt :root voor dark, body.light voor light.
+   shadcn's .dark class is hier niet nodig; de variabelen
+   staan direct op :root (dark) en body.light (light).
+   ===================================================== */
 :root {
+  /* shadcn/ui — Slate dark theme met cyan primary */
+  --background: 222 47% 4%;
+  --foreground: 210 40% 91%;
+
+  --card: 222 47% 7%;
+  --card-foreground: 210 40% 91%;
+
+  --popover: 222 47% 7%;
+  --popover-foreground: 210 40% 91%;
+
+  /* Cyan primary (#06b6d4 = hsl 189 95% 43%) */
+  --primary: 189 95% 43%;
+  --primary-foreground: 222 47% 4%;
+
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 91%;
+
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 60%;
+
+  --accent: 189 95% 43%;
+  --accent-foreground: 222 47% 4%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 217 33% 20%;
+  --input: 217 33% 20%;
+  --ring: 189 95% 43%;
+
+  --radius: 0.5rem;
+
+  /* Sidebar */
+  --sidebar-background: 222 47% 5%;
+  --sidebar-foreground: 210 40% 85%;
+  --sidebar-primary: 189 95% 43%;
+  --sidebar-primary-foreground: 222 47% 4%;
+  --sidebar-accent: 217 33% 17%;
+  --sidebar-accent-foreground: 210 40% 91%;
+  --sidebar-border: 217 33% 20%;
+  --sidebar-ring: 189 95% 43%;
+
   color-scheme: dark;
   --toggle-track-bg: #cbd5e1;
   --toggle-thumb-bg: #ffffff;
@@ -36,6 +84,45 @@ body {
 }
 
 body.light {
+  /* shadcn/ui — Slate light theme met cyan primary */
+  --background: 204 60% 98%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  --primary: 189 95% 37%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 40% 93%;
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 210 40% 93%;
+  --muted-foreground: 215 20% 45%;
+
+  --accent: 189 95% 37%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 214 32% 85%;
+  --input: 214 32% 85%;
+  --ring: 189 95% 37%;
+
+  /* Sidebar */
+  --sidebar-background: 210 40% 96%;
+  --sidebar-foreground: 222 47% 20%;
+  --sidebar-primary: 189 95% 37%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 210 40% 90%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-border: 214 32% 85%;
+  --sidebar-ring: 189 95% 37%;
+
   background:
     radial-gradient(circle at 8% 8%, rgba(2, 132, 199, 0.14), transparent 46%),
     radial-gradient(circle at 88% 14%, rgba(20, 184, 166, 0.13), transparent 42%),
