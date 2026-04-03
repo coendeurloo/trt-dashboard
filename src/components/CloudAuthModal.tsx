@@ -23,6 +23,7 @@ interface CloudAuthModalProps {
   onSignInEmail: (email: string, password: string) => Promise<void>;
   onSignUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   onCompleteConsent: (payload: CloudConsentPayload) => Promise<void>;
+  onRequestUnlockEmail: (email: string) => Promise<void>;
 }
 
 const GoogleIcon = () => (
@@ -60,7 +61,8 @@ const CloudAuthModal = ({
   onSignInGoogle,
   onSignInEmail,
   onSignUpEmail,
-  onCompleteConsent
+  onCompleteConsent,
+  onRequestUnlockEmail
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
@@ -278,6 +280,8 @@ const CloudAuthModal = ({
     localError || authError
       ? mapCloudAuthErrorToMessage(localError ?? authError ?? "", tr)
       : null;
+  const rawErrorCode = (localError ?? authError ?? "").split(":")[0]?.trim() ?? "";
+  const canRequestUnlock = rawErrorCode === "AUTH_ACCOUNT_LOCKED";
 
   const modal = (
     <div
@@ -514,7 +518,37 @@ const CloudAuthModal = ({
           )}
 
           {displayError ? (
-            <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{displayError}</p>
+            <div className="space-y-2">
+              <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{displayError}</p>
+              {canRequestUnlock ? (
+                <button
+                  type="button"
+                  disabled={isBusy || !email.trim()}
+                  onClick={() => {
+                    void runWithoutClose(async () => {
+                      const normalizedEmail = email.trim();
+                      if (!normalizedEmail) {
+                        throw new Error(
+                          tr(
+                            "Vul eerst je e-mailadres in.",
+                            "Enter your email first."
+                          )
+                        );
+                      }
+                      await onRequestUnlockEmail(normalizedEmail);
+                      setLocalError("AUTH_UNLOCK_EMAIL_SENT");
+                    });
+                  }}
+                  className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isLightTheme
+                      ? "border border-cyan-700/50 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                  }`}
+                >
+                  {tr("Stuur unlock e-mail", "Send unlock email")}
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

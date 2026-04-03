@@ -26,6 +26,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 
@@ -56,6 +57,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={onSignUpEmail}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 
@@ -110,6 +112,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 
@@ -138,6 +141,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 
@@ -163,6 +167,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 

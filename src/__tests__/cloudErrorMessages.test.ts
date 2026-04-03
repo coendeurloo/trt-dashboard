@@ -14,6 +14,16 @@ describe("cloud error message mapping", () => {
     expect(message).toBe("Sign-in failed. This account doesn't exist or the password is incorrect.");
   });
 
+  it("maps verification-required sign-up responses to a clear next step", () => {
+    const message = mapCloudAuthErrorToMessage("AUTH_EMAIL_VERIFICATION_REQUIRED", tr);
+    expect(message).toBe("Check your inbox and verify your email first. Then sign in.");
+  });
+
+  it("maps account lock responses to unlock guidance", () => {
+    const message = mapCloudAuthErrorToMessage("AUTH_ACCOUNT_LOCKED", tr);
+    expect(message).toBe("Too many failed attempts. Request an unlock email to regain access.");
+  });
+
   it("maps sync conflicts to a conflict-specific message", () => {
     const message = mapCloudSyncErrorToMessage("REVISION_MISMATCH:revision mismatch", tr);
     expect(message).toBe(

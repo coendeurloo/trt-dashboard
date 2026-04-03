@@ -106,3 +106,12 @@ export const getCounter = async (key: string): Promise<number> => {
     throw wrapStoreError(error);
   }
 };
+
+export const deleteKey = async (key: string): Promise<void> => {
+  try {
+    const redis = getRedisClient();
+    await redis.del(key);
+  } catch (error) {
+    throw wrapStoreError(error);
+  }
+};

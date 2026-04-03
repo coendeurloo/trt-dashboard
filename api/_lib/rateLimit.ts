@@ -11,7 +11,13 @@ export interface RateLimitResult {
   resetAt: number;
 }
 
-export type RequestType = "extraction" | "analysis" | "parser_improvement";
+export type RequestType =
+  | "extraction"
+  | "analysis"
+  | "parser_improvement"
+  | "auth_login"
+  | "auth_register"
+  | "auth_unlock";
 
 const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   extraction: {
@@ -24,6 +30,18 @@ const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   },
   parser_improvement: {
     windowMs: 60 * 60 * 1000,
+    maxRequests: 5
+  },
+  auth_login: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 5
+  },
+  auth_register: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 5
+  },
+  auth_unlock: {
+    windowMs: 15 * 60 * 1000,
     maxRequests: 5
   }
 };

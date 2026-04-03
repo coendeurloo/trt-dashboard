@@ -88,6 +88,7 @@ describe("/api/cloud/consent", () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     fetchMock
       .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }))
       .mockResolvedValueOnce(mockFetchResponse(200, []));
 
     const req = createMockRequest("GET", "token-1");
@@ -102,6 +103,7 @@ describe("/api/cloud/consent", () => {
   it("saves consent on POST and returns normalized consent payload", async () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     fetchMock
+      .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }))
       .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }))
       .mockResolvedValueOnce(
         mockFetchResponse(201, [
@@ -133,7 +135,9 @@ describe("/api/cloud/consent", () => {
 
   it("rejects POST when required consent flags are missing", async () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }));
+    fetchMock
+      .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { id: "user-1" }));
 
     const req = createMockRequest("POST", "token-1", {
       acceptPrivacyPolicy: true,

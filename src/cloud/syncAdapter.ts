@@ -279,8 +279,7 @@ export class SupabaseCloudAdapter {
     const response = await fetch("/api/cloud/replace", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.accessToken}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         deviceId: this.deviceId,
@@ -298,8 +297,7 @@ export class SupabaseCloudAdapter {
     const response = await fetch("/api/cloud/incremental", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.accessToken}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         deviceId: this.deviceId,

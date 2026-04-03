@@ -373,6 +373,12 @@ const App = () => {
       try {
         await cloudAuth.signUpEmail(email, password, payload);
       } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "AUTH_EMAIL_VERIFICATION_REQUIRED"
+        ) {
+          throw error;
+        }
         clearPendingCloudPostAuthIntent();
         throw error;
       }
@@ -2375,6 +2381,7 @@ const App = () => {
           onSignInEmail={handleCloudSignInEmail}
           onSignUpEmail={handleCloudSignUpEmail}
           onCompleteConsent={cloudAuth.completeConsent}
+          onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
         />
       </>
     );
@@ -2984,6 +2991,7 @@ const App = () => {
         onSignInEmail={handleCloudSignInEmail}
         onSignUpEmail={handleCloudSignUpEmail}
         onCompleteConsent={cloudAuth.completeConsent}
+        onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
       />
 
       <AnimatePresence>

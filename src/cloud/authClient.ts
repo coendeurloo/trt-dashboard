@@ -1,8 +1,4 @@
-import {
-  CLOUD_SESSION_STORAGE_KEY,
-  getSupabaseAnonKey,
-  getSupabaseUrl
-} from "./constants";
+import { getSupabaseAnonKey, getSupabaseUrl } from "./constants";
 
 export interface CloudUser {
   id: string;
@@ -11,22 +7,10 @@ export interface CloudUser {
 
 export interface CloudSession {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string | null;
   expiresAt: number;
   user: CloudUser;
 }
-
-type AuthTokenResponse = {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  user?: {
-    id?: string;
-    email?: string | null;
-  };
-  error?: string;
-  error_description?: string;
-};
 
 type AuthErrorPayload = {
   code?: string;
@@ -35,6 +19,20 @@ type AuthErrorPayload = {
   message?: string;
   msg?: string;
   details?: string;
+};
+
+type AuthSessionPayload = {
+  accessToken?: string;
+  expiresAt?: number;
+  user?: {
+    id?: string;
+    email?: string | null;
+  };
+};
+
+type SessionEnvelope = {
+  session?: AuthSessionPayload | null;
+  requiresEmailVerification?: boolean;
 };
 
 const authHeaders = (accessToken?: string): HeadersInit => {
@@ -50,7 +48,8 @@ const buildAuthUrl = (path: string): string => `${getSupabaseUrl()}/auth/v1${pat
 
 const normalizeAuthError = (status: number, payload: unknown): string => {
   const authError = payload as AuthErrorPayload | null;
-  const rawCode = String(authError?.code || authError?.error || "").trim().toLowerCase();
+  const rawCode = String(authError?.code || authError?.error || "").trim();
+  const normalizedCode = rawCode.toLowerCase();
   const rawMessage = String(
     authError?.error_description ||
       authError?.message ||
@@ -58,12 +57,15 @@ const normalizeAuthError = (status: number, payload: unknown): string => {
       authError?.details ||
       ""
   ).trim();
-  const combined = `${rawCode} ${rawMessage}`.toLowerCase();
+  const combined = `${normalizedCode} ${rawMessage.toLowerCase()}`;
 
-  if (rawCode === "invalid_credentials" || combined.includes("invalid login credentials")) {
+  if (rawCode.startsWith("AUTH_")) {
+    return rawCode;
+  }
+  if (normalizedCode === "invalid_credentials" || combined.includes("invalid login credentials")) {
     return "AUTH_INVALID_CREDENTIALS";
   }
-  if (rawCode === "email_not_confirmed" || combined.includes("email not confirmed")) {
+  if (normalizedCode === "email_not_confirmed" || combined.includes("email not confirmed")) {
     return "AUTH_EMAIL_NOT_CONFIRMED";
   }
   if (combined.includes("user already registered") || combined.includes("already registered")) {
@@ -74,6 +76,9 @@ const normalizeAuthError = (status: number, payload: unknown): string => {
   }
   if (combined.includes("unable to validate email") || combined.includes("invalid email")) {
     return "AUTH_INVALID_EMAIL";
+  }
+  if (status === 423 || combined.includes("account locked")) {
+    return "AUTH_ACCOUNT_LOCKED";
   }
   if (status === 429 || combined.includes("rate limit") || combined.includes("too many requests")) {
     return "AUTH_RATE_LIMITED";
@@ -97,27 +102,6 @@ const normalizeAuthError = (status: number, payload: unknown): string => {
   return `AUTH_HTTP_${status}`;
 };
 
-const normalizeTokenResponse = (response: AuthTokenResponse): CloudSession => {
-  const accessToken = response.access_token ?? "";
-  const refreshToken = response.refresh_token ?? "";
-  const expiresIn = Number(response.expires_in ?? 0);
-  const userId = String(response.user?.id ?? "").trim();
-
-  if (!accessToken || !refreshToken || !userId || !Number.isFinite(expiresIn) || expiresIn <= 0) {
-    throw new Error("AUTH_SESSION_INCOMPLETE");
-  }
-
-  return {
-    accessToken,
-    refreshToken,
-    expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
-    user: {
-      id: userId,
-      email: response.user?.email ?? null
-    }
-  };
-};
-
 const parseJson = async <T>(res: Response): Promise<T> => {
   let payload: unknown = null;
   try {
@@ -131,34 +115,36 @@ const parseJson = async <T>(res: Response): Promise<T> => {
   return payload as T;
 };
 
-export const loadStoredSession = (): CloudSession | null => {
-  if (typeof window === "undefined") {
-    return null;
+const normalizeSession = (response: AuthSessionPayload | null | undefined): CloudSession => {
+  const accessToken = String(response?.accessToken ?? "").trim();
+  const expiresAt = Number(response?.expiresAt ?? 0);
+  const userId = String(response?.user?.id ?? "").trim();
+  if (!accessToken || !Number.isFinite(expiresAt) || expiresAt <= 0 || !userId) {
+    throw new Error("AUTH_SESSION_INCOMPLETE");
   }
-  const raw = window.localStorage.getItem(CLOUD_SESSION_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(raw) as CloudSession;
-    if (!parsed.accessToken || !parsed.refreshToken || !parsed.user?.id) {
-      return null;
+  return {
+    accessToken,
+    expiresAt,
+    user: {
+      id: userId,
+      email: response?.user?.email ?? null
     }
-    return parsed;
-  } catch {
-    return null;
-  }
+  };
 };
 
-export const persistSession = (session: CloudSession | null): void => {
-  if (typeof window === "undefined") {
-    return;
+export const fetchCurrentSession = async (): Promise<CloudSession | null> => {
+  const response = await fetch("/api/cloud/auth-me", {
+    method: "GET",
+    headers: authHeaders()
+  });
+  if (response.status === 401) {
+    return null;
   }
-  if (!session) {
-    window.localStorage.removeItem(CLOUD_SESSION_STORAGE_KEY);
-    return;
+  const payload = await parseJson<SessionEnvelope>(response);
+  if (!payload.session) {
+    return null;
   }
-  window.localStorage.setItem(CLOUD_SESSION_STORAGE_KEY, JSON.stringify(session));
+  return normalizeSession(payload.session);
 };
 
 export const parseOAuthHashSession = async (
@@ -176,70 +162,71 @@ export const parseOAuthHashSession = async (
     return null;
   }
 
-  const userResponse = await fetch(buildAuthUrl("/user"), {
-    method: "GET",
-    headers: authHeaders(accessToken)
-  });
-  const userPayload = await parseJson<{ id: string; email?: string | null }>(userResponse);
-  return {
-    accessToken,
-    refreshToken,
-    expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
-    user: {
-      id: userPayload.id,
-      email: userPayload.email ?? null
-    }
-  };
-};
-
-export const refreshSession = async (
-  currentSession: CloudSession
-): Promise<CloudSession> => {
-  const response = await fetch(buildAuthUrl("/token?grant_type=refresh_token"), {
+  const response = await fetch("/api/cloud/auth-oauth-hash", {
     method: "POST",
-    headers: authHeaders(),
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
-      refresh_token: currentSession.refreshToken
+      accessToken,
+      refreshToken,
+      expiresIn
     })
   });
-  const payload = await parseJson<AuthTokenResponse>(response);
-  return normalizeTokenResponse(payload);
+  const payload = await parseJson<SessionEnvelope>(response);
+  return payload.session ? normalizeSession(payload.session) : null;
 };
 
 export const signInWithPassword = async (
   email: string,
   password: string
 ): Promise<CloudSession> => {
-  const response = await fetch(buildAuthUrl("/token?grant_type=password"), {
+  const response = await fetch("/api/cloud/auth-signin", {
     method: "POST",
-    headers: authHeaders(),
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ email, password })
   });
-  const payload = await parseJson<AuthTokenResponse>(response);
-  return normalizeTokenResponse(payload);
+  const payload = await parseJson<SessionEnvelope>(response);
+  return normalizeSession(payload.session);
 };
 
 export const signUpWithPassword = async (
   email: string,
   password: string
-): Promise<CloudSession> => {
-  const response = await fetch(buildAuthUrl("/signup"), {
+): Promise<void> => {
+  const response = await fetch("/api/cloud/auth-signup", {
     method: "POST",
-    headers: authHeaders(),
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ email, password })
   });
-  const payload = await parseJson<AuthTokenResponse>(response);
-  return normalizeTokenResponse(payload);
+  const payload = await parseJson<SessionEnvelope>(response);
+  if (payload.requiresEmailVerification === true) {
+    throw new Error("AUTH_EMAIL_VERIFICATION_REQUIRED");
+  }
 };
 
-export const signOutSession = async (accessToken: string): Promise<void> => {
-  const response = await fetch(buildAuthUrl("/logout"), {
-    method: "POST",
-    headers: authHeaders(accessToken)
+export const signOutSession = async (): Promise<void> => {
+  const response = await fetch("/api/cloud/auth-logout", {
+    method: "POST"
   });
   if (!response.ok && response.status !== 401) {
     throw new Error(`AUTH_SIGNOUT_FAILED_${response.status}`);
   }
+};
+
+export const requestUnlockEmail = async (email: string): Promise<void> => {
+  const response = await fetch("/api/cloud/auth-unlock-email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email })
+  });
+  await parseJson<{ ok: true }>(response);
 };
 
 export const buildGoogleOAuthUrl = (redirectTo: string): string => {

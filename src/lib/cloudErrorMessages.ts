@@ -89,6 +89,12 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
       "Your email is not confirmed yet. Check your inbox and confirm your account first."
     );
   }
+  if (code === "AUTH_EMAIL_VERIFICATION_REQUIRED") {
+    return tr(
+      "Check je inbox en bevestig eerst je e-mailadres. Daarna kun je inloggen.",
+      "Check your inbox and verify your email first. Then sign in."
+    );
+  }
   if (code === "AUTH_INVALID_EMAIL") {
     return tr(
       "Voer een geldig e-mailadres in.",
@@ -105,6 +111,18 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
     return tr(
       "Te veel pogingen in korte tijd. Wacht even en probeer opnieuw.",
       "Too many attempts in a short time. Wait a moment and try again."
+    );
+  }
+  if (code === "AUTH_ACCOUNT_LOCKED") {
+    return tr(
+      "Te veel mislukte pogingen. Vraag een unlock e-mail aan om weer toegang te krijgen.",
+      "Too many failed attempts. Request an unlock email to regain access."
+    );
+  }
+  if (code === "AUTH_UNLOCK_EMAIL_SENT") {
+    return tr(
+      "Unlock e-mail verzonden. Open je inbox en volg de stappen om door te gaan.",
+      "Unlock email sent. Open your inbox and follow the steps to continue."
     );
   }
   if (code === "AUTH_UNAUTHORIZED") {

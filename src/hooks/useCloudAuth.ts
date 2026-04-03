@@ -3,10 +3,9 @@ import { AppMode } from "../types";
 import {
   buildGoogleOAuthUrl,
   CloudSession,
-  loadStoredSession,
+  fetchCurrentSession,
   parseOAuthHashSession,
-  persistSession,
-  refreshSession,
+  requestUnlockEmail as requestUnlockEmailClient,
   signInWithPassword,
   signOutSession,
   signUpWithPassword
@@ -42,6 +41,7 @@ interface UseCloudAuthResult {
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   signInGoogle: (intent?: GoogleAuthIntent, payload?: CloudConsentPayload) => Promise<void>;
+  requestUnlockEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
@@ -50,8 +50,6 @@ type PendingSignupConsent = {
   payload: CloudConsentPayload;
   createdAt: string;
 };
-
-const CLOUD_SESSION_EXPIRY_SKEW_SECONDS = 30;
 
 const loadCloudEnabledPref = (): boolean => {
   if (typeof window === "undefined") {
@@ -126,9 +124,9 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     }
   };
 
-  const hydrateConsent = async (nextSession: CloudSession): Promise<CloudConsentState> => {
+  const hydrateConsent = async (): Promise<CloudConsentState> => {
     setConsentStatus("loading");
-    const nextConsent = await fetchCloudConsent(nextSession.accessToken);
+    const nextConsent = await fetchCloudConsent();
     setConsent(nextConsent);
     setConsentStatus(normalizeConsentStatus(nextConsent));
     return nextConsent;
@@ -149,9 +147,10 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
       setStatus("loading");
       setError(null);
       try {
-        let nextSession = loadStoredSession();
         const hasStoredPreference = hasStoredCloudEnabledPref();
         let usedOAuthReturn = false;
+        let nextSession: CloudSession | null = null;
+
         if (typeof window !== "undefined") {
           const hashSession = await parseOAuthHashSession(window.location.hash);
           if (hashSession) {
@@ -163,9 +162,12 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
         }
 
         if (!nextSession) {
+          nextSession = await fetchCurrentSession();
+        }
+
+        if (!nextSession) {
           if (!cancelled) {
             setSession(null);
-            persistSession(null);
             setConsent(null);
             setConsentStatus("required");
             setStatus("unauthenticated");
@@ -173,17 +175,11 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
           return;
         }
 
-        const now = Math.floor(Date.now() / 1000);
-        if (nextSession.expiresAt <= now + CLOUD_SESSION_EXPIRY_SKEW_SECONDS) {
-          nextSession = await refreshSession(nextSession);
-        }
-
         if (cancelled) {
           return;
         }
 
         setSession(nextSession);
-        persistSession(nextSession);
         setStatus("authenticated");
         if (usedOAuthReturn || !hasStoredPreference) {
           setCloudEnabled(true);
@@ -192,10 +188,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
         const pendingSignupConsent = loadPendingSignupConsent();
         if (pendingSignupConsent) {
           try {
-            const savedConsent = await submitCloudConsent(
-              nextSession.accessToken,
-              pendingSignupConsent.payload
-            );
+            const savedConsent = await submitCloudConsent(pendingSignupConsent.payload);
             if (cancelled) {
               return;
             }
@@ -215,12 +208,11 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
             );
           }
         } else {
-          await hydrateConsent(nextSession);
+          await hydrateConsent();
         }
       } catch (authError) {
         if (!cancelled) {
           setSession(null);
-          persistSession(null);
           setConsent(null);
           setConsentStatus("error");
           setStatus("error");
@@ -241,7 +233,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     }
     setError(null);
     setConsentStatus("loading");
-    const nextConsent = await submitCloudConsent(session.accessToken, payload);
+    const nextConsent = await submitCloudConsent(payload);
     setConsent(nextConsent);
     setConsentStatus(normalizeConsentStatus(nextConsent));
     setCloudEnabled(true);
@@ -251,9 +243,15 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     setError(null);
     setConsentStatus("loading");
     const nextSession = await signInWithPassword(email.trim(), password);
-    const nextConsent = await fetchCloudConsent(nextSession.accessToken);
+    const pendingSignupConsent = loadPendingSignupConsent();
+    let nextConsent: CloudConsentState;
+    if (pendingSignupConsent) {
+      nextConsent = await submitCloudConsent(pendingSignupConsent.payload);
+      persistPendingSignupConsent(null);
+    } else {
+      nextConsent = await fetchCloudConsent();
+    }
     setSession(nextSession);
-    persistSession(nextSession);
     setConsent(nextConsent);
     setConsentStatus(normalizeConsentStatus(nextConsent));
     setStatus("authenticated");
@@ -266,24 +264,22 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     payload: CloudConsentPayload
   ) => {
     setError(null);
-    setConsentStatus("loading");
-    const nextSession = await signUpWithPassword(email.trim(), password);
-    setSession(nextSession);
-    persistSession(nextSession);
-    setStatus("authenticated");
-    setCloudEnabled(true);
-
+    setConsentStatus("required");
+    persistPendingSignupConsent({
+      payload,
+      createdAt: new Date().toISOString()
+    });
     try {
-      const nextConsent = await submitCloudConsent(nextSession.accessToken, payload);
-      setConsent(nextConsent);
-      setConsentStatus(normalizeConsentStatus(nextConsent));
+      await signUpWithPassword(email.trim(), password);
+    } catch (signupError) {
+      if (
+        signupError instanceof Error &&
+        signupError.message === "AUTH_EMAIL_VERIFICATION_REQUIRED"
+      ) {
+        throw signupError;
+      }
       persistPendingSignupConsent(null);
-    } catch (consentError) {
-      setConsent(null);
-      setConsentStatus("required");
-      throw consentError instanceof Error
-        ? consentError
-        : new Error("Could not save consent after signup.");
+      throw signupError;
     }
   };
 
@@ -315,20 +311,21 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     window.location.assign(buildGoogleOAuthUrl(redirectTo));
   };
 
-  const signOut = async () => {
-    const activeSession = session;
+  const requestUnlockEmail = async (email: string) => {
     setError(null);
-    if (activeSession) {
-      try {
-        await signOutSession(activeSession.accessToken);
-      } catch {
-        // Ignore API sign-out failure and clear local session anyway.
-      }
+    await requestUnlockEmailClient(email.trim());
+  };
+
+  const signOut = async () => {
+    setError(null);
+    try {
+      await signOutSession();
+    } catch {
+      // Ignore API sign-out failure and clear local state anyway.
     }
     setSession(null);
     setConsent(null);
     setConsentStatus("required");
-    persistSession(null);
     persistPendingSignupConsent(null);
     setCloudEnabled(false);
     setStatus("unauthenticated");
@@ -339,10 +336,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
       throw new Error("Not authenticated");
     }
     const response = await fetch("/api/cloud/delete-account", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`
-      }
+      method: "POST"
     });
     if (!response.ok) {
       let message = "Account deletion failed";
@@ -381,6 +375,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     signInEmail: signInEmailHandler,
     signUpEmail: signUpEmailHandler,
     signInGoogle,
+    requestUnlockEmail,
     signOut,
     deleteAccount
   };
