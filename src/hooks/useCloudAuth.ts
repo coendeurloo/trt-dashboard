@@ -188,6 +188,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
             setConsent(null);
             setConsentStatus("required");
             setStatus("unauthenticated");
+            setError(null);
           }
           return;
         }

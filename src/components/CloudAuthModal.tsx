@@ -295,11 +295,18 @@ const CloudAuthModal = ({
           "Sign in to access your cloud data and automatically sync across devices."
         );
 
-  const displayError =
-    localError || authError
-      ? mapCloudAuthErrorToMessage(localError ?? authError ?? "", tr)
-      : null;
   const rawErrorCode = (localError ?? authError ?? "").split(":")[0]?.trim() ?? "";
+  const shouldHideGlobalAuthError =
+    !localError &&
+    rawErrorCode === "AUTH_UNAUTHORIZED" &&
+    authStatus !== "authenticated";
+  const displayError =
+    localError || (shouldHideGlobalAuthError ? null : authError)
+      ? mapCloudAuthErrorToMessage(
+          localError ?? (shouldHideGlobalAuthError ? null : authError) ?? "",
+          tr
+        )
+      : null;
   const canOpenSignIn = isSignupView && rawErrorCode === "AUTH_USER_ALREADY_REGISTERED";
   const canRequestPasswordReset =
     rawErrorCode === "AUTH_ACCOUNT_LOCKED" || rawErrorCode === "AUTH_USER_ALREADY_REGISTERED";

@@ -212,6 +212,32 @@ describe("CloudAuthModal", () => {
     expect(screen.queryByText("AUTH_INVALID_CREDENTIALS")).toBeNull();
   });
 
+  it("hides stale session-expired copy on a fresh sign-in modal", () => {
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        authStatus="unauthenticated"
+        authError="AUTH_UNAUTHORIZED"
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Your session expired. Please sign in again.")).toBeNull();
+  });
+
   it("shows a resend verification action when email confirmation is still pending", async () => {
     const onRequestVerificationEmail = vi.fn(async () => undefined);
 
