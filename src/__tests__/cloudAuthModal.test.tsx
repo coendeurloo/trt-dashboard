@@ -37,6 +37,32 @@ describe("CloudAuthModal", () => {
     expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
   });
 
+  it("prefills the sign-in email when one is provided", () => {
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        initialEmail="prefill@example.com"
+        authStatus="unauthenticated"
+        authError={null}
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("prefill@example.com");
+  });
+
   it("requires consent before enabling signup actions", async () => {
     const onSignUpEmail = vi.fn(async () => undefined);
     const onSignInGoogle = vi.fn(async () => undefined);

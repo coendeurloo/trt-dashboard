@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getVerificationFunnelSnapshot } from "../../api/_lib/cloudVerificationFunnel.js";
 import {
   fetchAllAuthUsers,
   fetchRestCount,
@@ -107,6 +108,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         createdAt: user.created_at ?? null
       }));
 
+    const verificationFunnel = await getVerificationFunnelSnapshot();
+
     sendJson(res, 200, {
       totals: {
         totalAccounts: authUsers.length,
@@ -122,7 +125,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         latestSignupAt: latestSignup,
         lastSyncAt: syncRow[0]?.last_synced_at ?? null
       },
-      recentUsers
+      recentUsers,
+      verificationFunnel
     });
   } catch (error) {
     handleAdminError(res, error);

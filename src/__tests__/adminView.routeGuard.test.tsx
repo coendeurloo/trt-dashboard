@@ -90,7 +90,26 @@ describe("AdminView route guard", () => {
             latestSignupAt: "2026-03-20T10:00:00.000Z",
             lastSyncAt: "2026-03-21T10:00:00.000Z"
           },
-          recentUsers: []
+          recentUsers: [],
+          verificationFunnel: {
+            storeAvailable: true,
+            last7d: {
+              signupStarted: 1,
+              verificationEmailsSent: 1,
+              verificationResends: 0,
+              confirmPageViews: 1,
+              verifiedCompletions: 1,
+              firstVerifiedSignIns: 1
+            },
+            last30d: {
+              signupStarted: 3,
+              verificationEmailsSent: 3,
+              verificationResends: 1,
+              confirmPageViews: 2,
+              verifiedCompletions: 2,
+              firstVerifiedSignIns: 1
+            }
+          }
         })
       )
       .mockResolvedValueOnce(
@@ -149,6 +168,7 @@ describe("AdminView route guard", () => {
       expect(screen.getAllByText("Admin Ops Cockpit").length).toBeGreaterThan(0);
       expect(screen.getByText("Accounts")).toBeTruthy();
       expect(screen.getByText("Runtime controls")).toBeTruthy();
+      expect(screen.getByText("Verification funnel")).toBeTruthy();
     });
   });
 });

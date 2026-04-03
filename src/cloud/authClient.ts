@@ -35,6 +35,11 @@ type SessionEnvelope = {
   requiresEmailVerification?: boolean;
 };
 
+type VerificationEventEnvelope = {
+  ok?: boolean;
+  email?: string | null;
+};
+
 const authHeaders = (accessToken?: string): HeadersInit => {
   const anonKey = getSupabaseAnonKey();
   return {
@@ -45,6 +50,14 @@ const authHeaders = (accessToken?: string): HeadersInit => {
 };
 
 const buildAuthUrl = (path: string): string => `${getSupabaseUrl()}/auth/v1${path}`;
+
+const normalizeEmail = (value: unknown): string | null => {
+  const candidate = String(value ?? "").trim().toLowerCase();
+  if (!candidate) {
+    return null;
+  }
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : null;
+};
 
 const normalizeAuthError = (status: number, payload: unknown): string => {
   const authError = payload as AuthErrorPayload | null;
@@ -238,6 +251,75 @@ export const requestVerificationEmail = async (email: string): Promise<void> => 
     body: JSON.stringify({ email })
   });
   await parseJson<{ ok: true }>(response);
+};
+
+export const readAccessTokenFromHash = (hash: string): string | null => {
+  const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!cleanHash) {
+    return null;
+  }
+  const params = new URLSearchParams(cleanHash);
+  const accessToken = String(params.get("access_token") ?? "").trim();
+  return accessToken || null;
+};
+
+export const readEmailFromAccessToken = (accessToken: string | null | undefined): string | null => {
+  const token = String(accessToken ?? "").trim();
+  if (!token) {
+    return null;
+  }
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const decoded = JSON.parse(atob(padded)) as { email?: unknown };
+    return normalizeEmail(decoded.email);
+  } catch {
+    return null;
+  }
+};
+
+export const trackVerificationEvent = async (
+  type: "confirm_opened" | "verified_opened",
+  accessToken?: string | null
+): Promise<{ email: string | null }> => {
+  if (typeof window === "undefined" || typeof fetch !== "function") {
+    return { email: null };
+  }
+
+  try {
+    const response = await fetch("/api/cloud/auth-verification-event", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      keepalive: true,
+      body: JSON.stringify({
+        type,
+        accessToken: accessToken ?? null
+      })
+    });
+
+    let payload: VerificationEventEnvelope | null = null;
+    try {
+      payload = (await response.json()) as VerificationEventEnvelope;
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      return { email: null };
+    }
+
+    return {
+      email: normalizeEmail(payload?.email)
+    };
+  } catch {
+    return { email: null };
+  }
 };
 
 export const buildGoogleOAuthUrl = (redirectTo: string): string => {

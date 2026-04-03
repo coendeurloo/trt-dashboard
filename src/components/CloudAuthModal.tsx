@@ -14,6 +14,7 @@ interface CloudAuthModalProps {
   theme: ThemeMode;
   configured: boolean;
   initialView: CloudAuthView;
+  initialEmail?: string | null;
   authStatus: "loading" | "authenticated" | "unauthenticated" | "error";
   authError: string | null;
   consentRequired: boolean;
@@ -54,6 +55,7 @@ const CloudAuthModal = ({
   theme,
   configured,
   initialView,
+  initialEmail = null,
   authStatus,
   authError,
   consentRequired,
@@ -82,14 +84,14 @@ const CloudAuthModal = ({
     if (!open) {
       return;
     }
-    setEmail("");
+    setEmail(initialEmail ?? "");
     setPassword("");
     setAcceptPrivacyPolicy(false);
     setAcceptHealthDataConsent(false);
     setLocalError(null);
     setConsentNotice(null);
     setConsentHighlight(false);
-  }, [initialView, open]);
+  }, [initialEmail, initialView, open]);
 
   useEffect(() => {
     return () => {

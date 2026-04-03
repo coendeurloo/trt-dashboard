@@ -4,6 +4,14 @@ import {
   resolveAppPublicOrigin,
   sendCloudVerificationEmail
 } from "../../api/_lib/cloudAuthEmail.js";
+import {
+  consumeVerifiedSigninMarker,
+  markVerificationCompleted,
+  recordVerificationConfirmOpened,
+  recordVerificationEmailSent,
+  recordVerificationResendRequested,
+  recordVerificationSignupStarted
+} from "../../api/_lib/cloudVerificationFunnel.js";
 import { checkRateLimit } from "../../api/_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import {
@@ -43,6 +51,11 @@ interface OAuthHashBody {
   accessToken?: string;
   refreshToken?: string;
   expiresIn?: number;
+}
+
+interface VerificationEventBody {
+  type?: string;
+  accessToken?: string;
 }
 
 interface AdminGenerateLinkResponse {
@@ -232,7 +245,7 @@ const sendVerificationEmailBestEffort = async (
   email: string,
   confirmationUrl: string,
   kind: "signup" | "magiclink"
-) => {
+): Promise<boolean> => {
   await storePendingVerificationLinkSafe(email, confirmationUrl, kind);
   try {
     await sendCloudVerificationEmail({
@@ -240,8 +253,10 @@ const sendVerificationEmailBestEffort = async (
       confirmationUrl,
       req
     });
+    return true;
   } catch {
     // Keep signup and resend responses generic. Users can request another email later.
+    return false;
   }
 };
 
@@ -442,6 +457,7 @@ export const signInHandler = async (req: IncomingMessage, res: ServerResponse) =
 
     await clearFailedLoginAttempts(email);
     await clearPendingVerificationLink(email);
+    await consumeVerifiedSigninMarker(email);
     setCloudSessionCookies(req, res, parsed.accessToken, parsed.refreshToken, parsed.expiresIn);
     sendJson(res, 200, buildSessionResponse(toCloudSessionPayload(parsed)));
   } catch (error) {
@@ -493,8 +509,8 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
         sendRateLimitError(res, limit.remaining, limit.resetAt);
         return;
       }
-    } catch (error) {
-      if (error instanceof RedisStoreUnavailableError) {
+      } catch (error) {
+        if (error instanceof RedisStoreUnavailableError) {
         sendJson(res, 503, {
           error: {
             code: "AUTH_LIMITS_UNAVAILABLE",
@@ -504,13 +520,15 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
         return;
       }
       throw error;
-    }
+      }
 
-    try {
-      const confirmationUrl = await generateAdminActionLink(env, {
-        type: "signup",
-        email,
-        password,
+      await recordVerificationSignupStarted();
+
+      try {
+        const confirmationUrl = await generateAdminActionLink(env, {
+          type: "signup",
+          email,
+          password,
         redirectTo: buildVerifiedRedirect(req)
       });
       await storePendingVerificationLinkSafe(email, confirmationUrl, "signup");
@@ -519,29 +537,38 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
           to: email,
           confirmationUrl,
           req
-        });
-      } catch {
-        sendJson(res, 502, {
+          });
+        } catch {
+          sendJson(res, 502, {
           error: {
             code: "AUTH_EMAIL_DELIVERY_FAILED",
             message: "Verification email could not be sent."
           }
-        });
+          });
+          return;
+        }
+        await recordVerificationEmailSent();
+        sendVerificationRequiredResponse(req, res);
         return;
-      }
-      sendVerificationRequiredResponse(req, res);
-      return;
-    } catch (error) {
+      } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const code = message.split(":")[0]?.trim() ?? "";
 
-      if (code === "AUTH_USER_ALREADY_REGISTERED") {
-        const pendingLink = await resolveExistingVerificationLink(req, env, email);
-        if (pendingLink) {
-          await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
-        }
-        sendVerificationRequiredResponse(req, res);
-        return;
+        if (code === "AUTH_USER_ALREADY_REGISTERED") {
+          const pendingLink = await resolveExistingVerificationLink(req, env, email);
+          if (pendingLink) {
+            const delivered = await sendVerificationEmailBestEffort(
+              req,
+              email,
+              pendingLink.confirmationUrl,
+              pendingLink.kind
+            );
+            if (delivered) {
+              await recordVerificationEmailSent();
+            }
+          }
+          sendVerificationRequiredResponse(req, res);
+          return;
       }
 
       if (code === "AUTH_RATE_LIMITED") {
@@ -620,8 +647,8 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
         sendRateLimitError(res, limit.remaining, limit.resetAt);
         return;
       }
-    } catch (error) {
-      if (error instanceof RedisStoreUnavailableError) {
+      } catch (error) {
+        if (error instanceof RedisStoreUnavailableError) {
         sendJson(res, 503, {
           error: {
             code: "AUTH_LIMITS_UNAVAILABLE",
@@ -631,12 +658,14 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
         return;
       }
       throw error;
-    }
+      }
 
-    const pendingLink = await resolveExistingVerificationLink(req, env, email);
-    if (pendingLink) {
-      await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
-    }
+      await recordVerificationResendRequested();
+
+      const pendingLink = await resolveExistingVerificationLink(req, env, email);
+      if (pendingLink) {
+        await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
+      }
 
     sendJson(res, 200, { ok: true });
   } catch (error) {
@@ -644,6 +673,65 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
       error: {
         code: "AUTH_RESEND_VERIFICATION_UNEXPECTED",
         message: error instanceof Error ? error.message : "Unexpected verification resend error."
+      }
+    });
+  }
+  };
+
+export const verificationEventHandler = async (req: IncomingMessage, res: ServerResponse) => {
+  try {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed." } });
+      return;
+    }
+
+    let body: VerificationEventBody = {};
+    try {
+      body = await readRequestBody<VerificationEventBody>(req);
+    } catch {
+      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+      return;
+    }
+
+    const type = String(body.type ?? "").trim().toLowerCase();
+    if (type === "confirm_opened") {
+      await recordVerificationConfirmOpened();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (type === "verified_opened") {
+      const accessToken = String(body.accessToken ?? "").trim();
+      if (!accessToken) {
+        sendJson(res, 200, { ok: true, email: null });
+        return;
+      }
+
+      const env = ensureAuthEnv(res);
+      if (!env) {
+        return;
+      }
+
+      const user = await fetchSupabaseUser(env, accessToken);
+      const normalizedEmail = normalizeEmail(user?.email);
+      if (normalizedEmail) {
+        await markVerificationCompleted(normalizedEmail);
+      }
+      sendJson(res, 200, { ok: true, email: normalizedEmail || null });
+      return;
+    }
+
+    sendJson(res, 400, {
+      error: {
+        code: "AUTH_INVALID_EVENT",
+        message: "Unknown verification event."
+      }
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: {
+        code: "AUTH_VERIFICATION_EVENT_UNEXPECTED",
+        message: error instanceof Error ? error.message : "Unexpected verification event error."
       }
     });
   }

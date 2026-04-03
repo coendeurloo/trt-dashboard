@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { ShieldCheck } from "lucide-react";
+import { trackVerificationEvent } from "../cloud/authClient";
 import { trLocale } from "../i18n";
 import { AppLanguage, ThemeMode } from "../types";
 
@@ -15,6 +17,13 @@ const CloudEmailConfirmView = ({
 }: CloudEmailConfirmViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
+
+  useEffect(() => {
+    if (!confirmationUrl) {
+      return;
+    }
+    void trackVerificationEvent("confirm_opened");
+  }, [confirmationUrl]);
 
   return (
     <div

@@ -83,6 +83,58 @@ const renderChangeSummary = (entry: AdminAuditLogEntry): string => {
   return keys.join(", ");
 };
 
+type VerificationFunnelCounts = AdminOverview["verificationFunnel"]["last30d"];
+
+const formatConversion = (current: number, previous: number): string => {
+  if (previous <= 0) {
+    return "-";
+  }
+  return `${Math.round((current / previous) * 100)}%`;
+};
+
+const resolveConversionTone = (current: number, previous: number): "neutral" | "good" | "warn" => {
+  if (previous <= 0) {
+    return "neutral";
+  }
+  const ratio = current / previous;
+  if (ratio >= 0.7) {
+    return "good";
+  }
+  if (ratio >= 0.4) {
+    return "neutral";
+  }
+  return "warn";
+};
+
+const findLargestVerificationDrop = (
+  counts: VerificationFunnelCounts,
+  labels: ReadonlyArray<{ key: keyof VerificationFunnelCounts; label: string }>
+): { from: string; to: string; conversion: string } | null => {
+  let lowestRatio = Number.POSITIVE_INFINITY;
+  let summary: { from: string; to: string; conversion: string } | null = null;
+
+  for (let index = 1; index < labels.length; index += 1) {
+    const previousKey = labels[index - 1].key;
+    const currentKey = labels[index].key;
+    const previous = counts[previousKey];
+    const current = counts[currentKey];
+    if (previous <= 0) {
+      continue;
+    }
+    const ratio = current / previous;
+    if (ratio < lowestRatio) {
+      lowestRatio = ratio;
+      summary = {
+        from: labels[index - 1].label,
+        to: labels[index].label,
+        conversion: `${Math.round(ratio * 100)}%`
+      };
+    }
+  }
+
+  return summary;
+};
+
 const AdminView = ({
   language,
   theme,
@@ -233,6 +285,16 @@ const AdminView = ({
     : "min-h-screen px-3 py-4 text-slate-100 sm:px-5 lg:px-6";
 
   const warningCount = systemStatus?.envDiagnostics.warnings.length ?? 0;
+  const verificationStepLabels = [
+    { key: "signupStarted", label: tr("Signup gestart", "Signup started") },
+    { key: "verificationEmailsSent", label: tr("Mail verstuurd", "Email sent") },
+    { key: "confirmPageViews", label: tr("Confirm geopend", "Confirm opened") },
+    { key: "verifiedCompletions", label: tr("E-mail bevestigd", "Email verified") },
+    { key: "firstVerifiedSignIns", label: tr("Eerste login", "First sign-in") }
+  ] as const;
+  const verificationLargestDrop = overview
+    ? findLargestVerificationDrop(overview.verificationFunnel.last30d, verificationStepLabels)
+    : null;
 
   if (authStatus === "loading" || adminMeLoading) {
     return (
@@ -407,6 +469,108 @@ const AdminView = ({
             </>
           ) : (
             <p className="text-sm text-slate-400">{tr("Geen overview data", "No overview data")}</p>
+          )}
+        </AdminPanel>
+
+        <AdminPanel
+          title={tr("Verification Funnel", "Verification funnel")}
+          subtitle={tr(
+            "Laatste 30 dagen van signup tot eerste echte login. Resends staan apart zodat je de echte drop-off ziet.",
+            "Last 30 days from signup to first real sign-in. Resends are separate so you can spot the real drop-off."
+          )}
+        >
+          {overview ? (
+            <div className="space-y-3">
+              {!overview.verificationFunnel.storeAvailable ? (
+                <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  {tr(
+                    "Upstash metrics zijn nu niet beschikbaar. Deze funnel wordt weer gevuld zodra Redis terug is.",
+                    "Upstash metrics are unavailable right now. This funnel will fill back in once Redis is reachable again."
+                  )}
+                </div>
+              ) : null}
+
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                {verificationStepLabels.map((step, index) => {
+                  const last30dValue = overview.verificationFunnel.last30d[step.key];
+                  const previousStep = index > 0 ? verificationStepLabels[index - 1] : null;
+                  const previousValue = previousStep ? overview.verificationFunnel.last30d[previousStep.key] : 0;
+                  const tone = previousStep
+                    ? resolveConversionTone(last30dValue, previousValue)
+                    : "neutral";
+
+                  return (
+                    <AdminMetricCard
+                      key={step.key}
+                      label={step.label}
+                      value={String(last30dValue)}
+                      tone={tone}
+                    />
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+                <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {verificationStepLabels.map((step, index) => {
+                      const last30dValue = overview.verificationFunnel.last30d[step.key];
+                      const last7dValue = overview.verificationFunnel.last7d[step.key];
+                      const previousStep = index > 0 ? verificationStepLabels[index - 1] : null;
+                      const previousValue = previousStep ? overview.verificationFunnel.last30d[previousStep.key] : 0;
+                      return (
+                        <div key={`${step.key}-detail`} className="rounded-lg border border-slate-700 bg-slate-950/40 p-2 text-xs text-slate-300">
+                          <p className="font-medium text-slate-100">{step.label}</p>
+                          <p className="mt-1 text-slate-400">
+                            {tr("30d", "30d")}: {last30dValue.toLocaleString()}
+                          </p>
+                          <p className="text-slate-400">
+                            {tr("7d", "7d")}: {last7dValue.toLocaleString()}
+                          </p>
+                          <p className="text-slate-500">
+                            {previousStep
+                              ? `${tr("Van vorige stap", "From previous step")}: ${formatConversion(last30dValue, previousValue)}`
+                              : tr("Start van de funnel", "Start of the funnel")}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Resends", "Resends")}</p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-100">
+                      {overview.verificationFunnel.last30d.verificationResends.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {tr("Laatste 7 dagen", "Last 7 days")}:{" "}
+                      {overview.verificationFunnel.last7d.verificationResends.toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 text-xs text-slate-300">
+                    <p className="font-medium uppercase tracking-wide text-slate-100">
+                      {tr("Grootste drop", "Biggest drop")}
+                    </p>
+                    <p className="mt-2 text-slate-400">
+                      {verificationLargestDrop
+                        ? tr(
+                            `${verificationLargestDrop.from} naar ${verificationLargestDrop.to}: ${verificationLargestDrop.conversion} conversie.`,
+                            `${verificationLargestDrop.from} to ${verificationLargestDrop.to}: ${verificationLargestDrop.conversion} conversion.`
+                          )
+                        : tr(
+                            "Nog niet genoeg data om een duidelijke drop-off te tonen.",
+                            "Not enough data yet to show a clear drop-off."
+                          )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">{tr("Geen funnel data", "No funnel data")}</p>
           )}
         </AdminPanel>
 

@@ -5,14 +5,19 @@ import { AppLanguage, ThemeMode } from "../types";
 interface CloudEmailVerifiedViewProps {
   language: AppLanguage;
   theme: ThemeMode;
+  prefillEmail?: string | null;
 }
 
 const CloudEmailVerifiedView = ({
   language,
-  theme
+  theme,
+  prefillEmail = null
 }: CloudEmailVerifiedViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
+  const signInHref = prefillEmail
+    ? `/?cloudAuth=signin&cloudEmail=${encodeURIComponent(prefillEmail)}`
+    : "/?cloudAuth=signin";
 
   return (
     <div
@@ -69,7 +74,7 @@ const CloudEmailVerifiedView = ({
             </p>
 
             <a
-              href="/?cloudAuth=signin"
+              href={signInHref}
               className={`mx-auto mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                 isLightTheme
                   ? "border border-cyan-700 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
@@ -78,6 +83,15 @@ const CloudEmailVerifiedView = ({
             >
               {tr("Inloggen bij LabTracker Cloud", "Sign in to LabTracker Cloud")}
             </a>
+
+            {prefillEmail ? (
+              <p className={`mx-auto mt-3 max-w-2xl text-center text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+                {tr(
+                  `We vullen ${prefillEmail} alvast voor je in zodra de sign-in modal opent.`,
+                  `We will prefill ${prefillEmail} for you as soon as the sign-in modal opens.`
+                )}
+              </p>
+            ) : null}
           </div>
 
           <p className={`mx-auto mt-6 max-w-2xl text-center text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>

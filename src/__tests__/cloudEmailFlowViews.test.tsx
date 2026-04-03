@@ -1,11 +1,23 @@
 /* @vitest-environment jsdom */
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CloudEmailConfirmView from "../views/CloudEmailConfirmView";
 import CloudEmailVerifiedView from "../views/CloudEmailVerifiedView";
 
 describe("cloud email flow views", () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true })
+    })) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
   it("renders the confirm view with a direct verification action", () => {
     render(
       <CloudEmailConfirmView
@@ -39,11 +51,13 @@ describe("cloud email flow views", () => {
       <CloudEmailVerifiedView
         language="en"
         theme="dark"
+        prefillEmail="verify@example.com"
       />
     );
 
     const link = screen.getByRole("link", { name: "Sign in to LabTracker Cloud" });
-    expect(link.getAttribute("href")).toBe("/?cloudAuth=signin");
+    expect(link.getAttribute("href")).toBe("/?cloudAuth=signin&cloudEmail=verify%40example.com");
     expect(screen.getByText("Email verified")).toBeTruthy();
+    expect(screen.getByText("We will prefill verify@example.com for you as soon as the sign-in modal opens.")).toBeTruthy();
   });
 });

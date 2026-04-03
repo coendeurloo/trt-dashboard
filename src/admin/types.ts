@@ -24,6 +24,25 @@ export interface AdminOverview {
     email: string;
     createdAt: string | null;
   }>;
+  verificationFunnel: {
+    storeAvailable: boolean;
+    last7d: {
+      signupStarted: number;
+      verificationEmailsSent: number;
+      verificationResends: number;
+      confirmPageViews: number;
+      verifiedCompletions: number;
+      firstVerifiedSignIns: number;
+    };
+    last30d: {
+      signupStarted: number;
+      verificationEmailsSent: number;
+      verificationResends: number;
+      confirmPageViews: number;
+      verifiedCompletions: number;
+      firstVerifiedSignIns: number;
+    };
+  };
 }
 
 export interface AdminServiceStatus {

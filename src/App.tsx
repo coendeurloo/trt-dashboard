@@ -18,9 +18,15 @@ import AppShell, { AppShellHeaderStat } from "./components/AppShell";
 import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
 import {
   CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
+  CLOUD_LAST_AUTH_EMAIL_STORAGE_KEY,
   CLOUD_PRIVACY_POLICY_VERSION,
   getSupabaseUrl
 } from "./cloud/constants";
+import {
+  readAccessTokenFromHash,
+  readEmailFromAccessToken,
+  trackVerificationEvent
+} from "./cloud/authClient";
 import type { CloudConsentPayload } from "./cloud/consentClient";
 import { getDemoSnapshot } from "./demoData";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
@@ -276,12 +282,49 @@ const readRequestedCloudAuthView = (): CloudAuthView | null => {
   return requested === "signin" || requested === "signup" ? requested : null;
 };
 
-const clearRequestedCloudAuthView = (): void => {
+const normalizeCloudAuthEmail = (value: unknown): string | null => {
+  const candidate = String(value ?? "").trim().toLowerCase();
+  if (!candidate) {
+    return null;
+  }
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : null;
+};
+
+const loadRememberedCloudAuthEmail = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return normalizeCloudAuthEmail(window.localStorage.getItem(CLOUD_LAST_AUTH_EMAIL_STORAGE_KEY));
+};
+
+const rememberCloudAuthEmail = (email: string | null | undefined): string | null => {
+  const normalized = normalizeCloudAuthEmail(email);
+  if (typeof window === "undefined") {
+    return normalized;
+  }
+  if (!normalized) {
+    window.localStorage.removeItem(CLOUD_LAST_AUTH_EMAIL_STORAGE_KEY);
+    return null;
+  }
+  window.localStorage.setItem(CLOUD_LAST_AUTH_EMAIL_STORAGE_KEY, normalized);
+  return normalized;
+};
+
+const readRequestedCloudAuthEmail = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  return normalizeCloudAuthEmail(params.get("cloudEmail"));
+};
+
+const clearRequestedCloudAuthParams = (): void => {
   if (typeof window === "undefined") {
     return;
   }
   const currentUrl = new URL(window.location.href);
   currentUrl.searchParams.delete("cloudAuth");
+  currentUrl.searchParams.delete("cloudEmail");
   const nextPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
   window.history.replaceState({}, document.title, nextPath);
 };
@@ -350,6 +393,9 @@ const App = () => {
   });
   const [cloudAuthModalOpen, setCloudAuthModalOpen] = useState(false);
   const [cloudAuthModalView, setCloudAuthModalView] = useState<CloudAuthView>("signin");
+  const [cloudAuthModalPrefillEmail, setCloudAuthModalPrefillEmail] = useState<string | null>(() =>
+    loadRememberedCloudAuthEmail()
+  );
   const [pendingCloudPostAuthIntent, setPendingCloudPostAuthIntent] = useState<CloudAuthView | null>(() =>
     loadCloudPostAuthIntent()
   );
@@ -357,6 +403,7 @@ const App = () => {
   const [signupVerificationEmail, setSignupVerificationEmail] = useState<string | null>(null);
   const [signupVerificationResendNotice, setSignupVerificationResendNotice] = useState<string | null>(null);
   const [signupVerificationResendBusy, setSignupVerificationResendBusy] = useState(false);
+  const [verifiedSignInEmail, setVerifiedSignInEmail] = useState<string | null>(() => loadRememberedCloudAuthEmail());
   const [showSigninSuccessToast, setShowSigninSuccessToast] = useState(false);
   const [showWellbeingReminderModal, setShowWellbeingReminderModal] = useState(false);
   const [wellbeingReminderDismissedDate, setWellbeingReminderDismissedDate] = useState<string | null>(() =>
@@ -392,8 +439,13 @@ const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
-  const openCloudAuthModal = useCallback((view: CloudAuthView = "signin") => {
+  const openCloudAuthModal = useCallback((view: CloudAuthView = "signin", prefillEmail?: string | null) => {
     setCloudAuthModalView(view);
+    setCloudAuthModalPrefillEmail(
+      view === "signin"
+        ? normalizeCloudAuthEmail(prefillEmail) ?? loadRememberedCloudAuthEmail()
+        : normalizeCloudAuthEmail(prefillEmail)
+    );
     setCloudAuthModalOpen(true);
   }, []);
   const closeCloudAuthModal = useCallback(() => {
@@ -419,11 +471,23 @@ const App = () => {
     },
     [clearPendingCloudPostAuthIntent, cloudAuth, rememberCloudPostAuthIntent]
   );
+  const handleCloudVerificationEmailRequest = useCallback(
+    async (email: string) => {
+      const normalizedEmail = rememberCloudAuthEmail(email) ?? email.trim().toLowerCase();
+      setCloudAuthModalPrefillEmail(normalizedEmail);
+      setVerifiedSignInEmail(normalizedEmail);
+      await cloudAuth.requestVerificationEmail(normalizedEmail);
+    },
+    [cloudAuth]
+  );
   const handleCloudSignInEmail = useCallback(
     async (email: string, password: string) => {
+      const normalizedEmail = rememberCloudAuthEmail(email) ?? email.trim().toLowerCase();
+      setCloudAuthModalPrefillEmail(normalizedEmail);
+      setVerifiedSignInEmail(normalizedEmail);
       rememberCloudPostAuthIntent("signin");
       try {
-        await cloudAuth.signInEmail(email, password);
+        await cloudAuth.signInEmail(normalizedEmail, password);
       } catch (error) {
         clearPendingCloudPostAuthIntent();
         throw error;
@@ -433,15 +497,18 @@ const App = () => {
   );
   const handleCloudSignUpEmail = useCallback(
     async (email: string, password: string, payload: CloudConsentPayload) => {
+      const normalizedEmail = rememberCloudAuthEmail(email) ?? email.trim().toLowerCase();
+      setCloudAuthModalPrefillEmail(normalizedEmail);
+      setVerifiedSignInEmail(normalizedEmail);
       rememberCloudPostAuthIntent("signup");
       try {
-        await cloudAuth.signUpEmail(email, password, payload);
+        await cloudAuth.signUpEmail(normalizedEmail, password, payload);
       } catch (error) {
         if (
           error instanceof Error &&
           error.message === "AUTH_EMAIL_VERIFICATION_REQUIRED"
         ) {
-          setSignupVerificationEmail(email.trim().toLowerCase());
+          setSignupVerificationEmail(normalizedEmail);
           setSignupVerificationResendNotice(null);
           clearPendingCloudPostAuthIntent();
           return;
@@ -498,7 +565,32 @@ const App = () => {
     if (typeof window === "undefined") {
       return;
     }
-    if (topLevelRouteMode === "auth_verified" && window.location.hash) {
+    if (topLevelRouteMode !== "auth_verified") {
+      return;
+    }
+
+    const fallbackEmail = loadRememberedCloudAuthEmail();
+    let nextEmail = fallbackEmail;
+    const accessToken = readAccessTokenFromHash(window.location.hash);
+    const tokenEmail = readEmailFromAccessToken(accessToken);
+    if (tokenEmail) {
+      nextEmail = rememberCloudAuthEmail(tokenEmail);
+      setCloudAuthModalPrefillEmail(nextEmail);
+    }
+    setVerifiedSignInEmail(nextEmail);
+
+    if (accessToken) {
+      void trackVerificationEvent("verified_opened", accessToken).then((result) => {
+        if (!result.email) {
+          return;
+        }
+        const trackedEmail = rememberCloudAuthEmail(result.email);
+        setCloudAuthModalPrefillEmail(trackedEmail);
+        setVerifiedSignInEmail(trackedEmail);
+      });
+    }
+
+    if (window.location.hash) {
       const cleanUrl = `${window.location.pathname}${window.location.search}`;
       window.history.replaceState({}, document.title, cleanUrl);
     }
@@ -512,8 +604,17 @@ const App = () => {
     if (!requestedView) {
       return;
     }
-    openCloudAuthModal(requestedView);
-    clearRequestedCloudAuthView();
+    const requestedEmail =
+      requestedView === "signin"
+        ? readRequestedCloudAuthEmail() ?? loadRememberedCloudAuthEmail()
+        : readRequestedCloudAuthEmail();
+    openCloudAuthModal(requestedView, requestedEmail);
+    if (requestedEmail) {
+      setCloudAuthModalPrefillEmail(requestedEmail);
+      setVerifiedSignInEmail(requestedEmail);
+      rememberCloudAuthEmail(requestedEmail);
+    }
+    clearRequestedCloudAuthParams();
   }, [isShareMode, openCloudAuthModal, topLevelRouteMode]);
 
   useEffect(() => {
@@ -1220,7 +1321,7 @@ const App = () => {
     setSignupVerificationResendBusy(true);
     setSignupVerificationResendNotice(null);
     try {
-      await cloudAuth.requestVerificationEmail(signupVerificationEmail);
+      await handleCloudVerificationEmailRequest(signupVerificationEmail);
       setSignupVerificationResendNotice(
         tr(
           "Nieuwe verificatie-e-mail verstuurd. Kijk ook in spam, ongewenst of promoties.",
@@ -2486,6 +2587,7 @@ const App = () => {
           theme={resolvedTheme}
           configured={cloudAuth.configured}
           initialView={cloudAuthModalView}
+          initialEmail={cloudAuthModalPrefillEmail}
           authStatus={cloudAuth.status}
           authError={cloudAuth.error}
           consentRequired={cloudAuth.status === "authenticated" && cloudAuth.consentStatus !== "granted"}
@@ -2495,7 +2597,7 @@ const App = () => {
           onSignInEmail={handleCloudSignInEmail}
           onSignUpEmail={handleCloudSignUpEmail}
           onCompleteConsent={cloudAuth.completeConsent}
-          onRequestVerificationEmail={cloudAuth.requestVerificationEmail}
+          onRequestVerificationEmail={handleCloudVerificationEmailRequest}
           onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
         />
       </>
@@ -2517,6 +2619,7 @@ const App = () => {
       <CloudEmailVerifiedView
         language={appData.settings.language}
         theme={resolvedTheme}
+        prefillEmail={verifiedSignInEmail}
       />
     );
   }
@@ -3116,6 +3219,7 @@ const App = () => {
         theme={resolvedTheme}
         configured={cloudAuth.configured}
         initialView={cloudAuthModalView}
+        initialEmail={cloudAuthModalPrefillEmail}
         authStatus={cloudAuth.status}
         authError={cloudAuth.error}
         consentRequired={cloudAuth.status === "authenticated" && cloudAuth.consentStatus !== "granted"}
@@ -3125,7 +3229,7 @@ const App = () => {
         onSignInEmail={handleCloudSignInEmail}
         onSignUpEmail={handleCloudSignUpEmail}
         onCompleteConsent={cloudAuth.completeConsent}
-        onRequestVerificationEmail={cloudAuth.requestVerificationEmail}
+        onRequestVerificationEmail={handleCloudVerificationEmailRequest}
         onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
       />
 

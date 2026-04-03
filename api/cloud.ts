@@ -6,7 +6,8 @@ import {
   sessionHandler,
   signInHandler,
   signUpHandler,
-  unlockEmailHandler
+  unlockEmailHandler,
+  verificationEventHandler
 } from "../server/cloud/auth.js";
 import consentHandler from "../server/cloud/consent.js";
 import deleteAccountHandler from "../server/cloud/delete-account.js";
@@ -116,6 +117,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (action === "auth-unlock-email") {
     await unlockEmailHandler(req, res);
+    return;
+  }
+  if (action === "auth-verification-event") {
+    await verificationEventHandler(req, res);
     return;
   }
 

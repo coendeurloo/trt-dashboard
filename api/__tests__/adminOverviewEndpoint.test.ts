@@ -5,12 +5,14 @@ const {
   requireAdminIdentity,
   fetchAllAuthUsers,
   fetchRestCount,
-  fetchRestRows
+  fetchRestRows,
+  getVerificationFunnelSnapshot
 } = vi.hoisted(() => ({
   requireAdminIdentity: vi.fn(),
   fetchAllAuthUsers: vi.fn(),
   fetchRestCount: vi.fn(),
-  fetchRestRows: vi.fn()
+  fetchRestRows: vi.fn(),
+  getVerificationFunnelSnapshot: vi.fn()
 }));
 
 vi.mock("../_lib/supabaseAdmin.js", async () => {
@@ -23,6 +25,10 @@ vi.mock("../_lib/supabaseAdmin.js", async () => {
     fetchRestRows
   };
 });
+
+vi.mock("../_lib/cloudVerificationFunnel.js", () => ({
+  getVerificationFunnelSnapshot
+}));
 
 import adminHandler from "../admin";
 
@@ -125,6 +131,26 @@ describe("/api/admin/overview", () => {
       }
       return [];
     });
+
+    getVerificationFunnelSnapshot.mockResolvedValue({
+      storeAvailable: true,
+      last7d: {
+        signupStarted: 2,
+        verificationEmailsSent: 2,
+        verificationResends: 1,
+        confirmPageViews: 1,
+        verifiedCompletions: 1,
+        firstVerifiedSignIns: 1
+      },
+      last30d: {
+        signupStarted: 4,
+        verificationEmailsSent: 4,
+        verificationResends: 2,
+        confirmPageViews: 3,
+        verifiedCompletions: 2,
+        firstVerifiedSignIns: 1
+      }
+    });
   });
 
   afterEach(() => {
@@ -148,6 +174,10 @@ describe("/api/admin/overview", () => {
         totalProtocols: number;
       };
       activity: { lastSyncAt: string | null };
+      verificationFunnel: {
+        storeAvailable: boolean;
+        last30d: { verificationResends: number };
+      };
     };
 
     expect(payload.totals.totalAccounts).toBe(2);
@@ -157,5 +187,7 @@ describe("/api/admin/overview", () => {
     expect(payload.totals.totalCheckIns).toBe(6);
     expect(payload.totals.totalProtocols).toBe(4);
     expect(payload.activity.lastSyncAt).toBe("2026-03-21T09:00:00.000Z");
+    expect(payload.verificationFunnel.storeAvailable).toBe(true);
+    expect(payload.verificationFunnel.last30d.verificationResends).toBe(2);
   });
 });
