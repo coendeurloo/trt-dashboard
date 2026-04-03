@@ -53,7 +53,8 @@ const createProps = () => {
     onGenerateShareLink: vi.fn(),
     onReportIssue: vi.fn(),
     cloudUserEmail: "coen@example.com",
-    onSignOut: vi.fn()
+    onSignOut: vi.fn(async () => undefined),
+    onDeleteAccount: vi.fn(async () => undefined)
   };
 };
 
@@ -132,5 +133,14 @@ describe("SettingsView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
     expect(screen.getByText("Reference range: 250-1100 ng/dL")).toBeTruthy();
     expect(screen.getByText("Change since prior test: +10.1%")).toBeTruthy();
+  });
+
+  it("shows cloud account actions in the profile privacy section", () => {
+    render(<SettingsView {...createProps()} />);
+
+    expect(screen.getByText("Signed-in account")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete account" })).toBeTruthy();
+    expect(screen.getByText("Deletes your account and cloud data. Your local data on this device stays intact.")).toBeTruthy();
   });
 });

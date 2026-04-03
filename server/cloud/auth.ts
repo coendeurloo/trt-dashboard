@@ -1,7 +1,9 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import {
+  buildPasswordResetRedirectUrl,
   buildVerifiedRedirectUrl,
   resolveAppPublicOrigin,
+  sendCloudPasswordResetEmail,
   sendCloudVerificationEmail
 } from "../../api/_lib/cloudAuthEmail.js";
 import {
@@ -58,12 +60,26 @@ interface VerificationEventBody {
   accessToken?: string;
 }
 
+interface PasswordResetBody {
+  email?: string;
+}
+
+interface PasswordUpdateBody {
+  accessToken?: string;
+  password?: string;
+}
+
 interface AdminGenerateLinkResponse {
   action_link?: string;
   email_otp?: string;
   hashed_token?: string;
   verification_type?: string;
   redirect_to?: string;
+}
+
+interface SupabaseUserUpdateResponse {
+  id?: string;
+  email?: string | null;
 }
 
 const ACCESS_TOKEN_FALLBACK_TTL_SECONDS = 15 * 60;
@@ -170,6 +186,20 @@ const resolveSignUpErrorCode = (status: number, payload: unknown): string => {
   return "AUTH_BAD_REQUEST";
 };
 
+const resolvePasswordUpdateErrorCode = (status: number, payload: unknown): string => {
+  const message = extractPayloadMessage(payload);
+  if (message.includes("password should be at least") || message.includes("at least 6 characters")) {
+    return "AUTH_WEAK_PASSWORD";
+  }
+  if (status === 401 || status === 403 || message.includes("jwt") || message.includes("token")) {
+    return "AUTH_RESET_LINK_INVALID";
+  }
+  if (status >= 500) {
+    return "AUTH_PROVIDER_UNAVAILABLE";
+  }
+  return "AUTH_BAD_REQUEST";
+};
+
 const sendVerificationRequiredResponse = (req: IncomingMessage, res: ServerResponse) => {
   clearCloudSessionCookies(req, res);
   sendJson(res, 200, VERIFICATION_REQUIRED_RESPONSE);
@@ -184,6 +214,9 @@ const buildServiceHeaders = (env: NonNullable<ReturnType<typeof ensureAuthEnv>>)
 const buildVerifiedRedirect = (req: IncomingMessage): string =>
   buildVerifiedRedirectUrl(resolveAppPublicOrigin(req));
 
+const buildPasswordResetRedirect = (req: IncomingMessage): string =>
+  buildPasswordResetRedirectUrl(resolveAppPublicOrigin(req));
+
 const parseGeneratedActionLink = (payload: unknown): string | null => {
   const actionLink = String((payload as AdminGenerateLinkResponse | null)?.action_link ?? "").trim();
   return actionLink || null;
@@ -192,7 +225,7 @@ const parseGeneratedActionLink = (payload: unknown): string | null => {
 const generateAdminActionLink = async (
   env: NonNullable<ReturnType<typeof ensureAuthEnv>>,
   options: {
-    type: "signup" | "magiclink";
+    type: "signup" | "magiclink" | "recovery";
     email: string;
     password?: string;
     redirectTo: string;
@@ -237,6 +270,23 @@ const storePendingVerificationLinkSafe = async (
     });
   } catch {
     // Best effort. Email delivery is more important than cache persistence.
+  }
+};
+
+const sendPasswordResetEmail = async (
+  req: IncomingMessage,
+  email: string,
+  recoveryUrl: string
+): Promise<void> => {
+  try {
+    await sendCloudPasswordResetEmail({
+      to: email,
+      recoveryUrl,
+      req
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "password_reset_delivery_failed";
+    throw new Error(`AUTH_EMAIL_DELIVERY_FAILED:${detail}`);
   }
 };
 
@@ -397,7 +447,7 @@ export const signInHandler = async (req: IncomingMessage, res: ServerResponse) =
       sendJson(res, 423, {
         error: {
           code: "AUTH_ACCOUNT_LOCKED",
-          message: "Account temporarily locked. Request an unlock email to continue."
+          message: "Account temporarily locked. Request a password reset email to continue."
         }
       });
       return;
@@ -509,8 +559,8 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
         sendRateLimitError(res, limit.remaining, limit.resetAt);
         return;
       }
-      } catch (error) {
-        if (error instanceof RedisStoreUnavailableError) {
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError) {
         sendJson(res, 503, {
           error: {
             code: "AUTH_LIMITS_UNAVAILABLE",
@@ -520,15 +570,43 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
         return;
       }
       throw error;
+    }
+
+    await recordVerificationSignupStarted();
+
+    const existingUser = await fetchSupabaseAuthUserByEmail(env, email);
+    if (existingUser) {
+      if (isSupabaseAuthUserConfirmed(existingUser)) {
+        sendJson(res, 409, {
+          error: {
+            code: "AUTH_USER_ALREADY_REGISTERED",
+            message: "An account with this email already exists."
+          }
+        });
+        return;
       }
 
-      await recordVerificationSignupStarted();
-
-      try {
-        const confirmationUrl = await generateAdminActionLink(env, {
-          type: "signup",
+      const pendingLink = await resolveExistingVerificationLink(req, env, email);
+      if (pendingLink) {
+        const delivered = await sendVerificationEmailBestEffort(
+          req,
           email,
-          password,
+          pendingLink.confirmationUrl,
+          pendingLink.kind
+        );
+        if (delivered) {
+          await recordVerificationEmailSent();
+        }
+      }
+      sendVerificationRequiredResponse(req, res);
+      return;
+    }
+
+    try {
+      const confirmationUrl = await generateAdminActionLink(env, {
+        type: "signup",
+        email,
+        password,
         redirectTo: buildVerifiedRedirect(req)
       });
       await storePendingVerificationLinkSafe(email, confirmationUrl, "signup");
@@ -537,39 +615,22 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
           to: email,
           confirmationUrl,
           req
-          });
-        } catch {
-          sendJson(res, 502, {
+        });
+      } catch {
+        sendJson(res, 502, {
           error: {
             code: "AUTH_EMAIL_DELIVERY_FAILED",
             message: "Verification email could not be sent."
           }
-          });
-          return;
-        }
-        await recordVerificationEmailSent();
-        sendVerificationRequiredResponse(req, res);
+        });
         return;
-      } catch (error) {
+      }
+      await recordVerificationEmailSent();
+      sendVerificationRequiredResponse(req, res);
+      return;
+    } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const code = message.split(":")[0]?.trim() ?? "";
-
-        if (code === "AUTH_USER_ALREADY_REGISTERED") {
-          const pendingLink = await resolveExistingVerificationLink(req, env, email);
-          if (pendingLink) {
-            const delivered = await sendVerificationEmailBestEffort(
-              req,
-              email,
-              pendingLink.confirmationUrl,
-              pendingLink.kind
-            );
-            if (delivered) {
-              await recordVerificationEmailSent();
-            }
-          }
-          sendVerificationRequiredResponse(req, res);
-          return;
-      }
 
       if (code === "AUTH_RATE_LIMITED") {
         sendJson(res, 429, {
@@ -597,7 +658,7 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
           message: "Cloud signup failed."
         }
       });
-      return;
+        return;
     }
   } catch (error) {
     sendJson(res, 500, {
@@ -647,8 +708,8 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
         sendRateLimitError(res, limit.remaining, limit.resetAt);
         return;
       }
-      } catch (error) {
-        if (error instanceof RedisStoreUnavailableError) {
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError) {
         sendJson(res, 503, {
           error: {
             code: "AUTH_LIMITS_UNAVAILABLE",
@@ -658,14 +719,14 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
         return;
       }
       throw error;
-      }
+    }
 
-      await recordVerificationResendRequested();
+    await recordVerificationResendRequested();
 
-      const pendingLink = await resolveExistingVerificationLink(req, env, email);
-      if (pendingLink) {
-        await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
-      }
+    const pendingLink = await resolveExistingVerificationLink(req, env, email);
+    if (pendingLink) {
+      await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
+    }
 
     sendJson(res, 200, { ok: true });
   } catch (error) {
@@ -676,7 +737,7 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
       }
     });
   }
-  };
+};
 
 export const verificationEventHandler = async (req: IncomingMessage, res: ServerResponse) => {
   try {
@@ -923,7 +984,7 @@ export const oauthHashHandler = async (req: IncomingMessage, res: ServerResponse
   }
 };
 
-export const unlockEmailHandler = async (req: IncomingMessage, res: ServerResponse) => {
+export const passwordResetEmailHandler = async (req: IncomingMessage, res: ServerResponse) => {
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed." } });
@@ -934,9 +995,9 @@ export const unlockEmailHandler = async (req: IncomingMessage, res: ServerRespon
       return;
     }
 
-    let body: { email?: string } = {};
+    let body: PasswordResetBody = {};
     try {
-      body = await readRequestBody<{ email?: string }>(req);
+      body = await readRequestBody<PasswordResetBody>(req);
     } catch {
       sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
       return;
@@ -973,29 +1034,149 @@ export const unlockEmailHandler = async (req: IncomingMessage, res: ServerRespon
       throw error;
     }
 
-    const response = await fetch(`${env.supabaseUrl}/auth/v1/recover`, {
-      method: "POST",
-      headers: buildCloudAuthHeaders(env),
-      body: JSON.stringify({ email })
+    const existingUser = await fetchSupabaseAuthUserByEmail(env, email);
+    if (!existingUser) {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (!isSupabaseAuthUserConfirmed(existingUser)) {
+      const pendingLink = await resolveExistingVerificationLink(req, env, email);
+      if (pendingLink) {
+        const delivered = await sendVerificationEmailBestEffort(
+          req,
+          email,
+          pendingLink.confirmationUrl,
+          pendingLink.kind
+        );
+        if (!delivered) {
+          sendJson(res, 502, {
+            error: {
+              code: "AUTH_EMAIL_DELIVERY_FAILED",
+              message: "Verification email could not be sent."
+            }
+          });
+          return;
+        }
+        await recordVerificationEmailSent();
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const recoveryUrl = await generateAdminActionLink(env, {
+      type: "recovery",
+      email,
+      redirectTo: buildPasswordResetRedirect(req)
     });
-    if (response.status >= 500) {
+    await sendPasswordResetEmail(req, email, recoveryUrl);
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const code = message.split(":")[0]?.trim() ?? "";
+    if (code === "AUTH_PROVIDER_UNAVAILABLE") {
       sendJson(res, 503, {
         error: {
-          code: "AUTH_PROVIDER_UNAVAILABLE",
+          code,
           message: "Cloud auth service is temporarily unavailable."
         }
       });
       return;
     }
-
-    await clearFailedLoginAttempts(email);
-    sendJson(res, 200, { ok: true });
-  } catch (error) {
+    if (code === "AUTH_EMAIL_DELIVERY_FAILED") {
+      sendJson(res, 502, {
+        error: {
+          code,
+          message: "Password reset email could not be sent."
+        }
+      });
+      return;
+    }
     sendJson(res, 500, {
       error: {
-        code: "AUTH_UNLOCK_UNEXPECTED",
-        message: error instanceof Error ? error.message : "Unexpected unlock flow error."
+        code: "AUTH_PASSWORD_RESET_EMAIL_UNEXPECTED",
+        message: error instanceof Error ? error.message : "Unexpected password reset email error."
       }
     });
   }
 };
+
+export const resetPasswordHandler = async (req: IncomingMessage, res: ServerResponse) => {
+  try {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed." } });
+      return;
+    }
+
+    const env = ensureAuthEnv(res);
+    if (!env) {
+      return;
+    }
+
+    let body: PasswordUpdateBody = {};
+    try {
+      body = await readRequestBody<PasswordUpdateBody>(req);
+    } catch {
+      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+      return;
+    }
+
+    const accessToken = String(body.accessToken ?? "").trim();
+    const password = String(body.password ?? "");
+    if (!accessToken || !isPasswordFormatValid(password)) {
+      sendJson(res, 400, {
+        error: {
+          code: "AUTH_INVALID_INPUT",
+          message: "Recovery token and a valid password are required."
+        }
+      });
+      return;
+    }
+
+    const response = await fetch(`${env.supabaseUrl}/auth/v1/user`, {
+      method: "PUT",
+      headers: {
+        apikey: env.anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ password })
+    });
+    const payload = await parseResponsePayload(response);
+    if (!response.ok) {
+      const code = resolvePasswordUpdateErrorCode(response.status, payload);
+      sendJson(res, code === "AUTH_PROVIDER_UNAVAILABLE" ? 503 : 400, {
+        error: {
+          code,
+          message:
+            code === "AUTH_RESET_LINK_INVALID"
+              ? "Password reset link is invalid or expired."
+              : "Password reset failed."
+        }
+      });
+      return;
+    }
+
+    const user = payload as SupabaseUserUpdateResponse | null;
+    const normalizedEmail = normalizeEmail(user?.email);
+    if (normalizedEmail) {
+      await clearFailedLoginAttempts(normalizedEmail);
+      await clearPendingVerificationLink(normalizedEmail);
+    }
+
+    clearCloudSessionCookies(req, res);
+    sendJson(res, 200, {
+      ok: true,
+      email: normalizedEmail || null
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: {
+        code: "AUTH_RESET_PASSWORD_UNEXPECTED",
+        message: error instanceof Error ? error.message : "Unexpected password reset error."
+      }
+    });
+  }
+};
+
+export const unlockEmailHandler = passwordResetEmailHandler;

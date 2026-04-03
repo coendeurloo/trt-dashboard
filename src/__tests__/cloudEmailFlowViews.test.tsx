@@ -3,6 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CloudEmailConfirmView from "../views/CloudEmailConfirmView";
+import CloudPasswordResetView from "../views/CloudPasswordResetView";
 import CloudEmailVerifiedView from "../views/CloudEmailVerifiedView";
 
 describe("cloud email flow views", () => {
@@ -59,5 +60,19 @@ describe("cloud email flow views", () => {
     expect(link.getAttribute("href")).toBe("/?cloudAuth=signin&cloudEmail=verify%40example.com");
     expect(screen.getByText("Email verified")).toBeTruthy();
     expect(screen.getByText("We will prefill verify@example.com for you as soon as the sign-in modal opens.")).toBeTruthy();
+  });
+
+  it("renders the password reset wrapper view with a centered CTA", () => {
+    render(
+      <CloudPasswordResetView
+        language="en"
+        theme="dark"
+        recoveryUrl="https://example.supabase.co/auth/v1/verify?token=recovery"
+        onResetPassword={vi.fn(async () => null)}
+      />
+    );
+
+    const link = screen.getByRole("link", { name: "Continue to password reset" });
+    expect(link.getAttribute("href")).toBe("https://example.supabase.co/auth/v1/verify?token=recovery");
   });
 });

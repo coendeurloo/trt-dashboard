@@ -27,7 +27,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -56,7 +57,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -85,7 +87,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={onSignUpEmail}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -141,7 +144,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -171,7 +175,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -198,7 +203,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={vi.fn(async () => undefined)}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -226,7 +232,8 @@ describe("CloudAuthModal", () => {
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
         onRequestVerificationEmail={onRequestVerificationEmail}
-        onRequestUnlockEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={vi.fn(async () => undefined)}
+        onOpenView={vi.fn()}
       />
     );
 
@@ -237,5 +244,77 @@ describe("CloudAuthModal", () => {
       expect(onRequestVerificationEmail).toHaveBeenCalledWith("verify@example.com");
     });
     expect(screen.getByText("Verification email sent. Check your inbox and click the confirmation link.")).toBeTruthy();
+  });
+
+  it("offers forgot password from the sign-in view", async () => {
+    const onRequestPasswordResetEmail = vi.fn(async () => undefined);
+
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        authStatus="unauthenticated"
+        authError={null}
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={onRequestPasswordResetEmail}
+        onOpenView={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "reset@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+
+    await waitFor(() => {
+      expect(onRequestPasswordResetEmail).toHaveBeenCalledWith("reset@example.com");
+    });
+    expect(
+      screen.getByText("If this email belongs to an account, we sent a reset email. Also check spam, junk, or promotions.")
+    ).toBeTruthy();
+  });
+
+  it("shows sign-in and reset actions when signup uses an existing email", async () => {
+    const onOpenView = vi.fn();
+    const onRequestPasswordResetEmail = vi.fn(async () => undefined);
+
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signup"
+        authStatus="unauthenticated"
+        authError="AUTH_USER_ALREADY_REGISTERED"
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
+        onRequestPasswordResetEmail={onRequestPasswordResetEmail}
+        onOpenView={onOpenView}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "coen@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open sign in" }));
+    expect(onOpenView).toHaveBeenCalledWith("signin", "coen@example.com");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    await waitFor(() => {
+      expect(onRequestPasswordResetEmail).toHaveBeenCalledWith("coen@example.com");
+    });
   });
 });

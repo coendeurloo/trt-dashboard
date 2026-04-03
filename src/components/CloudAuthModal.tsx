@@ -25,7 +25,8 @@ interface CloudAuthModalProps {
   onSignUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   onCompleteConsent: (payload: CloudConsentPayload) => Promise<void>;
   onRequestVerificationEmail: (email: string) => Promise<void>;
-  onRequestUnlockEmail: (email: string) => Promise<void>;
+  onRequestPasswordResetEmail: (email: string) => Promise<void>;
+  onOpenView: (view: CloudAuthView, prefillEmail?: string | null) => void;
 }
 
 const GoogleIcon = () => (
@@ -66,7 +67,8 @@ const CloudAuthModal = ({
   onSignUpEmail,
   onCompleteConsent,
   onRequestVerificationEmail,
-  onRequestUnlockEmail
+  onRequestPasswordResetEmail,
+  onOpenView
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
@@ -160,6 +162,19 @@ const CloudAuthModal = ({
     } finally {
       setIsBusy(false);
     }
+  };
+
+  const requireEmailValue = (): string => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      throw new Error(
+        tr(
+          "Vul eerst je e-mailadres in.",
+          "Enter your email first."
+        )
+      );
+    }
+    return normalizedEmail;
   };
 
   const handleGoogleClick = async () => {
@@ -285,11 +300,15 @@ const CloudAuthModal = ({
       ? mapCloudAuthErrorToMessage(localError ?? authError ?? "", tr)
       : null;
   const rawErrorCode = (localError ?? authError ?? "").split(":")[0]?.trim() ?? "";
-  const canRequestUnlock = rawErrorCode === "AUTH_ACCOUNT_LOCKED";
+  const canOpenSignIn = isSignupView && rawErrorCode === "AUTH_USER_ALREADY_REGISTERED";
+  const canRequestPasswordReset =
+    rawErrorCode === "AUTH_ACCOUNT_LOCKED" || rawErrorCode === "AUTH_USER_ALREADY_REGISTERED";
   const canResendVerification =
     rawErrorCode === "AUTH_EMAIL_NOT_CONFIRMED" || rawErrorCode === "AUTH_EMAIL_VERIFICATION_REQUIRED";
   const isPositiveFeedback =
-    rawErrorCode === "AUTH_UNLOCK_EMAIL_SENT" || rawErrorCode === "AUTH_VERIFICATION_EMAIL_SENT";
+    rawErrorCode === "AUTH_UNLOCK_EMAIL_SENT" ||
+    rawErrorCode === "AUTH_VERIFICATION_EMAIL_SENT" ||
+    rawErrorCode === "AUTH_PASSWORD_RESET_EMAIL_SENT";
 
   const modal = (
     <div
@@ -512,6 +531,29 @@ const CloudAuthModal = ({
                   {isBusy || authStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {isSignupView ? tr("Account maken", "Create account") : tr("Inloggen", "Sign in")}
                 </button>
+
+                {!isSignupView ? (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runWithoutClose(async () => {
+                          const normalizedEmail = requireEmailValue();
+                          await onRequestPasswordResetEmail(normalizedEmail);
+                          setLocalError("AUTH_PASSWORD_RESET_EMAIL_SENT");
+                        });
+                      }}
+                      disabled={isBusy || authStatus === "loading"}
+                      className={`text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                        isLightTheme
+                          ? "text-cyan-700 hover:text-cyan-900"
+                          : "text-cyan-200 hover:text-cyan-100"
+                      }`}
+                    >
+                      {tr("Wachtwoord vergeten?", "Forgot password?")}
+                    </button>
+                  </div>
+                ) : null}
               </form>
 
               {isSignupView && signupBlocked ? (
@@ -559,23 +601,31 @@ const CloudAuthModal = ({
                     {tr("Stuur verificatie opnieuw", "Resend verification email")}
                   </button>
                 ) : null}
-                {canRequestUnlock ? (
+                {canOpenSignIn ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => {
+                      onOpenView("signin", email.trim());
+                    }}
+                    className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isLightTheme
+                        ? "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:text-slate-900"
+                        : "border border-slate-600 text-slate-200 hover:border-slate-500 hover:text-slate-50"
+                    }`}
+                  >
+                    {tr("Ga naar inloggen", "Open sign in")}
+                  </button>
+                ) : null}
+                {canRequestPasswordReset ? (
                   <button
                     type="button"
                     disabled={isBusy || !email.trim()}
                     onClick={() => {
                       void runWithoutClose(async () => {
-                        const normalizedEmail = email.trim();
-                        if (!normalizedEmail) {
-                          throw new Error(
-                            tr(
-                              "Vul eerst je e-mailadres in.",
-                              "Enter your email first."
-                            )
-                          );
-                        }
-                        await onRequestUnlockEmail(normalizedEmail);
-                        setLocalError("AUTH_UNLOCK_EMAIL_SENT");
+                        const normalizedEmail = requireEmailValue();
+                        await onRequestPasswordResetEmail(normalizedEmail);
+                        setLocalError("AUTH_PASSWORD_RESET_EMAIL_SENT");
                       });
                     }}
                     className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -584,7 +634,7 @@ const CloudAuthModal = ({
                         : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
                     }`}
                   >
-                    {tr("Stuur unlock e-mail", "Send unlock email")}
+                    {tr("Reset wachtwoord", "Reset password")}
                   </button>
                 ) : null}
               </div>

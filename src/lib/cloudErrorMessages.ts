@@ -115,14 +115,26 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
   }
   if (code === "AUTH_ACCOUNT_LOCKED") {
     return tr(
-      "Te veel mislukte pogingen. Vraag een unlock e-mail aan om weer toegang te krijgen.",
-      "Too many failed attempts. Request an unlock email to regain access."
+      "Te veel mislukte pogingen. Vraag een wachtwoord-reset e-mail aan om weer toegang te krijgen.",
+      "Too many failed attempts. Request a password reset email to regain access."
+    );
+  }
+  if (code === "AUTH_PASSWORD_RESET_EMAIL_SENT") {
+    return tr(
+      "Als dit e-mailadres bij een account hoort, hebben we een reset e-mail gestuurd. Controleer ook spam, ongewenst of promoties.",
+      "If this email belongs to an account, we sent a reset email. Also check spam, junk, or promotions."
+    );
+  }
+  if (code === "AUTH_RESET_LINK_INVALID") {
+    return tr(
+      "Deze resetlink is ongeldig of verlopen. Vraag een nieuwe reset e-mail aan.",
+      "This reset link is invalid or expired. Request a new reset email."
     );
   }
   if (code === "AUTH_UNLOCK_EMAIL_SENT") {
     return tr(
-      "Unlock e-mail verzonden. Open je inbox en volg de stappen om door te gaan.",
-      "Unlock email sent. Open your inbox and follow the steps to continue."
+      "Als dit e-mailadres bij een account hoort, hebben we een reset e-mail gestuurd. Open je inbox en volg de stappen.",
+      "If this email belongs to an account, we sent a reset email. Open your inbox and follow the steps."
     );
   }
   if (code === "AUTH_VERIFICATION_EMAIL_SENT") {

@@ -5,8 +5,10 @@ import {
   CloudSession,
   fetchCurrentSession,
   parseOAuthHashSession,
+  requestPasswordResetEmail as requestPasswordResetEmailClient,
   requestVerificationEmail as requestVerificationEmailClient,
   requestUnlockEmail as requestUnlockEmailClient,
+  resetPasswordWithRecovery,
   signInWithPassword,
   signOutSession,
   signUpWithPassword
@@ -43,7 +45,9 @@ interface UseCloudAuthResult {
   signUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   signInGoogle: (intent?: GoogleAuthIntent, payload?: CloudConsentPayload) => Promise<void>;
   requestVerificationEmail: (email: string) => Promise<void>;
+  requestPasswordResetEmail: (email: string) => Promise<void>;
   requestUnlockEmail: (email: string) => Promise<void>;
+  resetPassword: (accessToken: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
@@ -112,7 +116,11 @@ const normalizeConsentStatus = (
 
 const shouldHandleOAuthHashFromPath = (pathname: string): boolean => {
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
-  return normalizedPath !== "/auth/confirm" && normalizedPath !== "/auth/verified";
+  return (
+    normalizedPath !== "/auth/confirm" &&
+    normalizedPath !== "/auth/verified" &&
+    normalizedPath !== "/auth/reset"
+  );
 };
 
 export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
@@ -325,9 +333,19 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     await requestUnlockEmailClient(email.trim());
   };
 
+  const requestPasswordResetEmail = async (email: string) => {
+    setError(null);
+    await requestPasswordResetEmailClient(email.trim());
+  };
+
   const requestVerificationEmail = async (email: string) => {
     setError(null);
     await requestVerificationEmailClient(email.trim());
+  };
+
+  const resetPassword = async (accessToken: string, password: string) => {
+    setError(null);
+    return resetPasswordWithRecovery(accessToken, password);
   };
 
   const signOut = async () => {
@@ -390,7 +408,9 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     signUpEmail: signUpEmailHandler,
     signInGoogle,
     requestVerificationEmail,
+    requestPasswordResetEmail,
     requestUnlockEmail,
+    resetPassword,
     signOut,
     deleteAccount
   };

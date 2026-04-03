@@ -2,7 +2,9 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import {
   logoutHandler,
   oauthHashHandler,
+  passwordResetEmailHandler,
   resendVerificationHandler,
+  resetPasswordHandler,
   sessionHandler,
   signInHandler,
   signUpHandler,
@@ -117,6 +119,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (action === "auth-unlock-email") {
     await unlockEmailHandler(req, res);
+    return;
+  }
+  if (action === "auth-password-reset-email") {
+    await passwordResetEmailHandler(req, res);
+    return;
+  }
+  if (action === "auth-reset-password") {
+    await resetPasswordHandler(req, res);
     return;
   }
   if (action === "auth-verification-event") {

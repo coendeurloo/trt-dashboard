@@ -17,8 +17,30 @@ interface SendCloudVerificationEmailOptions {
   req?: IncomingMessage;
 }
 
-const SUBJECT = "Verify your LabTracker account";
-const PREHEADER = "Confirm your email to enable secure cloud sync.";
+interface SendCloudPasswordResetEmailOptions {
+  to: string;
+  recoveryUrl: string;
+  req?: IncomingMessage;
+}
+
+interface AuthEmailTemplateOptions {
+  subject: string;
+  preheader: string;
+  badge: string;
+  title: string;
+  intro: string;
+  body: string;
+  ctaLabel: string;
+  wrappedUrl: string;
+  supportEmail: string | null;
+  logoUrl: string;
+  footerLine: string;
+}
+
+const VERIFICATION_SUBJECT = "Verify your LabTracker account";
+const VERIFICATION_PREHEADER = "Confirm your email to enable secure cloud sync.";
+const PASSWORD_RESET_SUBJECT = "Reset your LabTracker password";
+const PASSWORD_RESET_PREHEADER = "Use this secure link to choose a new password.";
 
 const createConfigError = (message: string): ConfigError => {
   const error = new Error(message) as ConfigError;
@@ -112,6 +134,9 @@ export const resolveAppPublicOrigin = (req?: IncomingMessage): string => {
 export const buildVerifiedRedirectUrl = (publicOrigin: string): string =>
   joinPublicUrl(publicOrigin, "/auth/verified");
 
+export const buildPasswordResetRedirectUrl = (publicOrigin: string): string =>
+  joinPublicUrl(publicOrigin, "/auth/reset");
+
 export const buildWrappedVerificationUrl = (
   publicOrigin: string,
   confirmationUrl: string
@@ -121,14 +146,31 @@ export const buildWrappedVerificationUrl = (
   return wrapperUrl.toString();
 };
 
+export const buildWrappedPasswordResetUrl = (
+  publicOrigin: string,
+  recoveryUrl: string
+): string => {
+  const wrapperUrl = new URL(joinPublicUrl(publicOrigin, "/auth/reset"));
+  wrapperUrl.searchParams.set("recovery_url", recoveryUrl);
+  return wrapperUrl.toString();
+};
+
 const buildEmailLogoUrl = (publicOrigin: string): string =>
   joinPublicUrl(publicOrigin, "/labtracker-email-logo.svg");
 
-const buildVerificationEmailHtml = (
-  wrappedUrl: string,
-  supportEmail: string | null,
-  logoUrl: string
-): string => {
+const buildAuthEmailHtml = ({
+  subject,
+  preheader,
+  badge,
+  title,
+  intro,
+  body,
+  ctaLabel,
+  wrappedUrl,
+  supportEmail,
+  logoUrl,
+  footerLine
+}: AuthEmailTemplateOptions): string => {
   const escapedUrl = escapeHtml(wrappedUrl);
   const escapedLogoUrl = escapeHtml(logoUrl);
   const supportLine = supportEmail
@@ -142,10 +184,10 @@ const buildVerificationEmailHtml = (
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(SUBJECT)}</title>
+    <title>${escapeHtml(subject)}</title>
   </head>
   <body style="margin:0;padding:0;background:#020617;color:#e2e8f0;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(PREHEADER)}</div>
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(preheader)}</div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#020617;background-image:radial-gradient(circle at top right, rgba(34,211,238,0.18), transparent 42%), linear-gradient(180deg, #020617 0%, #071225 100%);">
       <tr>
         <td align="center" style="padding:32px 16px;">
@@ -158,19 +200,19 @@ const buildVerificationEmailHtml = (
             <tr>
               <td style="border:1px solid rgba(103,232,249,0.22);border-radius:24px;background:rgba(2,6,23,0.92);padding:32px 28px;box-shadow:0 24px 80px rgba(8,47,73,0.45);">
                 <div style="display:inline-block;border:1px solid rgba(103,232,249,0.22);border-radius:999px;padding:7px 12px;color:#67e8f9;font-size:11px;line-height:14px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;background:rgba(6,182,212,0.08);">
-                  Cloud security
+                  ${escapeHtml(badge)}
                 </div>
                 <h1 style="margin:20px 0 12px;font-size:30px;line-height:36px;font-weight:650;color:#f8fafc;">
-                  Confirm your email
+                  ${escapeHtml(title)}
                 </h1>
                 <p style="margin:0 0 12px;color:#cbd5e1;font-size:16px;line-height:26px;">
-                  Finish setting up your LabTracker Cloud account.
+                  ${escapeHtml(intro)}
                 </p>
                 <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:24px;">
-                  This verification link helps protect your account and secure your sync access.
+                  ${escapeHtml(body)}
                 </p>
                 <a href="${escapedUrl}" style="display:inline-block;border-radius:14px;background:#0891b2;color:#ecfeff;text-decoration:none;font-size:15px;line-height:15px;font-weight:700;padding:15px 22px;">
-                  Verify email
+                  ${escapeHtml(ctaLabel)}
                 </a>
                 <p style="margin:24px 0 10px;color:#94a3b8;font-size:13px;line-height:20px;">
                   If the button does not work, use the fallback link below:
@@ -182,7 +224,7 @@ const buildVerificationEmailHtml = (
                   If you do not see this message in your inbox, also check spam, junk, or promotions.
                 </p>
                 <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;line-height:20px;">
-                  If you did not create this account, you can ignore this email.
+                  ${escapeHtml(footerLine)}
                 </p>
                 ${supportLine}
               </td>
@@ -195,51 +237,101 @@ const buildVerificationEmailHtml = (
 </html>`;
 };
 
-const buildVerificationEmailText = (wrappedUrl: string, supportEmail: string | null): string =>
+const buildAuthEmailText = ({
+  subject,
+  title,
+  intro,
+  body,
+  ctaLabel,
+  wrappedUrl,
+  supportEmail,
+  footerLine
+}: AuthEmailTemplateOptions): string =>
   [
     "LabTracker",
     "",
-    "Confirm your email",
+    subject,
     "",
-    "Finish setting up your LabTracker Cloud account.",
-    "This verification link helps protect your account and secure your sync access.",
+    title,
     "",
-    `Verify email: ${wrappedUrl}`,
+    intro,
+    body,
+    "",
+    `${ctaLabel}: ${wrappedUrl}`,
     "",
     "If you do not see this message in your inbox, also check spam, junk, or promotions.",
     "",
-    "If you did not create this account, you can ignore this email.",
+    footerLine,
     supportEmail ? `Support: ${supportEmail}` : null
   ]
     .filter((line): line is string => typeof line === "string")
     .join("\n");
+
+const sendAuthEmail = async (
+  to: string,
+  template: AuthEmailTemplateOptions
+): Promise<void> => {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    throw createConfigError("RESEND_API_KEY is not configured.");
+  }
+
+  const resend = new Resend(apiKey);
+  const replyTo = resolveReplyTo();
+  const result = await resend.emails.send({
+    from: resolveAuthSender(),
+    to,
+    subject: template.subject,
+    html: buildAuthEmailHtml(template),
+    text: buildAuthEmailText(template),
+    ...(replyTo ? { replyTo } : {})
+  });
+
+  if (result.error) {
+    throw createEmailSendError(result.error.message || "Resend rejected the auth email.");
+  }
+};
 
 export const sendCloudVerificationEmail = async ({
   to,
   confirmationUrl,
   req
 }: SendCloudVerificationEmailOptions): Promise<void> => {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
-    throw createConfigError("RESEND_API_KEY is not configured.");
-  }
-
   const publicOrigin = resolveAppPublicOrigin(req);
   const wrappedUrl = buildWrappedVerificationUrl(publicOrigin, confirmationUrl);
-  const logoUrl = buildEmailLogoUrl(publicOrigin);
-  const supportEmail = resolveSupportEmail();
-  const resend = new Resend(apiKey);
-  const replyTo = resolveReplyTo();
-  const result = await resend.emails.send({
-    from: resolveAuthSender(),
-    to,
-    subject: SUBJECT,
-    html: buildVerificationEmailHtml(wrappedUrl, supportEmail, logoUrl),
-    text: buildVerificationEmailText(wrappedUrl, supportEmail),
-    ...(replyTo ? { replyTo } : {})
+  await sendAuthEmail(to, {
+    subject: VERIFICATION_SUBJECT,
+    preheader: VERIFICATION_PREHEADER,
+    badge: "Cloud security",
+    title: "Confirm your email",
+    intro: "Finish setting up your LabTracker Cloud account.",
+    body: "This verification link helps protect your account and secure your sync access.",
+    ctaLabel: "Verify email",
+    wrappedUrl,
+    supportEmail: resolveSupportEmail(),
+    logoUrl: buildEmailLogoUrl(publicOrigin),
+    footerLine: "If you did not create this account, you can ignore this email."
   });
+};
 
-  if (result.error) {
-    throw createEmailSendError(result.error.message || "Resend rejected the auth verification email.");
-  }
+export const sendCloudPasswordResetEmail = async ({
+  to,
+  recoveryUrl,
+  req
+}: SendCloudPasswordResetEmailOptions): Promise<void> => {
+  const publicOrigin = resolveAppPublicOrigin(req);
+  const wrappedUrl = buildWrappedPasswordResetUrl(publicOrigin, recoveryUrl);
+  await sendAuthEmail(to, {
+    subject: PASSWORD_RESET_SUBJECT,
+    preheader: PASSWORD_RESET_PREHEADER,
+    badge: "Cloud security",
+    title: "Reset your password",
+    intro: "Use this secure link to choose a new password for your LabTracker Cloud account.",
+    body: "This also helps you regain access if your account was temporarily locked after too many failed sign-in attempts.",
+    ctaLabel: "Reset password",
+    wrappedUrl,
+    supportEmail: resolveSupportEmail(),
+    logoUrl: buildEmailLogoUrl(publicOrigin),
+    footerLine: "If you did not request this reset, you can ignore this email."
+  });
 };

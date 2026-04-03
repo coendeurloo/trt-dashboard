@@ -86,6 +86,7 @@ import {
 } from "./parserImprovementSubmission";
 import DashboardView from "./views/DashboardView";
 import CloudEmailConfirmView from "./views/CloudEmailConfirmView";
+import CloudPasswordResetView from "./views/CloudPasswordResetView";
 import CloudEmailVerifiedView from "./views/CloudEmailVerifiedView";
 import {
   AIConsentDecision,
@@ -147,7 +148,7 @@ type UploadSummary =
     };
 
 type OnboardingEntryPoint = "first_report" | "replay";
-type TopLevelRouteMode = "app" | "admin" | "auth_confirm" | "auth_verified";
+type TopLevelRouteMode = "app" | "admin" | "auth_confirm" | "auth_verified" | "auth_reset";
 
 interface PendingUndoAction {
   id: number;
@@ -241,10 +242,13 @@ const resolveTopLevelRouteMode = (): TopLevelRouteMode => {
   if (normalizedPathname === "/auth/verified") {
     return "auth_verified";
   }
+  if (normalizedPathname === "/auth/reset") {
+    return "auth_reset";
+  }
   return "app";
 };
 
-const isAllowedConfirmationUrl = (value: string): boolean => {
+const isAllowedSupabaseActionUrl = (value: string): boolean => {
   try {
     const parsed = new URL(value);
     const isLocalHttp = parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
@@ -267,7 +271,19 @@ const readConfirmationUrlFromLocation = (): string | null => {
   }
   const params = new URLSearchParams(window.location.search);
   const raw = params.get("confirmation_url");
-  if (!raw || !isAllowedConfirmationUrl(raw)) {
+  if (!raw || !isAllowedSupabaseActionUrl(raw)) {
+    return null;
+  }
+  return raw;
+};
+
+const readRecoveryUrlFromLocation = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("recovery_url");
+  if (!raw || !isAllowedSupabaseActionUrl(raw)) {
     return null;
   }
   return raw;
@@ -477,6 +493,15 @@ const App = () => {
       setCloudAuthModalPrefillEmail(normalizedEmail);
       setVerifiedSignInEmail(normalizedEmail);
       await cloudAuth.requestVerificationEmail(normalizedEmail);
+    },
+    [cloudAuth]
+  );
+  const handleCloudPasswordResetEmailRequest = useCallback(
+    async (email: string) => {
+      const normalizedEmail = rememberCloudAuthEmail(email) ?? email.trim().toLowerCase();
+      setCloudAuthModalPrefillEmail(normalizedEmail);
+      setVerifiedSignInEmail(normalizedEmail);
+      await cloudAuth.requestPasswordResetEmail(normalizedEmail);
     },
     [cloudAuth]
   );
@@ -810,6 +835,7 @@ const App = () => {
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
   const resolvedTheme = appData.settings.theme === "system" ? systemTheme : appData.settings.theme;
   const confirmationUrl = topLevelRouteMode === "auth_confirm" ? readConfirmationUrlFromLocation() : null;
+  const recoveryUrl = topLevelRouteMode === "auth_reset" ? readRecoveryUrlFromLocation() : null;
   const resolvedSettings = useMemo(
     () => ({
       ...appData.settings,
@@ -2598,7 +2624,8 @@ const App = () => {
           onSignUpEmail={handleCloudSignUpEmail}
           onCompleteConsent={cloudAuth.completeConsent}
           onRequestVerificationEmail={handleCloudVerificationEmailRequest}
-          onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
+          onRequestPasswordResetEmail={handleCloudPasswordResetEmailRequest}
+          onOpenView={openCloudAuthModal}
         />
       </>
     );
@@ -2620,6 +2647,17 @@ const App = () => {
         language={appData.settings.language}
         theme={resolvedTheme}
         prefillEmail={verifiedSignInEmail}
+      />
+    );
+  }
+
+  if (topLevelRouteMode === "auth_reset") {
+    return (
+      <CloudPasswordResetView
+        language={appData.settings.language}
+        theme={resolvedTheme}
+        recoveryUrl={recoveryUrl}
+        onResetPassword={cloudAuth.resetPassword}
       />
     );
   }
@@ -3185,6 +3223,7 @@ const App = () => {
                     }}
                     cloudUserEmail={cloudAuth.session?.user.email ?? null}
                     onSignOut={cloudAuth.signOut}
+                    onDeleteAccount={cloudAuth.deleteAccount}
                   />
                 ) : null}
               </Suspense>
@@ -3230,7 +3269,8 @@ const App = () => {
         onSignUpEmail={handleCloudSignUpEmail}
         onCompleteConsent={cloudAuth.completeConsent}
         onRequestVerificationEmail={handleCloudVerificationEmailRequest}
-        onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
+        onRequestPasswordResetEmail={handleCloudPasswordResetEmailRequest}
+        onOpenView={openCloudAuthModal}
       />
 
       <AnimatePresence>

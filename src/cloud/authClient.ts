@@ -242,6 +242,17 @@ export const requestUnlockEmail = async (email: string): Promise<void> => {
   await parseJson<{ ok: true }>(response);
 };
 
+export const requestPasswordResetEmail = async (email: string): Promise<void> => {
+  const response = await fetch("/api/cloud/auth-password-reset-email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email })
+  });
+  await parseJson<{ ok: true }>(response);
+};
+
 export const requestVerificationEmail = async (email: string): Promise<void> => {
   const response = await fetch("/api/cloud/auth-resend-verification", {
     method: "POST",
@@ -251,6 +262,21 @@ export const requestVerificationEmail = async (email: string): Promise<void> => 
     body: JSON.stringify({ email })
   });
   await parseJson<{ ok: true }>(response);
+};
+
+export const resetPasswordWithRecovery = async (
+  accessToken: string,
+  password: string
+): Promise<string | null> => {
+  const response = await fetch("/api/cloud/auth-reset-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ accessToken, password })
+  });
+  const payload = await parseJson<{ ok?: boolean; email?: string | null }>(response);
+  return normalizeEmail(payload.email);
 };
 
 export const readAccessTokenFromHash = (hash: string): string | null => {

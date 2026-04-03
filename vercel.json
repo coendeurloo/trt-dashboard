@@ -25,6 +25,10 @@
       "destination": "/"
     },
     {
+      "source": "/auth/reset",
+      "destination": "/"
+    },
+    {
       "source": "/admin",
       "destination": "/"
     },

@@ -41,15 +41,17 @@ const CloudEmailConfirmView = ({
               : "border-cyan-500/25 bg-slate-950/88"
           }`}
         >
-          <div
-            className={`mx-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
-              isLightTheme
-                ? "border border-cyan-700/20 bg-cyan-500/10 text-cyan-800"
-                : "border border-cyan-500/35 bg-cyan-500/10 text-cyan-200"
-            }`}
-          >
-            <ShieldCheck className="h-3.5 w-3.5" />
-            {tr("Cloud security", "Cloud security")}
+          <div className="flex justify-center">
+            <div
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
+                isLightTheme
+                  ? "border border-cyan-700/20 bg-cyan-500/10 text-cyan-800"
+                  : "border border-cyan-500/35 bg-cyan-500/10 text-cyan-200"
+              }`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {tr("Cloud security", "Cloud security")}
+            </div>
           </div>
 
           <p className={`mt-5 text-center text-xs uppercase tracking-[0.32em] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
@@ -80,16 +82,18 @@ const CloudEmailConfirmView = ({
             </p>
 
             {confirmationUrl ? (
-              <a
-                href={confirmationUrl}
-                className={`mx-auto mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                  isLightTheme
-                    ? "border border-cyan-700 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
-                    : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
-                }`}
-              >
-                {tr("E-mail bevestigen", "Verify email")}
-              </a>
+              <div className="mt-5 flex justify-center">
+                <a
+                  href={confirmationUrl}
+                  className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                    isLightTheme
+                      ? "border border-cyan-700 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                  }`}
+                >
+                  {tr("E-mail bevestigen", "Verify email")}
+                </a>
+              </div>
             ) : (
               <div
                 className={`mx-auto mt-5 max-w-2xl rounded-2xl border px-4 py-3 text-center text-sm ${

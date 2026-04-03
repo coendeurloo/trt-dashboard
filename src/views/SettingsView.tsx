@@ -43,6 +43,7 @@ interface SettingsViewProps {
   onReportIssue: () => void;
   cloudUserEmail?: string | null;
   onSignOut?: () => void;
+  onDeleteAccount?: () => Promise<void>;
 }
 
 interface AppearanceToggleProps {
@@ -116,7 +117,8 @@ const SettingsView = ({
   onGenerateShareLink,
   onReportIssue,
   cloudUserEmail,
-  onSignOut
+  onSignOut,
+  onDeleteAccount
 }: SettingsViewProps) => {
   const isNl = language === "nl";
   const isLightTheme = resolvedTheme === "light";
@@ -129,6 +131,8 @@ const SettingsView = ({
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
+  const [cloudAccountBusy, setCloudAccountBusy] = useState<"signout" | "delete" | null>(null);
+  const [cloudAccountNotice, setCloudAccountNotice] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const mergeFromSpecimen = inferSpecimenFromCanonicalMarker(mergeFromMarker);
   const mergeTargetOptions = editableMarkers.filter(
@@ -198,6 +202,23 @@ const SettingsView = ({
   const closeDeleteModal = () => {
     setShowDeleteConfirm(false);
     setDeleteInput("");
+  };
+
+  const runCloudAccountAction = async (
+    mode: "signout" | "delete",
+    fn: () => Promise<void> | void
+  ) => {
+    setCloudAccountBusy(mode);
+    setCloudAccountNotice(null);
+    try {
+      await fn();
+    } catch (error) {
+      setCloudAccountNotice(
+        error instanceof Error ? error.message : tr("Actie mislukt.", "Action failed.")
+      );
+    } finally {
+      setCloudAccountBusy(null);
+    }
   };
 
   const tabs: { id: SettingsTab; label: string }[] = [
@@ -414,10 +435,48 @@ const SettingsView = ({
                     </div>
                     <button
                       type="button"
-                      onClick={onSignOut}
-                      className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+                      onClick={() => {
+                        void runCloudAccountAction("signout", onSignOut);
+                      }}
+                      disabled={cloudAccountBusy !== null}
+                      className="shrink-0 rounded-lg border border-slate-600/60 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {tr("Uitloggen", "Sign out")}
+                      {cloudAccountBusy === "signout" ? tr("Bezig...", "Working...") : tr("Uitloggen", "Sign out")}
+                    </button>
+                  </div>
+                ) : null}
+
+                {cloudUserEmail && onDeleteAccount ? (
+                  <div className="flex items-start justify-between gap-4 py-4">
+                    <div>
+                      <p className="text-sm font-medium text-red-400">{tr("Verwijder cloudaccount", "Delete cloud account")}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {tr(
+                          "Verwijdert je account en clouddata. Je lokale data op dit apparaat blijft staan.",
+                          "Deletes your account and cloud data. Your local data on this device stays intact."
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={cloudAccountBusy !== null}
+                      onClick={() => {
+                        void runCloudAccountAction("delete", async () => {
+                          const confirmed = window.confirm(
+                            tr(
+                              "Weet je zeker dat je je cloudaccount en clouddata wilt verwijderen?",
+                              "Are you sure you want to delete your cloud account and cloud data?"
+                            )
+                          );
+                          if (!confirmed) {
+                            return;
+                          }
+                          await onDeleteAccount();
+                        });
+                      }}
+                      className="shrink-0 rounded-lg border border-red-800/60 bg-red-900/20 px-3 py-1.5 text-sm font-medium text-red-300 transition hover:bg-red-900/40 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cloudAccountBusy === "delete" ? tr("Bezig...", "Working...") : tr("Verwijder account", "Delete account")}
                     </button>
                   </div>
                 ) : null}
@@ -682,6 +741,9 @@ const SettingsView = ({
                   </div>
                 </div>
               </div>
+              {cloudAccountNotice ? (
+                <p className="mt-3 text-xs text-rose-300">{cloudAccountNotice}</p>
+              ) : null}
             </div>
           </div>
         )}

@@ -23,7 +23,7 @@ describe("cloud error message mapping", () => {
 
   it("maps account lock responses to unlock guidance", () => {
     const message = mapCloudAuthErrorToMessage("AUTH_ACCOUNT_LOCKED", tr);
-    expect(message).toBe("Too many failed attempts. Request an unlock email to regain access.");
+    expect(message).toBe("Too many failed attempts. Request a password reset email to regain access.");
   });
 
   it("maps sync conflicts to a conflict-specific message", () => {
@@ -46,5 +46,17 @@ describe("cloud error message mapping", () => {
   it("maps verification resend success to a positive message", () => {
     const message = mapCloudAuthErrorToMessage("AUTH_VERIFICATION_EMAIL_SENT", tr);
     expect(message).toBe("Verification email sent. Check your inbox and click the confirmation link.");
+  });
+
+  it("maps password reset success to a generic inbox message", () => {
+    const message = mapCloudAuthErrorToMessage("AUTH_PASSWORD_RESET_EMAIL_SENT", tr);
+    expect(message).toBe(
+      "If this email belongs to an account, we sent a reset email. Also check spam, junk, or promotions."
+    );
+  });
+
+  it("maps invalid reset links to a clear retry message", () => {
+    const message = mapCloudAuthErrorToMessage("AUTH_RESET_LINK_INVALID", tr);
+    expect(message).toBe("This reset link is invalid or expired. Request a new reset email.");
   });
 });
