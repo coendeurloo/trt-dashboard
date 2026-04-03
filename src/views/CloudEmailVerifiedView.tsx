@@ -31,7 +31,7 @@ const CloudEmailVerifiedView = ({
           }`}
         >
           <div
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
+            className={`mx-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
               isLightTheme
                 ? "border border-emerald-600/25 bg-emerald-500/10 text-emerald-800"
                 : "border border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
@@ -41,13 +41,13 @@ const CloudEmailVerifiedView = ({
             {tr("Verification complete", "Verification complete")}
           </div>
 
-          <p className={`mt-5 text-xs uppercase tracking-[0.32em] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+          <p className={`mt-5 text-center text-xs uppercase tracking-[0.32em] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
             LabTracker
           </p>
-          <h1 className={`mt-3 text-3xl font-semibold sm:text-4xl ${isLightTheme ? "text-slate-950" : "text-white"}`}>
+          <h1 className={`mt-3 text-center text-3xl font-semibold sm:text-4xl ${isLightTheme ? "text-slate-950" : "text-white"}`}>
             {tr("E-mail bevestigd", "Email verified")}
           </h1>
-          <p className={`mt-4 max-w-2xl text-sm leading-7 sm:text-base ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
+          <p className={`mx-auto mt-4 max-w-2xl text-center text-sm leading-7 sm:text-base ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
             {tr(
               "Je e-mailadres is bevestigd. Log nu in bij LabTracker Cloud om veilige sync op dit apparaat te activeren.",
               "Your email is confirmed. Sign in to LabTracker Cloud now to enable secure sync on this device."
@@ -61,7 +61,7 @@ const CloudEmailVerifiedView = ({
                 : "border-slate-800 bg-slate-900/75"
             }`}
           >
-            <p className={`text-sm leading-7 ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
+            <p className={`mx-auto max-w-2xl text-center text-sm leading-7 ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
               {tr(
                 "Om deze flow bewust en voorspelbaar te houden, loggen we je niet automatisch in na verificatie.",
                 "To keep this flow deliberate and predictable, we do not sign you in automatically after verification."
@@ -70,7 +70,7 @@ const CloudEmailVerifiedView = ({
 
             <a
               href="/?cloudAuth=signin"
-              className={`mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+              className={`mx-auto mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                 isLightTheme
                   ? "border border-cyan-700 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
                   : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
@@ -80,7 +80,7 @@ const CloudEmailVerifiedView = ({
             </a>
           </div>
 
-          <p className={`mt-6 text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+          <p className={`mx-auto mt-6 max-w-2xl text-center text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
             {tr(
               "Je lokale data blijft gewoon beschikbaar. Cloud sync wordt pas actief na je eerste echte login.",
               "Your local data stays available. Cloud sync only turns on after your first real sign-in."

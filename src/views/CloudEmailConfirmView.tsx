@@ -33,7 +33,7 @@ const CloudEmailConfirmView = ({
           }`}
         >
           <div
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
+            className={`mx-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${
               isLightTheme
                 ? "border border-cyan-700/20 bg-cyan-500/10 text-cyan-800"
                 : "border border-cyan-500/35 bg-cyan-500/10 text-cyan-200"
@@ -43,13 +43,13 @@ const CloudEmailConfirmView = ({
             {tr("Cloud security", "Cloud security")}
           </div>
 
-          <p className={`mt-5 text-xs uppercase tracking-[0.32em] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+          <p className={`mt-5 text-center text-xs uppercase tracking-[0.32em] ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
             LabTracker
           </p>
-          <h1 className={`mt-3 text-3xl font-semibold sm:text-4xl ${isLightTheme ? "text-slate-950" : "text-white"}`}>
+          <h1 className={`mt-3 text-center text-3xl font-semibold sm:text-4xl ${isLightTheme ? "text-slate-950" : "text-white"}`}>
             {tr("Bevestig je e-mailadres", "Confirm your email")}
           </h1>
-          <p className={`mt-4 max-w-2xl text-sm leading-7 sm:text-base ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
+          <p className={`mx-auto mt-4 max-w-2xl text-center text-sm leading-7 sm:text-base ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
             {tr(
               "Deze extra stap voorkomt dat inbox-scanners of mailapps je verificatie automatisch activeren. Er gebeurt pas iets zodra jij hieronder op de knop klikt.",
               "This extra step prevents inbox scanners or mail apps from triggering verification automatically. Nothing happens until you press the button below."
@@ -63,7 +63,7 @@ const CloudEmailConfirmView = ({
                 : "border-slate-800 bg-slate-900/75"
             }`}
           >
-            <p className={`text-sm leading-7 ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
+            <p className={`mx-auto max-w-2xl text-center text-sm leading-7 ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
               {tr(
                 "Na bevestiging sturen we je naar de afrondpagina. Je wordt niet automatisch ingelogd.",
                 "After verification we will send you to the final confirmation screen. You will not be signed in automatically."
@@ -73,7 +73,7 @@ const CloudEmailConfirmView = ({
             {confirmationUrl ? (
               <a
                 href={confirmationUrl}
-                className={`mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                className={`mx-auto mt-5 inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                   isLightTheme
                     ? "border border-cyan-700 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
                     : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
@@ -83,7 +83,7 @@ const CloudEmailConfirmView = ({
               </a>
             ) : (
               <div
-                className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
+                className={`mx-auto mt-5 max-w-2xl rounded-2xl border px-4 py-3 text-center text-sm ${
                   isLightTheme
                     ? "border-rose-300 bg-rose-50 text-rose-800"
                     : "border-rose-500/35 bg-rose-500/10 text-rose-100"
@@ -97,7 +97,7 @@ const CloudEmailConfirmView = ({
             )}
           </div>
 
-          <p className={`mt-6 text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
+          <p className={`mx-auto mt-6 max-w-2xl text-center text-xs leading-6 ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
             {tr(
               "Lokale modus blijft altijd beschikbaar, ook als je later terugkomt om cloud sync te activeren.",
               "Local mode always stays available, even if you come back later to enable cloud sync."

@@ -3139,21 +3139,22 @@ const App = () => {
             onClick={closeSignupVerificationModal}
           >
             <motion.div
-              className="app-modal-shell w-full max-w-lg bg-slate-900 p-5 shadow-soft"
+              className="app-modal-shell w-full max-w-xl overflow-hidden border border-slate-700/80 bg-slate-950/95 shadow-[0_34px_110px_-52px_rgba(8,47,73,0.85)]"
               initial={{ opacity: 0, scale: 0.97, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 6 }}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl border border-emerald-500/45 bg-emerald-500/12 p-2">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+              <div className="border-b border-slate-800 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_42%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] px-6 py-6 sm:px-7">
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {tr("Account created", "Account created")}
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg font-semibold text-slate-100">
+                <div className="mx-auto mt-5 max-w-2xl text-center">
+                  <h3 className="text-[1.9rem] font-semibold leading-tight text-slate-50 sm:text-[2.1rem]">
                     {tr("Bijna klaar", "You're almost done")}
                   </h3>
-                  <p className="mt-1 text-sm text-slate-300">
+                  <p className="mt-3 text-base leading-7 text-slate-300">
                     {tr(
                       "Je account is aangemaakt. De laatste stap is je e-mailadres bevestigen via de mail die we net hebben gestuurd.",
                       "Your account was created. The final step is confirming your email with the message we just sent."
@@ -3162,48 +3163,76 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/8 p-4">
-                <p className="text-sm text-slate-200">
-                  {tr("Verstuurd naar", "Sent to")}:{" "}
-                  <span className="font-medium text-slate-100">{signupVerificationEmail}</span>
-                </p>
-                <p className="mt-2 text-sm text-slate-300">
-                  {tr(
-                    "Check je inbox. Zie je niets binnen een minuut? Kijk dan ook in spam, ongewenst of promoties en markeer LabTracker als veilig.",
-                    "Check your inbox. If nothing shows up within a minute, also check spam, junk, or promotions and mark LabTracker as safe."
-                  )}
-                </p>
-                <p className="mt-2 text-xs text-slate-400">
-                  {tr(
-                    "Je kunt LabTracker ondertussen gewoon in lokale modus blijven gebruiken.",
-                    "You can keep using LabTracker in local mode while you wait."
-                  )}
-                </p>
-                {signupVerificationResendNotice ? (
-                  <p className="mt-3 text-xs text-cyan-200">{signupVerificationResendNotice}</p>
-                ) : null}
-              </div>
+              <div className="space-y-5 px-6 py-6 sm:px-7">
+                <div className="rounded-[24px] border border-slate-800 bg-slate-900/70 p-5">
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-center">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                      {tr("Verstuurd naar", "Sent to")}
+                    </span>
+                    <span className="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-sm font-medium text-slate-100">
+                      {signupVerificationEmail}
+                    </span>
+                  </div>
 
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
-                  onClick={() => {
-                    void handleResendSignupVerificationEmail();
-                  }}
-                  disabled={signupVerificationResendBusy}
-                >
-                  {signupVerificationResendBusy
-                    ? tr("Bezig met versturen...", "Sending...")
-                    : tr("Stuur e-mail opnieuw", "Resend email")}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
-                  onClick={closeSignupVerificationModal}
-                >
-                  {tr("Oké, ik check mijn mailbox", "Okay, I'll check my inbox")}
-                </button>
+                  <div className="mt-5 space-y-3">
+                    <div className="flex items-start justify-center gap-3 text-center">
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-cyan-500/25 bg-cyan-500/10 text-xs font-semibold text-cyan-200">
+                        1
+                      </div>
+                      <p className="max-w-xl text-sm leading-6 text-slate-300">
+                        {tr(
+                          "Open je inbox en klik op de verificatieknop in de mail van LabTracker.",
+                          "Open your inbox and click the verification button in the email from LabTracker."
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-start justify-center gap-3 text-center">
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-cyan-500/25 bg-cyan-500/10 text-xs font-semibold text-cyan-200">
+                        2
+                      </div>
+                      <p className="max-w-xl text-sm leading-6 text-slate-300">
+                        {tr(
+                          "Zie je niets binnen een minuut? Kijk dan ook in spam, ongewenst of promoties en markeer LabTracker als veilig.",
+                          "If nothing shows up within a minute, also check spam, junk, or promotions and mark LabTracker as safe."
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800/90 bg-slate-950/75 px-4 py-3">
+                  <p className="text-center text-xs leading-6 text-slate-400">
+                    {tr(
+                      "Je kunt LabTracker ondertussen gewoon in lokale modus blijven gebruiken.",
+                      "You can keep using LabTracker in local mode while you wait."
+                    )}
+                  </p>
+                  {signupVerificationResendNotice ? (
+                    <p className="mt-2 text-center text-xs leading-6 text-cyan-200">{signupVerificationResendNotice}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-slate-50 disabled:cursor-not-allowed disabled:opacity-65"
+                    onClick={() => {
+                      void handleResendSignupVerificationEmail();
+                    }}
+                    disabled={signupVerificationResendBusy}
+                  >
+                    {signupVerificationResendBusy
+                      ? tr("Bezig met versturen...", "Sending...")
+                      : tr("Stuur e-mail opnieuw", "Resend email")}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-cyan-500/35 bg-cyan-500/12 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-500/18"
+                    onClick={closeSignupVerificationModal}
+                  >
+                    {tr("Oké, ik check mijn mailbox", "Okay, I'll check my inbox")}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
