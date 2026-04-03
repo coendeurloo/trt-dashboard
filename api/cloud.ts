@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import {
   logoutHandler,
   oauthHashHandler,
+  resendVerificationHandler,
   sessionHandler,
   signInHandler,
   signUpHandler,
@@ -95,6 +96,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (action === "auth-signup") {
     await signUpHandler(req, res);
+    return;
+  }
+  if (action === "auth-resend-verification") {
+    await resendVerificationHandler(req, res);
     return;
   }
   if (action === "auth-me") {

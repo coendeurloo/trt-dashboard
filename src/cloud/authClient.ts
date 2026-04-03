@@ -229,6 +229,17 @@ export const requestUnlockEmail = async (email: string): Promise<void> => {
   await parseJson<{ ok: true }>(response);
 };
 
+export const requestVerificationEmail = async (email: string): Promise<void> => {
+  const response = await fetch("/api/cloud/auth-resend-verification", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email })
+  });
+  await parseJson<{ ok: true }>(response);
+};
+
 export const buildGoogleOAuthUrl = (redirectTo: string): string => {
   const url = new URL(buildAuthUrl("/authorize"));
   url.searchParams.set("provider", "google");

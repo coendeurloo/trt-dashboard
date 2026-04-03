@@ -17,6 +17,7 @@ export type RequestType =
   | "parser_improvement"
   | "auth_login"
   | "auth_register"
+  | "auth_resend_verification"
   | "auth_unlock";
 
 const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
@@ -37,6 +38,10 @@ const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
     maxRequests: 5
   },
   auth_register: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 5
+  },
+  auth_resend_verification: {
     windowMs: 15 * 60 * 1000,
     maxRequests: 5
   },

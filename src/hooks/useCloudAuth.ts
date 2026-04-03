@@ -5,6 +5,7 @@ import {
   CloudSession,
   fetchCurrentSession,
   parseOAuthHashSession,
+  requestVerificationEmail as requestVerificationEmailClient,
   requestUnlockEmail as requestUnlockEmailClient,
   signInWithPassword,
   signOutSession,
@@ -41,6 +42,7 @@ interface UseCloudAuthResult {
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   signInGoogle: (intent?: GoogleAuthIntent, payload?: CloudConsentPayload) => Promise<void>;
+  requestVerificationEmail: (email: string) => Promise<void>;
   requestUnlockEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -108,6 +110,11 @@ const normalizeConsentStatus = (
   return consent.hasConsent ? "granted" : "required";
 };
 
+const shouldHandleOAuthHashFromPath = (pathname: string): boolean => {
+  const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+  return normalizedPath !== "/auth/confirm" && normalizedPath !== "/auth/verified";
+};
+
 export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
   const configured = isSupabaseConfigured();
   const [status, setStatus] = useState<CloudAuthStatus>(configured ? "loading" : "unauthenticated");
@@ -152,12 +159,14 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
         let nextSession: CloudSession | null = null;
 
         if (typeof window !== "undefined") {
-          const hashSession = await parseOAuthHashSession(window.location.hash);
-          if (hashSession) {
-            nextSession = hashSession;
-            usedOAuthReturn = true;
-            const cleanUrl = `${window.location.pathname}${window.location.search}`;
-            window.history.replaceState({}, document.title, cleanUrl);
+          if (shouldHandleOAuthHashFromPath(window.location.pathname)) {
+            const hashSession = await parseOAuthHashSession(window.location.hash);
+            if (hashSession) {
+              nextSession = hashSession;
+              usedOAuthReturn = true;
+              const cleanUrl = `${window.location.pathname}${window.location.search}`;
+              window.history.replaceState({}, document.title, cleanUrl);
+            }
           }
         }
 
@@ -316,6 +325,11 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     await requestUnlockEmailClient(email.trim());
   };
 
+  const requestVerificationEmail = async (email: string) => {
+    setError(null);
+    await requestVerificationEmailClient(email.trim());
+  };
+
   const signOut = async () => {
     setError(null);
     try {
@@ -375,6 +389,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     signInEmail: signInEmailHandler,
     signUpEmail: signUpEmailHandler,
     signInGoogle,
+    requestVerificationEmail,
     requestUnlockEmail,
     signOut,
     deleteAccount

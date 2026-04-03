@@ -16,7 +16,9 @@ describe("cloud error message mapping", () => {
 
   it("maps verification-required sign-up responses to a clear next step", () => {
     const message = mapCloudAuthErrorToMessage("AUTH_EMAIL_VERIFICATION_REQUIRED", tr);
-    expect(message).toBe("Check your inbox and verify your email first. Then sign in.");
+    expect(message).toBe(
+      "If this email can be used for cloud signup, we sent a verification email. Check your inbox, then sign in."
+    );
   });
 
   it("maps account lock responses to unlock guidance", () => {
@@ -39,5 +41,10 @@ describe("cloud error message mapping", () => {
   it("maps raw JSON bad-request auth errors to a friendly message", () => {
     const message = mapCloudAuthErrorToMessage('{"detail":"Bad Request"}', tr);
     expect(message).toBe("The request could not be processed. Check your details and try again.");
+  });
+
+  it("maps verification resend success to a positive message", () => {
+    const message = mapCloudAuthErrorToMessage("AUTH_VERIFICATION_EMAIL_SENT", tr);
+    expect(message).toBe("Verification email sent. Check your inbox and click the confirmation link.");
   });
 });

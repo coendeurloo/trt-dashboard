@@ -23,6 +23,7 @@ interface CloudAuthModalProps {
   onSignInEmail: (email: string, password: string) => Promise<void>;
   onSignUpEmail: (email: string, password: string, payload: CloudConsentPayload) => Promise<void>;
   onCompleteConsent: (payload: CloudConsentPayload) => Promise<void>;
+  onRequestVerificationEmail: (email: string) => Promise<void>;
   onRequestUnlockEmail: (email: string) => Promise<void>;
 }
 
@@ -62,6 +63,7 @@ const CloudAuthModal = ({
   onSignInEmail,
   onSignUpEmail,
   onCompleteConsent,
+  onRequestVerificationEmail,
   onRequestUnlockEmail
 }: CloudAuthModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -282,6 +284,10 @@ const CloudAuthModal = ({
       : null;
   const rawErrorCode = (localError ?? authError ?? "").split(":")[0]?.trim() ?? "";
   const canRequestUnlock = rawErrorCode === "AUTH_ACCOUNT_LOCKED";
+  const canResendVerification =
+    rawErrorCode === "AUTH_EMAIL_NOT_CONFIRMED" || rawErrorCode === "AUTH_EMAIL_VERIFICATION_REQUIRED";
+  const isPositiveFeedback =
+    rawErrorCode === "AUTH_UNLOCK_EMAIL_SENT" || rawErrorCode === "AUTH_VERIFICATION_EMAIL_SENT";
 
   const modal = (
     <div
@@ -519,35 +525,67 @@ const CloudAuthModal = ({
 
           {displayError ? (
             <div className="space-y-2">
-              <p className={`text-sm ${isLightTheme ? "text-rose-700" : "text-rose-200"}`}>{displayError}</p>
-              {canRequestUnlock ? (
-                <button
-                  type="button"
-                  disabled={isBusy || !email.trim()}
-                  onClick={() => {
-                    void runWithoutClose(async () => {
-                      const normalizedEmail = email.trim();
-                      if (!normalizedEmail) {
-                        throw new Error(
-                          tr(
-                            "Vul eerst je e-mailadres in.",
-                            "Enter your email first."
-                          )
-                        );
-                      }
-                      await onRequestUnlockEmail(normalizedEmail);
-                      setLocalError("AUTH_UNLOCK_EMAIL_SENT");
-                    });
-                  }}
-                  className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    isLightTheme
-                      ? "border border-cyan-700/50 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
-                      : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
-                  }`}
-                >
-                  {tr("Stuur unlock e-mail", "Send unlock email")}
-                </button>
-              ) : null}
+              <p className={`text-sm ${isPositiveFeedback ? (isLightTheme ? "text-emerald-700" : "text-emerald-200") : isLightTheme ? "text-rose-700" : "text-rose-200"}`}>
+                {displayError}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {canResendVerification ? (
+                  <button
+                    type="button"
+                    disabled={isBusy || !email.trim()}
+                    onClick={() => {
+                      void runWithoutClose(async () => {
+                        const normalizedEmail = email.trim();
+                        if (!normalizedEmail) {
+                          throw new Error(
+                            tr(
+                              "Vul eerst je e-mailadres in.",
+                              "Enter your email first."
+                            )
+                          );
+                        }
+                        await onRequestVerificationEmail(normalizedEmail);
+                        setLocalError("AUTH_VERIFICATION_EMAIL_SENT");
+                      });
+                    }}
+                    className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isLightTheme
+                        ? "border border-cyan-700/50 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                        : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                    }`}
+                  >
+                    {tr("Stuur verificatie opnieuw", "Resend verification email")}
+                  </button>
+                ) : null}
+                {canRequestUnlock ? (
+                  <button
+                    type="button"
+                    disabled={isBusy || !email.trim()}
+                    onClick={() => {
+                      void runWithoutClose(async () => {
+                        const normalizedEmail = email.trim();
+                        if (!normalizedEmail) {
+                          throw new Error(
+                            tr(
+                              "Vul eerst je e-mailadres in.",
+                              "Enter your email first."
+                            )
+                          );
+                        }
+                        await onRequestUnlockEmail(normalizedEmail);
+                        setLocalError("AUTH_UNLOCK_EMAIL_SENT");
+                      });
+                    }}
+                    className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isLightTheme
+                        ? "border border-cyan-700/50 bg-cyan-700 text-white hover:border-cyan-800 hover:bg-cyan-800"
+                        : "border border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:border-cyan-300/75 hover:bg-cyan-500/22"
+                    }`}
+                  >
+                    {tr("Stuur unlock e-mail", "Send unlock email")}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>

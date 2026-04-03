@@ -1,26 +1,36 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import {
+  buildVerifiedRedirectUrl,
+  resolveAppPublicOrigin,
+  sendCloudVerificationEmail
+} from "../../api/_lib/cloudAuthEmail.js";
 import { checkRateLimit } from "../../api/_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import {
   buildCloudAuthHeaders,
+  clearPendingVerificationLink,
   clearCloudSessionCookies,
   clearFailedLoginAttempts,
   CloudSessionPayload,
+  fetchSupabaseAuthUserByEmail,
   fetchSupabaseUser,
   getClientIp,
   hasCloudEnv,
   isAccountLocked,
   isEmailFormatValid,
   isPasswordFormatValid,
+  isSupabaseAuthUserConfirmed,
   isTokenRevoked,
   parseJson,
   parseTokenResponse,
+  readPendingVerificationLink,
   readCloudAccessToken,
   readCloudRefreshToken,
   recordFailedLoginAttempt,
   resolveCloudEnv,
   revokeToken,
   setCloudSessionCookies,
+  storePendingVerificationLink,
   toCloudSessionPayload
 } from "./authShared.js";
 
@@ -35,8 +45,20 @@ interface OAuthHashBody {
   expiresIn?: number;
 }
 
+interface AdminGenerateLinkResponse {
+  action_link?: string;
+  email_otp?: string;
+  hashed_token?: string;
+  verification_type?: string;
+  redirect_to?: string;
+}
+
 const ACCESS_TOKEN_FALLBACK_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_FALLBACK_TTL_SECONDS = 7 * 24 * 60 * 60;
+const VERIFICATION_REQUIRED_RESPONSE = {
+  ok: true,
+  requiresEmailVerification: true
+};
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -85,6 +107,175 @@ const resolveSignInErrorCode = (status: number, payload: unknown): string => {
 const parseResponsePayload = async (response: Response): Promise<unknown> => {
   try {
     return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+const extractPayloadMessage = (payload: unknown): string => {
+  const candidate = payload as {
+    code?: string;
+    error?: string;
+    msg?: string;
+    error_description?: string;
+    message?: string;
+    details?: string;
+  } | null;
+  return String(
+    candidate?.error_description ||
+      candidate?.message ||
+      candidate?.msg ||
+      candidate?.details ||
+      candidate?.error ||
+      candidate?.code ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+};
+
+const isAlreadyRegisteredPayload = (payload: unknown): boolean =>
+  extractPayloadMessage(payload).includes("already registered");
+
+const resolveSignUpErrorCode = (status: number, payload: unknown): string => {
+  const message = extractPayloadMessage(payload);
+  if (isAlreadyRegisteredPayload(payload)) {
+    return "AUTH_USER_ALREADY_REGISTERED";
+  }
+  if (status === 429 || message.includes("rate limit") || message.includes("too many requests")) {
+    return "AUTH_RATE_LIMITED";
+  }
+  if (message.includes("password should be at least") || message.includes("at least 6 characters")) {
+    return "AUTH_WEAK_PASSWORD";
+  }
+  if (message.includes("invalid email") || message.includes("unable to validate email")) {
+    return "AUTH_INVALID_EMAIL";
+  }
+  if (status >= 500) {
+    return "AUTH_PROVIDER_UNAVAILABLE";
+  }
+  return "AUTH_BAD_REQUEST";
+};
+
+const sendVerificationRequiredResponse = (req: IncomingMessage, res: ServerResponse) => {
+  clearCloudSessionCookies(req, res);
+  sendJson(res, 200, VERIFICATION_REQUIRED_RESPONSE);
+};
+
+const buildServiceHeaders = (env: NonNullable<ReturnType<typeof ensureAuthEnv>>): HeadersInit => ({
+  apikey: env.serviceRoleKey,
+  Authorization: `Bearer ${env.serviceRoleKey}`,
+  "Content-Type": "application/json"
+});
+
+const buildVerifiedRedirect = (req: IncomingMessage): string =>
+  buildVerifiedRedirectUrl(resolveAppPublicOrigin(req));
+
+const parseGeneratedActionLink = (payload: unknown): string | null => {
+  const actionLink = String((payload as AdminGenerateLinkResponse | null)?.action_link ?? "").trim();
+  return actionLink || null;
+};
+
+const generateAdminActionLink = async (
+  env: NonNullable<ReturnType<typeof ensureAuthEnv>>,
+  options: {
+    type: "signup" | "magiclink";
+    email: string;
+    password?: string;
+    redirectTo: string;
+  }
+): Promise<string> => {
+  const body: Record<string, string> = {
+    type: options.type,
+    email: options.email,
+    redirect_to: options.redirectTo
+  };
+  if (options.password) {
+    body.password = options.password;
+  }
+
+  const response = await fetch(`${env.supabaseUrl}/auth/v1/admin/generate_link`, {
+    method: "POST",
+    headers: buildServiceHeaders(env),
+    body: JSON.stringify(body)
+  });
+  const payload = await parseResponsePayload(response);
+  if (!response.ok) {
+    const code = resolveSignUpErrorCode(response.status, payload);
+    throw new Error(`${code}:${extractPayloadMessage(payload) || `http_${response.status}`}`);
+  }
+  const actionLink = parseGeneratedActionLink(payload);
+  if (!actionLink) {
+    throw new Error("AUTH_SESSION_INCOMPLETE:missing_action_link");
+  }
+  return actionLink;
+};
+
+const storePendingVerificationLinkSafe = async (
+  email: string,
+  confirmationUrl: string,
+  kind: "signup" | "magiclink"
+) => {
+  try {
+    await storePendingVerificationLink(email, {
+      confirmationUrl,
+      kind,
+      createdAt: new Date().toISOString()
+    });
+  } catch {
+    // Best effort. Email delivery is more important than cache persistence.
+  }
+};
+
+const sendVerificationEmailBestEffort = async (
+  req: IncomingMessage,
+  email: string,
+  confirmationUrl: string,
+  kind: "signup" | "magiclink"
+) => {
+  await storePendingVerificationLinkSafe(email, confirmationUrl, kind);
+  try {
+    await sendCloudVerificationEmail({
+      to: email,
+      confirmationUrl,
+      req
+    });
+  } catch {
+    // Keep signup and resend responses generic. Users can request another email later.
+  }
+};
+
+const resolveExistingVerificationLink = async (
+  req: IncomingMessage,
+  env: NonNullable<ReturnType<typeof ensureAuthEnv>>,
+  email: string
+): Promise<{ confirmationUrl: string; kind: "signup" | "magiclink" } | null> => {
+  try {
+    const cached = await readPendingVerificationLink(email);
+    if (cached) {
+      return {
+        confirmationUrl: cached.confirmationUrl,
+        kind: cached.kind
+      };
+    }
+  } catch {
+    // Ignore cache lookup failures and continue with provider lookup.
+  }
+
+  try {
+    const existingUser = await fetchSupabaseAuthUserByEmail(env, email);
+    if (!existingUser || isSupabaseAuthUserConfirmed(existingUser)) {
+      return null;
+    }
+    const confirmationUrl = await generateAdminActionLink(env, {
+      type: "magiclink",
+      email,
+      redirectTo: buildVerifiedRedirect(req)
+    });
+    return {
+      confirmationUrl,
+      kind: "magiclink"
+    };
   } catch {
     return null;
   }
@@ -250,6 +441,7 @@ export const signInHandler = async (req: IncomingMessage, res: ServerResponse) =
     }
 
     await clearFailedLoginAttempts(email);
+    await clearPendingVerificationLink(email);
     setCloudSessionCookies(req, res, parsed.accessToken, parsed.refreshToken, parsed.expiresIn);
     sendJson(res, 200, buildSessionResponse(toCloudSessionPayload(parsed)));
   } catch (error) {
@@ -314,47 +506,144 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
       throw error;
     }
 
-    const response = await fetch(`${env.supabaseUrl}/auth/v1/signup`, {
-      method: "POST",
-      headers: buildCloudAuthHeaders(env),
-      body: JSON.stringify({ email, password })
-    });
-
-    if (!response.ok) {
-      const payload = await parseResponsePayload(response);
-      const details = String(
-        (payload as { error_description?: string; message?: string } | null)?.error_description ||
-          (payload as { error_description?: string; message?: string } | null)?.message ||
-          ""
-      ).toLowerCase();
-      if (details.includes("already registered")) {
-        clearCloudSessionCookies(req, res);
-        sendJson(res, 200, {
-          ok: true,
-          requiresEmailVerification: true
+    try {
+      const confirmationUrl = await generateAdminActionLink(env, {
+        type: "signup",
+        email,
+        password,
+        redirectTo: buildVerifiedRedirect(req)
+      });
+      await storePendingVerificationLinkSafe(email, confirmationUrl, "signup");
+      try {
+        await sendCloudVerificationEmail({
+          to: email,
+          confirmationUrl,
+          req
+        });
+      } catch {
+        sendJson(res, 502, {
+          error: {
+            code: "AUTH_EMAIL_DELIVERY_FAILED",
+            message: "Verification email could not be sent."
+          }
         });
         return;
       }
-      sendJson(res, response.status >= 500 ? 503 : 400, {
+      sendVerificationRequiredResponse(req, res);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const code = message.split(":")[0]?.trim() ?? "";
+
+      if (code === "AUTH_USER_ALREADY_REGISTERED") {
+        const pendingLink = await resolveExistingVerificationLink(req, env, email);
+        if (pendingLink) {
+          await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
+        }
+        sendVerificationRequiredResponse(req, res);
+        return;
+      }
+
+      if (code === "AUTH_RATE_LIMITED") {
+        sendJson(res, 429, {
+          error: {
+            code,
+            message: "Too many attempts. Please wait and try again."
+          }
+        });
+        return;
+      }
+
+      if (code === "AUTH_WEAK_PASSWORD" || code === "AUTH_INVALID_EMAIL") {
+        sendJson(res, 400, {
+          error: {
+            code,
+            message: "Cloud signup failed."
+          }
+        });
+        return;
+      }
+
+      sendJson(res, code === "AUTH_PROVIDER_UNAVAILABLE" ? 503 : 500, {
         error: {
-          code: response.status >= 500 ? "AUTH_PROVIDER_UNAVAILABLE" : "AUTH_BAD_REQUEST",
+          code: code || "AUTH_PROVIDER_UNAVAILABLE",
           message: "Cloud signup failed."
         }
       });
       return;
     }
-
-    // Force verification-first onboarding and avoid immediate active session after signup.
-    clearCloudSessionCookies(req, res);
-    sendJson(res, 200, {
-      ok: true,
-      requiresEmailVerification: true
-    });
   } catch (error) {
     sendJson(res, 500, {
       error: {
         code: "AUTH_SIGNUP_UNEXPECTED",
         message: error instanceof Error ? error.message : "Unexpected signup error."
+      }
+    });
+  }
+};
+
+export const resendVerificationHandler = async (req: IncomingMessage, res: ServerResponse) => {
+  try {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed." } });
+      return;
+    }
+
+    const env = ensureAuthEnv(res);
+    if (!env) {
+      return;
+    }
+
+    let body: { email?: string } = {};
+    try {
+      body = await readRequestBody<{ email?: string }>(req);
+    } catch {
+      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+      return;
+    }
+
+    const email = normalizeEmail(body.email);
+    if (!isEmailFormatValid(email)) {
+      sendJson(res, 400, {
+        error: {
+          code: "AUTH_INVALID_INPUT",
+          message: "Valid email is required."
+        }
+      });
+      return;
+    }
+
+    const ip = getClientIp(req);
+    try {
+      const limit = await checkRateLimit(ip, "auth_resend_verification");
+      if (!limit.allowed) {
+        sendRateLimitError(res, limit.remaining, limit.resetAt);
+        return;
+      }
+    } catch (error) {
+      if (error instanceof RedisStoreUnavailableError) {
+        sendJson(res, 503, {
+          error: {
+            code: "AUTH_LIMITS_UNAVAILABLE",
+            message: "Authentication rate limiting is temporarily unavailable."
+          }
+        });
+        return;
+      }
+      throw error;
+    }
+
+    const pendingLink = await resolveExistingVerificationLink(req, env, email);
+    if (pendingLink) {
+      await sendVerificationEmailBestEffort(req, email, pendingLink.confirmationUrl, pendingLink.kind);
+    }
+
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: {
+        code: "AUTH_RESEND_VERIFICATION_UNEXPECTED",
+        message: error instanceof Error ? error.message : "Unexpected verification resend error."
       }
     });
   }

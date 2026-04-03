@@ -43,6 +43,19 @@ const parseNumber = (raw: unknown): number => {
   return 0;
 };
 
+const parseString = (raw: unknown): string | null => {
+  if (typeof raw === "string") {
+    return raw;
+  }
+  if (raw === null || typeof raw === "undefined") {
+    return null;
+  }
+  if (typeof raw === "number" || typeof raw === "boolean") {
+    return String(raw);
+  }
+  return null;
+};
+
 const wrapStoreError = (error: unknown): RedisStoreUnavailableError => {
   if (error instanceof RedisStoreUnavailableError) {
     return error;
@@ -102,6 +115,30 @@ export const getCounter = async (key: string): Promise<number> => {
     const redis = getRedisClient();
     const raw = await redis.get(key);
     return parseNumber(raw);
+  } catch (error) {
+    throw wrapStoreError(error);
+  }
+};
+
+export const getString = async (key: string): Promise<string | null> => {
+  try {
+    const redis = getRedisClient();
+    const raw = await redis.get(key);
+    return parseString(raw);
+  } catch (error) {
+    throw wrapStoreError(error);
+  }
+};
+
+export const setStringWindow = async (
+  key: string,
+  value: string,
+  windowSeconds: number
+): Promise<void> => {
+  try {
+    const redis = getRedisClient();
+    await redis.set(key, value);
+    await redis.expire(key, Math.max(1, Math.round(windowSeconds)));
   } catch (error) {
     throw wrapStoreError(error);
   }

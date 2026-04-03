@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { IncomingMessage, ServerResponse } from "node:http";
-import { deleteKey, getCounter, incrementCounterWindow } from "../../api/_lib/redisStore.js";
+import {
+  deleteKey,
+  getCounter,
+  getString,
+  incrementCounterWindow,
+  setStringWindow
+} from "../../api/_lib/redisStore.js";
 
 export interface CloudEnv {
   supabaseUrl: string;
@@ -24,6 +30,19 @@ export interface CloudSessionPayload {
   };
 }
 
+export interface SupabaseAuthAdminUser {
+  id: string;
+  email: string | null;
+  emailConfirmedAt: string | null;
+  confirmedAt: string | null;
+}
+
+export interface PendingVerificationLinkRecord {
+  confirmationUrl: string;
+  kind: "signup" | "magiclink";
+  createdAt: string;
+}
+
 interface TokenResponsePayload {
   access_token?: string;
   refresh_token?: string;
@@ -41,6 +60,7 @@ const REFRESH_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const LOGIN_FAILURE_WINDOW_SECONDS = 24 * 60 * 60;
 const ACCOUNT_LOCK_WINDOW_SECONDS = 24 * 60 * 60;
 const ACCOUNT_LOCK_THRESHOLD = 10;
+const PENDING_VERIFICATION_LINK_TTL_SECONDS = 24 * 60 * 60;
 
 const parseCookieHeader = (rawHeader: string): Record<string, string> => {
   const pairs = rawHeader.split(";").map((pair) => pair.trim());
@@ -152,6 +172,8 @@ const tokenHash = (token: string): string =>
 const revokedTokenKey = (token: string): string => `cloud:auth:revoked:${tokenHash(token)}`;
 const failedLoginKey = (email: string): string => `cloud:auth:failed:${email}`;
 const accountLockKey = (email: string): string => `cloud:auth:locked:${email}`;
+const pendingVerificationLinkKey = (email: string): string =>
+  `cloud:auth:verify-link:${tokenHash(normalizeEmail(email))}`;
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
@@ -416,6 +438,47 @@ export const clearFailedLoginAttempts = async (email: string): Promise<void> => 
   }
 };
 
+export const storePendingVerificationLink = async (
+  email: string,
+  record: PendingVerificationLinkRecord
+): Promise<void> => {
+  await setStringWindow(
+    pendingVerificationLinkKey(email),
+    JSON.stringify(record),
+    PENDING_VERIFICATION_LINK_TTL_SECONDS
+  );
+};
+
+export const readPendingVerificationLink = async (
+  email: string
+): Promise<PendingVerificationLinkRecord | null> => {
+  const raw = await getString(pendingVerificationLinkKey(email));
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as PendingVerificationLinkRecord;
+    if (
+      typeof parsed?.confirmationUrl === "string" &&
+      (parsed.kind === "signup" || parsed.kind === "magiclink") &&
+      typeof parsed.createdAt === "string"
+    ) {
+      return parsed;
+    }
+  } catch {
+    // Ignore malformed cache entries.
+  }
+  return null;
+};
+
+export const clearPendingVerificationLink = async (email: string): Promise<void> => {
+  try {
+    await deleteKey(pendingVerificationLinkKey(email));
+  } catch {
+    // Best effort.
+  }
+};
+
 export const buildCloudAuthHeaders = (
   env: CloudEnv,
   accessToken?: string
@@ -424,6 +487,93 @@ export const buildCloudAuthHeaders = (
   Authorization: accessToken ? `Bearer ${accessToken}` : `Bearer ${env.anonKey}`,
   "Content-Type": "application/json"
 });
+
+const buildCloudServiceHeaders = (env: CloudEnv): HeadersInit => ({
+  apikey: env.serviceRoleKey,
+  Authorization: `Bearer ${env.serviceRoleKey}`,
+  "Content-Type": "application/json"
+});
+
+const normalizeAuthAdminUser = (value: unknown): SupabaseAuthAdminUser | null => {
+  const candidate = value as {
+    id?: unknown;
+    email?: unknown;
+    email_confirmed_at?: unknown;
+    confirmed_at?: unknown;
+  } | null;
+  const id = String(candidate?.id ?? "").trim();
+  if (!id) {
+    return null;
+  }
+  const emailRaw = candidate?.email;
+  const email =
+    typeof emailRaw === "string" && emailRaw.trim().length > 0 ? emailRaw.trim().toLowerCase() : null;
+  const emailConfirmedAt =
+    typeof candidate?.email_confirmed_at === "string" && candidate.email_confirmed_at.trim().length > 0
+      ? candidate.email_confirmed_at.trim()
+      : null;
+  const confirmedAt =
+    typeof candidate?.confirmed_at === "string" && candidate.confirmed_at.trim().length > 0
+      ? candidate.confirmed_at.trim()
+      : null;
+  return {
+    id,
+    email,
+    emailConfirmedAt,
+    confirmedAt
+  };
+};
+
+export const isSupabaseAuthUserConfirmed = (user: SupabaseAuthAdminUser | null): boolean =>
+  Boolean(user?.emailConfirmedAt || user?.confirmedAt);
+
+export const fetchSupabaseAuthUserByEmail = async (
+  env: CloudEnv,
+  email: string
+): Promise<SupabaseAuthAdminUser | null> => {
+  const normalizedTarget = normalizeEmail(email);
+  let page = 1;
+  const perPage = 200;
+  const maxPages = 50;
+
+  while (page <= maxPages) {
+    const response = await fetch(
+      `${env.supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`,
+      {
+        method: "GET",
+        headers: buildCloudServiceHeaders(env)
+      }
+    );
+    const payload = await parseJson<{ users?: unknown[]; next_page?: number | null } | unknown[]>(response);
+    const users = Array.isArray(payload)
+      ? payload.map(normalizeAuthAdminUser).filter((user): user is SupabaseAuthAdminUser => Boolean(user))
+      : Array.isArray(payload.users)
+        ? payload.users
+            .map(normalizeAuthAdminUser)
+            .filter((user): user is SupabaseAuthAdminUser => Boolean(user))
+        : [];
+
+    const match = users.find((user) => user.email === normalizedTarget);
+    if (match) {
+      return match;
+    }
+
+    if (users.length === 0) {
+      return null;
+    }
+
+    const nextPage =
+      !Array.isArray(payload) && typeof payload.next_page === "number" && payload.next_page > page
+        ? payload.next_page
+        : page + 1;
+    if (nextPage <= page) {
+      break;
+    }
+    page = nextPage;
+  }
+
+  return null;
+};
 
 export const getCloudCookieNames = () => ({
   access: ACCESS_COOKIE_NAME,

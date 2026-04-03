@@ -18,7 +18,8 @@ import AppShell, { AppShellHeaderStat } from "./components/AppShell";
 import CloudAuthModal, { type CloudAuthView } from "./components/CloudAuthModal";
 import {
   CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY,
-  CLOUD_PRIVACY_POLICY_VERSION
+  CLOUD_PRIVACY_POLICY_VERSION,
+  getSupabaseUrl
 } from "./cloud/constants";
 import type { CloudConsentPayload } from "./cloud/consentClient";
 import { getDemoSnapshot } from "./demoData";
@@ -77,6 +78,8 @@ import {
   submitParserImprovementSample
 } from "./parserImprovementSubmission";
 import DashboardView from "./views/DashboardView";
+import CloudEmailConfirmView from "./views/CloudEmailConfirmView";
+import CloudEmailVerifiedView from "./views/CloudEmailVerifiedView";
 import {
   AIConsentDecision,
   AppMode,
@@ -137,7 +140,7 @@ type UploadSummary =
     };
 
 type OnboardingEntryPoint = "first_report" | "replay";
-type TopLevelRouteMode = "app" | "admin";
+type TopLevelRouteMode = "app" | "admin" | "auth_confirm" | "auth_verified";
 
 interface PendingUndoAction {
   id: number;
@@ -222,7 +225,64 @@ const resolveTopLevelRouteMode = (): TopLevelRouteMode => {
     return "app";
   }
   const normalizedPathname = window.location.pathname.replace(/\/+$/, "") || "/";
-  return normalizedPathname === "/admin" ? "admin" : "app";
+  if (normalizedPathname === "/admin") {
+    return "admin";
+  }
+  if (normalizedPathname === "/auth/confirm") {
+    return "auth_confirm";
+  }
+  if (normalizedPathname === "/auth/verified") {
+    return "auth_verified";
+  }
+  return "app";
+};
+
+const isAllowedConfirmationUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    const isLocalHttp = parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+    if (parsed.protocol !== "https:" && !isLocalHttp) {
+      return false;
+    }
+    const supabaseUrl = getSupabaseUrl();
+    if (!supabaseUrl) {
+      return true;
+    }
+    return parsed.origin === new URL(supabaseUrl).origin;
+  } catch {
+    return false;
+  }
+};
+
+const readConfirmationUrlFromLocation = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("confirmation_url");
+  if (!raw || !isAllowedConfirmationUrl(raw)) {
+    return null;
+  }
+  return raw;
+};
+
+const readRequestedCloudAuthView = (): CloudAuthView | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get("cloudAuth");
+  return requested === "signin" || requested === "signup" ? requested : null;
+};
+
+const clearRequestedCloudAuthView = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const currentUrl = new URL(window.location.href);
+  currentUrl.searchParams.delete("cloudAuth");
+  const nextPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  window.history.replaceState({}, document.title, nextPath);
 };
 
 const buildFallbackParserAssessment = (draft: ExtractionDraft): ParserUncertaintyAssessment => {
@@ -428,6 +488,28 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (topLevelRouteMode === "auth_verified" && window.location.hash) {
+      const cleanUrl = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [topLevelRouteMode]);
+
+  useEffect(() => {
+    if (topLevelRouteMode !== "app" || isShareMode) {
+      return;
+    }
+    const requestedView = readRequestedCloudAuthView();
+    if (!requestedView) {
+      return;
+    }
+    openCloudAuthModal(requestedView);
+    clearRequestedCloudAuthView();
+  }, [isShareMode, openCloudAuthModal, topLevelRouteMode]);
+
+  useEffect(() => {
     const cloudAuthGranted = cloudAuth.status === "authenticated" && cloudAuth.consentStatus === "granted";
     if (cloudAuthGranted) {
       setCloudAuthModalOpen(false);
@@ -619,6 +701,7 @@ const App = () => {
   const hasDemoData = reports.some((report) => report.extraction.model === "demo-data");
   const isDemoMode = reports.length > 0 && reports.every((report) => report.extraction.model === "demo-data");
   const resolvedTheme = appData.settings.theme === "system" ? systemTheme : appData.settings.theme;
+  const confirmationUrl = topLevelRouteMode === "auth_confirm" ? readConfirmationUrlFromLocation() : null;
   const resolvedSettings = useMemo(
     () => ({
       ...appData.settings,
@@ -2381,9 +2464,29 @@ const App = () => {
           onSignInEmail={handleCloudSignInEmail}
           onSignUpEmail={handleCloudSignUpEmail}
           onCompleteConsent={cloudAuth.completeConsent}
+          onRequestVerificationEmail={cloudAuth.requestVerificationEmail}
           onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
         />
       </>
+    );
+  }
+
+  if (topLevelRouteMode === "auth_confirm") {
+    return (
+      <CloudEmailConfirmView
+        language={appData.settings.language}
+        theme={resolvedTheme}
+        confirmationUrl={confirmationUrl}
+      />
+    );
+  }
+
+  if (topLevelRouteMode === "auth_verified") {
+    return (
+      <CloudEmailVerifiedView
+        language={appData.settings.language}
+        theme={resolvedTheme}
+      />
     );
   }
 
@@ -2991,6 +3094,7 @@ const App = () => {
         onSignInEmail={handleCloudSignInEmail}
         onSignUpEmail={handleCloudSignUpEmail}
         onCompleteConsent={cloudAuth.completeConsent}
+        onRequestVerificationEmail={cloudAuth.requestVerificationEmail}
         onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
       />
 

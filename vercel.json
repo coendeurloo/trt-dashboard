@@ -17,6 +17,14 @@
       "destination": "/api/cloud?action=:action"
     },
     {
+      "source": "/auth/confirm",
+      "destination": "/"
+    },
+    {
+      "source": "/auth/verified",
+      "destination": "/"
+    },
+    {
       "source": "/admin",
       "destination": "/"
     },

@@ -63,6 +63,14 @@ Server-only (Vercel + local server):
 - `GEMINI_API_KEY` (required)
 - `UPSTASH_REDIS_REST_URL` (required for AI limits/budget store)
 - `UPSTASH_REDIS_REST_TOKEN` (required for AI limits/budget store)
+- `SUPABASE_URL` (required for cloud auth/sync server routes)
+- `SUPABASE_ANON_KEY` (required for cloud auth/sync server routes)
+- `SUPABASE_SERVICE_ROLE_KEY` (required for cloud auth/sync server routes)
+- `APP_PUBLIC_ORIGIN` (recommended for branded auth emails and verification redirects; production default `https://labtracker.app`)
+- `RESEND_API_KEY` (required for parser-improvement emails and branded cloud verification emails)
+- `LABTRACKER_AUTH_FROM` (recommended for production auth emails)
+- `LABTRACKER_AUTH_REPLY_TO` (optional auth reply-to inbox)
+- `LABTRACKER_SUPPORT_EMAIL` (optional support address shown in auth emails)
 - `SHARE_LINK_SECRET_BASE64` (required for encrypted short share links)
 - `SHARE_PUBLIC_ORIGIN` (optional, defaults to `https://labtracker.app`)
 - `AI_DAILY_BUDGET_EUR` (optional, `0` = disabled)
@@ -89,6 +97,19 @@ Required server env vars for this feature:
 - `RESEND_API_KEY`
 - `LABTRACKER_REPORTS_TO`
 - `LABTRACKER_REPORTS_FROM` (optional, recommended for production; otherwise a clearly marked beta/test sender is used)
+
+## Branded cloud verification emails
+
+- Cloud sign-up now uses a branded verification email instead of the default provider template.
+- The email lands on `/auth/confirm` first, so aggressive inbox scanners cannot consume the real verification link before the user clicks.
+- After verification, the user lands on `/auth/verified` and signs in manually. The app does not auto-login after email verification.
+
+Recommended production auth-email env vars:
+- `APP_PUBLIC_ORIGIN=https://labtracker.app`
+- `LABTRACKER_AUTH_FROM=LabTracker Security <noreply@mail.labtracker.app>`
+- `LABTRACKER_AUTH_REPLY_TO=trtlabtracker@gmail.com`
+- `LABTRACKER_SUPPORT_EMAIL=trtlabtracker@gmail.com`
+- `LABTRACKER_REPORTS_FROM=LabTracker Reports <reports@mail.labtracker.app>`
 
 Local testing:
 - Run the app with `npx vercel dev` so the Vercel API route is available locally.

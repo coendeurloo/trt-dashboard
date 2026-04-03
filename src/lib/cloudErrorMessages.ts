@@ -85,14 +85,14 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
   }
   if (code === "AUTH_EMAIL_NOT_CONFIRMED") {
     return tr(
-      "Je e-mailadres is nog niet bevestigd. Controleer je inbox en bevestig eerst je account.",
-      "Your email is not confirmed yet. Check your inbox and confirm your account first."
+      "Je account is nog niet klaar voor cloudtoegang. Controleer je inbox voor de verificatie-e-mail en log daarna in.",
+      "Your account is not ready for cloud access yet. Check your inbox for the verification email, then sign in."
     );
   }
   if (code === "AUTH_EMAIL_VERIFICATION_REQUIRED") {
     return tr(
-      "Check je inbox en bevestig eerst je e-mailadres. Daarna kun je inloggen.",
-      "Check your inbox and verify your email first. Then sign in."
+      "Als dit e-mailadres gebruikt kan worden voor cloud signup, hebben we een verificatie-e-mail gestuurd. Controleer je inbox en log daarna in.",
+      "If this email can be used for cloud signup, we sent a verification email. Check your inbox, then sign in."
     );
   }
   if (code === "AUTH_INVALID_EMAIL") {
@@ -125,6 +125,12 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
       "Unlock email sent. Open your inbox and follow the steps to continue."
     );
   }
+  if (code === "AUTH_VERIFICATION_EMAIL_SENT") {
+    return tr(
+      "Verificatie-e-mail verzonden. Controleer je inbox en klik op de bevestigingslink.",
+      "Verification email sent. Check your inbox and click the confirmation link."
+    );
+  }
   if (code === "AUTH_UNAUTHORIZED") {
     return tr(
       "Je sessie is verlopen. Log opnieuw in.",
@@ -135,6 +141,12 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
     return tr(
       "De cloud-auth service is tijdelijk niet beschikbaar. Probeer zo opnieuw.",
       "The cloud auth service is temporarily unavailable. Please try again shortly."
+    );
+  }
+  if (code === "AUTH_EMAIL_DELIVERY_FAILED") {
+    return tr(
+      "De verificatie-e-mail kon niet worden verstuurd. Probeer het opnieuw.",
+      "The verification email could not be sent. Please try again."
     );
   }
   if (code === "AUTH_BAD_REQUEST" || code === "AUTH_UNPROCESSABLE") {

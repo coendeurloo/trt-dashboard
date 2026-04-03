@@ -26,6 +26,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
         onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
@@ -57,6 +58,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={onSignUpEmail}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
         onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
@@ -112,6 +114,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
         onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
@@ -141,6 +144,7 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
         onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
@@ -167,11 +171,45 @@ describe("CloudAuthModal", () => {
         onSignInEmail={vi.fn(async () => undefined)}
         onSignUpEmail={vi.fn(async () => undefined)}
         onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={vi.fn(async () => undefined)}
         onRequestUnlockEmail={vi.fn(async () => undefined)}
       />
     );
 
     expect(screen.getByText("Sign-in failed. This account doesn't exist or the password is incorrect.")).toBeTruthy();
     expect(screen.queryByText("AUTH_INVALID_CREDENTIALS")).toBeNull();
+  });
+
+  it("shows a resend verification action when email confirmation is still pending", async () => {
+    const onRequestVerificationEmail = vi.fn(async () => undefined);
+
+    render(
+      <CloudAuthModal
+        open
+        language="en"
+        theme="dark"
+        configured
+        initialView="signin"
+        authStatus="unauthenticated"
+        authError="AUTH_EMAIL_NOT_CONFIRMED"
+        consentRequired={false}
+        privacyPolicyVersion="2026-03-09"
+        onClose={vi.fn()}
+        onSignInGoogle={vi.fn(async () => undefined)}
+        onSignInEmail={vi.fn(async () => undefined)}
+        onSignUpEmail={vi.fn(async () => undefined)}
+        onCompleteConsent={vi.fn(async () => undefined)}
+        onRequestVerificationEmail={onRequestVerificationEmail}
+        onRequestUnlockEmail={vi.fn(async () => undefined)}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "verify@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Resend verification email" }));
+
+    await waitFor(() => {
+      expect(onRequestVerificationEmail).toHaveBeenCalledWith("verify@example.com");
+    });
+    expect(screen.getByText("Verification email sent. Check your inbox and click the confirmation link.")).toBeTruthy();
   });
 });
