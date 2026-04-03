@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="72" viewBox="0 0 320 72" fill="none">
+  <defs>
+    <linearGradient id="labtracker-email-wave" x1="8" y1="0" x2="56" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee" />
+      <stop offset="100%" stop-color="#14b8a6" />
+    </linearGradient>
+    <linearGradient id="labtracker-email-border" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.48" />
+      <stop offset="100%" stop-color="#14b8a6" stop-opacity="0.18" />
+    </linearGradient>
+    <linearGradient id="labtracker-email-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0c2233" />
+      <stop offset="100%" stop-color="#07141d" />
+    </linearGradient>
+  </defs>
+  <rect x="0.75" y="4.75" width="62.5" height="62.5" rx="16" fill="url(#labtracker-email-bg)" stroke="url(#labtracker-email-border)" stroke-width="1.5" />
+  <path
+    d="M10 36C19.2 36 12.8 20 22 20C31.2 20 24.8 36 34 36C43.2 36 36.8 52 46 52C55.2 52 48.8 36 58 36"
+    stroke="url(#labtracker-email-wave)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+  <text x="82" y="35" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.4">
+    LabTracker
+  </text>
+  <text x="83" y="54" fill="#7dd3fc" font-family="Segoe UI, Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="4.4">
+    CLOUD SYNC
+  </text>
+</svg>

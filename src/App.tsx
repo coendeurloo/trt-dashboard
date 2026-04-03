@@ -69,6 +69,7 @@ import {
 import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { canMergeMarkersBySpecimen } from "./markerSpecimen";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
+import { mapCloudAuthErrorToMessage } from "./lib/cloudErrorMessages";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
 import { buildImplicitAnalysisConsent } from "./analysisConsent";
@@ -353,6 +354,9 @@ const App = () => {
     loadCloudPostAuthIntent()
   );
   const [showSignupSuccessModal, setShowSignupSuccessModal] = useState(false);
+  const [signupVerificationEmail, setSignupVerificationEmail] = useState<string | null>(null);
+  const [signupVerificationResendNotice, setSignupVerificationResendNotice] = useState<string | null>(null);
+  const [signupVerificationResendBusy, setSignupVerificationResendBusy] = useState(false);
   const [showSigninSuccessToast, setShowSigninSuccessToast] = useState(false);
   const [showWellbeingReminderModal, setShowWellbeingReminderModal] = useState(false);
   const [wellbeingReminderDismissedDate, setWellbeingReminderDismissedDate] = useState<string | null>(() =>
@@ -437,7 +441,10 @@ const App = () => {
           error instanceof Error &&
           error.message === "AUTH_EMAIL_VERIFICATION_REQUIRED"
         ) {
-          throw error;
+          setSignupVerificationEmail(email.trim().toLowerCase());
+          setSignupVerificationResendNotice(null);
+          clearPendingCloudPostAuthIntent();
+          return;
         }
         clearPendingCloudPostAuthIntent();
         throw error;
@@ -1201,6 +1208,30 @@ const App = () => {
     setShowSignupSuccessModal(false);
     setActiveTab("dashboard");
     scrollPageToTop();
+  };
+  const closeSignupVerificationModal = () => {
+    setSignupVerificationEmail(null);
+    setSignupVerificationResendNotice(null);
+  };
+  const handleResendSignupVerificationEmail = async () => {
+    if (!signupVerificationEmail) {
+      return;
+    }
+    setSignupVerificationResendBusy(true);
+    setSignupVerificationResendNotice(null);
+    try {
+      await cloudAuth.requestVerificationEmail(signupVerificationEmail);
+      setSignupVerificationResendNotice(
+        tr(
+          "Nieuwe verificatie-e-mail verstuurd. Kijk ook in spam, ongewenst of promoties.",
+          "Fresh verification email sent. Also check spam, junk, or promotions."
+        )
+      );
+    } catch (error) {
+      setSignupVerificationResendNotice(mapCloudAuthErrorToMessage(error, tr));
+    } finally {
+      setSignupVerificationResendBusy(false);
+    }
   };
 
   const clearDemoAndUpload = () => {
@@ -3097,6 +3128,87 @@ const App = () => {
         onRequestVerificationEmail={cloudAuth.requestVerificationEmail}
         onRequestUnlockEmail={cloudAuth.requestUnlockEmail}
       />
+
+      <AnimatePresence>
+        {signupVerificationEmail ? (
+          <motion.div
+            className="app-modal-overlay z-[88]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeSignupVerificationModal}
+          >
+            <motion.div
+              className="app-modal-shell w-full max-w-lg bg-slate-900 p-5 shadow-soft"
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 6 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl border border-emerald-500/45 bg-emerald-500/12 p-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    {tr("Bijna klaar", "You're almost done")}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {tr(
+                      "Je account is aangemaakt. De laatste stap is je e-mailadres bevestigen via de mail die we net hebben gestuurd.",
+                      "Your account was created. The final step is confirming your email with the message we just sent."
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/8 p-4">
+                <p className="text-sm text-slate-200">
+                  {tr("Verstuurd naar", "Sent to")}:{" "}
+                  <span className="font-medium text-slate-100">{signupVerificationEmail}</span>
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {tr(
+                    "Check je inbox. Zie je niets binnen een minuut? Kijk dan ook in spam, ongewenst of promoties en markeer LabTracker als veilig.",
+                    "Check your inbox. If nothing shows up within a minute, also check spam, junk, or promotions and mark LabTracker as safe."
+                  )}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  {tr(
+                    "Je kunt LabTracker ondertussen gewoon in lokale modus blijven gebruiken.",
+                    "You can keep using LabTracker in local mode while you wait."
+                  )}
+                </p>
+                {signupVerificationResendNotice ? (
+                  <p className="mt-3 text-xs text-cyan-200">{signupVerificationResendNotice}</p>
+                ) : null}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                  onClick={() => {
+                    void handleResendSignupVerificationEmail();
+                  }}
+                  disabled={signupVerificationResendBusy}
+                >
+                  {signupVerificationResendBusy
+                    ? tr("Bezig met versturen...", "Sending...")
+                    : tr("Stuur e-mail opnieuw", "Resend email")}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                  onClick={closeSignupVerificationModal}
+                >
+                  {tr("Oké, ik check mijn mailbox", "Okay, I'll check my inbox")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showSignupSuccessModal ? (

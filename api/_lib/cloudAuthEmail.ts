@@ -121,8 +121,16 @@ export const buildWrappedVerificationUrl = (
   return wrapperUrl.toString();
 };
 
-const buildVerificationEmailHtml = (wrappedUrl: string, supportEmail: string | null): string => {
+const buildEmailLogoUrl = (publicOrigin: string): string =>
+  joinPublicUrl(publicOrigin, "/labtracker-email-logo.svg");
+
+const buildVerificationEmailHtml = (
+  wrappedUrl: string,
+  supportEmail: string | null,
+  logoUrl: string
+): string => {
   const escapedUrl = escapeHtml(wrappedUrl);
+  const escapedLogoUrl = escapeHtml(logoUrl);
   const supportLine = supportEmail
     ? `<p style="margin:18px 0 0;color:#94a3b8;font-size:12px;line-height:18px;">Need help? Reply to this email or contact <a href="mailto:${escapeHtml(
         supportEmail
@@ -143,8 +151,8 @@ const buildVerificationEmailHtml = (wrappedUrl: string, supportEmail: string | n
         <td align="center" style="padding:32px 16px;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;">
             <tr>
-              <td style="padding:0 0 18px;color:#67e8f9;font-size:12px;line-height:16px;font-weight:600;letter-spacing:0.28em;text-transform:uppercase;">
-                LabTracker
+              <td style="padding:0 0 18px;">
+                <img src="${escapedLogoUrl}" width="200" alt="LabTracker" style="display:block;height:auto;border:0;outline:none;text-decoration:none;" />
               </td>
             </tr>
             <tr>
@@ -165,10 +173,13 @@ const buildVerificationEmailHtml = (wrappedUrl: string, supportEmail: string | n
                   Verify email
                 </a>
                 <p style="margin:24px 0 10px;color:#94a3b8;font-size:13px;line-height:20px;">
-                  If the button does not work, open this secure link:
+                  If the button does not work, use the fallback link below:
                 </p>
                 <p style="margin:0;padding:14px 16px;border-radius:16px;background:#0f172a;border:1px solid rgba(148,163,184,0.18);font-size:12px;line-height:20px;word-break:break-all;">
-                  <a href="${escapedUrl}" style="color:#67e8f9;text-decoration:none;">${escapedUrl}</a>
+                  <a href="${escapedUrl}" style="color:#67e8f9;text-decoration:none;">Open secure fallback link</a>
+                </p>
+                <p style="margin:18px 0 0;color:#94a3b8;font-size:12px;line-height:20px;">
+                  If you do not see this message in your inbox, also check spam, junk, or promotions.
                 </p>
                 <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;line-height:20px;">
                   If you did not create this account, you can ignore this email.
@@ -195,6 +206,8 @@ const buildVerificationEmailText = (wrappedUrl: string, supportEmail: string | n
     "",
     `Verify email: ${wrappedUrl}`,
     "",
+    "If you do not see this message in your inbox, also check spam, junk, or promotions.",
+    "",
     "If you did not create this account, you can ignore this email.",
     supportEmail ? `Support: ${supportEmail}` : null
   ]
@@ -213,6 +226,7 @@ export const sendCloudVerificationEmail = async ({
 
   const publicOrigin = resolveAppPublicOrigin(req);
   const wrappedUrl = buildWrappedVerificationUrl(publicOrigin, confirmationUrl);
+  const logoUrl = buildEmailLogoUrl(publicOrigin);
   const supportEmail = resolveSupportEmail();
   const resend = new Resend(apiKey);
   const replyTo = resolveReplyTo();
@@ -220,7 +234,7 @@ export const sendCloudVerificationEmail = async ({
     from: resolveAuthSender(),
     to,
     subject: SUBJECT,
-    html: buildVerificationEmailHtml(wrappedUrl, supportEmail),
+    html: buildVerificationEmailHtml(wrappedUrl, supportEmail, logoUrl),
     text: buildVerificationEmailText(wrappedUrl, supportEmail),
     ...(replyTo ? { replyTo } : {})
   });
