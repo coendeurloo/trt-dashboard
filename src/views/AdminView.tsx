@@ -23,6 +23,7 @@ import { formatDate } from "../utils";
 import AdminMetricCard from "../admin/components/AdminMetricCard";
 import AdminPanel from "../admin/components/AdminPanel";
 import AdminToggleRow from "../admin/components/AdminToggleRow";
+import { captureAppMessage, isSentryClientEnabled } from "../monitoring/sentry";
 
 interface AdminViewProps {
   language: AppLanguage;
@@ -159,6 +160,7 @@ const AdminView = ({
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupResult, setLookupResult] = useState<AdminUserLookupResult | null>(null);
+  const [errorReportingNotice, setErrorReportingNotice] = useState("");
   const [refreshTick, setRefreshTick] = useState(0);
 
   const isLightTheme = theme === "light";
@@ -274,6 +276,36 @@ const AdminView = ({
     } finally {
       setLookupLoading(false);
     }
+  };
+
+  const handleSendBrowserTestEvent = () => {
+    if (!isSentryClientEnabled()) {
+      setErrorReportingNotice(
+        tr(
+          "Browser error reporting staat nog uit. Voeg eerst VITE_SENTRY_DSN toe.",
+          "Browser error reporting is still off. Add VITE_SENTRY_DSN first."
+        )
+      );
+      return;
+    }
+
+    captureAppMessage("Admin browser error reporting test", {
+      tags: {
+        flow: "admin_error_reporting_test",
+        route: "admin"
+      },
+      extra: {
+        language,
+        theme
+      },
+      fingerprint: ["admin-browser-error-reporting-test"]
+    });
+    setErrorReportingNotice(
+      tr(
+        "Browser test-event verstuurd. In Sentry verschijnt dit meestal binnen een paar seconden.",
+        "Browser test event sent. It usually appears in Sentry within a few seconds."
+      )
+    );
   };
 
   const topStatusCardClassName = isLightTheme
@@ -690,6 +722,82 @@ const AdminView = ({
             </div>
           ) : (
             <p className="text-sm text-slate-400">{tr("Geen system status", "No system status")}</p>
+          )}
+        </AdminPanel>
+
+        <AdminPanel
+          title={tr("Error Reporting", "Error reporting")}
+          subtitle={tr(
+            "Eenvoudig overzicht van je foutregistratie. Dit is je controlekamer, niet de volledige issue-lijst.",
+            "Simple overview of your error reporting. This is your control room, not the full issue list."
+          )}
+        >
+          {systemStatus?.errorReporting ? (
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <AdminMetricCard
+                  label={tr("Browser capture", "Browser capture")}
+                  value={systemStatus.errorReporting.clientEnabled ? tr("Aan", "On") : tr("Uit", "Off")}
+                  tone={systemStatus.errorReporting.clientEnabled ? "good" : "warn"}
+                />
+                <AdminMetricCard
+                  label={tr("Server capture", "Server capture")}
+                  value={systemStatus.errorReporting.serverEnabled ? tr("Aan", "On") : tr("Uit", "Off")}
+                  tone={systemStatus.errorReporting.serverEnabled ? "good" : "warn"}
+                />
+                <AdminMetricCard
+                  label={tr("Source maps", "Source maps")}
+                  value={systemStatus.errorReporting.sourceMapsConfigured ? tr("Klaar", "Ready") : tr("Mist", "Missing")}
+                  tone={systemStatus.errorReporting.sourceMapsConfigured ? "good" : "warn"}
+                />
+                <AdminMetricCard
+                  label={tr("Omgeving", "Environment")}
+                  value={systemStatus.errorReporting.environment ?? "-"}
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 text-sm text-slate-300">
+                <p className="font-medium text-slate-100">{tr("Wat dit je oplevert", "What this gives you")}</p>
+                <p className="mt-2 text-slate-400">
+                  {tr(
+                    "Als LabTracker stukloopt of een API-route faalt, krijg je eindelijk een nette foutmelding met stacktrace, release en flow-info in plaats van alleen 'het werkt niet'.",
+                    "When LabTracker breaks or an API route fails, you finally get a clean error report with stack trace, release, and flow info instead of only 'it does not work'."
+                  )}
+                </p>
+                <p className="mt-2 text-slate-400">
+                  {tr(
+                    "Privacy blijft streng: geen labwaarden, notities, symptomen, PDF-inhoud of share-tokens worden bewust meegestuurd.",
+                    "Privacy stays strict: lab values, notes, symptoms, PDF contents, and share tokens are intentionally not sent along."
+                  )}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {tr("Release", "Release")}: {systemStatus.errorReporting.release ?? "-"} · {tr("Privacy", "Privacy")}:{" "}
+                  {systemStatus.errorReporting.privacyMode === "strict" ? tr("streng", "strict") : "-"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                    onClick={handleSendBrowserTestEvent}
+                  >
+                    {tr("Stuur browser test-event", "Send browser test event")}
+                  </button>
+                  {systemStatus.errorReporting.dashboardUrl ? (
+                    <a
+                      href={systemStatus.errorReporting.dashboardUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                    >
+                      {tr("Open Sentry", "Open Sentry")}
+                    </a>
+                  ) : null}
+                </div>
+                {errorReportingNotice ? <p className="mt-2 text-xs text-cyan-200">{errorReportingNotice}</p> : null}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">{tr("Geen error reporting status", "No error reporting status")}</p>
           )}
         </AdminPanel>
 

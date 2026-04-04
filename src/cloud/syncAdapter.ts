@@ -12,6 +12,7 @@ import {
   toCloudSyncPayload
 } from "./mapping";
 import { StoredAppData } from "../types";
+import { captureAppException, withMonitoringSpan } from "../monitoring/sentry";
 
 type SupabaseErrorPayload = {
   code?: string;
@@ -275,36 +276,93 @@ export class SupabaseCloudAdapter {
     data: StoredAppData,
     expectedRevision: number | null
   ): Promise<ReplaceResponse> {
-    const payload = toCloudSyncPayload(data);
-    const response = await fetch("/api/cloud/replace", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        deviceId: this.deviceId,
-        expectedRevision,
-        payload
-      })
-    });
-    return parseJson<ReplaceResponse>(response);
+    try {
+      return await withMonitoringSpan(
+        {
+          name: "cloud.replace_all",
+          op: "labtracker.cloud",
+          attributes: {
+            action: "replace_all",
+            expected_revision: expectedRevision ?? -1,
+            report_count: data.reports.length
+          }
+        },
+        async () => {
+          const payload = toCloudSyncPayload(data);
+          const response = await fetch("/api/cloud/replace", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              deviceId: this.deviceId,
+              expectedRevision,
+              payload
+            })
+          });
+          return parseJson<ReplaceResponse>(response);
+        }
+      );
+    } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "cloud_sync",
+          action: "replace_all"
+        },
+        extra: {
+          expectedRevision,
+          reportCount: data.reports.length,
+          protocolCount: data.protocols.length,
+          checkInCount: data.checkIns.length
+        },
+        fingerprint: ["cloud-sync-replace-all-failure"]
+      });
+      throw error;
+    }
   }
 
   async applyPatch(
     patch: CloudIncrementalPatch,
     expectedRevision: number | null
   ): Promise<ReplaceResponse> {
-    const response = await fetch("/api/cloud/incremental", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        deviceId: this.deviceId,
-        expectedRevision,
-        patch
-      })
-    });
-    return parseJson<ReplaceResponse>(response);
+    try {
+      return await withMonitoringSpan(
+        {
+          name: "cloud.apply_patch",
+          op: "labtracker.cloud",
+          attributes: {
+            action: "apply_patch",
+            expected_revision: expectedRevision ?? -1
+          }
+        },
+        async () => {
+          const response = await fetch("/api/cloud/incremental", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              deviceId: this.deviceId,
+              expectedRevision,
+              patch
+            })
+          });
+          return parseJson<ReplaceResponse>(response);
+        }
+      );
+    } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "cloud_sync",
+          action: "apply_patch"
+        },
+        extra: {
+          expectedRevision,
+          patchKeys: Object.keys(patch ?? {})
+        },
+        fingerprint: ["cloud-sync-apply-patch-failure"]
+      });
+      throw error;
+    }
   }
 }

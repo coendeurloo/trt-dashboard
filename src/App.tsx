@@ -76,6 +76,7 @@ import { normalizeMarkerLookupKey } from "./markerNormalization";
 import { canMergeMarkersBySpecimen } from "./markerSpecimen";
 import { mapServiceErrorToMessage } from "./lib/errorMessages";
 import { mapCloudAuthErrorToMessage } from "./lib/cloudErrorMessages";
+import { captureAppException, withMonitoringSpan } from "./monitoring/sentry";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
 import { buildImplicitAnalysisConsent } from "./analysisConsent";
@@ -1480,17 +1481,29 @@ const App = () => {
     consent: AIConsentDecision
   ): Promise<{ finalDraft: ExtractionDraft; aiApplied: boolean; aiAttempted: boolean }> => {
     const { extractLabData } = await ensurePdfParsingModule();
-    const improved = await extractLabData(file, {
-      costMode: "balanced",
-      aiAutoImproveEnabled: true,
-      forceAi: true,
-      preferAiResultWhenForced: true,
-      externalAiAllowed: true,
-      aiConsent: consent,
-      parserDebugMode: "text_ocr_ai",
-      markerAliasOverrides: appData.markerAliasOverrides,
-      onStageChange: setUploadStage
-    });
+    const improved = await withMonitoringSpan(
+      {
+        name: "parser.ai_rescue",
+        op: "labtracker.parser",
+        attributes: {
+          parser_mode: "text_ocr_ai",
+          ai_forced: true,
+          file_size_bytes: file.size
+        }
+      },
+      () =>
+        extractLabData(file, {
+          costMode: "balanced",
+          aiAutoImproveEnabled: true,
+          forceAi: true,
+          preferAiResultWhenForced: true,
+          externalAiAllowed: true,
+          aiConsent: consent,
+          parserDebugMode: "text_ocr_ai",
+          markerAliasOverrides: appData.markerAliasOverrides,
+          onStageChange: setUploadStage
+        })
+    );
 
     const improvedDraft = enrichDraftForReview(improved);
     const autoApplyDecision = shouldAutoApplyAiRescueResult(localDraft, improvedDraft);
@@ -1525,15 +1538,27 @@ const App = () => {
           : appData.settings.parserDebugMode
         : "text_ocr";
 
-      const extracted = await extractLabData(file, {
-        costMode: appData.settings.aiCostMode,
-        aiAutoImproveEnabled: false,
-        externalAiAllowed: false,
-        aiConsent: getLocalOnlyParserConsent(),
-        parserDebugMode: localParserMode,
-        markerAliasOverrides: appData.markerAliasOverrides,
-        onStageChange: setUploadStage
-      });
+      const extracted = await withMonitoringSpan(
+        {
+          name: "parser.upload",
+          op: "labtracker.parser",
+          attributes: {
+            parser_mode: localParserMode,
+            file_size_bytes: file.size,
+            ai_enabled: false
+          }
+        },
+        () =>
+          extractLabData(file, {
+            costMode: appData.settings.aiCostMode,
+            aiAutoImproveEnabled: false,
+            externalAiAllowed: false,
+            aiConsent: getLocalOnlyParserConsent(),
+            parserDebugMode: localParserMode,
+            markerAliasOverrides: appData.markerAliasOverrides,
+            onStageChange: setUploadStage
+          })
+      );
 
       const localDraft = enrichDraftForReview(extracted);
       const localAssessment = assessParserUncertainty(localDraft);
@@ -1575,6 +1600,23 @@ const App = () => {
         setUploadNotice(autoNotice);
       }
     } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "parser_upload",
+          parser_mode: showAdvancedParserActions
+            ? appData.settings.parserDebugMode === "text_ocr_ai"
+              ? "text_ocr"
+              : appData.settings.parserDebugMode
+            : "text_ocr",
+          upload_stage: uploadStage ?? "unknown"
+        },
+        extra: {
+          fileSizeBytes: file.size,
+          fileType: file.type || "unknown",
+          userProfile: appData.settings.userProfile
+        },
+        fingerprint: ["parser-upload-failure"]
+      });
       setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
@@ -1652,6 +1694,17 @@ const App = () => {
           : tr("AI-rescue uitgevoerd, lokaal resultaat behouden.", "AI rescue ran; local result was kept.")
       );
     } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "parser_ai_rescue_auto",
+          upload_stage: uploadStage ?? "unknown"
+        },
+        extra: {
+          baselineMarkerCount,
+          userProfile: appData.settings.userProfile
+        },
+        fingerprint: ["parser-ai-rescue-auto-failure"]
+      });
       setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
@@ -1691,17 +1744,29 @@ const App = () => {
     setUploadNotice("");
     try {
       const { extractLabData } = await ensurePdfParsingModule();
-      const improved = await extractLabData(lastUploadedFile, {
-        costMode: appData.settings.aiCostMode,
-        aiAutoImproveEnabled: true,
-        forceAi: true,
-        preferAiResultWhenForced: true,
-        externalAiAllowed: true,
-        aiConsent: consent,
-        parserDebugMode: "text_ocr_ai",
-        markerAliasOverrides: appData.markerAliasOverrides,
-        onStageChange: setUploadStage
-      });
+      const improved = await withMonitoringSpan(
+        {
+          name: "parser.ai_refine_compare",
+          op: "labtracker.parser",
+          attributes: {
+            parser_mode: "text_ocr_ai",
+            ai_forced: true,
+            file_size_bytes: lastUploadedFile.size
+          }
+        },
+        () =>
+          extractLabData(lastUploadedFile, {
+            costMode: appData.settings.aiCostMode,
+            aiAutoImproveEnabled: true,
+            forceAi: true,
+            preferAiResultWhenForced: true,
+            externalAiAllowed: true,
+            aiConsent: consent,
+            parserDebugMode: "text_ocr_ai",
+            markerAliasOverrides: appData.markerAliasOverrides,
+            onStageChange: setUploadStage
+          })
+      );
       const improvedDraft = enrichDraftForReview(improved);
       if (hasParserAiAttempt(improvedDraft)) {
         setAiAttemptedForCurrentUpload(true);
@@ -1722,6 +1787,17 @@ const App = () => {
         );
       }
     } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "parser_ai_refine_compare",
+          upload_stage: uploadStage ?? "unknown"
+        },
+        extra: {
+          baselineMarkerCount: baselineDraft.markers.length,
+          fileSizeBytes: lastUploadedFile.size
+        },
+        fingerprint: ["parser-ai-refine-compare-failure"]
+      });
       setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {
@@ -1798,15 +1874,27 @@ const App = () => {
 
     try {
       const { extractLabData, assessParserUncertainty } = await ensurePdfParsingModule();
-      const extracted = await extractLabData(lastUploadedFile, {
-        costMode: appData.settings.aiCostMode,
-        aiAutoImproveEnabled: false,
-        externalAiAllowed: false,
-        aiConsent: getLocalOnlyParserConsent(),
-        parserDebugMode: "text_ocr",
-        markerAliasOverrides: appData.markerAliasOverrides,
-        onStageChange: setUploadStage
-      });
+      const extracted = await withMonitoringSpan(
+        {
+          name: "parser.ocr_retry",
+          op: "labtracker.parser",
+          attributes: {
+            parser_mode: "text_ocr",
+            file_size_bytes: lastUploadedFile.size,
+            ai_enabled: false
+          }
+        },
+        () =>
+          extractLabData(lastUploadedFile, {
+            costMode: appData.settings.aiCostMode,
+            aiAutoImproveEnabled: false,
+            externalAiAllowed: false,
+            aiConsent: getLocalOnlyParserConsent(),
+            parserDebugMode: "text_ocr",
+            markerAliasOverrides: appData.markerAliasOverrides,
+            onStageChange: setUploadStage
+          })
+      );
       const enrichedDraft = enrichDraftForReview(extracted);
       const warningCount = countWarnings(enrichedDraft);
       const assessment = assessParserUncertainty(enrichedDraft);
@@ -1832,6 +1920,17 @@ const App = () => {
         routeLabel: routeSummary.label
       });
     } catch (error) {
+      captureAppException(error, {
+        tags: {
+          flow: "parser_ocr_retry",
+          upload_stage: uploadStage ?? "unknown"
+        },
+        extra: {
+          fileSizeBytes: lastUploadedFile.size,
+          userProfile: appData.settings.userProfile
+        },
+        fingerprint: ["parser-ocr-retry-failure"]
+      });
       setUploadError(mapErrorToMessage(error, "pdf"));
       setUploadStage("failed");
     } finally {

@@ -1,4 +1,5 @@
 import React from "react";
+import { captureAppException } from "../monitoring/sentry";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -21,6 +22,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     // Keep debugging visibility for unexpected render/runtime crashes.
     console.error("UI render error:", error, errorInfo);
+    captureAppException(error, {
+      tags: {
+        flow: "ui_render",
+        boundary: "root_error_boundary"
+      },
+      extra: {
+        componentStack: errorInfo.componentStack ?? ""
+      },
+      fingerprint: ["ui-render-error"]
+    });
   }
 
   private handleReload = (): void => {

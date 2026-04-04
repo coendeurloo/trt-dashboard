@@ -9,6 +9,7 @@ import {
   sendJson
 } from "../_lib/parserImprovement.js";
 import { sendParserImprovementEmail } from "../_lib/parserImprovementEmail.js";
+import { captureServerException, initServerSentry } from "../_lib/sentry.js";
 
 const FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 const FALLBACK_MAX_REQUESTS = 5;
@@ -43,6 +44,8 @@ const logFailure = (params: { code: string; message: string; fileName?: string; 
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  initServerSentry();
+
   if (req.method !== "POST") {
     sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } });
     return;
@@ -96,6 +99,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         error && typeof error === "object" && "fileSize" in error
           ? Number((error as { fileSize?: unknown }).fileSize ?? 0)
           : undefined
+    });
+    await captureServerException(error, {
+      tags: {
+        route: "/api/parser-improvement/submit",
+        flow: "parser_improvement_submission",
+        code: details.code
+      },
+      extra: {
+        statusCode: details.statusCode,
+        fileSize:
+          error && typeof error === "object" && "fileSize" in error
+            ? Number((error as { fileSize?: unknown }).fileSize ?? 0)
+            : 0
+      },
+      fingerprint: ["parser-improvement-submit-failure", details.code]
     });
     sendJson(res, details.statusCode, {
       error: {

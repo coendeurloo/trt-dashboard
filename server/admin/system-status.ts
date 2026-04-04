@@ -1,7 +1,11 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { getCounter, RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import { getRuntimeConfig } from "../../api/_lib/adminRuntimeConfig.js";
-import { buildAdminEnvDiagnostics, runtimeConfigToEnvWarnings } from "../../api/_lib/adminDiagnostics.js";
+import {
+  buildAdminEnvDiagnostics,
+  buildAdminErrorReportingStatus,
+  runtimeConfigToEnvWarnings
+} from "../../api/_lib/adminDiagnostics.js";
 import {
   adminServiceFetch,
   handleAdminError,
@@ -152,6 +156,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     ];
 
     const envDiagnostics = buildAdminEnvDiagnostics();
+    const errorReporting = buildAdminErrorReportingStatus();
     const runtimeWarnings = runtimeConfigToEnvWarnings(runtimeConfig);
 
     sendJson(res, 200, {
@@ -170,7 +175,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       envDiagnostics: {
         entries: envDiagnostics.entries,
         warnings: [...envDiagnostics.warnings, ...runtimeWarnings]
-      }
+      },
+      errorReporting
     });
   } catch (error) {
     handleAdminError(res, error);

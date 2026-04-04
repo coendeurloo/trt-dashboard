@@ -3,6 +3,7 @@ import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import { requireAiEntitlement } from "../_lib/entitlements.js";
+import { captureServerException, initServerSentry, withServerMonitoringSpan } from "../_lib/sentry.js";
 
 interface ClaudeMessagePayload {
   model: string;
@@ -183,6 +184,8 @@ const inferRequestType = (body: ProxyRequestBody): "analysis" | "extraction" => 
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  initServerSentry();
+
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: { message: "Method not allowed" } });
@@ -273,16 +276,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const onClientClose = () => upstreamAbort.abort();
     req.on("close", onClientClose);
     try {
-      const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01"
+      const anthropicResponse = await withServerMonitoringSpan(
+        {
+          name: "api.claude.proxy_request",
+          op: "labtracker.api",
+          attributes: {
+            route: "/api/claude/messages",
+            request_type: requestType,
+            stream: body.payload.stream === true
+          }
         },
-        signal: upstreamAbort.signal,
-        body: JSON.stringify(body.payload)
-      });
+        () =>
+          fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01"
+            },
+            signal: upstreamAbort.signal,
+            body: JSON.stringify(body.payload)
+          })
+      );
 
       const requestedStreaming = body.payload.stream === true;
       const upstreamContentType = anthropicResponse.headers.get("content-type") ?? "";
@@ -305,11 +320,32 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
         return;
       }
+      await captureServerException(error, {
+        tags: {
+          route: "/api/claude/messages",
+          flow: "claude_proxy",
+          request_type: requestType
+        },
+        extra: {
+          stream: body.payload.stream === true
+        },
+        fingerprint: ["api-claude-proxy-unreachable", requestType]
+      });
       sendJson(res, 502, { error: { message: "Anthropic API unreachable" } });
     } finally {
       req.off("close", onClientClose);
     }
   } catch (error) {
+    await captureServerException(error, {
+      tags: {
+        route: "/api/claude/messages",
+        flow: "claude_proxy"
+      },
+      extra: {
+        method: req.method ?? "unknown"
+      },
+      fingerprint: ["api-claude-unexpected-error"]
+    });
     if (!res.writableEnded) {
       sendJson(res, 500, {
         error: {

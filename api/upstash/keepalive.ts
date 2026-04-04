@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import { getRuntimeConfig } from "../_lib/adminRuntimeConfig.js";
 import { getCounter, RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import { resolveSupabaseEnv } from "../_lib/supabaseAdmin.js";
+import { captureServerException, initServerSentry, withServerMonitor } from "../_lib/sentry.js";
 
 const KEEPALIVE_KEY = "meta:keepalive";
 
@@ -32,32 +33,55 @@ const resolveKeepaliveFlag = async (): Promise<{
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  initServerSentry();
+
   if (req.method !== "GET") {
     sendJson(res, 405, { error: { message: "Method not allowed" } });
     return;
   }
 
   try {
-    const keepalive = await resolveKeepaliveFlag();
-    if (!keepalive.enabled) {
-      sendJson(res, 200, {
-        ok: true,
-        skipped: true,
-        reason: "KEEPALIVE_DISABLED_BY_RUNTIME_CONFIG",
-        source: keepalive.source,
-        touchedAt: null
-      });
-      return;
-    }
+    await withServerMonitor(
+      "upstash-keepalive",
+      async () => {
+        const keepalive = await resolveKeepaliveFlag();
+        if (!keepalive.enabled) {
+          sendJson(res, 200, {
+            ok: true,
+            skipped: true,
+            reason: "KEEPALIVE_DISABLED_BY_RUNTIME_CONFIG",
+            source: keepalive.source,
+            touchedAt: null
+          });
+          return;
+        }
 
-    await getCounter(KEEPALIVE_KEY);
-    sendJson(res, 200, {
-      ok: true,
-      skipped: false,
-      source: keepalive.source,
-      touchedAt: new Date().toISOString()
-    });
+        await getCounter(KEEPALIVE_KEY);
+        sendJson(res, 200, {
+          ok: true,
+          skipped: false,
+          source: keepalive.source,
+          touchedAt: new Date().toISOString()
+        });
+      },
+      {
+        schedule: {
+          type: "crontab",
+          value: "0 3 * * *"
+        },
+        checkinMargin: 10,
+        maxRuntime: 5,
+        timezone: "Europe/Amsterdam"
+      }
+    );
   } catch (error) {
+    await captureServerException(error, {
+      tags: {
+        route: "/api/upstash/keepalive",
+        flow: "upstash_keepalive"
+      },
+      fingerprint: ["upstash-keepalive-failure"]
+    });
     sendJson(res, 500, {
       error: {
         code: error instanceof RedisStoreUnavailableError ? error.code : "KEEPALIVE_FAILED",

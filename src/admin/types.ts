@@ -72,6 +72,15 @@ export interface AdminSystemStatus {
     entries: AdminEnvDiagnosticEntry[];
     warnings: string[];
   };
+  errorReporting?: {
+    clientEnabled: boolean;
+    serverEnabled: boolean;
+    sourceMapsConfigured: boolean;
+    dashboardUrl: string | null;
+    environment: string | null;
+    release: string | null;
+    privacyMode: "strict";
+  };
 }
 
 export interface AdminRuntimeConfig {

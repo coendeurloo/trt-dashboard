@@ -4,6 +4,7 @@ import { AnalysisScopeNotice, buildWellbeingSummary, selectReportsForAnalysis } 
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AIConsentDecision, AppLanguage, AppSettings, LabReport, PersonalInfo, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
 import { AnalystMemory } from "../types/analystMemory";
+import { captureAppException, withMonitoringSpan } from "../monitoring/sentry";
 
 interface UseAnalysisOptions {
   settings: AppSettings;
@@ -175,44 +176,60 @@ export const useAnalysis = ({
         checkIns
       });
       const { analyzeLabDataWithClaude } = await import("../aiAnalysis");
-      const result = await analyzeLabDataWithClaude({
-        reports: selectedReports,
-        protocols,
-        supplementTimeline,
-        personalInfo,
-        unitSystem: settings.unitSystem,
-        profile: settings.userProfile,
-        memory: analystMemory,
-        language,
-        analysisType,
-        customQuestion: normalizedQuestion.length > 0 ? normalizedQuestion : undefined,
-        signal: abortController.signal,
-        onStreamEvent: (event) => {
-          if (activeRunIdRef.current !== requestId) {
-            return;
-          }
-          if (event.type === "delta" && event.delta) {
-            receivedStreamDelta = true;
-            setAnalysisRequestState("streaming");
-            setAnalysisResult((current) => `${current}${event.delta}`);
-          }
+      const result = await withMonitoringSpan(
+        {
+          name: kind === "question" ? "ai.question" : `ai.${analysisType}`,
+          op: "labtracker.ai",
+          attributes: {
+            analysis_type: analysisType,
+            analysis_kind: kind,
+            report_count: selectedReports.length,
+            provider_preference: settings.aiAnalysisProvider,
+            external_ai_allowed: externalAiAllowed,
+            has_custom_question: normalizedQuestion.length > 0
+          },
+          forceTransaction: true
         },
-        externalAiAllowed,
-        aiConsent: {
-          includeSymptoms: consentOverride?.includeSymptoms ?? false,
-          includeNotes: consentOverride?.includeNotes ?? false
-        },
-        context: {
-          samplingFilter: samplingControlsEnabled ? settings.samplingFilter : "all",
-          protocolImpact: protocolImpactSummary,
-          alerts,
-          trendByMarker,
-          trtStability,
-          dosePredictions,
-          wellbeingSummary
-        },
-        providerPreference: settings.aiAnalysisProvider
-      });
+        () =>
+          analyzeLabDataWithClaude({
+            reports: selectedReports,
+            protocols,
+            supplementTimeline,
+            personalInfo,
+            unitSystem: settings.unitSystem,
+            profile: settings.userProfile,
+            memory: analystMemory,
+            language,
+            analysisType,
+            customQuestion: normalizedQuestion.length > 0 ? normalizedQuestion : undefined,
+            signal: abortController.signal,
+            onStreamEvent: (event) => {
+              if (activeRunIdRef.current !== requestId) {
+                return;
+              }
+              if (event.type === "delta" && event.delta) {
+                receivedStreamDelta = true;
+                setAnalysisRequestState("streaming");
+                setAnalysisResult((current) => `${current}${event.delta}`);
+              }
+            },
+            externalAiAllowed,
+            aiConsent: {
+              includeSymptoms: consentOverride?.includeSymptoms ?? false,
+              includeNotes: consentOverride?.includeNotes ?? false
+            },
+            context: {
+              samplingFilter: samplingControlsEnabled ? settings.samplingFilter : "all",
+              protocolImpact: protocolImpactSummary,
+              alerts,
+              trendByMarker,
+              trtStability,
+              dosePredictions,
+              wellbeingSummary
+            },
+            providerPreference: settings.aiAnalysisProvider
+          })
+      );
       if (activeRunIdRef.current !== requestId) {
         return;
       }
@@ -266,6 +283,23 @@ export const useAnalysis = ({
         setAnalysisRequestState("idle");
         return;
       }
+      captureAppException(error, {
+        tags: {
+          flow: "ai_analysis",
+          analysis_kind: kind,
+          analysis_type: analysisType,
+          provider_preference: settings.aiAnalysisProvider,
+          partial_output: receivedStreamDelta
+        },
+        extra: {
+          reportCount: allReports.length,
+          checkInCount: checkIns.length,
+          protocolCount: protocols.length,
+          supplementCount: supplementTimeline.length,
+          userProfile: settings.userProfile
+        },
+        fingerprint: ["ai-analysis-failure", kind, analysisType]
+      });
       const mappedError = mapErrorToMessage(error, "ai");
       setAnalysisError(
         receivedStreamDelta
