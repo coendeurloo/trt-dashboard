@@ -71,7 +71,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         },
         checkinMargin: 10,
         maxRuntime: 5,
-        timezone: "Europe/Amsterdam"
+        // Vercel cron schedules run in UTC, so the Sentry monitor must use UTC too.
+        timezone: "UTC"
       }
     );
   } catch (error) {
