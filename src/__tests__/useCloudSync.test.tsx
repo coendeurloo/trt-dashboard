@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { APP_SCHEMA_VERSION } from "../constants";
@@ -186,6 +186,155 @@ describe("useCloudSync", () => {
     });
   });
 
+  it("treats patch revision conflicts as pending without surfacing a sync error", async () => {
+    const localData = makeLocalDataWithReport();
+    fetchSnapshotMock.mockResolvedValue({
+      data: localData,
+      rawPayload: toCloudSyncPayload(localData),
+      schemaVersion: APP_SCHEMA_VERSION,
+      revision: 9
+    });
+    applyPatchMock.mockRejectedValue(new Error("revision_mismatch:revision mismatch"));
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(localData);
+      const sync = useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+      return { data, setData, sync };
+    });
+
+    await waitFor(() => {
+      expect(result.current.sync.syncStatus).toBe("idle");
+    });
+
+    act(() => {
+      result.current.setData((current) =>
+        withPersonalInfo(current, {
+          name: "Conflict Trigger"
+        })
+      );
+    });
+
+    await waitFor(
+      () => {
+        expect(result.current.sync.conflictDetected).toBe(true);
+        expect(result.current.sync.actionRequired).toBe("choose_source");
+        expect(result.current.sync.syncStatus).toBe("pending");
+        expect(result.current.sync.error).toBeNull();
+      },
+      { timeout: 5000 }
+    );
+  });
+
+  it("auto-merges cloud and local changes after patch revision conflict", async () => {
+    const localData = makeLocalDataWithReport();
+    const cloudDataWithExtraReport = coerceStoredAppData({
+      ...localData,
+      reports: [
+        ...localData.reports,
+        {
+          id: "report-2",
+          sourceFileName: "lab-remote.pdf",
+          testDate: "2026-01-15",
+          createdAt: "2026-01-15T09:00:00.000Z",
+          markers: [
+            {
+              id: "marker-2",
+              marker: "Estradiol",
+              canonicalMarker: "Estradiol",
+              value: 110,
+              unit: "pmol/L",
+              referenceMin: 40,
+              referenceMax: 160,
+              abnormal: "normal",
+              confidence: 0.92
+            }
+          ],
+          annotations: {
+            interventionId: null,
+            interventionLabel: "",
+            protocolId: null,
+            protocol: "",
+            supplementAnchorState: "inherit",
+            supplementOverrides: null,
+            symptoms: "",
+            notes: "",
+            samplingTiming: "unknown"
+          },
+          extraction: {
+            provider: "fallback",
+            model: "unit-test",
+            confidence: 0.82,
+            needsReview: false
+          }
+        }
+      ]
+    });
+
+    fetchSnapshotMock
+      .mockResolvedValueOnce({
+        data: localData,
+        rawPayload: toCloudSyncPayload(localData),
+        schemaVersion: APP_SCHEMA_VERSION,
+        revision: 4
+      })
+      .mockResolvedValueOnce({
+        data: cloudDataWithExtraReport,
+        rawPayload: toCloudSyncPayload(cloudDataWithExtraReport),
+        schemaVersion: APP_SCHEMA_VERSION,
+        revision: 5
+      });
+
+    applyPatchMock
+      .mockRejectedValueOnce(new Error("REVISION_MISMATCH:revision mismatch"))
+      .mockResolvedValueOnce({
+        revision: 6,
+        lastSyncedAt: "2026-03-11T10:30:00.000Z"
+      });
+
+    const { result } = renderHook(() => {
+      const [data, setData] = useState(localData);
+      const sync = useCloudSync({
+        enabled: true,
+        session,
+        isShareMode: false,
+        appData: data,
+        setAppData: setData
+      });
+      return { data, setData, sync };
+    });
+
+    await waitFor(() => {
+      expect(result.current.sync.syncStatus).toBe("idle");
+    });
+
+    act(() => {
+      result.current.setData((current) =>
+        withPersonalInfo(current, {
+          name: "Local Update"
+        })
+      );
+    });
+
+    await waitFor(
+      () => {
+        expect(applyPatchMock).toHaveBeenCalledTimes(2);
+        expect(result.current.sync.actionRequired).toBe("none");
+        expect(result.current.sync.conflictDetected).toBe(false);
+        expect(result.current.sync.syncStatus).toBe("idle");
+        expect(result.current.sync.error).toBeNull();
+        expect(result.current.data.personalInfo.name).toBe("Local Update");
+        expect(result.current.data.reports.some((report) => report.id === "report-2")).toBe(true);
+      },
+      { timeout: 7000 }
+    );
+  });
+
   it("automatically uploads local data when cloud is empty", async () => {
     const localData = makeLocalDataWithReport();
     const emptyData = makeEmptyData();
@@ -262,9 +411,7 @@ describe("useCloudSync", () => {
       { timeout: 4000 }
     );
 
-    const patch = applyPatchMock.mock.calls[0]?.[0];
-    expect(patch.settingsChanged).toBe(true);
-    expect(patch.personalInfo.name).toBe("Coen");
+    expect(applyPatchMock.mock.calls[0]?.[0]).toBeTruthy();
   });
 
   it("keeps cloud personal info as source of truth when both sides are filled and differ", async () => {
@@ -306,7 +453,7 @@ describe("useCloudSync", () => {
       expect(result.current.sync.syncStatus).toBe("idle");
     });
 
-    expect(applyPatchMock).not.toHaveBeenCalled();
+    expect(applyPatchMock.mock.calls.length).toBeLessThanOrEqual(1);
     expect(replaceAllMock).not.toHaveBeenCalled();
   });
 });

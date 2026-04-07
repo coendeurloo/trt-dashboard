@@ -4,6 +4,7 @@ import { getOrCreateCloudDeviceId } from "../cloud/deviceId";
 import {
   CloudSyncPayload,
   buildIncrementalPatch,
+  fromCloudSyncPayload,
   hasIncrementalPatchOperations,
   hasMeaningfulData,
   isPersonalInfoEmpty,
@@ -44,7 +45,7 @@ const detectRevisionConflict = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
   }
-  return /REVISION_MISMATCH|P0001|409/.test(error.message);
+  return /REVISION_MISMATCH|P0001|409/i.test(error.message);
 };
 
 const getErrorMessage = (error: unknown): string =>
@@ -99,6 +100,52 @@ const isTransientFailure = (error: unknown): boolean => {
 };
 
 const hashPayload = (payload: CloudSyncPayload): string => JSON.stringify(payload);
+
+const mergeRowsByLocalId = <TRow extends { local_id: string }>(
+  cloudRows: TRow[],
+  localRows: TRow[]
+): TRow[] => {
+  const mergedRows = new Map<string, TRow>();
+  cloudRows.forEach((row) => {
+    mergedRows.set(row.local_id, row);
+  });
+  localRows.forEach((row) => {
+    mergedRows.set(row.local_id, row);
+  });
+  return Array.from(mergedRows.values());
+};
+
+const mergePersonalInfoForConflict = (
+  cloud: CloudSyncPayload["personalInfo"],
+  local: CloudSyncPayload["personalInfo"]
+): CloudSyncPayload["personalInfo"] => ({
+  name: local.name.trim().length > 0 ? local.name : cloud.name,
+  dateOfBirth: local.dateOfBirth.trim().length > 0 ? local.dateOfBirth : cloud.dateOfBirth,
+  biologicalSex: local.biologicalSex !== "prefer_not_to_say" ? local.biologicalSex : cloud.biologicalSex,
+  heightCm: local.heightCm ?? cloud.heightCm,
+  weightKg: local.weightKg ?? cloud.weightKg
+});
+
+const mergePayloadForConflict = (
+  cloud: CloudSyncPayload,
+  local: CloudSyncPayload
+): CloudSyncPayload => ({
+  schemaVersion: Math.max(cloud.schemaVersion || 0, local.schemaVersion || 0),
+  settings: {
+    ...cloud.settings,
+    ...local.settings
+  },
+  markerAliasOverrides: {
+    ...cloud.markerAliasOverrides,
+    ...local.markerAliasOverrides
+  },
+  personalInfo: mergePersonalInfoForConflict(cloud.personalInfo, local.personalInfo),
+  reports: mergeRowsByLocalId(cloud.reports, local.reports),
+  markers: mergeRowsByLocalId(cloud.markers, local.markers),
+  protocols: mergeRowsByLocalId(cloud.protocols, local.protocols),
+  supplements: mergeRowsByLocalId(cloud.supplements, local.supplements),
+  checkIns: mergeRowsByLocalId(cloud.checkIns, local.checkIns)
+});
 
 export const useCloudSync = ({
   enabled,
@@ -299,7 +346,9 @@ export const useCloudSync = ({
         // Auto-resolve: cloud is the authoritative source for signed-in users.
         // Silently adopt the cloud copy, matching how most sync services behave.
         setAppData(cloudData);
-        lastSyncedHashRef.current = cloudHash;
+        // Prevent a stale local render from being patched back to cloud before
+        // React applies the cloud state update.
+        lastSyncedHashRef.current = localHash;
         lastSyncedPayloadRef.current = cloudPayload;
         setActionRequired("none");
         setSyncStatus("idle");
@@ -363,24 +412,66 @@ export const useCloudSync = ({
     [adapter]
   );
 
+  const attemptAutoResolveRevisionConflict = useCallback(async (): Promise<boolean> => {
+    if (!adapter) {
+      return false;
+    }
+    try {
+      const latestSnapshot = await adapter.fetchSnapshot();
+      const localPayload = toCloudSyncPayload(coerceStoredAppData(appData));
+      const mergedPayload = mergePayloadForConflict(latestSnapshot.rawPayload, localPayload);
+      const mergedData = fromCloudSyncPayload(mergedPayload);
+      const rebasedPatch = buildIncrementalPatch(latestSnapshot.rawPayload, mergedPayload);
+
+      if (hasIncrementalPatchOperations(rebasedPatch)) {
+        const result = await adapter.applyPatch(rebasedPatch, latestSnapshot.revision);
+        setLastRevision(result.revision);
+        lastRevisionRef.current = result.revision;
+        setLastSyncedAt(result.lastSyncedAt);
+      } else {
+        setLastRevision(latestSnapshot.revision);
+        lastRevisionRef.current = latestSnapshot.revision;
+      }
+
+      setAppData(mergedData);
+      setCloudCandidateData(mergedData);
+      lastSyncedHashRef.current = hashPayload(mergedPayload);
+      lastSyncedPayloadRef.current = mergedPayload;
+      setError(null);
+      setConflictDetected(false);
+      setActionRequired("none");
+      setBootstrapped(true);
+      setSyncStatus("idle");
+      resetRetryState("patch");
+      return true;
+    } catch {
+      return false;
+    }
+  }, [adapter, appData, resetRetryState, setAppData]);
+
   const uploadLocalData = useCallback(async () => {
     try {
       await replaceCloudWithData(coerceStoredAppData(appData));
       setCloudCandidateData(coerceStoredAppData(appData));
       resetRetryState("upload");
     } catch (replaceError) {
-      setError(replaceError instanceof Error ? replaceError.message : "Upload failed");
       if (detectRevisionConflict(replaceError)) {
+        const autoResolved = await attemptAutoResolveRevisionConflict();
+        if (autoResolved) {
+          return;
+        }
+        setError(null);
         setConflictDetected(true);
         setActionRequired("choose_source");
         setSyncStatus("pending");
         return;
       }
+      setError(replaceError instanceof Error ? replaceError.message : "Upload failed");
       if (!scheduleRetry("upload", replaceError)) {
         setSyncStatus("error");
       }
     }
-  }, [appData, replaceCloudWithData, resetRetryState, scheduleRetry]);
+  }, [appData, attemptAutoResolveRevisionConflict, replaceCloudWithData, resetRetryState, scheduleRetry]);
 
   const useCloudCopy = useCallback(() => {
     if (!cloudCandidateData) {
@@ -463,13 +554,18 @@ export const useCloudSync = ({
         setSyncStatus("idle");
         resetRetryState("patch");
       } catch (syncError) {
-        setError(syncError instanceof Error ? syncError.message : "Cloud sync failed");
         if (detectRevisionConflict(syncError)) {
+          const autoResolved = await attemptAutoResolveRevisionConflict();
+          if (autoResolved) {
+            return;
+          }
+          setError(null);
           setConflictDetected(true);
           setActionRequired("choose_source");
           setSyncStatus("pending");
           return;
         }
+        setError(syncError instanceof Error ? syncError.message : "Cloud sync failed");
         if (!scheduleRetry("patch", syncError)) {
           setSyncStatus("error");
         }
@@ -491,6 +587,7 @@ export const useCloudSync = ({
     schemaVersionCompatible
     ,
     patchRetryTick,
+    attemptAutoResolveRevisionConflict,
     resetRetryState,
     scheduleRetry
   ]);
