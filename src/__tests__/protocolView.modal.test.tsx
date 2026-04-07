@@ -161,6 +161,7 @@ describe("ProtocolView modal behavior", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
     expect(screen.getByDisplayValue("52.5 mg")).toBeTruthy();
+    expect(screen.getByDisplayValue("105 mg")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.queryByRole("heading", { name: "This protocol is already in use" })).toBeNull();
@@ -187,7 +188,7 @@ describe("ProtocolView modal behavior", () => {
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[0], { target: { value: "5x_week" } });
     fireEvent.change(selects[1], { target: { value: "SubQ" } });
-    expect(screen.getByText("Weekly equivalent: 10 mg/week")).toBeTruthy();
+    expect(screen.getByDisplayValue("10 mg")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -196,6 +197,27 @@ describe("ProtocolView modal behavior", () => {
     const savedProtocol = onAddProtocol.mock.calls[0]?.[0];
     expect(savedProtocol?.compounds?.[0]?.dose).toBe("10 mg/week");
     expect(savedProtocol?.compounds?.[0]?.doseMg).toBe("10 mg/week");
+  });
+
+  it("keeps weekly as source when frequency changes after weekly input", () => {
+    const onAddProtocol = vi.fn();
+    renderProtocolView({ onAddProtocol, protocols: [], reports: [], usageCount: 0 });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "New protocol" })[0]);
+    fireEvent.change(screen.getByLabelText("Protocol name"), {
+      target: { value: "Test weekly source" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search or type compound"), {
+      target: { value: "Testosterone Enanthate" }
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Weekly dose (e.g. 125 mg)"), {
+      target: { value: "105 mg" }
+    });
+    expect(screen.queryByDisplayValue("52.5 mg")).toBeNull();
+
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "2x_week" } });
+    expect(screen.getByDisplayValue("52.5 mg")).toBeTruthy();
   });
 
   it("asks confirmation before deleting a protocol", () => {

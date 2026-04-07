@@ -6,7 +6,8 @@ import {
   COMPOUND_OPTIONS,
   INJECTION_FREQUENCY_OPTIONS,
   normalizeInjectionFrequency,
-  protocolDosePerAdministrationToWeeklyEquivalent
+  protocolDosePerAdministrationToWeeklyDose,
+  protocolWeeklyDoseInputToPerAdministrationDose
 } from "../protocolStandards";
 import { PROTOCOL_ROUTE_OPTIONS } from "../protocolUtils";
 import { AppLanguage, CompoundEntry } from "../types";
@@ -39,34 +40,106 @@ interface ProtocolEditorProps {
   onChange: (next: ProtocolDraft) => void;
 }
 
+type DoseEditingField = "per_administration" | "weekly";
+
 const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
   const [compoundNameInput, setCompoundNameInput] = useState("");
   const [compoundDoseInput, setCompoundDoseInput] = useState("");
+  const [compoundDoseWeeklyInput, setCompoundDoseWeeklyInput] = useState("");
   const [compoundFrequencyInput, setCompoundFrequencyInput] = useState("unknown");
   const [compoundRouteInput, setCompoundRouteInput] = useState("");
+  const [compoundDoseLastEdited, setCompoundDoseLastEdited] = useState<DoseEditingField>("per_administration");
+  const [rowDoseLastEdited, setRowDoseLastEdited] = useState<Record<number, DoseEditingField>>({});
   const [showCompoundSuggestions, setShowCompoundSuggestions] = useState(false);
 
   const compoundSuggestions = useMemo(() => buildSuggestions(compoundNameInput, COMPOUND_OPTIONS), [compoundNameInput]);
   const searchQuery = compoundNameInput.trim();
   const shouldShowSuggestionMenu = showCompoundSuggestions && searchQuery.length >= AUTOCOMPLETE_MIN_CHARS;
   const hasMatchingSuggestions = compoundSuggestions.length > 0;
-  const newEntryWeeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(compoundDoseInput, compoundFrequencyInput);
+  const isKnownFrequency = (frequency: string): boolean => normalizeInjectionFrequency(frequency) !== "unknown";
+
+  const handleAddPerAdministrationDoseChange = (nextValue: string) => {
+    setCompoundDoseInput(nextValue);
+    setCompoundDoseLastEdited("per_administration");
+    const normalizedFrequency = normalizeInjectionFrequency(compoundFrequencyInput);
+    if (!isKnownFrequency(normalizedFrequency)) {
+      setCompoundDoseWeeklyInput("");
+      return;
+    }
+    const weeklyDose = protocolDosePerAdministrationToWeeklyDose(nextValue, normalizedFrequency);
+    if (weeklyDose) {
+      setCompoundDoseWeeklyInput(weeklyDose);
+    }
+  };
+
+  const handleAddWeeklyDoseChange = (nextValue: string) => {
+    setCompoundDoseWeeklyInput(nextValue);
+    setCompoundDoseLastEdited("weekly");
+    const normalizedFrequency = normalizeInjectionFrequency(compoundFrequencyInput);
+    if (!isKnownFrequency(normalizedFrequency)) {
+      setCompoundDoseInput("");
+      return;
+    }
+    const perAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(nextValue, normalizedFrequency);
+    if (perAdministrationDose) {
+      setCompoundDoseInput(perAdministrationDose);
+    }
+  };
+
+  const handleAddFrequencyChange = (nextFrequencyValue: string) => {
+    const normalizedFrequency = normalizeInjectionFrequency(nextFrequencyValue);
+    setCompoundFrequencyInput(normalizedFrequency);
+    if (!isKnownFrequency(normalizedFrequency)) {
+      return;
+    }
+    if (compoundDoseLastEdited === "weekly") {
+      const perAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(
+        compoundDoseWeeklyInput,
+        normalizedFrequency
+      );
+      if (perAdministrationDose) {
+        setCompoundDoseInput(perAdministrationDose);
+      }
+      return;
+    }
+    const weeklyDose = protocolDosePerAdministrationToWeeklyDose(compoundDoseInput, normalizedFrequency);
+    if (weeklyDose) {
+      setCompoundDoseWeeklyInput(weeklyDose);
+    }
+  };
 
   const addCompound = () => {
     const name = canonicalizeCompound(compoundNameInput);
     if (!name) {
       return;
     }
+    const normalizedFrequency = normalizeInjectionFrequency(compoundFrequencyInput);
+    let perAdministrationDose = compoundDoseInput.trim();
+    let weeklyDose = compoundDoseWeeklyInput.trim();
+
+    if (isKnownFrequency(normalizedFrequency)) {
+      if (compoundDoseLastEdited === "weekly") {
+        const convertedPerAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(weeklyDose, normalizedFrequency);
+        if (convertedPerAdministrationDose) {
+          perAdministrationDose = convertedPerAdministrationDose;
+        }
+      } else {
+        const convertedWeeklyDose = protocolDosePerAdministrationToWeeklyDose(perAdministrationDose, normalizedFrequency);
+        if (convertedWeeklyDose) {
+          weeklyDose = convertedWeeklyDose;
+        }
+      }
+    }
 
     const nextCompounds = [
       ...(value.compounds.length > 0 ? value.compounds : value.items),
       {
         name,
-        dose: compoundDoseInput.trim(),
-        doseMg: compoundDoseInput.trim(),
-        frequency: normalizeInjectionFrequency(compoundFrequencyInput),
+        dose: perAdministrationDose,
+        doseMg: weeklyDose,
+        frequency: normalizedFrequency,
         route: compoundRouteInput.trim()
       }
     ];
@@ -74,8 +147,10 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
     setCompoundNameInput("");
     setCompoundDoseInput("");
+    setCompoundDoseWeeklyInput("");
     setCompoundFrequencyInput("unknown");
     setCompoundRouteInput("");
+    setCompoundDoseLastEdited("per_administration");
     setShowCompoundSuggestions(false);
   };
 
@@ -96,6 +171,18 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
 
   const removeCompound = (index: number) => {
     const base = value.compounds.length > 0 ? value.compounds : value.items;
+    setRowDoseLastEdited((current) => {
+      const shifted = Object.entries(current).reduce<Record<number, DoseEditingField>>((acc, [key, field]) => {
+        const rowIndex = Number(key);
+        if (rowIndex < index) {
+          acc[rowIndex] = field;
+        } else if (rowIndex > index) {
+          acc[rowIndex - 1] = field;
+        }
+        return acc;
+      }, {});
+      return shifted;
+    });
     onChange(syncDraftItems(value, base.filter((_, compoundIndex) => compoundIndex !== index)));
   };
 
@@ -170,19 +257,28 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             </p>
           ) : null}
 
-          <div className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_170px_200px_140px_auto]">
+          <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
             <input
               value={compoundDoseInput}
-              onChange={(event) => setCompoundDoseInput(event.target.value)}
+              onChange={(event) => handleAddPerAdministrationDoseChange(event.target.value)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
               placeholder={tr(
                 "Dosis per toediening (bv. 2 mg)",
                 "Dose per administration (e.g. 2 mg)"
               )}
             />
+            <input
+              value={compoundDoseWeeklyInput}
+              onChange={(event) => handleAddWeeklyDoseChange(event.target.value)}
+              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              placeholder={tr(
+                "Weekdosis (bv. 125 mg)",
+                "Weekly dose (e.g. 125 mg)"
+              )}
+            />
             <select
               value={compoundFrequencyInput}
-              onChange={(event) => setCompoundFrequencyInput(event.target.value)}
+              onChange={(event) => handleAddFrequencyChange(event.target.value)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             >
               {INJECTION_FREQUENCY_OPTIONS.map((option) => (
@@ -211,19 +307,13 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
             </button>
           </div>
-
-          {newEntryWeeklyEquivalent ? (
-            <p className="text-[11px] text-slate-400">
-              {tr("Week-equivalent", "Weekly equivalent")}: {newEntryWeeklyEquivalent}
-            </p>
-          ) : null}
         </div>
 
         <p className="mt-2 text-[11px] text-slate-400">{tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}</p>
         <p className="mt-1 text-[11px] text-slate-400">
           {tr(
-            "Vul dosis per toediening in. Het week-equivalent wordt automatisch berekend op basis van frequentie.",
-            "Enter dose per administration. The weekly equivalent is calculated automatically from frequency."
+            "Je kunt per toediening of per week invullen. Bij bekende frequentie vullen de velden elkaar automatisch aan.",
+            "You can enter dose per administration or per week. With known frequency, the fields auto-fill each other."
           )}
         </p>
 
@@ -233,32 +323,78 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
           ) : (
             (value.compounds.length > 0 ? value.compounds : value.items).map((compound, index) => {
               const normalizedFrequency = normalizeInjectionFrequency(compound.frequency);
-              const editableDose = compound.dose || compound.doseMg || "";
-              const weeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(editableDose, normalizedFrequency);
+              const perAdministrationDose = compound.dose || "";
+              const weeklyDose = compound.doseMg || "";
+              const rowDoseSource = rowDoseLastEdited[index] ?? "weekly";
               return (
-              <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_170px_200px_140px_auto]">
+              <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
                   onChange={(event) => updateCompound(index, { name: event.target.value })}
                   onBlur={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
-                <div className="space-y-1">
-                  <input
-                    value={editableDose}
-                    onChange={(event) => updateCompound(index, { dose: event.target.value, doseMg: event.target.value })}
-                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                    placeholder={tr("Dosis per toediening", "Dose per administration")}
-                  />
-                  {weeklyEquivalent ? (
-                    <p className="text-[11px] text-slate-400">
-                      {tr("Week-equivalent", "Weekly equivalent")}: {weeklyEquivalent}
-                    </p>
-                  ) : null}
-                </div>
+                <input
+                  value={perAdministrationDose}
+                  onChange={(event) => {
+                    const nextDose = event.target.value;
+                    setRowDoseLastEdited((current) => ({ ...current, [index]: "per_administration" }));
+                    const patch: Partial<CompoundEntry> = { dose: nextDose };
+                    if (isKnownFrequency(normalizedFrequency)) {
+                      const nextWeeklyDose = protocolDosePerAdministrationToWeeklyDose(nextDose, normalizedFrequency);
+                      if (nextWeeklyDose) {
+                        patch.doseMg = nextWeeklyDose;
+                      }
+                    } else {
+                      patch.doseMg = "";
+                    }
+                    updateCompound(index, patch);
+                  }}
+                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  placeholder={tr("Dosis per toediening", "Dose per administration")}
+                />
+                <input
+                  value={weeklyDose}
+                  onChange={(event) => {
+                    const nextWeeklyDose = event.target.value;
+                    setRowDoseLastEdited((current) => ({ ...current, [index]: "weekly" }));
+                    const patch: Partial<CompoundEntry> = { doseMg: nextWeeklyDose };
+                    if (isKnownFrequency(normalizedFrequency)) {
+                      const nextPerAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(
+                        nextWeeklyDose,
+                        normalizedFrequency
+                      );
+                      if (nextPerAdministrationDose) {
+                        patch.dose = nextPerAdministrationDose;
+                      }
+                    } else {
+                      patch.dose = "";
+                    }
+                    updateCompound(index, patch);
+                  }}
+                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  placeholder={tr("Weekdosis", "Weekly dose")}
+                />
                 <select
                   value={normalizedFrequency}
-                  onChange={(event) => updateCompound(index, { frequency: event.target.value })}
+                  onChange={(event) => {
+                    const nextFrequency = normalizeInjectionFrequency(event.target.value);
+                    const patch: Partial<CompoundEntry> = { frequency: nextFrequency };
+                    if (isKnownFrequency(nextFrequency)) {
+                      if (rowDoseSource === "weekly") {
+                        const nextPerAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(weeklyDose, nextFrequency);
+                        if (nextPerAdministrationDose) {
+                          patch.dose = nextPerAdministrationDose;
+                        }
+                      } else {
+                        const nextWeeklyDose = protocolDosePerAdministrationToWeeklyDose(perAdministrationDose, nextFrequency);
+                        if (nextWeeklyDose) {
+                          patch.doseMg = nextWeeklyDose;
+                        }
+                      }
+                    }
+                    updateCompound(index, patch);
+                  }}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 >
                   {INJECTION_FREQUENCY_OPTIONS.map((option) => (

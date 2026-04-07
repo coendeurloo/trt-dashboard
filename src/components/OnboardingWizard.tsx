@@ -5,7 +5,9 @@ import {
   INJECTION_FREQUENCY_OPTIONS,
   normalizeInjectionFrequency,
   protocolDoseInputToCanonicalWeeklyDose,
-  protocolDosePerAdministrationToWeeklyEquivalent
+  protocolDosePerAdministrationToWeeklyDose,
+  protocolWeeklyDoseInputToCanonicalWeeklyDose,
+  protocolWeeklyDoseInputToPerAdministrationDose
 } from "../protocolStandards";
 import { WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
 import { createProtocolVersion } from "../protocolVersions";
@@ -45,6 +47,8 @@ export interface OnboardingWizardProps {
 interface ProtocolDraft {
   compound: string;
   dose: string;
+  doseWeekly: string;
+  doseLastEdited: "per_administration" | "weekly";
   frequency: string;
   route: string;
   startDate: string;
@@ -354,7 +358,7 @@ function StepProtocol({
   onChange: (d: ProtocolDraft) => void;
 }) {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
-  const weeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(draft.dose, draft.frequency);
+  const isKnownFrequency = normalizeInjectionFrequency(draft.frequency) !== "unknown";
   const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition-colors focus:ring-2 focus:ring-cyan-500/40 ${
     isDark
       ? "bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
@@ -390,14 +394,59 @@ function StepProtocol({
               className={inputCls}
               placeholder={tr("bijv. 2 mg", "e.g. 2 mg")}
               value={draft.dose}
-              onChange={(e) => onChange({ ...draft, dose: e.target.value })}
+              onChange={(e) => {
+                const nextDose = e.target.value;
+                const nextDraft: ProtocolDraft = {
+                  ...draft,
+                  dose: nextDose,
+                  doseLastEdited: "per_administration"
+                };
+                if (isKnownFrequency) {
+                  const nextWeeklyDose = protocolDosePerAdministrationToWeeklyDose(nextDose, draft.frequency);
+                  if (nextWeeklyDose) {
+                    nextDraft.doseWeekly = nextWeeklyDose;
+                  }
+                } else {
+                  nextDraft.doseWeekly = "";
+                }
+                onChange(nextDraft);
+              }}
             />
-            {weeklyEquivalent ? (
-              <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                {tr("Week-equivalent", "Weekly equivalent")}: {weeklyEquivalent}
-              </p>
-            ) : null}
           </div>
+          <div>
+            <label className={labelCls}>{tr("Weekdosis", "Weekly dose")}</label>
+            <input
+              className={inputCls}
+              placeholder={tr("bijv. 125 mg", "e.g. 125 mg")}
+              value={draft.doseWeekly}
+              onChange={(e) => {
+                const nextWeeklyDose = e.target.value;
+                const nextDraft: ProtocolDraft = {
+                  ...draft,
+                  doseWeekly: nextWeeklyDose,
+                  doseLastEdited: "weekly"
+                };
+                if (isKnownFrequency) {
+                  const nextPerAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(nextWeeklyDose, draft.frequency);
+                  if (nextPerAdministrationDose) {
+                    nextDraft.dose = nextPerAdministrationDose;
+                  }
+                } else {
+                  nextDraft.dose = "";
+                }
+                onChange(nextDraft);
+              }}
+            />
+          </div>
+        </div>
+        <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          {tr(
+            "Je kunt per toediening of per week invullen. Bij bekende frequentie vullen de velden elkaar automatisch aan.",
+            "You can enter dose per administration or per week. With known frequency, the fields auto-fill each other."
+          )}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>{tr("Toedieningswijze", "Route")}</label>
             <select
@@ -421,7 +470,24 @@ function StepProtocol({
             <select
               className={selectCls}
               value={draft.frequency}
-              onChange={(e) => onChange({ ...draft, frequency: e.target.value })}
+              onChange={(e) => {
+                const nextFrequency = normalizeInjectionFrequency(e.target.value);
+                const nextDraft: ProtocolDraft = { ...draft, frequency: nextFrequency };
+                if (nextFrequency !== "unknown") {
+                  if (draft.doseLastEdited === "weekly") {
+                    const nextPerAdministrationDose = protocolWeeklyDoseInputToPerAdministrationDose(draft.doseWeekly, nextFrequency);
+                    if (nextPerAdministrationDose) {
+                      nextDraft.dose = nextPerAdministrationDose;
+                    }
+                  } else {
+                    const nextWeeklyDose = protocolDosePerAdministrationToWeeklyDose(draft.dose, nextFrequency);
+                    if (nextWeeklyDose) {
+                      nextDraft.doseWeekly = nextWeeklyDose;
+                    }
+                  }
+                }
+                onChange(nextDraft);
+              }}
             >
               {INJECTION_FREQUENCY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -810,6 +876,8 @@ export default function OnboardingWizard({
   const [protocolDraft, setProtocolDraft] = useState<ProtocolDraft>({
     compound: "",
     dose: "",
+    doseWeekly: "",
+    doseLastEdited: "weekly",
     frequency: "unknown",
     route: "",
     startDate: ""
@@ -838,8 +906,12 @@ export default function OnboardingWizard({
     const now = new Date().toISOString();
     const effectiveFrom = protocolDraft.startDate.trim() || now.slice(0, 10);
     const normalizedFrequency = normalizeInjectionFrequency(protocolDraft.frequency);
-    const doseInput = protocolDraft.dose.trim();
-    const canonicalDose = protocolDoseInputToCanonicalWeeklyDose(doseInput, normalizedFrequency) ?? doseInput;
+    const weeklyDoseInput = protocolDraft.doseWeekly.trim();
+    const perAdministrationDoseInput = protocolDraft.dose.trim();
+    const canonicalDose =
+      (weeklyDoseInput ? protocolWeeklyDoseInputToCanonicalWeeklyDose(weeklyDoseInput) : null) ??
+      (perAdministrationDoseInput ? protocolDoseInputToCanonicalWeeklyDose(perAdministrationDoseInput, normalizedFrequency) : null) ??
+      (weeklyDoseInput || perAdministrationDoseInput);
     const item: InterventionItem = {
       name: protocolDraft.compound.trim(),
       dose: canonicalDose,

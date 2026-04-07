@@ -58,6 +58,7 @@ const canonicalizeDraftForCompare = (draft: ProtocolDraft): string =>
     compounds: draft.compounds.map((compound) => ({
       name: compound.name.trim(),
       dose: (compound.dose ?? compound.doseMg ?? "").trim(),
+      doseWeekly: (compound.doseMg ?? "").trim(),
       frequency: compound.frequency.trim(),
       route: compound.route.trim()
     }))

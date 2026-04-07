@@ -671,11 +671,11 @@ const DAILY_DOSE_SUFFIX_PATTERN = /(?:\/\s*(?:day|d)\b|per\s+(?:day|dag)\b|daily
 const DOSE_VALUE_WITH_UNIT_PATTERN = /^([+-]?\d+(?:[.,]\d+)?)(?:\s*([a-zA-Z%uUµμ][a-zA-Z0-9%uUµμ-]*))?\s*$/;
 
 const formatDoseNumber = (value: number): string => {
-  const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
   if (!Number.isFinite(rounded)) {
     return "";
   }
-  return rounded.toFixed(3).replace(/\.?0+$/, "");
+  return rounded.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const formatDoseValueWithUnit = (amount: number, unit: string): string => {
@@ -694,13 +694,16 @@ const formatWeeklyDoseValue = (amount: number, unit: string): string => {
   return unit ? `${base}/week` : `${base}/week`;
 };
 
-const parseDoseInput = (value: string): ParsedDoseInput | null => {
+const parseDoseInput = (
+  value: string,
+  defaultCadence: DoseCadence = "per_administration"
+): ParsedDoseInput | null => {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
 
-  let cadence: DoseCadence = "per_administration";
+  let cadence: DoseCadence = defaultCadence;
   let withoutCadence = trimmed;
 
   if (WEEKLY_DOSE_SUFFIX_PATTERN.test(withoutCadence)) {
@@ -741,7 +744,7 @@ export const protocolDosePerAdministrationToWeeklyEquivalent = (
   dosePerAdministration: string,
   injectionFrequency: string
 ): string | null => {
-  const parsedDose = parseDoseInput(dosePerAdministration);
+  const parsedDose = parseDoseInput(dosePerAdministration, "per_administration");
   if (!parsedDose || parsedDose.cadence !== "per_administration") {
     return null;
   }
@@ -753,11 +756,56 @@ export const protocolDosePerAdministrationToWeeklyEquivalent = (
   return weeklyDose || null;
 };
 
+export const protocolDosePerAdministrationToWeeklyDose = (
+  dosePerAdministration: string,
+  injectionFrequency: string
+): string | null => {
+  const weeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(dosePerAdministration, injectionFrequency);
+  if (!weeklyEquivalent) {
+    return null;
+  }
+  const parsed = parseDoseInput(weeklyEquivalent, "per_week");
+  if (!parsed) {
+    return null;
+  }
+  return formatDoseValueWithUnit(parsed.amount, parsed.unit) || null;
+};
+
+export const protocolWeeklyDoseInputToCanonicalWeeklyDose = (weeklyDoseInput: string): string | null => {
+  const parsedDose = parseDoseInput(weeklyDoseInput, "per_week");
+  if (!parsedDose) {
+    return null;
+  }
+  if (parsedDose.cadence === "per_day") {
+    const weeklyDose = formatWeeklyDoseValue(parsedDose.amount * 7, parsedDose.unit);
+    return weeklyDose || null;
+  }
+  const weeklyDose = formatWeeklyDoseValue(parsedDose.amount, parsedDose.unit);
+  return weeklyDose || null;
+};
+
+export const protocolWeeklyDoseInputToPerAdministrationDose = (
+  weeklyDoseInput: string,
+  injectionFrequency: string
+): string | null => {
+  const parsedDose = parseDoseInput(weeklyDoseInput, "per_week");
+  if (!parsedDose) {
+    return null;
+  }
+  const dosesPerWeek = getFrequencyDosesPerWeek(injectionFrequency);
+  if (dosesPerWeek === null || dosesPerWeek <= 0) {
+    return null;
+  }
+  const weeklyAmount = parsedDose.cadence === "per_day" ? parsedDose.amount * 7 : parsedDose.amount;
+  const perAdministrationDose = formatDoseValueWithUnit(weeklyAmount / dosesPerWeek, parsedDose.unit);
+  return perAdministrationDose || null;
+};
+
 export const protocolDoseInputToCanonicalWeeklyDose = (
   doseInput: string,
   injectionFrequency: string
 ): string | null => {
-  const parsedDose = parseDoseInput(doseInput);
+  const parsedDose = parseDoseInput(doseInput, "per_administration");
   if (!parsedDose) {
     return null;
   }
@@ -784,16 +832,7 @@ export const protocolWeeklyDoseToPerAdministrationDose = (
   storedWeeklyDose: string,
   injectionFrequency: string
 ): string | null => {
-  const parsedDose = parseDoseInput(storedWeeklyDose);
-  if (!parsedDose || parsedDose.cadence !== "per_week") {
-    return null;
-  }
-  const dosesPerWeek = getFrequencyDosesPerWeek(injectionFrequency);
-  if (dosesPerWeek === null || dosesPerWeek <= 0) {
-    return null;
-  }
-  const perAdministrationDose = formatDoseValueWithUnit(parsedDose.amount / dosesPerWeek, parsedDose.unit);
-  return perAdministrationDose || null;
+  return protocolWeeklyDoseInputToPerAdministrationDose(storedWeeklyDose, injectionFrequency);
 };
 
 export const compoundsForProtocolEditor = (compounds: CompoundEntry[]): CompoundEntry[] =>
@@ -802,12 +841,18 @@ export const compoundsForProtocolEditor = (compounds: CompoundEntry[]): Compound
     const frequency = normalizeInjectionFrequency(String(compound.frequency ?? "unknown"));
     const route = String(compound.route ?? "").trim();
     const storedDose = String(compound.dose ?? compound.doseMg ?? "").trim();
-    const editorDose = protocolWeeklyDoseToPerAdministrationDose(storedDose, frequency) ?? storedDose;
+    const canonicalWeeklyDose =
+      protocolWeeklyDoseInputToCanonicalWeeklyDose(storedDose) ??
+      protocolDoseInputToCanonicalWeeklyDose(storedDose, frequency);
+    const weeklyInput = canonicalWeeklyDose ? String(canonicalWeeklyDose).replace(/\/\s*week$/i, "") : "";
+    const perAdministrationInput =
+      (weeklyInput ? protocolWeeklyDoseInputToPerAdministrationDose(weeklyInput, frequency) : null) ??
+      (storedDose && !weeklyInput ? storedDose : "");
     return {
       ...compound,
       name,
-      dose: editorDose,
-      doseMg: editorDose,
+      dose: perAdministrationInput,
+      doseMg: weeklyInput,
       frequency,
       route
     };
@@ -818,8 +863,12 @@ export const compoundsForProtocolStorage = (compounds: CompoundEntry[]): Compoun
     const name = String(compound.name ?? "").trim();
     const frequency = normalizeInjectionFrequency(String(compound.frequency ?? "unknown"));
     const route = String(compound.route ?? "").trim();
-    const doseInput = String(compound.dose ?? compound.doseMg ?? "").trim();
-    const canonicalDose = protocolDoseInputToCanonicalWeeklyDose(doseInput, frequency) ?? doseInput;
+    const perAdministrationDoseInput = String(compound.dose ?? "").trim();
+    const weeklyDoseInput = String(compound.doseMg ?? "").trim();
+    const canonicalDose =
+      (weeklyDoseInput ? protocolWeeklyDoseInputToCanonicalWeeklyDose(weeklyDoseInput) : null) ??
+      (perAdministrationDoseInput ? protocolDoseInputToCanonicalWeeklyDose(perAdministrationDoseInput, frequency) : null) ??
+      (weeklyDoseInput || perAdministrationDoseInput);
     return {
       ...compound,
       name,

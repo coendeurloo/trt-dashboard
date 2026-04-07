@@ -3,7 +3,10 @@ import {
   compoundsForProtocolStorage,
   normalizeSupplementEntries,
   protocolDoseInputToCanonicalWeeklyDose,
+  protocolDosePerAdministrationToWeeklyDose,
   protocolDosePerAdministrationToWeeklyEquivalent,
+  protocolWeeklyDoseInputToCanonicalWeeklyDose,
+  protocolWeeklyDoseInputToPerAdministrationDose,
   protocolWeeklyDoseToPerAdministrationDose,
   supplementEntriesToText
 } from "../protocolStandards";
@@ -58,6 +61,20 @@ describe("protocolStandards protocol dose conversion", () => {
 
   it("returns no helper equivalent when frequency is unknown", () => {
     expect(protocolDosePerAdministrationToWeeklyEquivalent("2 mg", "unknown")).toBeNull();
+  });
+
+  it("builds weekly input value (without /week suffix) from per-administration input", () => {
+    expect(protocolDosePerAdministrationToWeeklyDose("2 mg", "5x_week")).toBe("10 mg");
+  });
+
+  it("treats weekly input without suffix as weekly by default", () => {
+    expect(protocolWeeklyDoseInputToPerAdministrationDose("105 mg", "2x_week")).toBe("52.5 mg");
+    expect(protocolWeeklyDoseInputToCanonicalWeeklyDose("105 mg")).toBe("105 mg/week");
+  });
+
+  it("rounds to 2 decimals in weekly/per-administration conversions", () => {
+    expect(protocolDosePerAdministrationToWeeklyDose("1.43 mg", "3x_week")).toBe("4.29 mg");
+    expect(protocolWeeklyDoseInputToPerAdministrationDose("100 mg", "every_3_days")).toBe("42.86 mg");
   });
 
   it("keeps raw input for unparseable doses during storage normalization", () => {
