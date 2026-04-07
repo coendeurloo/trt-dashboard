@@ -41,7 +41,7 @@ interface ProtocolEditorProps {
 }
 
 type DoseEditingField = "per_administration" | "weekly";
-const COMPOUND_ROW_GRID_CLASS = "grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]";
+const COMPOUND_ROW_GRID_CLASS = "grid gap-2 md:grid-cols-[minmax(180px,1fr)_140px_140px_180px_120px_44px]";
 
 const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -262,19 +262,19 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             <input
               value={compoundDoseInput}
               onChange={(event) => handleAddPerAdministrationDoseChange(event.target.value)}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
               placeholder={tr("2 mg", "2 mg")}
             />
             <input
               value={compoundDoseWeeklyInput}
               onChange={(event) => handleAddWeeklyDoseChange(event.target.value)}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
               placeholder={tr("125 mg", "125 mg")}
             />
             <select
               value={compoundFrequencyInput}
               onChange={(event) => handleAddFrequencyChange(event.target.value)}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             >
               {INJECTION_FREQUENCY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -285,7 +285,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             <select
               value={compoundRouteInput}
               onChange={(event) => setCompoundRouteInput(event.target.value)}
-              className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+              className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             >
               <option value="">{tr("Route: niet ingevuld", "Route: not set")}</option>
               {PROTOCOL_ROUTE_OPTIONS.filter((option) => option !== "").map((option) => (
@@ -312,7 +312,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
           )}
         </p>
 
-        <div className="mt-2 hidden gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
+        <div className="mt-2 hidden gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[minmax(180px,1fr)_140px_140px_180px_120px_44px]">
           <span>{tr("Naam", "Name")}</span>
           <span>{tr("Per toediening", "Per administration")}</span>
           <span>{tr("Weekdosis", "Weekly dose")}</span>
@@ -336,7 +336,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                   value={compound.name}
                   onChange={(event) => updateCompound(index, { name: event.target.value })}
                   onBlur={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
                 <input
                   value={perAdministrationDose}
@@ -354,7 +354,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     }
                     updateCompound(index, patch);
                   }}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                   placeholder={tr("2 mg", "2 mg")}
                 />
                 <input
@@ -376,7 +376,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     }
                     updateCompound(index, patch);
                   }}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                   placeholder={tr("125 mg", "125 mg")}
                 />
                 <select
@@ -399,7 +399,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     }
                     updateCompound(index, patch);
                   }}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 >
                   {INJECTION_FREQUENCY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -410,7 +410,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                 <select
                   value={compound.route}
                   onChange={(event) => updateCompound(index, { route: event.target.value })}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                  className="review-context-input min-w-0 w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="">{tr("Niet ingevuld", "Not set")}</option>
                   {PROTOCOL_ROUTE_OPTIONS.filter((option) => option !== "").map((option) => (
@@ -421,7 +421,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                 </select>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+                  className="inline-flex w-full items-center justify-center rounded-md border border-rose-500/40 bg-rose-500/10 px-0 py-2 text-sm text-rose-200"
                   onClick={() => removeCompound(index)}
                 >
                   <X className="h-4 w-4" />
