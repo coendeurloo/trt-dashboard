@@ -5,7 +5,8 @@ import {
   canonicalizeCompound,
   COMPOUND_OPTIONS,
   INJECTION_FREQUENCY_OPTIONS,
-  normalizeInjectionFrequency
+  normalizeInjectionFrequency,
+  protocolDosePerAdministrationToWeeklyEquivalent
 } from "../protocolStandards";
 import { PROTOCOL_ROUTE_OPTIONS } from "../protocolUtils";
 import { AppLanguage, CompoundEntry } from "../types";
@@ -13,31 +14,6 @@ import { ProtocolDraft } from "./protocolEditorModel";
 
 const AUTOCOMPLETE_MIN_CHARS = 2;
 const AUTOCOMPLETE_MAX_OPTIONS = 8;
-
-const formatWeeklyDoseValue = (value: number): string => {
-  const rounded = Math.round(value * 100) / 100;
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
-};
-
-const normalizeDoseToWeekly = (rawValue: string): string => {
-  const trimmed = rawValue.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const dailyMatch = trimmed.match(
-    /^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?\s*(?:\/\s*)?(?:day|d|daily|ed|per day|per dag|dagelijks)$/i
-  );
-  if (!dailyMatch) {
-    return trimmed;
-  }
-  const numeric = Number((dailyMatch[1] ?? "").replace(",", "."));
-  if (!Number.isFinite(numeric)) {
-    return trimmed;
-  }
-  const unit = (dailyMatch[2] ?? "").trim();
-  const weekly = formatWeeklyDoseValue(numeric * 7);
-  return unit ? `${weekly} ${unit}/week` : `${weekly}/week`;
-};
 
 const buildSuggestions = (value: string, options: string[]): string[] => {
   const query = value.trim().toLocaleLowerCase();
@@ -76,6 +52,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const searchQuery = compoundNameInput.trim();
   const shouldShowSuggestionMenu = showCompoundSuggestions && searchQuery.length >= AUTOCOMPLETE_MIN_CHARS;
   const hasMatchingSuggestions = compoundSuggestions.length > 0;
+  const newEntryWeeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(compoundDoseInput, compoundFrequencyInput);
 
   const addCompound = () => {
     const name = canonicalizeCompound(compoundNameInput);
@@ -197,11 +174,10 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             <input
               value={compoundDoseInput}
               onChange={(event) => setCompoundDoseInput(event.target.value)}
-              onBlur={(event) => setCompoundDoseInput(normalizeDoseToWeekly(event.target.value))}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
               placeholder={tr(
-                "Totale weekdosis (bv. Testosteron 125 mg/week of 18 mg/day)",
-                "Total weekly dose (e.g. Testosterone 125 mg/week or 18 mg/day)"
+                "Dosis per toediening (bv. 2 mg)",
+                "Dose per administration (e.g. 2 mg)"
               )}
             />
             <select
@@ -235,13 +211,19 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               <Plus className="h-4 w-4" /> {tr("Toevoegen", "Add")}
             </button>
           </div>
+
+          {newEntryWeeklyEquivalent ? (
+            <p className="text-[11px] text-slate-400">
+              {tr("Week-equivalent", "Weekly equivalent")}: {newEntryWeeklyEquivalent}
+            </p>
+          ) : null}
         </div>
 
         <p className="mt-2 text-[11px] text-slate-400">{tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}</p>
         <p className="mt-1 text-[11px] text-slate-400">
           {tr(
-            "Dosis is altijd de totale weekdosis. Voorbeeld (testosteron): 18 mg/dag = 125 mg/week.",
-            "Dose is always the total weekly dose. Testosterone example: 18 mg/day = 125 mg/week."
+            "Vul dosis per toediening in. Het week-equivalent wordt automatisch berekend op basis van frequentie.",
+            "Enter dose per administration. The weekly equivalent is calculated automatically from frequency."
           )}
         </p>
 
@@ -249,7 +231,11 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
           {(value.compounds.length > 0 ? value.compounds : value.items).length === 0 ? (
             <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
           ) : (
-            (value.compounds.length > 0 ? value.compounds : value.items).map((compound, index) => (
+            (value.compounds.length > 0 ? value.compounds : value.items).map((compound, index) => {
+              const normalizedFrequency = normalizeInjectionFrequency(compound.frequency);
+              const editableDose = compound.dose || compound.doseMg || "";
+              const weeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(editableDose, normalizedFrequency);
+              return (
               <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_170px_200px_140px_auto]">
                 <input
                   value={compound.name}
@@ -257,18 +243,21 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                   onBlur={(event) => updateCompound(index, { name: canonicalizeCompound(event.target.value) })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 />
-                <input
-                  value={compound.dose || compound.doseMg}
-                  onChange={(event) => updateCompound(index, { dose: event.target.value, doseMg: event.target.value })}
-                  onBlur={(event) => {
-                    const normalizedDose = normalizeDoseToWeekly(event.target.value);
-                    updateCompound(index, { dose: normalizedDose, doseMg: normalizedDose });
-                  }}
-                  className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  placeholder={tr("Totale weekdosis", "Total weekly dose")}
-                />
+                <div className="space-y-1">
+                  <input
+                    value={editableDose}
+                    onChange={(event) => updateCompound(index, { dose: event.target.value, doseMg: event.target.value })}
+                    className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+                    placeholder={tr("Dosis per toediening", "Dose per administration")}
+                  />
+                  {weeklyEquivalent ? (
+                    <p className="text-[11px] text-slate-400">
+                      {tr("Week-equivalent", "Weekly equivalent")}: {weeklyEquivalent}
+                    </p>
+                  ) : null}
+                </div>
                 <select
-                  value={normalizeInjectionFrequency(compound.frequency)}
+                  value={normalizedFrequency}
                   onChange={(event) => updateCompound(index, { frequency: event.target.value })}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
                 >
@@ -298,7 +287,8 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </div>

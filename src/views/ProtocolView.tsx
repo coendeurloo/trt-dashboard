@@ -5,6 +5,7 @@ import EmptyStateCard from "../components/EmptyStateCard";
 import ProtocolEditor from "../components/ProtocolEditor";
 import { ProtocolDraft, blankProtocolDraft } from "../components/protocolEditorModel";
 import { trLocale } from "../i18n";
+import { compoundsForProtocolEditor, compoundsForProtocolStorage } from "../protocolStandards";
 import { getMostRecentlyUpdatedProtocolId, getProtocolCompoundsText } from "../protocolUtils";
 import {
   createProtocolVersion,
@@ -33,11 +34,13 @@ interface ProtocolViewProps {
 
 const protocolToDraft = (protocol: Protocol): ProtocolDraft => {
   const latestVersion = getLatestProtocolVersion(protocol);
-  const compounds = latestVersion
+  const compounds = compoundsForProtocolEditor(
+    latestVersion
     ? latestVersion.compounds
     : protocol.compounds.length > 0
       ? protocol.compounds
-      : protocol.items;
+      : protocol.items
+  );
   return {
     name: protocol.name,
     effectiveFrom: todayIsoDate(),
@@ -209,13 +212,14 @@ const ProtocolView = ({
     }
     const name = draft.name.trim();
     const effectiveFrom = draft.effectiveFrom.trim() || todayIsoDate();
+    const compounds = compoundsForProtocolStorage(draft.compounds);
     onUpdateProtocol(
       editingId,
       {
         name,
         effectiveFrom,
-        items: draft.compounds,
-        compounds: draft.compounds,
+        items: compounds,
+        compounds,
         notes: draft.notes
       },
       mode
@@ -238,6 +242,7 @@ const ProtocolView = ({
       setFeedback(tr(`Voeg minimaal 1 ${itemLabel} toe.`, `Add at least 1 ${itemLabel}.`));
       return;
     }
+    const compounds = compoundsForProtocolStorage(draft.compounds);
 
     if (editorMode === "edit" && editingId) {
       if (linkedReportsForEditing.length > 0) {
@@ -252,7 +257,7 @@ const ProtocolView = ({
     const version = createProtocolVersion({
       name,
       effectiveFrom,
-      items: draft.compounds,
+      items: compounds,
       notes: draft.notes,
       createdAt: now
     });

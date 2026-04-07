@@ -116,7 +116,7 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div>
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("Datum", "Date")}</label>
         <input
@@ -128,7 +128,7 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
         />
       </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4 sm:gap-5">
         {metrics.map((metricId) => {
           const metric = WELLBEING_METRICS[metricId];
           return (
@@ -157,7 +157,7 @@ const CheckInForm = ({ userProfile, initial, onSave, onCancel, language }: Check
         />
       </div>
 
-      <div className="flex gap-2 border-t border-slate-800 pt-2">
+      <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-2">
         <button
           type="button"
           onClick={handleSave}
@@ -302,7 +302,10 @@ const CheckInModal = ({ open, title, userProfile, initial, language, onSave, onC
 
   return createPortal(
     <div className="app-modal-overlay z-[92]" role="dialog" aria-modal="true" aria-labelledby="wellbeing-checkin-modal-title" onClick={onClose}>
-      <div className="app-modal-shell w-full max-w-3xl bg-slate-900 shadow-soft" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="app-modal-shell flex max-h-[92vh] w-full max-w-3xl flex-col bg-slate-900 shadow-soft sm:max-h-[90vh]"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="app-modal-header p-5 sm:p-6">
           <div className="app-modal-header-glow" aria-hidden />
           <div className="relative flex items-start justify-between gap-3">
@@ -325,7 +328,7 @@ const CheckInModal = ({ open, title, userProfile, initial, language, onSave, onC
             </button>
           </div>
         </div>
-        <div className="p-5 sm:p-6">
+        <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
           <CheckInForm userProfile={userProfile} initial={initial} onSave={onSave} onCancel={onClose} language={language} />
         </div>
       </div>

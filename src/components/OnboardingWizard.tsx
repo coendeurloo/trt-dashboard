@@ -1,6 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trLocale } from "../i18n";
+import {
+  INJECTION_FREQUENCY_OPTIONS,
+  normalizeInjectionFrequency,
+  protocolDoseInputToCanonicalWeeklyDose,
+  protocolDosePerAdministrationToWeeklyEquivalent
+} from "../protocolStandards";
 import { WELLBEING_METRICS, WELLBEING_PRESETS } from "../wellbeingMetrics";
 import { createProtocolVersion } from "../protocolVersions";
 import { createId } from "../utils";
@@ -52,16 +58,6 @@ interface SupplementDraft {
 /* ── Constants ─────────────────────────────────────────── */
 
 const TOTAL_STEPS = 6;
-
-const FREQUENCIES: { value: string; nl: string; en: string }[] = [
-  { value: "daily", nl: "Dagelijks", en: "Daily" },
-  { value: "every other day", nl: "Om de dag", en: "Every other day" },
-  { value: "2x/week", nl: "2x per week", en: "Twice a week" },
-  { value: "3x/week", nl: "3x per week", en: "3x per week" },
-  { value: "weekly", nl: "Wekelijks", en: "Weekly" },
-  { value: "biweekly", nl: "Om de 2 weken", en: "Every 2 weeks" },
-  { value: "monthly", nl: "Maandelijks", en: "Monthly" }
-];
 
 const ROUTES: { value: string; nl: string; en: string }[] = [
   { value: "injection", nl: "Injectie", en: "Injection" },
@@ -358,6 +354,7 @@ function StepProtocol({
   onChange: (d: ProtocolDraft) => void;
 }) {
   const tr = (nl: string, en: string) => trLocale(language, nl, en);
+  const weeklyEquivalent = protocolDosePerAdministrationToWeeklyEquivalent(draft.dose, draft.frequency);
   const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition-colors focus:ring-2 focus:ring-cyan-500/40 ${
     isDark
       ? "bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
@@ -388,13 +385,18 @@ function StepProtocol({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>{tr("Dosering", "Dose")}</label>
+            <label className={labelCls}>{tr("Dosis per toediening", "Dose per administration")}</label>
             <input
               className={inputCls}
-              placeholder={tr("bijv. 150mg", "e.g. 150mg")}
+              placeholder={tr("bijv. 2 mg", "e.g. 2 mg")}
               value={draft.dose}
               onChange={(e) => onChange({ ...draft, dose: e.target.value })}
             />
+            {weeklyEquivalent ? (
+              <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                {tr("Week-equivalent", "Weekly equivalent")}: {weeklyEquivalent}
+              </p>
+            ) : null}
           </div>
           <div>
             <label className={labelCls}>{tr("Toedieningswijze", "Route")}</label>
@@ -421,10 +423,9 @@ function StepProtocol({
               value={draft.frequency}
               onChange={(e) => onChange({ ...draft, frequency: e.target.value })}
             >
-              <option value="">{tr("Kies...", "Select...")}</option>
-              {FREQUENCIES.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {trLocale(language, f.nl, f.en)}
+              {INJECTION_FREQUENCY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {tr(option.label.nl, option.label.en)}
                 </option>
               ))}
             </select>
@@ -809,7 +810,7 @@ export default function OnboardingWizard({
   const [protocolDraft, setProtocolDraft] = useState<ProtocolDraft>({
     compound: "",
     dose: "",
-    frequency: "",
+    frequency: "unknown",
     route: "",
     startDate: ""
   });
@@ -836,11 +837,14 @@ export default function OnboardingWizard({
     if (!protocolDraft.compound.trim()) return;
     const now = new Date().toISOString();
     const effectiveFrom = protocolDraft.startDate.trim() || now.slice(0, 10);
+    const normalizedFrequency = normalizeInjectionFrequency(protocolDraft.frequency);
+    const doseInput = protocolDraft.dose.trim();
+    const canonicalDose = protocolDoseInputToCanonicalWeeklyDose(doseInput, normalizedFrequency) ?? doseInput;
     const item: InterventionItem = {
       name: protocolDraft.compound.trim(),
-      dose: protocolDraft.dose.trim(),
-      doseMg: protocolDraft.dose.trim(),
-      frequency: protocolDraft.frequency,
+      dose: canonicalDose,
+      doseMg: canonicalDose,
+      frequency: normalizedFrequency,
       route: protocolDraft.route
     };
     const protocolName = protocolDraft.compound.trim();

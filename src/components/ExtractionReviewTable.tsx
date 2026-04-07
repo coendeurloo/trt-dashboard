@@ -18,6 +18,7 @@ import {
 } from "../types";
 import {
   canonicalizeSupplement,
+  compoundsForProtocolStorage,
   SUPPLEMENT_FREQUENCY_OPTIONS,
   SUPPLEMENT_OPTIONS,
   supplementFrequencyLabel
@@ -717,22 +718,23 @@ const ExtractionReviewTable = ({
       setProtocolFeedback(tr("Voeg minimaal 1 compound toe.", "Add at least 1 compound."));
       return;
     }
+    const compounds = compoundsForProtocolStorage(protocolDraft.compounds);
 
     const now = new Date().toISOString();
     const version = {
       id: createId(),
       name,
       effectiveFrom,
-      items: protocolDraft.compounds,
-      compounds: protocolDraft.compounds,
+      items: compounds,
+      compounds,
       notes: protocolDraft.notes,
       createdAt: now
     };
     const protocol: Protocol = {
       id: createId(),
       name,
-      items: protocolDraft.compounds,
-      compounds: protocolDraft.compounds,
+      items: compounds,
+      compounds,
       versions: [version],
       notes: protocolDraft.notes,
       createdAt: now,

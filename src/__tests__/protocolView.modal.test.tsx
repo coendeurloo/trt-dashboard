@@ -64,12 +64,14 @@ const report: LabReport = {
 };
 
 const renderProtocolView = ({
+  onAddProtocol,
   onUpdateProtocol,
   onDeleteProtocol,
   protocols = [protocol],
   reports = [report],
   usageCount = 1
 }: {
+  onAddProtocol?: (protocol: Protocol) => void;
   onUpdateProtocol?: (
     id: string,
     updates: Partial<Protocol> & { effectiveFrom?: string },
@@ -87,7 +89,7 @@ const renderProtocolView = ({
       language="en"
       userProfile="trt"
       isShareMode={false}
-      onAddProtocol={vi.fn()}
+      onAddProtocol={onAddProtocol ?? vi.fn()}
       onUpdateProtocol={onUpdateProtocol ?? vi.fn()}
       onDeleteProtocol={onDeleteProtocol ?? vi.fn(() => true)}
       getProtocolUsageCount={vi.fn(() => usageCount)}
@@ -158,11 +160,42 @@ describe("ProtocolView modal behavior", () => {
     renderProtocolView({ onUpdateProtocol, usageCount: 0, reports: [] });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    expect(screen.getByDisplayValue("52.5 mg")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.queryByRole("heading", { name: "This protocol is already in use" })).toBeNull();
     expect(onUpdateProtocol).toHaveBeenCalledTimes(1);
     expect(onUpdateProtocol.mock.calls[0]?.[2]).toBe("replace_existing");
+    const updates = onUpdateProtocol.mock.calls[0]?.[1];
+    expect(updates?.compounds?.[0]?.dose).toBe("105 mg/week");
+  });
+
+  it("stores canonical weekly dose when adding per-administration input", () => {
+    const onAddProtocol = vi.fn();
+    renderProtocolView({ onAddProtocol, protocols: [], reports: [], usageCount: 0 });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "New protocol" })[0]);
+    fireEvent.change(screen.getByLabelText("Protocol name"), {
+      target: { value: "GHK-CU base" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search or type compound"), {
+      target: { value: "GHK-CU" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("Dose per administration (e.g. 2 mg)"), {
+      target: { value: "2 mg" }
+    });
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "5x_week" } });
+    fireEvent.change(selects[1], { target: { value: "SubQ" } });
+    expect(screen.getByText("Weekly equivalent: 10 mg/week")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onAddProtocol).toHaveBeenCalledTimes(1);
+    const savedProtocol = onAddProtocol.mock.calls[0]?.[0];
+    expect(savedProtocol?.compounds?.[0]?.dose).toBe("10 mg/week");
+    expect(savedProtocol?.compounds?.[0]?.doseMg).toBe("10 mg/week");
   });
 
   it("asks confirmation before deleting a protocol", () => {

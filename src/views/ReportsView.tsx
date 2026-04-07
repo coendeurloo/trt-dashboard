@@ -9,7 +9,14 @@ import { buildMarkerSeries } from "../analytics";
 import MarkerInfoBadge from "../components/MarkerInfoBadge";
 import { abnormalStatusLabel, blankAnnotations } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
-import { canonicalizeSupplement, SUPPLEMENT_FREQUENCY_OPTIONS, SUPPLEMENT_OPTIONS, supplementFrequencyLabel } from "../protocolStandards";
+import {
+  canonicalizeSupplement,
+  compoundsForProtocolEditor,
+  compoundsForProtocolStorage,
+  SUPPLEMENT_FREQUENCY_OPTIONS,
+  SUPPLEMENT_OPTIONS,
+  supplementFrequencyLabel
+} from "../protocolStandards";
 import {
   getProtocolCompoundsText,
   getProtocolDoseMgPerWeek,
@@ -575,11 +582,12 @@ const ReportsView = ({
             : resolvedProtocol.items
           : [])
     );
+    const editorCompounds = compoundsForProtocolEditor(baseCompounds);
     const nextDraft: ProtocolDraft = {
       name: baseName,
       effectiveFrom: snapshot?.effectiveFrom ?? report.testDate ?? todayIsoDate(),
-      items: baseCompounds,
-      compounds: baseCompounds,
+      items: editorCompounds,
+      compounds: editorCompounds,
       notes: snapshot?.notes ?? resolvedProtocol?.notes ?? ""
     };
     setProtocolVersionEditorReportId(report.id);
@@ -599,7 +607,7 @@ const ReportsView = ({
     }
     const name = protocolVersionDraft.name.trim();
     const effectiveFrom = protocolVersionDraft.effectiveFrom.trim() || report.testDate || todayIsoDate();
-    const compounds = cloneCompoundEntries(protocolVersionDraft.compounds);
+    const compounds = compoundsForProtocolStorage(cloneCompoundEntries(protocolVersionDraft.compounds));
     if (!name) {
       setProtocolVersionFeedback(tr("Geef een protocolnaam op.", "Please enter a protocol name."));
       return;

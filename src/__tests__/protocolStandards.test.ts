@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSupplementEntries, supplementEntriesToText } from "../protocolStandards";
+import {
+  compoundsForProtocolStorage,
+  normalizeSupplementEntries,
+  protocolDoseInputToCanonicalWeeklyDose,
+  protocolDosePerAdministrationToWeeklyEquivalent,
+  protocolWeeklyDoseToPerAdministrationDose,
+  supplementEntriesToText
+} from "../protocolStandards";
 
 describe("protocolStandards supplement frequency", () => {
   it("normalizes supplement frequency from entry objects", () => {
@@ -33,5 +40,40 @@ describe("protocolStandards supplement frequency", () => {
     ]);
 
     expect(text).toBe("Vitamin D3 4000 IU @ Daily, Magnesium Glycinate 400 mg @ Before bed, NAC 600 mg");
+  });
+});
+
+describe("protocolStandards protocol dose conversion", () => {
+  it("calculates weekly equivalent from dose per administration and frequency", () => {
+    expect(protocolDosePerAdministrationToWeeklyEquivalent("2 mg", "5x_week")).toBe("10 mg/week");
+  });
+
+  it("reverse-converts explicit weekly dose for editing when frequency is known", () => {
+    expect(protocolWeeklyDoseToPerAdministrationDose("105 mg/week", "2x_week")).toBe("52.5 mg");
+  });
+
+  it("supports daily dose conversion to weekly canonical dose", () => {
+    expect(protocolDoseInputToCanonicalWeeklyDose("1.5 IU/day", "unknown")).toBe("10.5 IU/week");
+  });
+
+  it("returns no helper equivalent when frequency is unknown", () => {
+    expect(protocolDosePerAdministrationToWeeklyEquivalent("2 mg", "unknown")).toBeNull();
+  });
+
+  it("keeps raw input for unparseable doses during storage normalization", () => {
+    const normalized = compoundsForProtocolStorage([
+      {
+        name: "GHK-CU",
+        dose: "two mg",
+        doseMg: "two mg",
+        frequency: "5x_week",
+        route: "SubQ"
+      }
+    ]);
+    expect(normalized[0]).toMatchObject({
+      dose: "two mg",
+      doseMg: "two mg",
+      frequency: "5x_week"
+    });
   });
 });

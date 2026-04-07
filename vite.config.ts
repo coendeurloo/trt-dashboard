@@ -60,14 +60,14 @@ export default defineConfig(({ mode }) => {
               moduleId.includes("/src/hooks/useDerivedData") ||
               moduleId.includes("/src/views/DashboardView")
             ) {
-              return "app-analytics";
+              return "app-analysis";
             }
 
             if (
               moduleId.includes("/src/hooks/useAnalysis") ||
               moduleId.includes("/src/aiAnalysis")
             ) {
-              return "app-ai";
+              return "app-analysis";
             }
 
             if (

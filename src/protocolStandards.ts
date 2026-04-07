@@ -1,4 +1,4 @@
-import { AppLanguage, SupplementEntry } from "./types";
+import { AppLanguage, CompoundEntry, SupplementEntry } from "./types";
 import { trLocale } from "./i18n";
 
 interface CompoundCatalogEntry {
@@ -657,6 +657,178 @@ const closestFrequencyValue = (dosesPerWeek: number): string | null => {
 
   return bestDelta <= 0.12 ? bestValue : null;
 };
+
+type DoseCadence = "per_administration" | "per_day" | "per_week";
+
+interface ParsedDoseInput {
+  amount: number;
+  unit: string;
+  cadence: DoseCadence;
+}
+
+const WEEKLY_DOSE_SUFFIX_PATTERN = /(?:\/\s*(?:week|wk)\b|per\s+week\b|weekly\b)\s*$/i;
+const DAILY_DOSE_SUFFIX_PATTERN = /(?:\/\s*(?:day|d)\b|per\s+(?:day|dag)\b|daily\b|dagelijks\b)\s*$/i;
+const DOSE_VALUE_WITH_UNIT_PATTERN = /^([+-]?\d+(?:[.,]\d+)?)(?:\s*([a-zA-Z%uUµμ][a-zA-Z0-9%uUµμ-]*))?\s*$/;
+
+const formatDoseNumber = (value: number): string => {
+  const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  if (!Number.isFinite(rounded)) {
+    return "";
+  }
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+};
+
+const formatDoseValueWithUnit = (amount: number, unit: string): string => {
+  const numeric = formatDoseNumber(amount);
+  if (!numeric) {
+    return "";
+  }
+  return unit ? `${numeric} ${unit}` : numeric;
+};
+
+const formatWeeklyDoseValue = (amount: number, unit: string): string => {
+  const base = formatDoseValueWithUnit(amount, unit);
+  if (!base) {
+    return "";
+  }
+  return unit ? `${base}/week` : `${base}/week`;
+};
+
+const parseDoseInput = (value: string): ParsedDoseInput | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let cadence: DoseCadence = "per_administration";
+  let withoutCadence = trimmed;
+
+  if (WEEKLY_DOSE_SUFFIX_PATTERN.test(withoutCadence)) {
+    cadence = "per_week";
+    withoutCadence = withoutCadence.replace(WEEKLY_DOSE_SUFFIX_PATTERN, "").trim();
+  } else if (DAILY_DOSE_SUFFIX_PATTERN.test(withoutCadence)) {
+    cadence = "per_day";
+    withoutCadence = withoutCadence.replace(DAILY_DOSE_SUFFIX_PATTERN, "").trim();
+  }
+
+  const match = withoutCadence.match(DOSE_VALUE_WITH_UNIT_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(String(match[1] ?? "").replace(",", "."));
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  return {
+    amount,
+    unit: String(match[2] ?? "").trim(),
+    cadence
+  };
+};
+
+const getFrequencyDosesPerWeek = (frequency: string): number | null => {
+  const normalizedFrequency = normalizeInjectionFrequency(frequency);
+  const fromSelection = frequencyByValue.get(normalizedFrequency)?.dosesPerWeek ?? null;
+  if (fromSelection !== null) {
+    return fromSelection;
+  }
+  return parseFrequencyPerWeekFromFreeText(frequency);
+};
+
+export const protocolDosePerAdministrationToWeeklyEquivalent = (
+  dosePerAdministration: string,
+  injectionFrequency: string
+): string | null => {
+  const parsedDose = parseDoseInput(dosePerAdministration);
+  if (!parsedDose || parsedDose.cadence !== "per_administration") {
+    return null;
+  }
+  const dosesPerWeek = getFrequencyDosesPerWeek(injectionFrequency);
+  if (dosesPerWeek === null) {
+    return null;
+  }
+  const weeklyDose = formatWeeklyDoseValue(parsedDose.amount * dosesPerWeek, parsedDose.unit);
+  return weeklyDose || null;
+};
+
+export const protocolDoseInputToCanonicalWeeklyDose = (
+  doseInput: string,
+  injectionFrequency: string
+): string | null => {
+  const parsedDose = parseDoseInput(doseInput);
+  if (!parsedDose) {
+    return null;
+  }
+
+  if (parsedDose.cadence === "per_week") {
+    const weeklyDose = formatWeeklyDoseValue(parsedDose.amount, parsedDose.unit);
+    return weeklyDose || null;
+  }
+
+  if (parsedDose.cadence === "per_day") {
+    const weeklyDose = formatWeeklyDoseValue(parsedDose.amount * 7, parsedDose.unit);
+    return weeklyDose || null;
+  }
+
+  const dosesPerWeek = getFrequencyDosesPerWeek(injectionFrequency);
+  if (dosesPerWeek === null) {
+    return null;
+  }
+  const weeklyDose = formatWeeklyDoseValue(parsedDose.amount * dosesPerWeek, parsedDose.unit);
+  return weeklyDose || null;
+};
+
+export const protocolWeeklyDoseToPerAdministrationDose = (
+  storedWeeklyDose: string,
+  injectionFrequency: string
+): string | null => {
+  const parsedDose = parseDoseInput(storedWeeklyDose);
+  if (!parsedDose || parsedDose.cadence !== "per_week") {
+    return null;
+  }
+  const dosesPerWeek = getFrequencyDosesPerWeek(injectionFrequency);
+  if (dosesPerWeek === null || dosesPerWeek <= 0) {
+    return null;
+  }
+  const perAdministrationDose = formatDoseValueWithUnit(parsedDose.amount / dosesPerWeek, parsedDose.unit);
+  return perAdministrationDose || null;
+};
+
+export const compoundsForProtocolEditor = (compounds: CompoundEntry[]): CompoundEntry[] =>
+  (Array.isArray(compounds) ? compounds : []).map((compound) => {
+    const name = String(compound.name ?? "").trim();
+    const frequency = normalizeInjectionFrequency(String(compound.frequency ?? "unknown"));
+    const route = String(compound.route ?? "").trim();
+    const storedDose = String(compound.dose ?? compound.doseMg ?? "").trim();
+    const editorDose = protocolWeeklyDoseToPerAdministrationDose(storedDose, frequency) ?? storedDose;
+    return {
+      ...compound,
+      name,
+      dose: editorDose,
+      doseMg: editorDose,
+      frequency,
+      route
+    };
+  });
+
+export const compoundsForProtocolStorage = (compounds: CompoundEntry[]): CompoundEntry[] =>
+  (Array.isArray(compounds) ? compounds : []).map((compound) => {
+    const name = String(compound.name ?? "").trim();
+    const frequency = normalizeInjectionFrequency(String(compound.frequency ?? "unknown"));
+    const route = String(compound.route ?? "").trim();
+    const doseInput = String(compound.dose ?? compound.doseMg ?? "").trim();
+    const canonicalDose = protocolDoseInputToCanonicalWeeklyDose(doseInput, frequency) ?? doseInput;
+    return {
+      ...compound,
+      name,
+      dose: canonicalDose,
+      doseMg: canonicalDose,
+      frequency,
+      route
+    };
+  });
 
 export const normalizeInjectionFrequency = (value: string): string => {
   const normalized = normalizeKey(value);
