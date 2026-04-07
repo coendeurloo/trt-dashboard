@@ -160,6 +160,8 @@ describe("ProtocolView modal behavior", () => {
     renderProtocolView({ onUpdateProtocol, usageCount: 0, reports: [] });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    expect(screen.getByText("Per administration")).toBeTruthy();
+    expect(screen.getByText("Weekly dose")).toBeTruthy();
     expect(screen.getByDisplayValue("52.5 mg")).toBeTruthy();
     expect(screen.getByDisplayValue("105 mg")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -182,7 +184,7 @@ describe("ProtocolView modal behavior", () => {
     fireEvent.change(screen.getByPlaceholderText("Search or type compound"), {
       target: { value: "GHK-CU" }
     });
-    fireEvent.change(screen.getByPlaceholderText("Dose per administration (e.g. 2 mg)"), {
+    fireEvent.change(screen.getByPlaceholderText("2 mg"), {
       target: { value: "2 mg" }
     });
     const selects = screen.getAllByRole("combobox");
@@ -211,7 +213,7 @@ describe("ProtocolView modal behavior", () => {
       target: { value: "Testosterone Enanthate" }
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Weekly dose (e.g. 125 mg)"), {
+    fireEvent.change(screen.getByPlaceholderText("125 mg"), {
       target: { value: "105 mg" }
     });
     expect(screen.queryByDisplayValue("52.5 mg")).toBeNull();

@@ -41,6 +41,7 @@ interface ProtocolEditorProps {
 }
 
 type DoseEditingField = "per_administration" | "weekly";
+const COMPOUND_ROW_GRID_CLASS = "grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]";
 
 const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
@@ -257,24 +258,18 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
             </p>
           ) : null}
 
-          <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
+          <div className={COMPOUND_ROW_GRID_CLASS}>
             <input
               value={compoundDoseInput}
               onChange={(event) => handleAddPerAdministrationDoseChange(event.target.value)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr(
-                "Dosis per toediening (bv. 2 mg)",
-                "Dose per administration (e.g. 2 mg)"
-              )}
+              placeholder={tr("2 mg", "2 mg")}
             />
             <input
               value={compoundDoseWeeklyInput}
               onChange={(event) => handleAddWeeklyDoseChange(event.target.value)}
               className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr(
-                "Weekdosis (bv. 125 mg)",
-                "Weekly dose (e.g. 125 mg)"
-              )}
+              placeholder={tr("125 mg", "125 mg")}
             />
             <select
               value={compoundFrequencyInput}
@@ -312,12 +307,21 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
         <p className="mt-2 text-[11px] text-slate-400">{tr("Suggesties verschijnen vanaf 2 letters.", "Suggestions appear after 2 letters.")}</p>
         <p className="mt-1 text-[11px] text-slate-400">
           {tr(
-            "Je kunt per toediening of per week invullen. Bij bekende frequentie vullen de velden elkaar automatisch aan.",
-            "You can enter dose per administration or per week. With known frequency, the fields auto-fill each other."
+            "Je kunt per toediening of per week invullen.",
+            "You can enter per administration or per week."
           )}
         </p>
 
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 hidden gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
+          <span>{tr("Naam", "Name")}</span>
+          <span>{tr("Per toediening", "Per administration")}</span>
+          <span>{tr("Weekdosis", "Weekly dose")}</span>
+          <span>{tr("Frequentie", "Frequency")}</span>
+          <span>{tr("Route", "Route")}</span>
+          <span aria-hidden="true" />
+        </div>
+
+        <div className="space-y-2">
           {(value.compounds.length > 0 ? value.compounds : value.items).length === 0 ? (
             <span className="text-xs text-slate-400">{tr("Nog geen compounds toegevoegd.", "No compounds added yet.")}</span>
           ) : (
@@ -327,7 +331,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
               const weeklyDose = compound.doseMg || "";
               const rowDoseSource = rowDoseLastEdited[index] ?? "weekly";
               return (
-              <div key={`compound-row-${index}`} className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_170px_200px_140px_auto]">
+              <div key={`compound-row-${index}`} className={COMPOUND_ROW_GRID_CLASS}>
                 <input
                   value={compound.name}
                   onChange={(event) => updateCompound(index, { name: event.target.value })}
@@ -351,7 +355,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     updateCompound(index, patch);
                   }}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  placeholder={tr("Dosis per toediening", "Dose per administration")}
+                  placeholder={tr("2 mg", "2 mg")}
                 />
                 <input
                   value={weeklyDose}
@@ -373,7 +377,7 @@ const ProtocolEditor = ({ value, language, onChange }: ProtocolEditorProps) => {
                     updateCompound(index, patch);
                   }}
                   className="review-context-input w-full rounded-md border border-slate-600 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
-                  placeholder={tr("Weekdosis", "Weekly dose")}
+                  placeholder={tr("125 mg", "125 mg")}
                 />
                 <select
                   value={normalizedFrequency}

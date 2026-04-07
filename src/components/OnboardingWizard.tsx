@@ -389,10 +389,10 @@ function StepProtocol({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>{tr("Dosis per toediening", "Dose per administration")}</label>
+            <label className={labelCls}>{tr("Per toediening", "Per administration")}</label>
             <input
               className={inputCls}
-              placeholder={tr("bijv. 2 mg", "e.g. 2 mg")}
+              placeholder={tr("2 mg", "2 mg")}
               value={draft.dose}
               onChange={(e) => {
                 const nextDose = e.target.value;
@@ -417,7 +417,7 @@ function StepProtocol({
             <label className={labelCls}>{tr("Weekdosis", "Weekly dose")}</label>
             <input
               className={inputCls}
-              placeholder={tr("bijv. 125 mg", "e.g. 125 mg")}
+              placeholder={tr("125 mg", "125 mg")}
               value={draft.doseWeekly}
               onChange={(e) => {
                 const nextWeeklyDose = e.target.value;
@@ -441,8 +441,8 @@ function StepProtocol({
         </div>
         <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           {tr(
-            "Je kunt per toediening of per week invullen. Bij bekende frequentie vullen de velden elkaar automatisch aan.",
-            "You can enter dose per administration or per week. With known frequency, the fields auto-fill each other."
+            "Je kunt per toediening of per week invullen.",
+            "You can enter per administration or per week."
           )}
         </p>
 
