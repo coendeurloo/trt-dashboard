@@ -4,8 +4,7 @@ import { AnalysisScopeNotice } from "../analysisScope";
 import { betaLimitsDisabled } from "../betaLimits";
 import AIInfoBar from "../components/analysis/AIInfoBar";
 import AIOutputPanel from "../components/analysis/AIOutputPanel";
-import AIQuestionInput from "../components/analysis/AIQuestionInput";
-import AIQuickActionsPanel from "../components/analysis/AIQuickActionsPanel";
+import AIQuestionInput, { type IntentChip } from "../components/analysis/AIQuestionInput";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
 import useAiQuestionSuggestions from "../hooks/useAiQuestionSuggestions";
 import { trLocale } from "../i18n";
@@ -104,6 +103,10 @@ const AnalysisView = ({
   const isAnalyzingQuestion = isAnalyzingLabs && analyzingKind === "question";
   const canRunFull = !isAnalyzingLabs && reportsInScope > 0 && !blockedByLimits;
   const canRunLatest = !isAnalyzingLabs && reportsInScope >= 2 && !blockedByLimits;
+  const hasActiveRun = analysisRequestState === "preparing" || analysisRequestState === "streaming";
+  const hasOutput = analysisResult.trim().length > 0;
+  const hasError = analysisError.trim().length > 0;
+  const shouldShowOutputPanel = hasActiveRun || hasOutput || hasError;
   const relevantBenchmarks = useMemo(
     () => getRelevantBenchmarks(analysisMarkerNames),
     [analysisMarkerNames]
@@ -128,15 +131,17 @@ const AnalysisView = ({
   }, [analysisQuestion]);
 
   useEffect(() => {
-    const hasOutput = analysisResult.trim().length > 0;
-    if (!hasOutput) {
+    if (!shouldShowOutputPanel) {
       return;
     }
-    if (analysisRequestState !== "streaming" && analysisRequestState !== "completed") {
+    if (!hasActiveRun && !hasOutput) {
       return;
     }
-    outputPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-  }, [analysisRequestState, analysisResult]);
+    const frame = requestAnimationFrame(() => {
+      outputPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [hasActiveRun, hasOutput, shouldShowOutputPanel]);
 
   const usageLabel = limitsDisabled
     ? tr("Beta limieten uit", "Beta limits disabled")
@@ -155,6 +160,30 @@ const AnalysisView = ({
         `${reportsInScope} rapporten in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`,
         `${reportsInScope} reports in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`
       );
+  const intents: IntentChip[] = [
+    {
+      key: "full",
+      label: isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis"),
+      icon: "sparkles",
+      variant: "primary",
+      isRunning: isAnalyzingFull,
+      disabled: !canRunFull,
+      onClick: () => onRunAnalysis("full")
+    },
+    {
+      key: "latest",
+      label: isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest vs previous", "Compare latest vs previous"),
+      icon: "sparkles",
+      variant: "secondary",
+      isRunning: isAnalyzingLatest,
+      disabled: !canRunLatest,
+      helperText:
+        reportsInScope < 2
+          ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
+          : undefined,
+      onClick: () => onRunAnalysis("latestComparison")
+    }
+  ];
 
   return (
     <section className="space-y-4 fade-in sm:space-y-5">
@@ -192,6 +221,7 @@ const AnalysisView = ({
           "Suggesties worden lokaal gegenereerd uit je rapportdata. AI start alleen na jouw klik.",
           "Suggestions are generated locally from your report data. AI starts only after your click."
         )}
+        intents={intents}
         reportsHint={
           reportsInScope === 0
             ? tr("Voeg eerst minstens één rapport toe om vragen te kunnen stellen.", "Add at least one report first to ask questions.")
@@ -199,42 +229,6 @@ const AnalysisView = ({
         }
         value={questionInput}
         suggestions={suggestedQuestions.slice(0, 4)}
-        actionsSlot={
-          <AIQuickActionsPanel
-            fullTitle={tr("Run full analysis", "Run full analysis")}
-            fullDescription={tr(
-              "Trends, protocolcontext, supplementen en praktische volgende stappen.",
-              "Trends, protocol context, supplements, and practical next steps."
-            )}
-            fullButtonLabel={isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis")}
-            fullFootnote={tr(
-              "Je start dit handmatig. Er draait niets automatisch op paginalaad.",
-              "You start this manually. Nothing runs automatically on page load."
-            )}
-            latestTitle={tr("Compare latest vs previous", "Compare latest vs previous")}
-            latestDescription={tr(
-              "Snelle vergelijking van wat recent het meest veranderde.",
-              "Quick comparison of what changed most recently."
-            )}
-            latestButtonLabel={isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest report", "Compare latest report")}
-            latestFootnote={tr(
-              "Compacte check als je eerst snel overzicht wilt.",
-              "Compact check when you want a quick overview first."
-            )}
-            latestHelperText={
-              reportsInScope < 2
-                ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
-                : undefined
-            }
-            isAnalyzingFull={isAnalyzingFull}
-            isAnalyzingLatest={isAnalyzingLatest}
-            canRunFull={canRunFull}
-            canRunLatest={canRunLatest}
-            isDarkTheme={isDarkTheme}
-            onRunFull={() => onRunAnalysis("full")}
-            onRunLatest={() => onRunAnalysis("latestComparison")}
-          />
-        }
         isSubmitting={isAnalyzingQuestion}
         canSubmit={canAskQuestion}
         isDarkTheme={isDarkTheme}
@@ -243,50 +237,52 @@ const AnalysisView = ({
         onSelectSuggestion={setQuestionInput}
       />
 
-      <div ref={outputPanelRef}>
-        <AIOutputPanel
-          analysisRequestState={analysisRequestState}
-          analysisError={analysisError}
-          analysisResult={analysisResult}
-          analysisResultDisplay={analysisResultDisplay}
-          analysisGeneratedAt={analysisGeneratedAt}
-          analysisCopied={analysisCopied}
-          analysisModelInfo={analysisModelInfo}
-          analysisKind={analysisKind}
-          analysisQuestion={analysisQuestion}
-          analysisScopeNotice={analysisScopeNotice}
-          relevantBenchmarks={relevantBenchmarks}
-          isDarkTheme={isDarkTheme}
-          titleOutput={tr("Analysis output", "Analysis output")}
-          titleLatestComparison={tr("Analysis output (latest vs previous)", "Analysis output (latest vs previous)")}
-          titleQuestionAnswer={tr("Answer to your question", "Answer to your question")}
-          copyLabel={tr("Kopieer analyse", "Copy analysis")}
-          copiedLabel={tr("Gekopieerd", "Copied")}
-          styleLabel={tr("Stijl", "Style")}
-          styleValue={tr("Narrative premium", "Narrative premium")}
-          modelLabel={tr("Model", "Model")}
-          providerLabel={tr("Provider", "Provider")}
-          supplementActionsLabel={tr("Supplement acties", "Supplement actions")}
-          noneLabel={tr("geen", "none")}
-          outputGuardLabel={tr("Output guard toegepast", "Output guard applied")}
-          lastRunLabel={tr("Laatste run", "Last run")}
-          loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
-          loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
-          emptyBody={tr("Start een analyse of stel een vraag om te beginnen.", "Run an analysis or ask a question to get started.")}
-          disclaimerLabel={tr(
-            "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
-            "Analysis may reference published research. Values vary between individuals. This is not medical advice."
-          )}
-          aiUsesPrefix={tr("AI gebruikt", "AI uses")}
-          aiUsesMiddle={tr("van", "of")}
-          aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
-          questionPrefixLabel={tr("Vraag:", "Question:")}
-          preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
-          streamingStatusLabel={tr("Generating response…", "Generating response...")}
-          streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
-          onCopyAnalysis={onCopyAnalysis}
-        />
-      </div>
+      {shouldShowOutputPanel ? (
+        <div ref={outputPanelRef}>
+          <AIOutputPanel
+            analysisRequestState={analysisRequestState}
+            analysisError={analysisError}
+            analysisResult={analysisResult}
+            analysisResultDisplay={analysisResultDisplay}
+            analysisGeneratedAt={analysisGeneratedAt}
+            analysisCopied={analysisCopied}
+            analysisModelInfo={analysisModelInfo}
+            analysisKind={analysisKind}
+            analysisQuestion={analysisQuestion}
+            analysisScopeNotice={analysisScopeNotice}
+            relevantBenchmarks={relevantBenchmarks}
+            isDarkTheme={isDarkTheme}
+            titleOutput={tr("Analysis output", "Analysis output")}
+            titleLatestComparison={tr("Analysis output (latest vs previous)", "Analysis output (latest vs previous)")}
+            titleQuestionAnswer={tr("Answer to your question", "Answer to your question")}
+            copyLabel={tr("Kopieer analyse", "Copy analysis")}
+            copiedLabel={tr("Gekopieerd", "Copied")}
+            styleLabel={tr("Stijl", "Style")}
+            styleValue={tr("Narrative premium", "Narrative premium")}
+            modelLabel={tr("Model", "Model")}
+            providerLabel={tr("Provider", "Provider")}
+            supplementActionsLabel={tr("Supplement acties", "Supplement actions")}
+            noneLabel={tr("geen", "none")}
+            outputGuardLabel={tr("Output guard toegepast", "Output guard applied")}
+            lastRunLabel={tr("Laatste run", "Last run")}
+            loadingLabel={tr("AI is je analyse aan het opstellen...", "AI is preparing your analysis...")}
+            loadingFormatLabel={tr("Analyse-opmaak laden...", "Loading analysis formatting...")}
+            emptyBody={tr("Start een analyse of stel een vraag om te beginnen.", "Run an analysis or ask a question to get started.")}
+            disclaimerLabel={tr(
+              "Analyse kan gepubliceerd onderzoek refereren. Waarden variëren per individu. Dit is geen medisch advies.",
+              "Analysis may reference published research. Values vary between individuals. This is not medical advice."
+            )}
+            aiUsesPrefix={tr("AI gebruikt", "AI uses")}
+            aiUsesMiddle={tr("van", "of")}
+            aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
+            questionPrefixLabel={tr("Vraag:", "Question:")}
+            preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
+            streamingStatusLabel={tr("Generating response…", "Generating response...")}
+            streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
+            onCopyAnalysis={onCopyAnalysis}
+          />
+        </div>
+      ) : null}
     </section>
   );
 };
