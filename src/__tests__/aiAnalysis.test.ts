@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { analyzeLabDataWithClaude } from "../aiAnalysis";
+import { analyzeLabDataWithClaude, generateAnalystMemory } from "../aiAnalysis";
 import { LabReport, SupplementPeriod } from "../types";
 import { AnalystMemory } from "../types/analystMemory";
 
@@ -45,6 +45,44 @@ const extractDataBlock = (prompt: string): Record<string, unknown> => {
   }
   const json = prompt.slice(start + "DATA START\n".length, end).trim();
   return JSON.parse(json) as Record<string, unknown>;
+};
+
+const extractPromptTextFromPayload = (payload: unknown): string => {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  const typedPayload = payload as {
+    system?: string | Array<{ type?: string; text?: string }>;
+    messages?: Array<{
+      content?: string | Array<{ type?: string; text?: string }>;
+    }>;
+  };
+  const systemText = typeof typedPayload.system === "string"
+    ? typedPayload.system
+    : Array.isArray(typedPayload.system)
+      ? typedPayload.system
+          .filter((block) => block?.type === "text" && typeof block.text === "string")
+          .map((block) => block.text ?? "")
+          .join("\n")
+      : "";
+  const userText = Array.isArray(typedPayload.messages)
+    ? typedPayload.messages
+        .flatMap((message) => {
+          const content = message?.content;
+          if (typeof content === "string") {
+            return [content];
+          }
+          if (!Array.isArray(content)) {
+            return [];
+          }
+          return content
+            .filter((block) => block?.type === "text" && typeof block.text === "string")
+            .map((block) => block.text ?? "");
+        })
+        .join("\n")
+    : "";
+
+  return [systemText, userText].filter((part) => part.length > 0).join("\n");
 };
 
 describe("analyzeLabDataWithClaude", () => {
@@ -156,8 +194,8 @@ describe("analyzeLabDataWithClaude", () => {
     const prompts: string[] = [];
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      const prompt = body?.payload?.messages?.[0]?.content ?? "";
-      prompts.push(String(prompt));
+      const prompt = extractPromptTextFromPayload(body?.payload);
+      prompts.push(prompt);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -199,7 +237,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -290,7 +328,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -442,7 +480,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -540,7 +578,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -573,7 +611,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "## Clinical Story\nStable." }],
@@ -605,7 +643,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [
@@ -692,7 +730,7 @@ describe("analyzeLabDataWithClaude", () => {
     let capturedPrompt = "";
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+      capturedPrompt = extractPromptTextFromPayload(body?.payload);
       return new Response(
         JSON.stringify({
           content: [{ type: "text", text: "ok" }],
@@ -713,9 +751,124 @@ describe("analyzeLabDataWithClaude", () => {
       memory
     });
 
-    expect(capturedPrompt).toContain("## Analyst memory (3 analyses · last updated 2026-02-20)");
+    expect(capturedPrompt).toContain("## Analyst memory");
+    expect(capturedPrompt).toContain("Memory contains 3 prior analyses, last updated 2026-02-20.");
     expect(capturedPrompt).toContain("Do NOT list or repeat the memory contents.");
     expect(capturedPrompt.indexOf("## Analyst memory")).toBeLessThan(capturedPrompt.indexOf("DATA START"));
+  });
+
+  it("builds byte-identical cached blocks for identical full-analysis inputs", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-10T08:00:00.000Z"));
+
+    const capturedBlocks: Array<{ system: unknown; dataBlock: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedBlocks.push({
+          system: body?.payload?.system,
+          dataBlock: body?.payload?.messages?.[0]?.content?.[0]
+        });
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    const input = {
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [] as SupplementPeriod[],
+      unitSystem: "eu" as const,
+      language: "en" as const,
+      externalAiAllowed: true
+    };
+
+    await analyzeLabDataWithClaude(input);
+    await analyzeLabDataWithClaude(input);
+
+    expect(capturedBlocks).toHaveLength(2);
+    expect(JSON.stringify(capturedBlocks[0].system)).toBe(JSON.stringify(capturedBlocks[1].system));
+    expect(JSON.stringify(capturedBlocks[0].dataBlock)).toBe(JSON.stringify(capturedBlocks[1].dataBlock));
+  });
+
+  it("skips memory generation call when compact memory input hash is unchanged", async () => {
+    const storageMap = new Map<string, string>();
+    const mockStorage: Storage = {
+      get length() {
+        return storageMap.size;
+      },
+      clear: () => storageMap.clear(),
+      getItem: (key: string) => storageMap.get(key) ?? null,
+      key: (index: number) => Array.from(storageMap.keys())[index] ?? null,
+      removeItem: (key: string) => {
+        storageMap.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        storageMap.set(key, value);
+      }
+    };
+    vi.stubGlobal("window", {
+      storage: mockStorage,
+      localStorage: mockStorage
+    });
+
+    const memoryJson = {
+      version: 1,
+      lastUpdated: "2026-04-10",
+      analysisCount: 1,
+      responderProfile: {
+        testosteroneResponse: "unknown",
+        aromatizationTendency: "unknown",
+        hematocritSensitivity: "unknown",
+        notes: ""
+      },
+      personalBaselines: {},
+      supplementHistory: [],
+      protocolHistory: [],
+      watchList: [],
+      analystNotes: ""
+    };
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: JSON.stringify(memoryJson) }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const options = {
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [] as SupplementPeriod[],
+      unitSystem: "eu" as const,
+      profile: "trt" as const,
+      currentMemory: null,
+      analysisResult: "## Summary\nStable trend.",
+      aiConsent: {
+        includeSymptoms: false,
+        includeNotes: false
+      }
+    };
+
+    const first = await generateAnalystMemory(options);
+    const second = await generateAnalystMemory(options);
+
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCallInit = (((fetchMock as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] ?? [])[1] ?? {}) as RequestInit;
+    const firstCallBody = JSON.parse(String(firstCallInit.body ?? "{}"));
+    expect(firstCallBody?.payload?.model).toBe("claude-haiku-4-5");
   });
 
   it("includes marker presence inventory across scope and full latest-report marker list", async () => {
@@ -772,7 +925,7 @@ describe("analyzeLabDataWithClaude", () => {
       "fetch",
       vi.fn(async (_url: string, init?: RequestInit) => {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
-        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        capturedPrompt = extractPromptTextFromPayload(body?.payload);
         return new Response(
           JSON.stringify({
             content: [{ type: "text", text: "ok" }],
@@ -834,7 +987,7 @@ describe("analyzeLabDataWithClaude", () => {
       "fetch",
       vi.fn(async (_url: string, init?: RequestInit) => {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
-        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        capturedPrompt = extractPromptTextFromPayload(body?.payload);
         return new Response(
           JSON.stringify({
             content: [{ type: "text", text: "ok" }],
@@ -877,7 +1030,7 @@ describe("analyzeLabDataWithClaude", () => {
       "fetch",
       vi.fn(async (_url: string, init?: RequestInit) => {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
-        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        capturedPrompt = extractPromptTextFromPayload(body?.payload);
         return new Response(
           JSON.stringify({
             content: [{ type: "text", text: "ok" }],
@@ -917,7 +1070,7 @@ describe("analyzeLabDataWithClaude", () => {
       "fetch",
       vi.fn(async (_url: string, init?: RequestInit) => {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
-        capturedPrompt = String(body?.payload?.messages?.[0]?.content ?? "");
+        capturedPrompt = extractPromptTextFromPayload(body?.payload);
         return new Response(
           JSON.stringify({
             content: [{ type: "text", text: "ok" }],

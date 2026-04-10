@@ -10,12 +10,19 @@ interface ClaudeMessagePayload {
   max_tokens: number;
   temperature?: number;
   stream?: boolean;
+  system?:
+    | string
+    | Array<{
+        type: "text";
+        text: string;
+        cache_control?: { type: "ephemeral" };
+      }>;
   messages: Array<{
     role: string;
     content:
       | string
       | Array<
-          | { type: "text"; text: string }
+          | { type: "text"; text: string; cache_control?: { type: "ephemeral" } }
           | {
               type: "document";
               source: {
@@ -283,7 +290,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           attributes: {
             route: "/api/claude/messages",
             request_type: requestType,
-            stream: body.payload.stream === true
+            stream: body.payload.stream === true,
+            model: body.payload.model
           }
         },
         () =>
@@ -309,6 +317,39 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const responseText = await anthropicResponse.text();
+      if (anthropicResponse.ok) {
+        try {
+          const parsed = JSON.parse(responseText) as {
+            model?: string;
+            usage?: {
+              input_tokens?: number;
+              output_tokens?: number;
+              cache_creation_input_tokens?: number;
+              cache_read_input_tokens?: number;
+            };
+          };
+          const usage = parsed?.usage ?? {};
+          await withServerMonitoringSpan(
+            {
+              name: "api.claude.proxy_usage",
+              op: "labtracker.api",
+              attributes: {
+                route: "/api/claude/messages",
+                request_type: requestType,
+                stream: false,
+                model: parsed?.model ?? body.payload.model,
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                cache_creation_input_tokens: usage.cache_creation_input_tokens,
+                cache_read_input_tokens: usage.cache_read_input_tokens
+              }
+            },
+            async () => undefined
+          );
+        } catch {
+          // Keep response path untouched when JSON parsing fails.
+        }
+      }
       res.statusCode = anthropicResponse.status;
       res.setHeader("content-type", "application/json; charset=utf-8");
       res.setHeader("cache-control", "no-store");

@@ -62,6 +62,7 @@ const createDefaultData = (): StoredAppData => ({
 });
 
 const ANALYST_MEMORY_KEY = "analyst-memory";
+const ANALYST_MEMORY_INPUT_HASH_KEY = "analyst-memory-input-hash";
 
 const normalizeSamplingTiming = (value: unknown): ReportAnnotations["samplingTiming"] => {
   return value === "trough" || value === "mid" || value === "peak" || value === "unknown" ? value : "unknown";
@@ -1010,6 +1011,31 @@ export const saveAnalystMemory = (memory: AnalystMemory): void => {
   }
 };
 
+export const loadAnalystMemoryInputHash = (): string | null => {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+  const value = storage.getItem(ANALYST_MEMORY_INPUT_HASH_KEY);
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+export const saveAnalystMemoryInputHash = (hash: string): void => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.setItem(ANALYST_MEMORY_INPUT_HASH_KEY, hash);
+  } catch (error) {
+    console.error("Failed to save analyst memory input hash:", error);
+  }
+};
+
 export const clearAnalystMemory = (): void => {
   const storage = getStorage();
   if (!storage) {
@@ -1017,9 +1043,9 @@ export const clearAnalystMemory = (): void => {
   }
   try {
     storage.removeItem(ANALYST_MEMORY_KEY);
+    storage.removeItem(ANALYST_MEMORY_INPUT_HASH_KEY);
   } catch (error) {
     console.error("Failed to clear analyst memory:", error);
   }
 };
-
 

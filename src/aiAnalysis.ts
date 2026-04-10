@@ -42,6 +42,7 @@ import { getActiveSupplementsAtDate, sortSupplementPeriods, supplementPeriodsToT
 import { AnalystMemory } from "./types/analystMemory";
 import { coerceAnalystMemory } from "./analystMemory";
 import { canonicalizeMarker } from "./unitConversion";
+import { loadAnalystMemoryInputHash, saveAnalystMemoryInputHash } from "./storage";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -178,6 +179,20 @@ interface AnalysisMarkerPresenceEntry {
   countReportsSeen: number;
 }
 
+interface AnalysisTextContentBlock {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+}
+
+interface AnalysisMessages {
+  system: AnalysisTextContentBlock[];
+  messages: Array<{
+    role: "user";
+    content: AnalysisTextContentBlock[];
+  }>;
+}
+
 const QUESTION_REQUIRED_NARRATIVE_SECTION_KEYS = [
   "direct_answer",
   "why_this_fits_your_data",
@@ -230,7 +245,8 @@ const MAX_MEMORY_SUPPLEMENTS_IN_PROMPT = 4;
 const MAX_MEMORY_WATCHLIST_IN_PROMPT = 4;
 const MEMORY_ANALYSIS_SUMMARY_MAX_CHARS = 1200;
 const MEMORY_GENERATION_MAX_TOKENS = 700;
-const MEMORY_GENERATION_MODEL = ANALYSIS_MODEL_CANDIDATES[ANALYSIS_MODEL_CANDIDATES.length - 1];
+const MEMORY_GENERATION_MODEL = "claude-haiku-4-5";
+const MEMORY_GENERATION_FALLBACK_MODEL = "claude-3-5-sonnet-latest";
 const parseMarkerCap = (): number => {
   const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 60);
   if (!Number.isFinite(raw)) {
@@ -241,6 +257,7 @@ const parseMarkerCap = (): number => {
 const MAX_MARKERS_PER_REPORT = parseMarkerCap();
 export const AI_ANALYSIS_MARKER_CAP = MAX_MARKERS_PER_REPORT;
 const MAX_CONTEXT_CHARS = 120;
+const PROMPT_CACHE_CONTROL = { type: "ephemeral" } as const;
 
 const SIGNAL_MARKERS = [
   "Testosterone",
@@ -338,8 +355,8 @@ const promptLanguageLabel = (language: AppLanguage): string => {
   return "English";
 };
 
-const buildPersona = (profile: UserProfile, today: string, language: AppLanguage): string => {
-  const base = `Today: ${today}. Reply language: ${promptLanguageLabel(language)}. Match the user's question language for headings and prose.`;
+const buildPersona = (profile: UserProfile, language: AppLanguage): string => {
+  const base = `Reply language: ${promptLanguageLabel(language)}. Match the user's question language for headings and prose.`;
   const personas: Record<UserProfile, string> = {
     trt: `You are a knowledgeable TRT coach who helps people understand their blood work in the context of hormone replacement therapy. You explain things the way a well-informed friend would: clearly, directly, without unnecessary medical jargon. You care about safety (especially hematocrit and cardiovascular markers) but you are not alarmist.`,
     enhanced: `You are an experienced performance health coach who understands anabolic compounds, their effects on blood markers, and harm reduction. You speak directly and practically: no judgment about compound use, just clear guidance on what the blood work shows and what to watch. You prioritize liver function, kidney markers, lipid profile, and cardiovascular safety.`,
@@ -856,7 +873,7 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
 
   const priorityMarkers = new Set<string>(SIGNAL_MARKERS);
   const lines: string[] = [
-    `## Analyst memory (${memory.analysisCount} analyses · last updated ${memory.lastUpdated})`,
+    "## Analyst memory",
     "",
     "Returning user memory. Use it silently for personalization.",
     "Do NOT list or repeat the memory contents. Use it as silent background context.",
@@ -893,13 +910,17 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
       if (leftPriority !== rightPriority) {
         return rightPriority - leftPriority;
       }
-      return (right[1].basedOnN ?? 0) - (left[1].basedOnN ?? 0);
+      const sampleSizeDelta = (right[1].basedOnN ?? 0) - (left[1].basedOnN ?? 0);
+      if (sampleSizeDelta !== 0) {
+        return sampleSizeDelta;
+      }
+      return left[0].localeCompare(right[0]);
     })
     .slice(0, MAX_MEMORY_BASELINES_IN_PROMPT);
   if (baselines.length > 0) {
     lines.push("**Personal baselines:**");
     baselines.forEach(([marker, baseline]) => {
-      lines.push(`- ${marker}: ${baseline.mean.toFixed(1)} ± ${baseline.sd.toFixed(1)} ${baseline.unit} (n=${baseline.basedOnN})`);
+      lines.push(`- ${marker}: ${baseline.mean.toFixed(1)} +/- ${baseline.sd.toFixed(1)} ${baseline.unit} (n=${baseline.basedOnN})`);
     });
     const baselineOverflow = Math.max(0, Object.keys(memory.personalBaselines).length - baselines.length);
     if (baselineOverflow > 0) {
@@ -908,11 +929,13 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
     lines.push("");
   }
 
-  const supplementHistory = memory.supplementHistory.slice(0, MAX_MEMORY_SUPPLEMENTS_IN_PROMPT);
+  const supplementHistory = [...memory.supplementHistory]
+    .sort((left, right) => left.name.localeCompare(right.name) || left.observation.localeCompare(right.observation))
+    .slice(0, MAX_MEMORY_SUPPLEMENTS_IN_PROMPT);
   if (supplementHistory.length > 0) {
     lines.push("**Supplement history:**");
     supplementHistory.forEach((entry) => {
-      lines.push(`- ${entry.name}: ${entry.effect} — ${entry.observation}`);
+      lines.push(`- ${entry.name}: ${entry.effect} - ${entry.observation}`);
     });
     const supplementOverflow = Math.max(0, memory.supplementHistory.length - supplementHistory.length);
     if (supplementOverflow > 0) {
@@ -921,7 +944,9 @@ const buildMemoryContext = (memory: AnalystMemory | null): string => {
     lines.push("");
   }
 
-  const watchList = memory.watchList.slice(0, MAX_MEMORY_WATCHLIST_IN_PROMPT);
+  const watchList = [...memory.watchList]
+    .sort((left, right) => left.marker.localeCompare(right.marker) || left.since.localeCompare(right.since))
+    .slice(0, MAX_MEMORY_WATCHLIST_IN_PROMPT);
   if (watchList.length > 0) {
     lines.push("**Watch list:**");
     watchList.forEach((entry) => {
@@ -960,7 +985,6 @@ interface FullAnalysisParams {
   fullSupplementActionability: SupplementActionabilityDecision;
   benchmarkSection: string;
   supplementActionsNeeded: boolean;
-  customQuestion: string | null;
 }
 
 interface ComparisonParams {
@@ -984,32 +1008,105 @@ interface ComparisonParams {
   supplementActionsNeeded: boolean;
 }
 
-function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
+const buildSystemPromptText = ({
+  profile,
+  language,
+  sectionText,
+  formatRules,
+  targetLength
+}: {
+  profile: UserProfile;
+  language: AppLanguage;
+  sectionText: string;
+  formatRules: string;
+  targetLength: string;
+}): string =>
+  [
+    buildPersona(profile, language),
+    buildCoreRules(profile),
+    HALLUCINATION_GUARDRAILS,
+    sectionText,
+    formatRules,
+    targetLength,
+    SAFETY_FOOTER
+  ].join("\n\n");
+
+const buildStableDataText = ({
+  benchmarkSection,
+  memoryContext,
+  payload
+}: {
+  benchmarkSection: string;
+  memoryContext: string;
+  payload: Record<string, unknown>;
+}): string =>
+  [
+    benchmarkSection.trim(),
+    memoryContext.trim(),
+    "DATA START",
+    JSON.stringify(payload),
+    "DATA END"
+  ]
+    .filter((section) => section.length > 0)
+    .join("\n\n");
+
+const buildMemoryMetaLine = (memory: AnalystMemory | null): string =>
+  memory
+    ? `Memory contains ${memory.analysisCount} prior analyses, last updated ${memory.lastUpdated}.`
+    : "No prior analyst memory is available.";
+
+const toAnalysisMessages = ({
+  systemText,
+  stableDataText,
+  variableText
+}: {
+  systemText: string;
+  stableDataText: string;
+  variableText: string;
+}): AnalysisMessages => ({
+  system: [
+    {
+      type: "text",
+      text: systemText,
+      cache_control: PROMPT_CACHE_CONTROL
+    }
+  ],
+  messages: [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: stableDataText,
+          cache_control: PROMPT_CACHE_CONTROL
+        },
+        {
+          type: "text",
+          text: variableText
+        }
+      ]
+    }
+  ]
+});
+
+function buildFullAnalysisPrompt(params: FullAnalysisParams): AnalysisMessages {
   const {
     today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
-    benchmarkSection, supplementActionsNeeded, customQuestion
+    benchmarkSection, supplementActionsNeeded
   } = params;
 
-  const questionInstruction = customQuestion
-    ? `USER QUESTION:
-- "${customQuestion}"
-- Answer this directly in the opening section, then provide the usual structured analysis and next steps.`
-    : "No explicit user question was provided. Focus on the most important data-driven priorities.";
-
-  return [
-    buildPersona(profile, today, language),
-    "Target length: 300-450 words.",
-    FORMAT_RULES(10, 5),
-    buildCoreRules(profile),
-    HALLUCINATION_GUARDRAILS,
-    buildFullSections(supplementActionsNeeded, language),
-    questionInstruction,
-    SAFETY_FOOTER,
+  const systemText = buildSystemPromptText({
+    profile,
+    language,
+    sectionText: buildFullSections(supplementActionsNeeded, language),
+    formatRules: FORMAT_RULES(10, 5),
+    targetLength: "Target length: 300-450 words."
+  });
+  const stableDataText = buildStableDataText({
     benchmarkSection,
-    buildMemoryContext(memory),
-    "DATA START",
-    JSON.stringify({
+    memoryContext: buildMemoryContext(memory),
+    payload: {
       type: "full",
       units: unitSystem,
       userProfile: profile,
@@ -1019,44 +1116,44 @@ function buildFullAnalysisPrompt(params: FullAnalysisParams): string {
       markerPresenceAcrossScope,
       latestReportAllMarkers,
       currentSupplements: supplementContext,
-      userQuestion: customQuestion,
+      userQuestion: null,
       signals,
       premiumInsights: fullPremiumInsightPack,
       actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
-    }),
-    "DATA END"
+    }
+  });
+  const variableText = [
+    `Today is ${today}.`,
+    buildMemoryMetaLine(memory),
+    "Run the full analysis now according to the sections above."
   ].join("\n");
+
+  return toAnalysisMessages({
+    systemText,
+    stableDataText,
+    variableText
+  });
 }
 
-function buildQuestionPrompt(params: FullAnalysisParams): string {
+function buildQuestionPrompt(params: FullAnalysisParams & { customQuestion: string }): AnalysisMessages {
   const {
     today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
     benchmarkSection, supplementActionsNeeded, customQuestion
   } = params;
 
-  const safeQuestion = customQuestion?.trim() ? customQuestion.trim() : "No explicit user question was provided.";
-
-  return [
-    buildPersona(profile, today, language),
-    "Scope: answer the user question first. This is a targeted Q&A run, not a full timeline recap.",
-    "Target length: 180-320 words.",
-    FORMAT_RULES(8, 4),
-    buildCoreRules(profile),
-    HALLUCINATION_GUARDRAILS,
-    buildQuestionSections(supplementActionsNeeded, language),
-    `USER QUESTION:
-- "${safeQuestion}"`,
-    `Question-first rules:
-- The user question is the primary objective.
-- Do not include a broad "story so far" narrative or full historical recap unless strictly required to answer the question.
-- Use LabTracker data only as supporting evidence for the answer.
-- Keep context mentions concise and directly tied to the question.`,
-    SAFETY_FOOTER,
+  const safeQuestion = customQuestion.trim();
+  const systemText = buildSystemPromptText({
+    profile,
+    language,
+    sectionText: buildQuestionSections(supplementActionsNeeded, language),
+    formatRules: FORMAT_RULES(8, 4),
+    targetLength: "Target length: 180-320 words."
+  });
+  const stableDataText = buildStableDataText({
     benchmarkSection,
-    buildMemoryContext(memory),
-    "DATA START",
-    JSON.stringify({
+    memoryContext: buildMemoryContext(memory),
+    payload: {
       type: "questionFocusedFull",
       units: unitSystem,
       userProfile: profile,
@@ -1066,16 +1163,33 @@ function buildQuestionPrompt(params: FullAnalysisParams): string {
       markerPresenceAcrossScope,
       latestReportAllMarkers,
       currentSupplements: supplementContext,
-      userQuestion: customQuestion,
+      userQuestion: safeQuestion,
       signals,
       premiumInsights: fullPremiumInsightPack,
       actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
-    }),
-    "DATA END"
+    }
+  });
+  const variableText = [
+    `Today is ${today}.`,
+    buildMemoryMetaLine(memory),
+    "Scope: answer the user question first. This is a targeted Q&A run, not a full timeline recap.",
+    `USER QUESTION:
+- "${safeQuestion}"`,
+    `Question-first rules:
+- The user question is the primary objective.
+- Do not include a broad "story so far" narrative or full historical recap unless strictly required to answer the question.
+- Use LabTracker data only as supporting evidence for the answer.
+- Keep context mentions concise and directly tied to the question.`
   ].join("\n");
+
+  return toAnalysisMessages({
+    systemText,
+    stableDataText,
+    variableText
+  });
 }
 
-function buildComparisonPrompt(params: ComparisonParams): string {
+function buildComparisonPrompt(params: ComparisonParams): AnalysisMessages {
   const {
     today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, relevantComparison, latestComparison,
     relevantPayload, relevantSupplementContext, comparisonSignals, comparisonPremiumInsightPack,
@@ -1083,19 +1197,17 @@ function buildComparisonPrompt(params: ComparisonParams): string {
     supplementActionsNeeded
   } = params;
 
-  return [
-    buildPersona(profile, today, language),
-    "Scope: latest report vs the most comparable previous report (highest marker overlap; nearest date on tie).",
-    "Target length: 220-320 words.",
-    FORMAT_RULES(7, 4),
-    buildCoreRules(profile),
-    HALLUCINATION_GUARDRAILS,
-    buildComparisonSections(supplementActionsNeeded, language),
-    SAFETY_FOOTER,
-    relevantBenchmarkSection,
-    buildMemoryContext(memory),
-    "DATA START",
-    JSON.stringify({
+  const systemText = buildSystemPromptText({
+    profile,
+    language,
+    sectionText: buildComparisonSections(supplementActionsNeeded, language),
+    formatRules: FORMAT_RULES(7, 4),
+    targetLength: "Target length: 220-320 words."
+  });
+  const stableDataText = buildStableDataText({
+    benchmarkSection: relevantBenchmarkSection,
+    memoryContext: buildMemoryContext(memory),
+    payload: {
       type: "latestComparison",
       units: unitSystem,
       userProfile: profile,
@@ -1109,9 +1221,20 @@ function buildComparisonPrompt(params: ComparisonParams): string {
       signals: comparisonSignals,
       premiumInsights: comparisonPremiumInsightPack,
       actionability: { clinical: comparisonActionability, supplement: comparisonSupplementActionability }
-    }),
-    "DATA END"
+    }
+  });
+  const variableText = [
+    `Today is ${today}.`,
+    buildMemoryMetaLine(memory),
+    "Scope: latest report vs the most comparable previous report (highest marker overlap; nearest date on tie).",
+    "Run the latest comparison now according to the sections above."
   ].join("\n");
+
+  return toAnalysisMessages({
+    systemText,
+    stableDataText,
+    variableText
+  });
 }
 
 const buildMemoryPrompt = ({
@@ -1203,18 +1326,27 @@ const buildCompactMemoryInput = ({
       m: row.marker,
       d: row.delta,
       p: row.percentChange
-    })) ?? [];
+    }))
+    .sort((left, right) => {
+      const deltaMagnitude = Math.abs(right.d) - Math.abs(left.d);
+      if (deltaMagnitude !== 0) {
+        return deltaMagnitude;
+      }
+      return left.m.localeCompare(right.m);
+    }) ?? [];
 
   const compactSummary = stripComplexFormatting(analysisResult).replace(/\s+/g, " ").trim();
 
   return {
     rc: reports.length,
-    rt: reports.map((report) => ({
-      d: report.date,
-      p: [report.ann.dose, report.ann.frequency, report.ann.compound],
-      t: report.ann.timing,
-      s: report.ann.supps
-    })),
+    rt: [...reports]
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((report) => ({
+        d: report.date,
+        p: [report.ann.dose, report.ann.frequency, report.ann.compound],
+        t: report.ann.timing,
+        s: report.ann.supps
+      })),
     ms: Array.from(markerSeries.entries())
       .sort((left, right) => left[0].localeCompare(right[0]))
       .map(([m, series]) => ({
@@ -1222,13 +1354,20 @@ const buildCompactMemoryInput = ({
         u: series.u,
         p: series.p
       })),
-    st: sortSupplementPeriods(supplementTimeline).map((period) => ({
-      n: period.name,
-      d: period.dose,
-      f: period.frequency,
-      s: period.startDate,
-      e: period.endDate
-    })),
+    st: sortSupplementPeriods(supplementTimeline)
+      .sort(
+        (left, right) =>
+          left.startDate.localeCompare(right.startDate) ||
+          left.name.localeCompare(right.name) ||
+          left.id.localeCompare(right.id)
+      )
+      .map((period) => ({
+        n: period.name,
+        d: period.dose,
+        f: period.frequency,
+        s: period.startDate,
+        e: period.endDate
+      })),
     mv: topMovers,
     as: compactSummary.slice(0, MEMORY_ANALYSIS_SUMMARY_MAX_CHARS)
   };
@@ -1242,6 +1381,16 @@ const extractJsonPayload = (text: string): string => {
     return withoutFences;
   }
   return withoutFences.slice(start, end + 1).trim();
+};
+
+const hashCompactMemoryInput = (compactInput: Record<string, unknown>): string => {
+  const serialized = JSON.stringify(compactInput);
+  let hash = 2166136261;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a_${(hash >>> 0).toString(16).padStart(8, "0")}`;
 };
 
 export const generateAnalystMemory = async ({
@@ -1306,6 +1455,11 @@ export const generateAnalystMemory = async ({
     supplementTimeline,
     analysisResult
   });
+  const compactInputHash = hashCompactMemoryInput(compactInput);
+  const previousInputHash = loadAnalystMemoryInputHash();
+  if (previousInputHash === compactInputHash) {
+    return null;
+  }
   const memoryPrompt = buildMemoryPrompt({
     today,
     profile,
@@ -1313,31 +1467,53 @@ export const generateAnalystMemory = async ({
     compactInput
   });
 
-  let response: Response;
-  try {
-    response = await fetch("/api/claude/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        requestType: "analysis",
-        payload: {
-          model: MEMORY_GENERATION_MODEL,
-          max_tokens: MEMORY_GENERATION_MAX_TOKENS,
-          temperature: 0.2,
-          messages: [{ role: "user", content: memoryPrompt }]
-        }
-      })
-    });
-  } catch (error) {
-    console.error("Analyst memory generation failed (non-fatal):", error);
+  const requestMemoryGeneration = async (model: string): Promise<Response | null> => {
+    try {
+      return await fetch("/api/claude/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          requestType: "analysis",
+          payload: {
+            model,
+            max_tokens: MEMORY_GENERATION_MAX_TOKENS,
+            temperature: 0.2,
+            messages: [{ role: "user", content: memoryPrompt }]
+          }
+        })
+      });
+    } catch (error) {
+      console.error("Analyst memory generation failed (non-fatal):", { model, error });
+      return null;
+    }
+  };
+
+  let selectedMemoryModel = MEMORY_GENERATION_MODEL;
+  let response = await requestMemoryGeneration(selectedMemoryModel);
+  if (!response) {
     return null;
+  }
+  if (
+    !(response.status >= 200 && response.status < 300) &&
+    response.status >= 400 &&
+    response.status < 500 &&
+    response.status !== 429 &&
+    selectedMemoryModel !== MEMORY_GENERATION_FALLBACK_MODEL
+  ) {
+    selectedMemoryModel = MEMORY_GENERATION_FALLBACK_MODEL;
+    const fallbackResponse = await requestMemoryGeneration(selectedMemoryModel);
+    if (!fallbackResponse) {
+      return null;
+    }
+    response = fallbackResponse;
   }
 
   const responseText = await response.text();
   if (!(response.status >= 200 && response.status < 300)) {
     console.error("Analyst memory generation failed (non-fatal):", {
+      model: selectedMemoryModel,
       status: response.status,
       body: responseText.slice(0, 280)
     });
@@ -1368,6 +1544,7 @@ export const generateAnalystMemory = async ({
       return null;
     }
     const expectedCount = (currentMemory?.analysisCount ?? 0) + 1;
+    saveAnalystMemoryInputHash(compactInputHash);
     return {
       ...normalized,
       version: 1,
@@ -1428,7 +1605,7 @@ const truncateContextText = (value: string, maxChars = MAX_CONTEXT_CHARS): strin
   if (compact.length <= maxChars) {
     return compact;
   }
-  return `${compact.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+  return `${compact.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
 };
 
 const supplementDoseFrequencyLabel = (dose: string, frequency: string): string => {
@@ -2755,8 +2932,7 @@ export const analyzeLabDataWithClaude = async ({
     fullActionability,
     fullSupplementActionability,
     benchmarkSection,
-    supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded,
-    customQuestion: normalizedCustomQuestion
+    supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded
   });
   const questionPrompt = normalizedCustomQuestion
     ? buildQuestionPrompt({
@@ -2860,14 +3036,43 @@ export const analyzeLabDataWithClaude = async ({
       ? latestComparisonConfig.supplementActionability
       : fullSupplementActionability;
 
+  const flattenAnalysisMessages = (messages: AnalysisMessages): string => {
+    const systemText = messages.system
+      .map((block) => block.text.trim())
+      .filter((text) => text.length > 0)
+      .join("\n\n");
+    const messageText = messages.messages
+      .flatMap((message) => message.content)
+      .map((block) => block.text.trim())
+      .filter((text) => text.length > 0)
+      .join("\n\n");
+    return [systemText, messageText].filter((text) => text.length > 0).join("\n\n");
+  };
+
   const tryModel = async (
     model: string,
     provider: AnalysisProvider,
-    promptText: string
+    promptData: AnalysisMessages | string
   ): Promise<{ status: number; body: ClaudeResponse; retryAfterSeconds: number | null }> => {
     const endpoint = provider === "gemini" ? "/api/gemini?action=analysis" : "/api/claude/messages";
     const providerMaxTokens = provider === "gemini" ? Math.max(maxTokens, GEMINI_MIN_OUTPUT_TOKENS) : maxTokens;
     const shouldStreamClaude = provider === "claude" && typeof onStreamEvent === "function";
+    const claudePayload =
+      typeof promptData === "string"
+        ? {
+            messages: [{ role: "user", content: promptData }]
+          }
+        : {
+            system: promptData.system,
+            messages: promptData.messages
+          };
+    const geminiPrompt = typeof promptData === "string" ? promptData : flattenAnalysisMessages(promptData);
+    const providerPayload =
+      provider === "gemini"
+        ? {
+            messages: [{ role: "user", content: geminiPrompt }]
+          }
+        : claudePayload;
     let response: Response;
     try {
       response = await fetch(endpoint, {
@@ -2883,7 +3088,7 @@ export const analyzeLabDataWithClaude = async ({
             max_tokens: providerMaxTokens,
             temperature: 0.3,
             ...(shouldStreamClaude ? { stream: true } : {}),
-            messages: [{ role: "user", content: promptText }]
+            ...providerPayload
           }
         })
       });
@@ -2969,9 +3174,10 @@ export const analyzeLabDataWithClaude = async ({
           let finalized = text;
           let truncated = result.body.stop_reason === "max_tokens";
           if (truncated) {
+            const basePromptText = typeof prompt === "string" ? prompt : flattenAnalysisMessages(prompt);
             for (let continuationIndex = 0; continuationIndex < MAX_CONTINUATION_CALLS; continuationIndex += 1) {
               const continuationPrompt = [
-                prompt,
+                basePromptText,
                 "",
                 "The previous answer was cut off by token limit.",
                 "Continue from where you stopped, do not repeat earlier text, keep it concise and insight-focused.",
@@ -3087,3 +3293,4 @@ export const analyzeLabDataWithClaude = async ({
   }
   throw new Error(`AI_REQUEST_FAILED:${lastStatus || "unknown"}:${lastErrorMessage || ""}`);
 };
+
