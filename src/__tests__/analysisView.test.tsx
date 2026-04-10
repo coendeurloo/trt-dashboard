@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../constants";
 import { LabReport } from "../types";
@@ -109,6 +109,7 @@ describe("AnalysisView", () => {
   it("keeps copy button in output area only when a result exists", () => {
     const { rerender } = render(<AnalysisView {...baseProps} />);
     expect(screen.queryByRole("button", { name: /copy analysis/i })).toBeNull();
+    expect(screen.queryByText(/run an analysis or ask a question to get started/i)).toBeNull();
 
     rerender(
       <AnalysisView
@@ -124,7 +125,7 @@ describe("AnalysisView", () => {
 
   it("disables latest comparison action when there are fewer than 2 reports", () => {
     render(<AnalysisView {...baseProps} reportsInScope={1} />);
-    const latestButton = screen.getByRole("button", { name: /compare latest report/i });
+    const latestButton = screen.getByRole("button", { name: /compare latest vs previous/i });
     expect(latestButton.getAttribute("disabled")).not.toBeNull();
   });
 
@@ -132,6 +133,9 @@ describe("AnalysisView", () => {
     render(
       <AnalysisView
         {...baseProps}
+        analysisResult="Scoped result"
+        analysisResultDisplay="Scoped result"
+        analysisKind="full"
         analysisScopeNotice={{
           usedReports: 10,
           totalReports: 27,
@@ -217,6 +221,15 @@ describe("AnalysisView", () => {
       />
     );
 
-    expect(scrollIntoViewMock).toHaveBeenCalled();
+    return waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+  });
+
+  it("does not render the output panel before the first run", () => {
+    render(<AnalysisView {...baseProps} />);
+
+    expect(screen.queryByRole("heading", { name: /analysis output/i })).toBeNull();
+    expect(screen.queryByText(/run an analysis or ask a question to get started/i)).toBeNull();
   });
 });
