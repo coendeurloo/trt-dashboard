@@ -585,6 +585,72 @@ describe("pdfParsing fallback layers", () => {
     expect(thirdEgfr[0]?.value).toBe(124);
   });
 
+  it("keeps wide left marker clusters on the component side to avoid sodium carry-over", () => {
+    const spatialRows = [
+      {
+        page: 1,
+        y: 631,
+        items: [
+          { x: 56, text: "Component" },
+          { x: 256, text: "Feb 29, 2024" },
+          { x: 375, text: "Sep 2, 2025" }
+        ]
+      },
+      {
+        page: 1,
+        y: 611,
+        items: [
+          { x: 56, text: "Sodium Normal Range: 135 - 148 mEq/L" },
+          { x: 257, text: "139 mEq/L" },
+          { x: 375, text: "140 mEq/L" }
+        ]
+      },
+      {
+        page: 1,
+        y: 572,
+        items: [
+          // Intentionally starts near the component/date boundary and is long enough
+          // to stretch right; parser should still treat this as the left marker cell.
+          { x: 200, text: "eGFR (2021 CKD-EPI) Normal Range: >=60 ml/min/1.73m2" },
+          { x: 257, text: "7 ml/min/1.73m2" },
+          { x: 375, text: "120 ml/min/1.73m2" }
+        ]
+      }
+    ];
+
+    const text = [
+      "Result Trends",
+      "Component Feb 29, 2024 Sep 2, 2025",
+      "Sodium Normal Range: 135 - 148 mEq/L",
+      "eGFR (2021 CKD-EPI) Normal Range: >=60 ml/min/1.73m2"
+    ].join("\n");
+
+    const parsed = __pdfParsingInternals.parseQuestResultTrendsMultiDateDrafts(
+      text,
+      spatialRows,
+      genericProfile,
+      "BasicMP.pdf"
+    );
+
+    expect(parsed).not.toBeNull();
+    const firstDraft = parsed?.drafts.find((draft) => draft.testDate === "2024-02-29");
+    const secondDraft = parsed?.drafts.find((draft) => draft.testDate === "2025-09-02");
+
+    const firstSodium = firstDraft?.markers.filter((marker) => marker.canonicalMarker === "Sodium") ?? [];
+    const secondSodium = secondDraft?.markers.filter((marker) => marker.canonicalMarker === "Sodium") ?? [];
+    const firstEgfr = firstDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
+    const secondEgfr = secondDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
+
+    expect(firstSodium).toHaveLength(1);
+    expect(firstSodium[0]?.value).toBe(139);
+    expect(secondSodium).toHaveLength(1);
+    expect(secondSodium[0]?.value).toBe(140);
+    expect(firstEgfr).toHaveLength(1);
+    expect(firstEgfr[0]?.value).toBe(7);
+    expect(secondEgfr).toHaveLength(1);
+    expect(secondEgfr[0]?.value).toBe(120);
+  });
+
   it("drops calculator and url noise rows while keeping real lab markers", () => {
     const rows = __pdfParsingInternals.parseLineRows(
       [

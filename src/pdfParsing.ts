@@ -3713,8 +3713,10 @@ const parseQuestResultTrendsMultiDateDrafts = (
       continue;
     }
 
-    const leftClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) < header.componentBoundaryX);
-    const rightClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) >= header.componentBoundaryX);
+    // Use xStart instead of cluster center so long marker labels that stretch
+    // toward the first date column still stay in the left "Component" side.
+    const leftClusters = bundle.clusters.filter((cluster) => cluster.xStart < header.componentBoundaryX);
+    const rightClusters = bundle.clusters.filter((cluster) => cluster.xStart >= header.componentBoundaryX);
 
     const leftText = cleanWhitespace(leftClusters.map((cluster) => cluster.text).join(" "));
     const splitLeft = splitQuestTrendMarkerAndReference(leftText);
@@ -6644,5 +6646,6 @@ export const __pdfParsingInternals = {
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
+
 
 
