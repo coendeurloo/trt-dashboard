@@ -1350,7 +1350,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Electrolytes",
     aliases: ["natrium", "na"],
     preferredUnit: "mmol/L",
-    alternateUnits: [],
+    alternateUnits: ["mEq/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 135, max: 145 }
   }),
@@ -1360,7 +1360,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Electrolytes",
     aliases: ["kalium", "k"],
     preferredUnit: "mmol/L",
-    alternateUnits: [],
+    alternateUnits: ["mEq/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 3.5, max: 5.1 }
   }),
@@ -1370,7 +1370,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Electrolytes",
     aliases: ["chloride", "cl"],
     preferredUnit: "mmol/L",
-    alternateUnits: [],
+    alternateUnits: ["mEq/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 98, max: 107 }
   }),
@@ -1380,7 +1380,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Electrolytes",
     aliases: ["co2", "total co2", "co2 total", "bicarbonate", "bicarbonaat", "hco3", "hco3-"],
     preferredUnit: "mmol/L",
-    alternateUnits: [],
+    alternateUnits: ["mEq/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 22, max: 29 }
   }),
@@ -1390,7 +1390,7 @@ export const MARKER_DATABASE: CanonicalMarker[] = [
     category: "Electrolytes",
     aliases: ["anion gap", "anionen gap"],
     preferredUnit: "mmol/L",
-    alternateUnits: [],
+    alternateUnits: ["mEq/L"],
     defaultRangeType: "min-max",
     defaultRange: { min: 6, max: 16 }
   }),

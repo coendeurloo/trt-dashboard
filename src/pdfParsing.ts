@@ -1427,6 +1427,9 @@ const normalizeUnit = (unit: string): string => {
   if (/^mmol\/l$/i.test(compact)) {
     return "mmol/L";
   }
+  if (/^meq\/l$/i.test(compact)) {
+    return "mEq/L";
+  }
   if (/^nmol\/l$/i.test(compact)) {
     return "nmol/L";
   }
@@ -2302,7 +2305,9 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   let referenceMax: number | null = null;
   let unit = "";
 
-  const rangeMatches = Array.from(cleaned.matchAll(/(?:<|>|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/g));
+  const rangeMatches = Array.from(
+    cleaned.matchAll(/(?:<=|>=|<|>|\u2264|\u2265)?\s*(-?\d+(?:[.,]\d+)?)\s*[-�]\s*(-?\d+(?:[.,]\d+)?)/g)
+  );
   if (rangeMatches.length > 0) {
     const last = rangeMatches[rangeMatches.length - 1];
     referenceMin = safeNumber(last[1]);
@@ -2310,28 +2315,28 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const upperOrEqualMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*OR\s*=\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const upperOrEqualMatch = cleaned.match(/(?:^|\s)(?:<=|<|\u2264)\s*(?:OR\s*=\s*)?(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (upperOrEqualMatch) {
       referenceMax = safeNumber(upperOrEqualMatch[1]);
     }
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const lowerOrEqualMatch = cleaned.match(/(?:^|\s)(?:>|≥)\s*OR\s*=\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const lowerOrEqualMatch = cleaned.match(/(?:^|\s)(?:>=|>|\u2265)\s*(?:OR\s*=\s*)?(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (lowerOrEqualMatch) {
       referenceMin = safeNumber(lowerOrEqualMatch[1]);
     }
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const upperMatch = cleaned.match(/(?:^|\s)(?:<|≤)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const upperMatch = cleaned.match(/(?:^|\s)(?:<=|<|\u2264)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (upperMatch) {
       referenceMax = safeNumber(upperMatch[1]);
     }
   }
 
   if (referenceMin === null && referenceMax === null) {
-    const lowerMatch = cleaned.match(/(?:^|\s)(?:>|≥)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
+    const lowerMatch = cleaned.match(/(?:^|\s)(?:>=|>|\u2265)\s*(-?\d+(?:[.,]\d+)?)(?:\s|$)/i);
     if (lowerMatch) {
       referenceMin = safeNumber(lowerMatch[1]);
     }

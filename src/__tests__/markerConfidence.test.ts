@@ -140,6 +140,23 @@ describe("markerConfidence", () => {
     expect(egfrConfidence.issues.some((issue) => /not recognized|unknown/i.test(issue))).toBe(false);
   });
 
+  it("accepts mEq/L as a known alternative for electrolyte markers", () => {
+    const sodiumConfidence = scoreMarkerConfidence(
+      {
+        name: "Sodium",
+        value: 140,
+        unit: "mEq/L",
+        referenceMin: 135,
+        referenceMax: 148
+      },
+      matchMarker("Sodium")
+    );
+
+    expect(sodiumConfidence.unit).toBe("medium");
+    expect(sodiumConfidence.issues.some((issue) => /unknown|not recognized/i.test(issue))).toBe(false);
+    expect(sodiumConfidence.issues.some((issue) => /valid but not preferred/i.test(issue))).toBe(true);
+  });
+
   it("recognizes Thousand/uL and Million/uL style CBC units", () => {
     const leukocyteConfidence = scoreMarkerConfidence(
       {

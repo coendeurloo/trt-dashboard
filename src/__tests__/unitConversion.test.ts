@@ -62,6 +62,32 @@ describe("unitConversion", () => {
     expect(totalT.value).toBeCloseTo(31.2, 1);
   });
 
+  it("normalizes electrolyte mEq/L values to mmol/L", () => {
+    const sodium = normalizeMarkerMeasurement({
+      canonicalMarker: "Sodium",
+      value: 140,
+      unit: "mEq/L",
+      referenceMin: 135,
+      referenceMax: 148
+    });
+
+    const co2 = normalizeMarkerMeasurement({
+      canonicalMarker: "Carbon Dioxide",
+      value: 28,
+      unit: "meq/l",
+      referenceMin: 22,
+      referenceMax: 30
+    });
+
+    expect(sodium.unit).toBe("mmol/L");
+    expect(sodium.value).toBe(140);
+    expect(sodium.referenceMin).toBe(135);
+    expect(sodium.referenceMax).toBe(148);
+
+    expect(co2.unit).toBe("mmol/L");
+    expect(co2.value).toBe(28);
+  });
+
   it("rounds normalized values and references to max 3 decimals for storage", () => {
     const rounded = normalizeMarkerMeasurement({
       canonicalMarker: "Free Testosterone",

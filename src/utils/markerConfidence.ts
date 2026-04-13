@@ -64,6 +64,7 @@ export const UNIT_NORMALIZATION: Record<string, string> = {
   "u/l": "U/L",
   "miu/l": "mIU/L",
   "miu/ml": "mIU/mL",
+  "meq/l": "mEq/L",
   "uiu/ml": "uIU/mL",
   "ui/l": "U/L",
   "iu/l": "IU/L",

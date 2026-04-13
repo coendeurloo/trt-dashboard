@@ -481,6 +481,9 @@ describe("pdfParsing fallback layers", () => {
     expect(firstDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.value).toBe(139);
     expect(secondDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.value).toBe(140);
     expect(thirdDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.value).toBe(140);
+    expect(firstDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.unit).toBe("mmol/L");
+    expect(secondDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.unit).toBe("mmol/L");
+    expect(thirdDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium")?.unit).toBe("mmol/L");
 
     const firstEgfr = firstDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
     const secondEgfr = secondDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
@@ -492,6 +495,9 @@ describe("pdfParsing fallback layers", () => {
     expect(firstEgfr[0]?.value).toBe(7);
     expect(secondEgfr[0]?.value).toBe(120);
     expect(thirdEgfr[0]?.value).toBe(124);
+    expect(firstEgfr[0]?.referenceMin).toBe(60);
+    expect(secondEgfr[0]?.referenceMin).toBe(60);
+    expect(thirdEgfr[0]?.referenceMin).toBe(60);
 
     const firstBun = firstDraft?.markers.find((marker) => /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`));
     const secondBun = secondDraft?.markers.find((marker) => /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`));

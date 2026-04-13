@@ -82,6 +82,7 @@ const normalizeUnitToken = (unit: string): string =>
     .replace(/\s+/g, "");
 const isOneOf = (value: string, candidates: string[]): boolean => candidates.includes(value);
 const scaleNullable = (value: number | null, factor: number): number | null => (value === null ? null : value * factor);
+const isMilliequivalentPerLiterUnit = (normalizedUnit: string): boolean => isOneOf(normalizedUnit, ["meq/l", "meql"]);
 const roundToStoragePrecision = (value: number): number => {
   const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
   return Object.is(rounded, -0) ? 0 : rounded;
@@ -271,6 +272,26 @@ const normalizeMarkerUnits = (
         unit: "mmol/L",
         referenceMin: scaleNullable(measurement.referenceMin, HEMOGLOBIN_GPDL_TO_MMOLL),
         referenceMax: scaleNullable(measurement.referenceMax, HEMOGLOBIN_GPDL_TO_MMOLL)
+      };
+    }
+    return null;
+  }
+
+  if (
+    isOneOf(measurement.canonicalMarker, [
+      "Sodium",
+      "Potassium",
+      "Chloride",
+      "Carbon Dioxide",
+      "Anion Gap"
+    ])
+  ) {
+    if (isOneOf(normalizedUnit, ["mmol/l", "mmoll"]) || isMilliequivalentPerLiterUnit(normalizedUnit)) {
+      return {
+        value: measurement.value,
+        unit: "mmol/L",
+        referenceMin: measurement.referenceMin,
+        referenceMax: measurement.referenceMax
       };
     }
     return null;
