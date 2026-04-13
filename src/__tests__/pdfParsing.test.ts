@@ -499,13 +499,90 @@ describe("pdfParsing fallback layers", () => {
     expect(secondEgfr[0]?.referenceMin).toBe(60);
     expect(thirdEgfr[0]?.referenceMin).toBe(60);
 
-    const firstBun = firstDraft?.markers.find((marker) => /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`));
-    const secondBun = secondDraft?.markers.find((marker) => /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`));
-    const thirdBun = thirdDraft?.markers.find((marker) => /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`));
+    const isBunLike = (marker: { marker: string; canonicalMarker: string }) =>
+      /\bbun\b/i.test(`${marker.marker} ${marker.canonicalMarker}`) || marker.canonicalMarker === "Urea";
+    const firstBun = firstDraft?.markers.find(isBunLike);
+    const secondBun = secondDraft?.markers.find(isBunLike);
+    const thirdBun = thirdDraft?.markers.find(isBunLike);
 
     expect(firstBun).toBeUndefined();
     expect(secondBun?.value).toBe(12);
     expect(thirdBun?.value).toBe(13);
+  });
+
+  it("does not shift markers when Quest rows combine marker and normal range in one left cell", () => {
+    const spatialRows = [
+      {
+        page: 1,
+        y: 631,
+        items: [
+          { x: 56, text: "Component" },
+          { x: 256, text: "Feb 29, 2024" },
+          { x: 375, text: "Sep 2, 2025" },
+          { x: 493, text: "Oct 15, 2025" }
+        ]
+      },
+      {
+        page: 1,
+        y: 611,
+        items: [
+          { x: 56, text: "Sodium Normal Range: 135 - 148 mEq/L" },
+          { x: 257, text: "139 mEq/L" },
+          { x: 375, text: "140 mEq/L" },
+          { x: 494, text: "140 mEq/L" }
+        ]
+      },
+      {
+        page: 1,
+        y: 572,
+        items: [
+          { x: 56, text: "eGFR (2021 CKD-EPI) Normal Range: >=60 ml/min/1.73m2" },
+          { x: 243, text: "7 ml/min/1.73m2" },
+          { x: 355, text: "120 ml/min/1.73m2" }
+        ]
+      },
+      {
+        page: 1,
+        y: 525,
+        items: [
+          { x: 56, text: "eGFR (2021 CKD-EPI) Normal Range: Greater than >=60 ml/min/1.73m2" },
+          { x: 474, text: "124 ml/min/1.73m2" }
+        ]
+      }
+    ];
+    const text = [
+      "Result Trends",
+      "Component Feb 29, 2024 Sep 2, 2025 Oct 15, 2025",
+      "Sodium Normal Range: 135 - 148 mEq/L",
+      "eGFR (2021 CKD-EPI) Normal Range: >=60 ml/min/1.73m2"
+    ].join("\n");
+
+    const parsed = __pdfParsingInternals.parseQuestResultTrendsMultiDateDrafts(
+      text,
+      spatialRows,
+      genericProfile,
+      "BasicMP.pdf"
+    );
+
+    expect(parsed).not.toBeNull();
+    const firstDraft = parsed?.drafts.find((draft) => draft.testDate === "2024-02-29");
+    const secondDraft = parsed?.drafts.find((draft) => draft.testDate === "2025-09-02");
+    const thirdDraft = parsed?.drafts.find((draft) => draft.testDate === "2025-10-15");
+
+    const firstSodium = firstDraft?.markers.filter((marker) => marker.canonicalMarker === "Sodium") ?? [];
+    const firstEgfr = firstDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
+    const secondEgfr = secondDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
+    const thirdEgfr = thirdDraft?.markers.filter((marker) => /egfr/i.test(`${marker.marker} ${marker.canonicalMarker}`)) ?? [];
+
+    expect(firstSodium).toHaveLength(1);
+    expect(firstSodium[0]?.value).toBe(139);
+    expect(firstEgfr).toHaveLength(1);
+    expect(firstEgfr[0]?.value).toBe(7);
+    expect(firstEgfr[0]?.referenceMin).toBe(60);
+    expect(secondEgfr).toHaveLength(1);
+    expect(secondEgfr[0]?.value).toBe(120);
+    expect(thirdEgfr).toHaveLength(1);
+    expect(thirdEgfr[0]?.value).toBe(124);
   });
 
   it("drops calculator and url noise rows while keeping real lab markers", () => {
@@ -1846,3 +1923,4 @@ describe("assessParserUncertainty", () => {
     expect(result.reasons).toContain("confidence_and_unit_coverage_low");
   });
 });
+

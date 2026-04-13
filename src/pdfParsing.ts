@@ -3650,6 +3650,23 @@ const looksLikeQuestTrendMarkerLabel = (text: string): boolean => {
   return normalized.split(" ").filter(Boolean).length <= 8;
 };
 
+const splitQuestTrendMarkerAndReference = (
+  leftText: string
+): { markerText: string; referenceText: string } => {
+  const normalized = cleanWhitespace(leftText);
+  if (!normalized) {
+    return { markerText: "", referenceText: "" };
+  }
+
+  const match = normalized.match(/\b(?:normal|reference)\s*range\s*:/i);
+  if (!match || match.index === undefined) {
+    return { markerText: normalized, referenceText: "" };
+  }
+
+  const markerText = cleanWhitespace(normalized.slice(0, match.index));
+  const referenceText = cleanWhitespace(normalized.slice(match.index));
+  return { markerText, referenceText };
+};
 const parseQuestResultTrendsMultiDateDrafts = (
   text: string,
   spatialRows: PdfSpatialRow[],
@@ -3698,42 +3715,53 @@ const parseQuestResultTrendsMultiDateDrafts = (
 
     const leftClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) < header.componentBoundaryX);
     const rightClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) >= header.componentBoundaryX);
-    const leftText = cleanWhitespace(leftClusters.map((cluster) => cluster.text).join(" "));
 
-    if (leftText) {
-      if (/^normal range:/i.test(leftText) || /^reference range:/i.test(leftText)) {
-        const parsedRef = extractReferenceAndUnit(leftText);
-        currentReference = {
-          referenceMin: parsedRef.referenceMin,
-          referenceMax: parsedRef.referenceMax,
-          unit: parsedRef.unit
-        };
+    const leftText = cleanWhitespace(leftClusters.map((cluster) => cluster.text).join(" "));
+    const splitLeft = splitQuestTrendMarkerAndReference(leftText);
+    let markerDetectedOnRow = false;
+    let referenceDetectedOnRow = false;
+
+    if (splitLeft.markerText && looksLikeQuestTrendMarkerLabel(splitLeft.markerText)) {
+      currentMarker = applyProfileMarkerFixes(cleanMarkerName(splitLeft.markerText));
+      currentReference = {
+        referenceMin: null,
+        referenceMax: null,
+        unit: ""
+      };
+      markerDetectedOnRow = true;
+    }
+
+    const referenceSourceText = splitLeft.referenceText || leftText;
+    if (referenceSourceText) {
+      const parsedReference = extractReferenceAndUnit(referenceSourceText);
+      if (parsedReference.referenceMin !== null || parsedReference.referenceMax !== null || parsedReference.unit) {
+        currentReference = parsedReference;
+        referenceDetectedOnRow = true;
         if (currentMarker) {
-          const pending = pendingRowsByMarker.get(currentMarker) ?? [];
-          if (pending.length > 0 && (parsedRef.referenceMin !== null || parsedRef.referenceMax !== null || parsedRef.unit)) {
-            for (const row of pending) {
-              row.referenceMin = row.referenceMin ?? parsedRef.referenceMin;
-              row.referenceMax = row.referenceMax ?? parsedRef.referenceMax;
-              row.unit = row.unit || parsedRef.unit;
-              row.confidence = Math.max(row.confidence, 0.8);
+          const pendingRows = pendingRowsByMarker.get(currentMarker) ?? [];
+          for (const pendingRow of pendingRows) {
+            if (pendingRow.referenceMin === null) {
+              pendingRow.referenceMin = parsedReference.referenceMin;
             }
-            pendingRowsByMarker.set(currentMarker, []);
+            if (pendingRow.referenceMax === null) {
+              pendingRow.referenceMax = parsedReference.referenceMax;
+            }
+            if (!pendingRow.unit && parsedReference.unit) {
+              pendingRow.unit = parsedReference.unit;
+            }
           }
-        }
-      } else if (looksLikeQuestTrendMarkerLabel(leftText)) {
-        currentMarker = applyProfileMarkerFixes(cleanMarkerName(leftText));
-        currentReference = {
-          referenceMin: null,
-          referenceMax: null,
-          unit: ""
-        };
-        if (!pendingRowsByMarker.has(currentMarker)) {
-          pendingRowsByMarker.set(currentMarker, []);
+          pendingRowsByMarker.delete(currentMarker);
         }
       }
     }
 
     if (!currentMarker || rightClusters.length === 0) {
+      continue;
+    }
+
+    // Guard: if the left cell has unrecognized text, do not let values inherit
+    // the previous marker. This prevents row-shifts like eGFR -> Sodium.
+    if (leftText && !markerDetectedOnRow && !referenceDetectedOnRow) {
       continue;
     }
 
@@ -3823,7 +3851,6 @@ const parseQuestResultTrendsMultiDateDrafts = (
     detectedDateColumns: header.columns.map((column) => column.isoDate)
   };
 };
-
 const looksLikeHistorySheetLayout = (text: string): boolean => {
   const normalized = cleanWhitespace(text).toLowerCase();
   const hasBaseline = /\bbaseline\b/.test(normalized);
@@ -6617,3 +6644,5 @@ export const __pdfParsingInternals = {
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
+
+
