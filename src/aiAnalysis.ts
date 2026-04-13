@@ -715,6 +715,20 @@ const parseSseEventBlock = (rawBlock: string): { eventType: string; payloadText:
   };
 };
 
+const isLikelyOverloadedError = (rawMessage: string): boolean => {
+  const message = rawMessage.trim().toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return (
+    message.includes("overload") ||
+    message.includes("overloaded") ||
+    message.includes("529") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("capacity")
+  );
+};
+
 const parseAnthropicEventStream = async ({
   response,
   signal,
@@ -777,6 +791,9 @@ const parseAnthropicEventStream = async ({
 
     if (typedPayload.type === "error") {
       const errorMessage = typedPayload.error?.message ?? typedPayload.message ?? "Anthropic stream error";
+      if (isLikelyOverloadedError(errorMessage)) {
+        throw new Error("AI_OVERLOADED");
+      }
       throw new Error(`AI_REQUEST_FAILED:${response.status}:${errorMessage}`);
     }
   };

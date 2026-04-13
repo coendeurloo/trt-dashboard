@@ -204,7 +204,10 @@ export const initSentry = (): void => {
     release: String(import.meta.env.VITE_SENTRY_RELEASE ?? "").trim() || undefined,
     tracesSampleRate: normalizeSampleRate(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE, 0.12),
     integrations: [Sentry.browserTracingIntegration()],
-    ignoreErrors: ["AI_REQUEST_ABORTED"],
+    ignoreErrors: [
+      "AI_REQUEST_ABORTED",
+      "Cannot read properties of null (reading 'postMessage')"
+    ],
     beforeSend: (event) => sanitizeEventCommon(event),
     beforeSendTransaction: (event) => sanitizeEventCommon(event),
     beforeSendSpan: (span) => sanitizeSpan(span),

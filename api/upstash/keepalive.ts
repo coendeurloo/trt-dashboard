@@ -5,6 +5,8 @@ import { resolveSupabaseEnv } from "../_lib/supabaseAdmin.js";
 import { captureServerException, initServerSentry, withServerMonitor } from "../_lib/sentry.js";
 
 const KEEPALIVE_KEY = "meta:keepalive";
+const KEEPALIVE_RUNTIME_CONFIG_TIMEOUT_MS = 2500;
+const KEEPALIVE_REDIS_PROBE_TIMEOUT_MS = 3000;
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -13,13 +15,33 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
   res.end(JSON.stringify(payload));
 };
 
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutCode: string): Promise<T> => {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error(timeoutCode)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+};
+
 const resolveKeepaliveFlag = async (): Promise<{
   enabled: boolean;
   source: "database" | "defaults" | "fallback";
 }> => {
   try {
     const env = resolveSupabaseEnv();
-    const runtimeConfig = await getRuntimeConfig(env);
+    const runtimeConfig = await withTimeout(
+      getRuntimeConfig(env),
+      KEEPALIVE_RUNTIME_CONFIG_TIMEOUT_MS,
+      "KEEPALIVE_RUNTIME_CONFIG_TIMEOUT"
+    );
     return {
       enabled: runtimeConfig.upstashKeepaliveEnabled,
       source: runtimeConfig.source
@@ -56,7 +78,31 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           return;
         }
 
-        await getCounter(KEEPALIVE_KEY);
+        try {
+          await withTimeout(
+            getCounter(KEEPALIVE_KEY),
+            KEEPALIVE_REDIS_PROBE_TIMEOUT_MS,
+            "KEEPALIVE_REDIS_PROBE_TIMEOUT"
+          );
+        } catch (probeError) {
+          await captureServerException(probeError, {
+            tags: {
+              route: "/api/upstash/keepalive",
+              flow: "upstash_keepalive",
+              severity: "degraded"
+            },
+            fingerprint: ["upstash-keepalive-degraded"]
+          });
+          sendJson(res, 200, {
+            ok: true,
+            skipped: true,
+            reason: "KEEPALIVE_REDIS_PROBE_FAILED",
+            source: keepalive.source,
+            touchedAt: null
+          });
+          return;
+        }
+
         sendJson(res, 200, {
           ok: true,
           skipped: false,

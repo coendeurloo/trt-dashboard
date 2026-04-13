@@ -27,6 +27,18 @@ interface UseAnalysisOptions {
   tr: (nl: string, en: string) => string;
 }
 
+const isExpectedAiServiceError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = (error.message ?? "").trim();
+  return (
+    code === "AI_OVERLOADED" ||
+    code === "AI_LIMITS_UNAVAILABLE" ||
+    code.startsWith("AI_RATE_LIMITED:")
+  );
+};
+
 export const useAnalysis = ({
   settings,
   language,
@@ -283,23 +295,25 @@ export const useAnalysis = ({
         setAnalysisRequestState("idle");
         return;
       }
-      captureAppException(error, {
-        tags: {
-          flow: "ai_analysis",
-          analysis_kind: kind,
-          analysis_type: analysisType,
-          provider_preference: settings.aiAnalysisProvider,
-          partial_output: receivedStreamDelta
-        },
-        extra: {
-          reportCount: allReports.length,
-          checkInCount: checkIns.length,
-          protocolCount: protocols.length,
-          supplementCount: supplementTimeline.length,
-          userProfile: settings.userProfile
-        },
-        fingerprint: ["ai-analysis-failure", kind, analysisType]
-      });
+      if (!isExpectedAiServiceError(error)) {
+        captureAppException(error, {
+          tags: {
+            flow: "ai_analysis",
+            analysis_kind: kind,
+            analysis_type: analysisType,
+            provider_preference: settings.aiAnalysisProvider,
+            partial_output: receivedStreamDelta
+          },
+          extra: {
+            reportCount: allReports.length,
+            checkInCount: checkIns.length,
+            protocolCount: protocols.length,
+            supplementCount: supplementTimeline.length,
+            userProfile: settings.userProfile
+          },
+          fingerprint: ["ai-analysis-failure", kind, analysisType]
+        });
+      }
       const mappedError = mapErrorToMessage(error, "ai");
       setAnalysisError(
         receivedStreamDelta

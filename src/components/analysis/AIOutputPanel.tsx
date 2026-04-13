@@ -202,7 +202,7 @@ const AIOutputPanel = ({
         </div>
       ) : null}
 
-      {!showLoadingCard && !showLiveOutput && !analysisResult ? (
+      {!showLoadingCard && !showLiveOutput && !analysisResult && !analysisError ? (
         <div className={isDarkTheme ? "mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-900/45 p-4 text-sm text-slate-300" : "mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700"}>
           <p className={isDarkTheme ? "text-sm text-slate-400" : "text-sm text-slate-500"}>{emptyBody}</p>
         </div>

@@ -123,4 +123,26 @@ describe("/api/upstash/keepalive", () => {
     expect(res.res.statusCode).toBe(405);
     expect(getCounter).not.toHaveBeenCalled();
   });
+
+  it("returns degraded-ok when redis probe fails", async () => {
+    getCounter.mockRejectedValueOnce(new Error("redis timeout"));
+    const req = {
+      method: "GET"
+    } as unknown as IncomingMessage;
+    const res = createMockResponse();
+
+    await keepaliveHandler(req, res.res);
+
+    expect(res.res.statusCode).toBe(200);
+    const payload = JSON.parse(res.readBody()) as {
+      ok: boolean;
+      skipped: boolean;
+      reason: string;
+      touchedAt: string | null;
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.skipped).toBe(true);
+    expect(payload.reason).toBe("KEEPALIVE_REDIS_PROBE_FAILED");
+    expect(payload.touchedAt).toBeNull();
+  });
 });

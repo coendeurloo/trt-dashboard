@@ -72,6 +72,19 @@ const isRecoverableSyncStateError = (error: unknown): boolean => {
   );
 };
 
+const isExpectedCloudAuthError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const normalized = (error.message ?? "").trim().toUpperCase();
+  return (
+    normalized.startsWith("AUTH_REQUIRED:") ||
+    normalized.startsWith("AUTH_UNAUTHORIZED") ||
+    normalized.startsWith("SUPABASE_HTTP_401:") ||
+    normalized.startsWith("SUPABASE_HTTP_403:")
+  );
+};
+
 const fetchRows = async <T>(
   table: string,
   query: string,
@@ -304,19 +317,21 @@ export class SupabaseCloudAdapter {
         }
       );
     } catch (error) {
-      captureAppException(error, {
-        tags: {
-          flow: "cloud_sync",
-          action: "replace_all"
-        },
-        extra: {
-          expectedRevision,
-          reportCount: data.reports.length,
-          protocolCount: data.protocols.length,
-          checkInCount: data.checkIns.length
-        },
-        fingerprint: ["cloud-sync-replace-all-failure"]
-      });
+      if (!isExpectedCloudAuthError(error)) {
+        captureAppException(error, {
+          tags: {
+            flow: "cloud_sync",
+            action: "replace_all"
+          },
+          extra: {
+            expectedRevision,
+            reportCount: data.reports.length,
+            protocolCount: data.protocols.length,
+            checkInCount: data.checkIns.length
+          },
+          fingerprint: ["cloud-sync-replace-all-failure"]
+        });
+      }
       throw error;
     }
   }
@@ -351,17 +366,19 @@ export class SupabaseCloudAdapter {
         }
       );
     } catch (error) {
-      captureAppException(error, {
-        tags: {
-          flow: "cloud_sync",
-          action: "apply_patch"
-        },
-        extra: {
-          expectedRevision,
-          patchKeys: Object.keys(patch ?? {})
-        },
-        fingerprint: ["cloud-sync-apply-patch-failure"]
-      });
+      if (!isExpectedCloudAuthError(error)) {
+        captureAppException(error, {
+          tags: {
+            flow: "cloud_sync",
+            action: "apply_patch"
+          },
+          extra: {
+            expectedRevision,
+            patchKeys: Object.keys(patch ?? {})
+          },
+          fingerprint: ["cloud-sync-apply-patch-failure"]
+        });
+      }
       throw error;
     }
   }
