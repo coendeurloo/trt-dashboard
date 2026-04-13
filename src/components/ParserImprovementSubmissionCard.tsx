@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Send, ShieldCheck, X } from "lucide-react";
 import { trLocale } from "../i18n";
-import { ParserImprovementFormValues } from "../parserImprovementSubmission";
+import { PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH, ParserImprovementFormValues } from "../parserImprovementSubmission";
 import { AppLanguage, ExtractionDraft, ParserUncertaintyAssessment } from "../types";
 
 interface ParserImprovementSubmissionCardProps {
@@ -9,6 +9,7 @@ interface ParserImprovementSubmissionCardProps {
   language: AppLanguage;
   draft: ExtractionDraft;
   assessment: ParserUncertaintyAssessment;
+  prefillEmail?: string | null;
   status: "idle" | "submitting" | "success" | "error";
   errorMessage: string;
   onSubmit: (values: ParserImprovementFormValues) => Promise<void>;
@@ -17,6 +18,7 @@ interface ParserImprovementSubmissionCardProps {
 
 const EMPTY_VALUES: ParserImprovementFormValues = {
   consent: false,
+  email: "",
   note: "",
   country: "",
   labProvider: "",
@@ -28,6 +30,7 @@ const ParserImprovementSubmissionCard = ({
   language,
   draft,
   assessment,
+  prefillEmail = null,
   status,
   errorMessage,
   onSubmit,
@@ -41,9 +44,12 @@ const ParserImprovementSubmissionCard = ({
     if (!open || status !== "idle") {
       return;
     }
-    setValues(EMPTY_VALUES);
+    setValues({
+      ...EMPTY_VALUES,
+      email: (prefillEmail ?? "").trim().toLowerCase()
+    });
     setValidationError("");
-  }, [draft.sourceFileName, open, status]);
+  }, [draft.sourceFileName, open, status, prefillEmail]);
 
   if (!open) {
     return null;
@@ -63,9 +69,28 @@ const ParserImprovementSubmissionCard = ({
       );
       return;
     }
+    const normalizedEmail = values.email.trim().toLowerCase();
+    if (normalizedEmail.length > PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH) {
+      setValidationError(
+        tr(
+          `Gebruik maximaal ${PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH} tekens voor je e-mailadres.`,
+          `Use at most ${PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH} characters for your email address.`
+        )
+      );
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setValidationError(
+        tr(
+          "Vul een geldig e-mailadres in zodat we contact kunnen opnemen over dit PDF-bestand.",
+          "Enter a valid email address so we can contact you about this PDF."
+        )
+      );
+      return;
+    }
 
     setValidationError("");
-    await onSubmit(values);
+    await onSubmit({ ...values, email: normalizedEmail });
   };
 
   return (
@@ -73,6 +98,7 @@ const ParserImprovementSubmissionCard = ({
       <form
         className="app-modal-shell w-full max-w-3xl border-amber-500/35 bg-slate-900 p-5 shadow-soft"
         onSubmit={handleSubmit}
+        noValidate
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -132,7 +158,19 @@ const ParserImprovementSubmissionCard = ({
             </span>
           </label>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="block text-sm text-slate-200">
+              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("E-mail", "Email")}</span>
+              <input
+                type="email"
+                value={values.email}
+                required
+                maxLength={PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH}
+                disabled={isSubmitting}
+                onChange={(event) => setValues((current) => ({ ...current, email: event.target.value }))}
+                className="w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+              />
+            </label>
             <label className="block text-sm text-slate-200">
               <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{tr("Land", "Country")}</span>
               <input

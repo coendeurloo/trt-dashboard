@@ -40,6 +40,7 @@ describe("ParserImprovementSubmissionCard", () => {
         language="en"
         draft={draft}
         assessment={assessment}
+        prefillEmail={null}
         status="idle"
         errorMessage=""
         onSubmit={onSubmit}
@@ -62,6 +63,7 @@ describe("ParserImprovementSubmissionCard", () => {
         language="en"
         draft={draft}
         assessment={assessment}
+        prefillEmail={null}
         status="idle"
         errorMessage=""
         onSubmit={onSubmit}
@@ -74,6 +76,7 @@ describe("ParserImprovementSubmissionCard", () => {
         name: /i consent to sending this original pdf/i
       })
     );
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "user@example.com" } });
     fireEvent.change(screen.getByLabelText("Country"), { target: { value: "Netherlands" } });
     fireEvent.change(screen.getByLabelText("Lab / provider"), { target: { value: "Example Lab" } });
     fireEvent.change(screen.getByLabelText("Language"), { target: { value: "Dutch" } });
@@ -82,11 +85,41 @@ describe("ParserImprovementSubmissionCard", () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       consent: true,
+      email: "user@example.com",
       note: "Parser missed most rows.",
       country: "Netherlands",
       labProvider: "Example Lab",
       language: "Dutch"
     });
+  });
+
+  it("requires a valid email before submitting", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+
+    render(
+      <ParserImprovementSubmissionCard
+        open
+        language="en"
+        draft={draft}
+        assessment={assessment}
+        prefillEmail={null}
+        status="idle"
+        errorMessage=""
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /i consent to sending this original pdf/i
+      })
+    );
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "not-an-email" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send PDF to improve parser" }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent ?? "").toMatch(/valid email/i);
   });
 
   it("shows loading state and stays hidden when closed", () => {
@@ -96,6 +129,7 @@ describe("ParserImprovementSubmissionCard", () => {
         language="en"
         draft={draft}
         assessment={assessment}
+        prefillEmail={null}
         status="submitting"
         errorMessage=""
         onSubmit={vi.fn(async () => undefined)}
@@ -113,6 +147,7 @@ describe("ParserImprovementSubmissionCard", () => {
         language="en"
         draft={draft}
         assessment={assessment}
+        prefillEmail={null}
         status="idle"
         errorMessage=""
         onSubmit={vi.fn(async () => undefined)}
@@ -132,6 +167,7 @@ describe("ParserImprovementSubmissionCard", () => {
         language="en"
         draft={draft}
         assessment={assessment}
+        prefillEmail={null}
         status="idle"
         errorMessage=""
         onSubmit={vi.fn(async () => undefined)}

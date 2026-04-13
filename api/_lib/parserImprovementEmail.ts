@@ -62,6 +62,7 @@ const buildEmailBody = (payload: ParserImprovementSubmissionPayload): string =>
     `Debug summary: ${payload.debugSummary ?? "n/a"}`,
     "",
     "User metadata",
+    `Reporter email: ${payload.email}`,
     `Country: ${payload.country ?? "n/a"}`,
     `Lab / provider: ${payload.labProvider ?? "n/a"}`,
     `Language: ${payload.language ?? "n/a"}`,
@@ -81,6 +82,7 @@ export const sendParserImprovementEmail = async (payload: ParserImprovementSubmi
   const result = await resend.emails.send({
     from: resolveSender(),
     to,
+    replyTo: payload.email,
     subject: "[LabTracker Beta] Low-quality parser PDF submission",
     text: buildEmailBody(payload),
     attachments: [

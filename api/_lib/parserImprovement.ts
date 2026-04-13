@@ -7,12 +7,14 @@ export const PARSER_IMPROVEMENT_COUNTRY_MAX_LENGTH = 80;
 export const PARSER_IMPROVEMENT_LANGUAGE_MAX_LENGTH = 80;
 export const PARSER_IMPROVEMENT_METADATA_MAX_LENGTH = 120;
 export const PARSER_IMPROVEMENT_DEBUG_SUMMARY_MAX_LENGTH = 750;
+export const PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH = 254;
 
 export interface ParserImprovementSubmissionPayload {
   fileName: string;
   fileSize: number;
   fileBuffer: Buffer;
   consent: true;
+  email: string;
   sourceFileName: string;
   note?: string;
   country?: string;
@@ -118,6 +120,7 @@ const parseStringArrayField = (value: FormDataEntryValue | null): string[] => {
 };
 
 const isPdfMagicHeader = (fileBuffer: Buffer): boolean => fileBuffer.subarray(0, 5).toString("utf8") === "%PDF-";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const getClientIp = (req: IncomingMessage): string => {
   const forwarded = req.headers["x-forwarded-for"];
@@ -165,12 +168,20 @@ export const parseParserImprovementSubmission = async (
     typeof formData.get("sourceFileName") === "string" ? String(formData.get("sourceFileName")) : fileName,
     PARSER_IMPROVEMENT_METADATA_MAX_LENGTH
   );
+  const email = sanitizeText(
+    typeof formData.get("email") === "string" ? String(formData.get("email")) : "",
+    PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH
+  ).toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) {
+    throw createRouteError("A valid email address is required.", "EMAIL_REQUIRED", 400);
+  }
 
   return {
     fileName,
     fileSize: fileBuffer.length,
     fileBuffer,
     consent: true,
+    email,
     sourceFileName,
     note: (() => {
       const value = typeof formData.get("note") === "string" ? sanitizeText(String(formData.get("note")), PARSER_IMPROVEMENT_NOTE_MAX_LENGTH) : "";

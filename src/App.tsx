@@ -108,7 +108,7 @@ import {
   ThemeMode
 } from "./types";
 import { AnalystMemory } from "./types/analystMemory";
-import { createId, deriveAbnormalFlag, formatDate } from "./utils";
+import { createId, deriveAbnormalFlag, formatDate, sortReportsChronological } from "./utils";
 import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
@@ -374,7 +374,6 @@ const App = () => {
     updatePersonalInfo,
     isNl,
     samplingControlsEnabled,
-    addReport,
     deleteReport: deleteReportFromData,
     deleteReports: deleteReportsFromData,
     updateReportAnnotations,
@@ -553,6 +552,11 @@ const App = () => {
   const [uploadNotice, setUploadNotice] = useState("");
   const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null);
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
+  const [multiDateDrafts, setMultiDateDrafts] = useState<ExtractionDraft[]>([]);
+  const [multiDateAssessments, setMultiDateAssessments] = useState<ParserUncertaintyAssessment[]>([]);
+  const [multiDateAnnotations, setMultiDateAnnotations] = useState<ReportAnnotations[]>([]);
+  const [multiDateProtocolIds, setMultiDateProtocolIds] = useState<Array<string | null>>([]);
+  const [multiDateOriginalMarkerLabels, setMultiDateOriginalMarkerLabels] = useState<Array<Record<string, string>>>([]);
   const [localBaselineDraft, setLocalBaselineDraft] = useState<ExtractionDraft | null>(null);
   const [aiCandidateDraft, setAiCandidateDraft] = useState<ExtractionDraft | null>(null);
   const [aiAttemptedForCurrentUpload, setAiAttemptedForCurrentUpload] = useState(false);
@@ -735,6 +739,28 @@ const App = () => {
     const resolver = consentResolveRef.current;
     consentResolveRef.current = null;
     resolver?.(decision);
+  };
+
+  const clearReviewDraftState = () => {
+    setDraft(null);
+    setMultiDateDrafts([]);
+    setMultiDateAssessments([]);
+    setMultiDateAnnotations([]);
+    setMultiDateProtocolIds([]);
+    setMultiDateOriginalMarkerLabels([]);
+    setLocalBaselineDraft(null);
+    setAiCandidateDraft(null);
+    setAiAttemptedForCurrentUpload(false);
+    setPendingDiff(null);
+    setShowComparisonModal(false);
+    setUncertaintyAssessment(null);
+    resetParserImprovementPrompt();
+    setDraftOriginalMarkerLabels({});
+    setLastUploadedFile(null);
+    setDraftAnnotations(blankAnnotations());
+    setSelectedProtocolId(null);
+    setUploadError("");
+    setIsImprovingExtraction(false);
   };
 
   const clearPendingUndoAction = useCallback(() => {
@@ -929,7 +955,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!draft) {
+    if (!draft && multiDateDrafts.length === 0) {
       return;
     }
 
@@ -940,7 +966,7 @@ const App = () => {
 
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [draft]);
+  }, [draft, multiDateDrafts.length]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1170,10 +1196,22 @@ const App = () => {
     setDraftOriginalMarkerLabels(byId);
   };
 
+  const captureMultiDateOriginalLabels = (nextDrafts: ExtractionDraft[]) => {
+    const perDraft = nextDrafts.map((entry) =>
+      Object.fromEntries(entry.markers.map((marker) => [marker.id, marker.marker]))
+    );
+    setMultiDateOriginalMarkerLabels(perDraft);
+  };
+
   const startManualEntry = () => {
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
+    setMultiDateDrafts([]);
+    setMultiDateAssessments([]);
+    setMultiDateAnnotations([]);
+    setMultiDateProtocolIds([]);
+    setMultiDateOriginalMarkerLabels([]);
     setAiAttemptedForCurrentUpload(false);
     setDraftAnnotations(blankAnnotations());
     setSelectedProtocolId(getMostRecentlyUpdatedProtocolId(appData.protocols));
@@ -1521,6 +1559,11 @@ const App = () => {
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
+    setMultiDateDrafts([]);
+    setMultiDateAssessments([]);
+    setMultiDateAnnotations([]);
+    setMultiDateProtocolIds([]);
+    setMultiDateOriginalMarkerLabels([]);
     setAiAttemptedForCurrentUpload(false);
     setIsImprovingExtraction(false);
     setLocalBaselineDraft(null);
@@ -1531,14 +1574,14 @@ const App = () => {
     setAiCandidateDraft(null);
 
     try {
-      const { extractLabData, assessParserUncertainty } = await ensurePdfParsingModule();
+      const { extractLabDataBatch, assessParserUncertainty } = await ensurePdfParsingModule();
       const localParserMode = showAdvancedParserActions
         ? appData.settings.parserDebugMode === "text_ocr_ai"
           ? "text_ocr"
           : appData.settings.parserDebugMode
         : "text_ocr";
 
-      const extracted = await withMonitoringSpan(
+      const extractedBatch = await withMonitoringSpan(
         {
           name: "parser.upload",
           op: "labtracker.parser",
@@ -1549,7 +1592,7 @@ const App = () => {
           }
         },
         () =>
-          extractLabData(file, {
+          extractLabDataBatch(file, {
             costMode: appData.settings.aiCostMode,
             aiAutoImproveEnabled: false,
             externalAiAllowed: false,
@@ -1559,6 +1602,56 @@ const App = () => {
             onStageChange: setUploadStage
           })
       );
+
+      if (extractedBatch.isMultiDate && extractedBatch.drafts.length > 1) {
+        const enrichedDrafts = extractedBatch.drafts.map((entry) => enrichDraftForReview(entry));
+        const assessments = enrichedDrafts.map((entry) => assessParserUncertainty(entry));
+        const warningCount = new Set(
+          enrichedDrafts.flatMap((entry) => [
+            ...(entry.extraction.warnings ?? []),
+            ...(entry.extraction.warningCode ? [entry.extraction.warningCode] : [])
+          ])
+        ).size;
+        const markerCount = enrichedDrafts.reduce((sum, entry) => sum + entry.markers.length, 0);
+        const defaultProtocolId = getMostRecentlyUpdatedProtocolId(appData.protocols);
+
+        setDraft(null);
+        setLocalBaselineDraft(null);
+        setAiCandidateDraft(null);
+        setPendingDiff(null);
+        setShowComparisonModal(false);
+        setUncertaintyAssessment(null);
+        setDraftOriginalMarkerLabels({});
+        setMultiDateDrafts(enrichedDrafts);
+        setMultiDateAssessments(assessments);
+        setMultiDateAnnotations(enrichedDrafts.map(() => blankAnnotations()));
+        setMultiDateProtocolIds(enrichedDrafts.map(() => defaultProtocolId));
+        captureMultiDateOriginalLabels(enrichedDrafts);
+        setLastUploadedFile(file);
+        setDraftAnnotations(blankAnnotations());
+        setSelectedProtocolId(null);
+        setActiveTab("dashboard");
+        scrollPageToTop();
+        setUploadSummary({
+          kind: "upload",
+          fileName: file.name,
+          markerCount,
+          warnings: warningCount,
+          routeLabel: tr("Multi-date tabel", "Multi-date table")
+        });
+        setUploadNotice(
+          tr(
+            `${enrichedDrafts.length} meetmomenten gevonden. Controleer per datum en sla alles of per datum op.`,
+            `${enrichedDrafts.length} measurement dates found. Review each date, then save all or per date.`
+          )
+        );
+        return;
+      }
+
+      const extracted = extractedBatch.drafts[0];
+      if (!extracted) {
+        throw new Error("Parser returned no extraction drafts.");
+      }
 
       const localDraft = enrichDraftForReview(extracted);
       const localAssessment = assessParserUncertainty(localDraft);
@@ -1939,13 +2032,45 @@ const App = () => {
     }
   };
 
-  const saveDraftAsReport = () => {
-    if (!draft) {
-      return;
-    }
+  const normalizeDraftAnnotationsForSave = (input: ReportAnnotations): ReportAnnotations => {
+    const normalizedDraftSupplementAnchorState =
+      input.supplementAnchorState === "inherit" ||
+      input.supplementAnchorState === "anchor" ||
+      input.supplementAnchorState === "none" ||
+      input.supplementAnchorState === "unknown"
+        ? input.supplementAnchorState
+        : input.supplementOverrides === null
+          ? "inherit"
+          : input.supplementOverrides.length > 0
+            ? "anchor"
+            : "none";
 
+    return {
+      ...input,
+      supplementAnchorState: normalizedDraftSupplementAnchorState,
+      supplementOverrides:
+        normalizedDraftSupplementAnchorState === "anchor"
+          ? input.supplementOverrides ?? []
+          : normalizedDraftSupplementAnchorState === "none"
+            ? []
+            : null
+    };
+  };
+
+  interface PreparedReportSave {
+    report: LabReport;
+    learnedAliasOverrides: Record<string, string>;
+    suggestions: MarkerMergeSuggestion[];
+  }
+
+  const prepareReportFromDraft = (
+    sourceDraft: ExtractionDraft,
+    sourceAnnotations: ReportAnnotations,
+    protocolId: string | null,
+    originalMarkerLabels: Record<string, string>
+  ): PreparedReportSave | null => {
     const learnedAliasOverrides: Record<string, string> = {};
-    const sanitizedMarkers = draft.markers
+    const sanitizedMarkers = sourceDraft.markers
       .map((marker) => {
         const { _confidence, _matchResult, category, ...persistable } = marker as MarkerValue & {
           _confidence?: unknown;
@@ -1979,8 +2104,8 @@ const App = () => {
       })
       .filter((marker): marker is MarkerValue => marker !== null);
 
-    draft.markers.forEach((row) => {
-      const originalRaw = draftOriginalMarkerLabels[row.id];
+    sourceDraft.markers.forEach((row) => {
+      const originalRaw = originalMarkerLabels[row.id];
       const currentRaw = row.marker?.trim() ?? "";
       if (!originalRaw || !currentRaw) {
         return;
@@ -1998,82 +2123,377 @@ const App = () => {
     });
 
     if (sanitizedMarkers.length === 0) {
-      setUploadError(tr("Geen geldige biomarker-rijen gevonden. Voeg minimaal één biomarker toe voordat je opslaat.", "No valid biomarker rows found. Add at least one biomarker before saving."));
-      return;
+      return null;
     }
-
-    const normalizedDraftSupplementAnchorState =
-      draftAnnotations.supplementAnchorState === "inherit" ||
-      draftAnnotations.supplementAnchorState === "anchor" ||
-      draftAnnotations.supplementAnchorState === "none" ||
-      draftAnnotations.supplementAnchorState === "unknown"
-        ? draftAnnotations.supplementAnchorState
-        : draftAnnotations.supplementOverrides === null
-          ? "inherit"
-          : draftAnnotations.supplementOverrides.length > 0
-            ? "anchor"
-            : "none";
-    const normalizedDraftAnnotations: ReportAnnotations = {
-      ...draftAnnotations,
-      supplementAnchorState: normalizedDraftSupplementAnchorState,
-      supplementOverrides:
-        normalizedDraftSupplementAnchorState === "anchor"
-          ? draftAnnotations.supplementOverrides ?? []
-          : normalizedDraftSupplementAnchorState === "none"
-            ? []
-            : null
-    };
 
     const resolvedDraftAnnotations = withResolvedInterventionAnnotations(
       {
-        ...normalizedDraftAnnotations,
-        interventionId: selectedProtocolId,
-        protocolId: selectedProtocolId
+        ...normalizeDraftAnnotationsForSave(sourceAnnotations),
+        interventionId: protocolId,
+        protocolId
       },
-      selectedProtocolId,
-      draft.testDate,
+      protocolId,
+      sourceDraft.testDate,
       appData.protocols
     );
 
     const report: LabReport = {
       id: createId(),
-      sourceFileName: draft.sourceFileName,
-      testDate: draft.testDate,
+      sourceFileName: sourceDraft.sourceFileName,
+      testDate: sourceDraft.testDate,
       createdAt: new Date().toISOString(),
       markers: sanitizedMarkers,
       annotations: resolvedDraftAnnotations,
-      extraction: draft.extraction
+      extraction: sourceDraft.extraction
     };
     const incomingCanonicalMarkers = Array.from(new Set(report.markers.map((marker) => marker.canonicalMarker)));
     const suggestions = detectMarkerMergeSuggestions(incomingCanonicalMarkers, allMarkers);
 
+    return {
+      report,
+      learnedAliasOverrides,
+      suggestions
+    };
+  };
+
+  const normalizeFingerprintNumber = (value: number | null): string =>
+    value === null || !Number.isFinite(value) ? "null" : (Math.round(value * 1_000_000) / 1_000_000).toString();
+
+  const buildReportFingerprint = (report: LabReport): string =>
+    report.markers
+      .map((marker) => ({
+        canonicalMarker: marker.canonicalMarker,
+        unit: marker.unit.trim().toLowerCase(),
+        value: normalizeFingerprintNumber(marker.value),
+        referenceMin: normalizeFingerprintNumber(marker.referenceMin),
+        referenceMax: normalizeFingerprintNumber(marker.referenceMax)
+      }))
+      .sort((left, right) => {
+        if (left.canonicalMarker !== right.canonicalMarker) {
+          return left.canonicalMarker.localeCompare(right.canonicalMarker);
+        }
+        if (left.unit !== right.unit) {
+          return left.unit.localeCompare(right.unit);
+        }
+        if (left.value !== right.value) {
+          return left.value.localeCompare(right.value);
+        }
+        if (left.referenceMin !== right.referenceMin) {
+          return left.referenceMin.localeCompare(right.referenceMin);
+        }
+        return left.referenceMax.localeCompare(right.referenceMax);
+      })
+      .map((entry) => `${entry.canonicalMarker}|${entry.unit}|${entry.value}|${entry.referenceMin}|${entry.referenceMax}`)
+      .join("||");
+
+  interface SaveReportsOutcome {
+    saved: number;
+    replaced: number;
+    skippedExact: number;
+    skippedConflicts: number;
+    savedTestDates: string[];
+    exactDuplicateTestDates: string[];
+    conflictSkippedTestDates: string[];
+    firstSavedReport: LabReport | null;
+  }
+
+  const savePreparedReports = (prepared: PreparedReportSave[]): SaveReportsOutcome => {
+    if (prepared.length === 0) {
+      return {
+        saved: 0,
+        replaced: 0,
+        skippedExact: 0,
+        skippedConflicts: 0,
+        savedTestDates: [],
+        exactDuplicateTestDates: [],
+        conflictSkippedTestDates: [],
+        firstSavedReport: null
+      };
+    }
+
+    const mergedAliasOverrides: Record<string, string> = {};
+    const mergedSuggestions: MarkerMergeSuggestion[] = [];
+    let nextReports = [...appData.reports];
+    let saved = 0;
+    let replaced = 0;
+    let skippedExact = 0;
+    let skippedConflicts = 0;
+    const savedTestDates: string[] = [];
+    const exactDuplicateTestDates: string[] = [];
+    const conflictSkippedTestDates: string[] = [];
+    let firstSavedReport: LabReport | null = null;
+
+    for (const entry of prepared) {
+      Object.assign(mergedAliasOverrides, entry.learnedAliasOverrides);
+      mergedSuggestions.push(...entry.suggestions);
+      const sameDateReports = nextReports.filter((report) => report.testDate === entry.report.testDate);
+      if (sameDateReports.length === 0) {
+        nextReports.push(entry.report);
+        saved += 1;
+        savedTestDates.push(entry.report.testDate);
+        if (!firstSavedReport) {
+          firstSavedReport = entry.report;
+        }
+        continue;
+      }
+
+      const incomingFingerprint = buildReportFingerprint(entry.report);
+      const exactExisting = sameDateReports.find((report) => buildReportFingerprint(report) === incomingFingerprint);
+      if (exactExisting) {
+        skippedExact += 1;
+        exactDuplicateTestDates.push(entry.report.testDate);
+        continue;
+      }
+
+      const toReplace = sameDateReports[0];
+      const replaceConfirmed =
+        typeof window === "undefined"
+          ? true
+          : window.confirm(
+              tr(
+                `Er bestaat al een rapport op ${entry.report.testDate}. Vervang het bestaande rapport voor deze datum?`,
+                `A report already exists on ${entry.report.testDate}. Replace the existing report for this date?`
+              )
+            );
+      if (!replaceConfirmed) {
+        skippedConflicts += 1;
+        conflictSkippedTestDates.push(entry.report.testDate);
+        continue;
+      }
+
+      const replacedReport: LabReport = {
+        ...toReplace,
+        sourceFileName: entry.report.sourceFileName,
+        testDate: entry.report.testDate,
+        markers: entry.report.markers,
+        extraction: entry.report.extraction
+      };
+      nextReports = nextReports.map((report) => (report.id === toReplace.id ? replacedReport : report));
+      saved += 1;
+      replaced += 1;
+      savedTestDates.push(entry.report.testDate);
+      if (!firstSavedReport) {
+        firstSavedReport = replacedReport;
+      }
+    }
+
+    if (saved > 0) {
+      const sorted = sortReportsChronological(nextReports);
+      setAppData((prev) => ({
+        ...prev,
+        reports: sorted
+      }));
+    }
+    if (Object.keys(mergedAliasOverrides).length > 0) {
+      upsertMarkerAliasOverrides(mergedAliasOverrides);
+    }
+    if (mergedSuggestions.length > 0) {
+      appendMarkerSuggestions(mergedSuggestions);
+    }
+
+    return {
+      saved,
+      replaced,
+      skippedExact,
+      skippedConflicts,
+      savedTestDates,
+      exactDuplicateTestDates,
+      conflictSkippedTestDates,
+      firstSavedReport
+    };
+  };
+
+  const saveDraftAsReport = () => {
+    if (!draft) {
+      return;
+    }
+
+    const prepared = prepareReportFromDraft(
+      draft,
+      draftAnnotations,
+      selectedProtocolId,
+      draftOriginalMarkerLabels
+    );
+    if (!prepared) {
+      setUploadError(
+        tr(
+          "Geen geldige biomarker-rijen gevonden. Voeg minimaal één biomarker toe voordat je opslaat.",
+          "No valid biomarker rows found. Add at least one biomarker before saving."
+        )
+      );
+      return;
+    }
+
     const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
-
-    addReport(report);
-    upsertMarkerAliasOverrides(learnedAliasOverrides);
-    appendMarkerSuggestions(suggestions);
-
-    if (isFirstReport) {
-      setOnboardingReport(report);
+    const outcome = savePreparedReports([prepared]);
+    if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
+      setOnboardingReport(outcome.firstSavedReport);
       setOnboardingEntryPoint("first_report");
       setShowOnboardingWizard(true);
     }
 
+    if (outcome.saved === 0 && outcome.skippedConflicts > 0) {
+      setUploadNotice(
+        tr(
+          "Opslaan geannuleerd voor deze datum. Controleer de review en probeer opnieuw.",
+          "Save was skipped for this date. Review and try again."
+        )
+      );
+      return;
+    }
+
+    if (outcome.saved === 0 && outcome.skippedExact > 0) {
+      setUploadNotice(
+        tr(
+          "Dit meetmoment bestaat al exact. Er is niets nieuws opgeslagen.",
+          "This measurement date already exists exactly. Nothing new was saved."
+        )
+      );
+    } else if (outcome.saved > 0) {
+      setUploadNotice(
+        outcome.replaced > 0
+          ? tr("Rapport opgeslagen en bestaande datum bijgewerkt.", "Report saved and existing date updated.")
+          : tr("Rapport opgeslagen.", "Report saved.")
+      );
+    }
+
     setUploadSummary(null);
-    setDraft(null);
-    setLocalBaselineDraft(null);
-    setAiCandidateDraft(null);
-    setAiAttemptedForCurrentUpload(false);
-    setPendingDiff(null);
-    setShowComparisonModal(false);
-    setUncertaintyAssessment(null);
-    resetParserImprovementPrompt();
-    setDraftOriginalMarkerLabels({});
-    setLastUploadedFile(null);
-    setDraftAnnotations(blankAnnotations());
-    setSelectedProtocolId(null);
-    setUploadError("");
-    setIsImprovingExtraction(false);
+    clearReviewDraftState();
+  };
+
+  const removeMultiDateDraftAtIndex = (index: number) => {
+    setMultiDateDrafts((current) => current.filter((_, entryIndex) => entryIndex !== index));
+    setMultiDateAssessments((current) => current.filter((_, entryIndex) => entryIndex !== index));
+    setMultiDateAnnotations((current) => current.filter((_, entryIndex) => entryIndex !== index));
+    setMultiDateProtocolIds((current) => current.filter((_, entryIndex) => entryIndex !== index));
+    setMultiDateOriginalMarkerLabels((current) => current.filter((_, entryIndex) => entryIndex !== index));
+  };
+
+  const saveMultiDateDraftByIndex = (index: number) => {
+    const draftAtIndex = multiDateDrafts[index];
+    if (!draftAtIndex) {
+      return;
+    }
+
+    const prepared = prepareReportFromDraft(
+      draftAtIndex,
+      multiDateAnnotations[index] ?? blankAnnotations(),
+      multiDateProtocolIds[index] ?? null,
+      multiDateOriginalMarkerLabels[index] ?? {}
+    );
+    if (!prepared) {
+      setUploadError(
+        tr(
+          "Geen geldige biomarker-rijen gevonden. Voeg minimaal één biomarker toe voordat je opslaat.",
+          "No valid biomarker rows found. Add at least one biomarker before saving."
+        )
+      );
+      return;
+    }
+
+    const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
+    const outcome = savePreparedReports([prepared]);
+    if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
+      setOnboardingReport(outcome.firstSavedReport);
+      setOnboardingEntryPoint("first_report");
+      setShowOnboardingWizard(true);
+    }
+
+    if (outcome.saved > 0 || outcome.skippedExact > 0) {
+      removeMultiDateDraftAtIndex(index);
+      const remainingCount = multiDateDrafts.length - 1;
+      if (remainingCount <= 0) {
+        setUploadSummary(null);
+        clearReviewDraftState();
+      }
+    }
+
+    if (outcome.saved > 0) {
+      setUploadNotice(
+        outcome.replaced > 0
+          ? tr("Meetmoment opgeslagen en bestaande datum bijgewerkt.", "Measurement date saved and existing date updated.")
+          : tr("Meetmoment opgeslagen.", "Measurement date saved.")
+      );
+      return;
+    }
+    if (outcome.skippedExact > 0) {
+      setUploadNotice(
+        tr(
+          "Dit meetmoment bestond al exact en is overgeslagen.",
+          "This measurement date already existed exactly and was skipped."
+        )
+      );
+      return;
+    }
+    if (outcome.skippedConflicts > 0) {
+      setUploadNotice(
+        tr(
+          "Meetmoment niet opgeslagen. Je kunt opnieuw kiezen of de bestaande datum vervangen moet worden.",
+          "Measurement date was not saved. You can retry and choose whether to replace the existing date."
+        )
+      );
+    }
+  };
+
+  const saveAllMultiDateDrafts = () => {
+    if (multiDateDrafts.length === 0) {
+      return;
+    }
+    const prepared = multiDateDrafts
+      .map((entry, index) =>
+        prepareReportFromDraft(
+          entry,
+          multiDateAnnotations[index] ?? blankAnnotations(),
+          multiDateProtocolIds[index] ?? null,
+          multiDateOriginalMarkerLabels[index] ?? {}
+        )
+      )
+      .filter((entry): entry is PreparedReportSave => Boolean(entry));
+
+    if (prepared.length === 0) {
+      setUploadError(
+        tr(
+          "Geen geldige biomarker-rijen gevonden. Voeg minimaal één biomarker toe voordat je opslaat.",
+          "No valid biomarker rows found. Add at least one biomarker before saving."
+        )
+      );
+      return;
+    }
+
+    const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
+    const outcome = savePreparedReports(prepared);
+    if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
+      setOnboardingReport(outcome.firstSavedReport);
+      setOnboardingEntryPoint("first_report");
+      setShowOnboardingWizard(true);
+    }
+    const conflictDates = new Set(outcome.conflictSkippedTestDates);
+    if (conflictDates.size > 0) {
+      const keepIndexes = multiDateDrafts
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => conflictDates.has(entry.testDate))
+        .map(({ index }) => index);
+      if (keepIndexes.length === 0) {
+        setUploadSummary(null);
+        clearReviewDraftState();
+      } else {
+        setMultiDateDrafts(keepIndexes.map((index) => multiDateDrafts[index]));
+        setMultiDateAssessments(keepIndexes.map((index) => multiDateAssessments[index] ?? buildFallbackParserAssessment(multiDateDrafts[index])));
+        setMultiDateAnnotations(keepIndexes.map((index) => multiDateAnnotations[index] ?? blankAnnotations()));
+        setMultiDateProtocolIds(keepIndexes.map((index) => multiDateProtocolIds[index] ?? null));
+        setMultiDateOriginalMarkerLabels(keepIndexes.map((index) => multiDateOriginalMarkerLabels[index] ?? {}));
+      }
+    } else {
+      setUploadSummary(null);
+      clearReviewDraftState();
+    }
+
+    setUploadNotice(
+      tr(
+        `${outcome.saved} opgeslagen, ${outcome.skippedExact} overgeslagen (exact), ${outcome.skippedConflicts} conflicten overgeslagen.`,
+        `${outcome.saved} saved, ${outcome.skippedExact} skipped (exact), ${outcome.skippedConflicts} conflict skips.`
+      )
+    );
   };
 
   const chartPointsForMarker = useCallback(
@@ -2318,7 +2738,7 @@ const App = () => {
     if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
     return null;
   })();
-  const isReviewMode = Boolean(draft && !isShareMode);
+  const isReviewMode = Boolean((draft || multiDateDrafts.length > 0) && !isShareMode);
   const shouldShowWellbeingReminder =
     !isShareMode &&
     !isReviewMode &&
@@ -2489,7 +2909,7 @@ const App = () => {
     if (nextTab !== "reports") {
       setFocusedReportId(null);
     }
-    if (draft && !isShareMode) {
+    if ((draft || multiDateDrafts.length > 0) && !isShareMode) {
       setPendingTabChange(nextTab);
       return;
     }
@@ -2549,34 +2969,26 @@ const App = () => {
     }
     const nextTab = pendingTabChange;
     setPendingTabChange(null);
-    setDraft(null);
-    setLocalBaselineDraft(null);
-    setAiCandidateDraft(null);
-    setAiAttemptedForCurrentUpload(false);
-    setPendingDiff(null);
-    setShowComparisonModal(false);
-    setUncertaintyAssessment(null);
-    resetParserImprovementPrompt();
-    setDraftOriginalMarkerLabels({});
-    setLastUploadedFile(null);
-    setDraftAnnotations(blankAnnotations());
-    setSelectedProtocolId(null);
-    setUploadError("");
+    clearReviewDraftState();
     if (nextTab !== "reports") {
       setFocusedReportId(null);
     }
     setActiveTab(nextTab);
   };
 
+  const parserImprovementDraft = draft ?? multiDateDrafts[0] ?? null;
   const parserImprovementAssessment = useMemo(() => {
-    if (!draft) {
+    if (draft) {
+      return uncertaintyAssessment ?? buildFallbackParserAssessment(draft);
+    }
+    if (!parserImprovementDraft) {
       return null;
     }
-    return uncertaintyAssessment ?? buildFallbackParserAssessment(draft);
-  }, [draft, uncertaintyAssessment]);
+    return multiDateAssessments[0] ?? buildFallbackParserAssessment(parserImprovementDraft);
+  }, [draft, parserImprovementDraft, uncertaintyAssessment, multiDateAssessments]);
 
   const handleParserImprovementSubmit = async (values: ParserImprovementFormValues) => {
-    if (!draft || !parserImprovementAssessment || !lastUploadedFile) {
+    if (!parserImprovementDraft || !parserImprovementAssessment || !lastUploadedFile) {
       setParserImprovementPromptState("error");
       setParserImprovementPromptError(
         tr(
@@ -2593,7 +3005,7 @@ const App = () => {
     try {
       await submitParserImprovementSample({
         file: lastUploadedFile,
-        draft,
+        draft: parserImprovementDraft,
         assessment: parserImprovementAssessment,
         values
       });
@@ -2615,7 +3027,7 @@ const App = () => {
   const shouldShowLowQualityReviewBanner = Boolean(
     draft && uncertaintyAssessment && shouldOfferParserImprovementSubmission(uncertaintyAssessment)
   );
-  const parserImprovementCanSubmit = Boolean(draft && lastUploadedFile);
+  const parserImprovementCanSubmit = Boolean(parserImprovementDraft && lastUploadedFile);
 
   const openParserImprovementModal = (options?: { closeUploadSummary?: boolean }) => {
     if (!parserImprovementCanSubmit || parserImprovementPromptState === "success") {
@@ -2886,74 +3298,161 @@ const App = () => {
                       </div>
                     </div>
                   ) : null}
-                  {draft && parserImprovementAssessment ? (
+                  {parserImprovementDraft && parserImprovementAssessment ? (
                     <ParserImprovementSubmissionCard
                       open={isParserImprovementModalOpen}
                       language={appData.settings.language}
-                      draft={draft}
+                      draft={parserImprovementDraft}
                       assessment={parserImprovementAssessment}
                       status={parserImprovementPromptState}
                       errorMessage={parserImprovementPromptError}
+                      prefillEmail={cloudAuth.session?.user.email ?? null}
                       onSubmit={handleParserImprovementSubmit}
                       onClose={closeParserImprovementModal}
                     />
                   ) : null}
-                  <ExtractionReviewTable
-                    key="draft"
-                    draft={draft!}
-                    annotations={draftAnnotations}
-                    protocols={appData.protocols}
-                    supplementTimeline={appData.supplementTimeline}
-                    inheritedSupplementsPreview={draftInheritedSupplements}
-                    inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
-                    selectedProtocolId={selectedProtocolId}
-                    parserDebugMode={appData.settings.parserDebugMode}
-                    language={appData.settings.language}
-                    theme={resolvedTheme}
-                    onDraftChange={setDraft}
-                    onAnnotationsChange={setDraftAnnotations}
-                    onSelectedProtocolIdChange={setSelectedProtocolId}
-                    onProtocolCreate={addProtocol}
-                    onAddSupplementPeriod={addSupplementPeriod}
-                    isImprovingWithAi={isImprovingExtraction}
-                    showLowQualityReviewBanner={shouldShowLowQualityReviewBanner}
-                    onOpenParserImprovement={
-                      parserImprovementCanSubmit && parserImprovementPromptState !== "success"
-                        ? () => openParserImprovementModal()
-                        : undefined
-                    }
-                    parserImprovementSubmitted={parserImprovementPromptState === "success"}
-                    onImproveWithAi={
-                      showAdvancedParserActions && lastUploadedFile && !hasParserAiAlreadyRunForCurrentUpload
-                        ? improveDraftWithAi
-                        : undefined
-                    }
-                    onEnableAiRescue={
-                      lastUploadedFile &&
-                      !hasParserAiAlreadyRunForCurrentUpload &&
-                      Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
-                        ? enableAiRescueFromReview
-                        : undefined
-                    }
-                    onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
-                    onStartManualEntry={startManualEntry}
-                    onSave={saveDraftAsReport}
-                    onCancel={() => {
-                      setUploadSummary(null);
-                      setDraft(null);
-                      setLocalBaselineDraft(null);
-                      setAiCandidateDraft(null);
-                      setAiAttemptedForCurrentUpload(false);
-                      setPendingDiff(null);
-                      setShowComparisonModal(false);
-                      setUncertaintyAssessment(null);
-                      resetParserImprovementPrompt();
-                      setDraftOriginalMarkerLabels({});
-                      setLastUploadedFile(null);
-                      setSelectedProtocolId(null);
-                      setIsImprovingExtraction(false);
-                    }}
-                  />
+                  {draft ? (
+                    <ExtractionReviewTable
+                      key="draft"
+                      draft={draft}
+                      annotations={draftAnnotations}
+                      protocols={appData.protocols}
+                      supplementTimeline={appData.supplementTimeline}
+                      inheritedSupplementsPreview={draftInheritedSupplements}
+                      inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
+                      selectedProtocolId={selectedProtocolId}
+                      parserDebugMode={appData.settings.parserDebugMode}
+                      language={appData.settings.language}
+                      theme={resolvedTheme}
+                      onDraftChange={setDraft}
+                      onAnnotationsChange={setDraftAnnotations}
+                      onSelectedProtocolIdChange={setSelectedProtocolId}
+                      onProtocolCreate={addProtocol}
+                      onAddSupplementPeriod={addSupplementPeriod}
+                      isImprovingWithAi={isImprovingExtraction}
+                      showLowQualityReviewBanner={shouldShowLowQualityReviewBanner}
+                      onOpenParserImprovement={
+                        parserImprovementCanSubmit && parserImprovementPromptState !== "success"
+                          ? () => openParserImprovementModal()
+                          : undefined
+                      }
+                      parserImprovementSubmitted={parserImprovementPromptState === "success"}
+                      onImproveWithAi={
+                        showAdvancedParserActions && lastUploadedFile && !hasParserAiAlreadyRunForCurrentUpload
+                          ? improveDraftWithAi
+                          : undefined
+                      }
+                      onEnableAiRescue={
+                        lastUploadedFile &&
+                        !hasParserAiAlreadyRunForCurrentUpload &&
+                        Boolean(uncertaintyAssessment && isSevereParserExtraction(uncertaintyAssessment))
+                          ? enableAiRescueFromReview
+                          : undefined
+                      }
+                      onRetryWithOcr={lastUploadedFile ? retryDraftWithOcr : undefined}
+                      onStartManualEntry={startManualEntry}
+                      onSave={saveDraftAsReport}
+                      onCancel={() => {
+                        setUploadSummary(null);
+                        clearReviewDraftState();
+                      }}
+                    />
+                  ) : null}
+                  {!draft && multiDateDrafts.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+                        <p className="font-medium">
+                          {tr(
+                            `${multiDateDrafts.length} meetmomenten gevonden in deze PDF`,
+                            `${multiDateDrafts.length} measurement dates found in this PDF`
+                          )}
+                        </p>
+                        <p className="mt-1 text-cyan-100/90">
+                          {tr(
+                            "Controleer per datum de waarden. Je kunt alles in één keer opslaan of per datum apart.",
+                            "Review values per date. You can save everything at once or save each date separately."
+                          )}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-900 hover:bg-cyan-400"
+                            onClick={saveAllMultiDateDrafts}
+                          >
+                            {tr("Alles opslaan", "Save all")}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+                            onClick={() => {
+                              setUploadSummary(null);
+                              clearReviewDraftState();
+                            }}
+                          >
+                            {tr("Annuleren", "Cancel")}
+                          </button>
+                        </div>
+                      </div>
+
+                      {multiDateDrafts.map((entry, index) => (
+                        <div key={`${entry.testDate}-${index}`} className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-100">
+                              {tr("Meetmoment", "Measurement date")}: {formatDate(entry.testDate)}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {entry.markers.length} {tr("biomarkers", "biomarkers")}
+                            </p>
+                          </div>
+                          <ExtractionReviewTable
+                            key={`multi-draft-${index}`}
+                            draft={entry}
+                            annotations={multiDateAnnotations[index] ?? blankAnnotations()}
+                            protocols={appData.protocols}
+                            supplementTimeline={appData.supplementTimeline}
+                            inheritedSupplementsPreview={draftInheritedSupplements}
+                            inheritedSupplementsSourceLabel={draftInheritedSupplementsLabel}
+                            selectedProtocolId={multiDateProtocolIds[index] ?? null}
+                            parserDebugMode={appData.settings.parserDebugMode}
+                            language={appData.settings.language}
+                            theme={resolvedTheme}
+                            onDraftChange={(nextDraft) =>
+                              setMultiDateDrafts((current) =>
+                                current.map((candidate, candidateIndex) =>
+                                  candidateIndex === index ? nextDraft : candidate
+                                )
+                              )
+                            }
+                            onAnnotationsChange={(nextAnnotations) =>
+                              setMultiDateAnnotations((current) =>
+                                current.map((candidate, candidateIndex) =>
+                                  candidateIndex === index ? nextAnnotations : candidate
+                                )
+                              )
+                            }
+                            onSelectedProtocolIdChange={(nextProtocolId) =>
+                              setMultiDateProtocolIds((current) =>
+                                current.map((candidate, candidateIndex) =>
+                                  candidateIndex === index ? nextProtocolId : candidate
+                                )
+                              )
+                            }
+                            onProtocolCreate={addProtocol}
+                            onAddSupplementPeriod={addSupplementPeriod}
+                            isImprovingWithAi={false}
+                            showLowQualityReviewBanner={false}
+                            parserImprovementSubmitted={parserImprovementPromptState === "success"}
+                            onStartManualEntry={startManualEntry}
+                            onSave={() => saveMultiDateDraftByIndex(index)}
+                            onCancel={() => {
+                              setUploadSummary(null);
+                              clearReviewDraftState();
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </Suspense>
             ) : null}

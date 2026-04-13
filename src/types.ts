@@ -336,6 +336,8 @@ export interface ExtractionDebugInfo {
   aiRescueTriggered?: boolean;
   aiRescueReason?: string;
   extractionRoute?: ExtractionRoute;
+  multiDateDetected?: boolean;
+  detectedDateColumns?: string[];
   routing?: {
     primaryLanguage?: string;
     languageCandidates?: Array<{ language: string; score: number }>;
@@ -424,5 +426,16 @@ export interface ExtractionDraft {
     costMode?: AICostMode;
     aiUsed?: boolean;
     aiReason?: ExtractionAIReason;
+  };
+}
+
+export interface ExtractionBatchResult {
+  drafts: ExtractionDraft[];
+  detectedDates: string[];
+  isMultiDate: boolean;
+  debug?: {
+    parser?: string;
+    route?: ExtractionRoute;
+    detectedDateColumns?: string[];
   };
 }

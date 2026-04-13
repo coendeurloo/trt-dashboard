@@ -7,9 +7,11 @@ export const PARSER_IMPROVEMENT_METADATA_MAX_LENGTH = 120;
 export const PARSER_IMPROVEMENT_LANGUAGE_MAX_LENGTH = 80;
 export const PARSER_IMPROVEMENT_COUNTRY_MAX_LENGTH = 80;
 export const PARSER_IMPROVEMENT_DEBUG_SUMMARY_MAX_LENGTH = 750;
+export const PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH = 254;
 
 export interface ParserImprovementFormValues {
   consent: boolean;
+  email: string;
   note: string;
   country: string;
   labProvider: string;
@@ -72,6 +74,7 @@ export const buildParserImprovementFormData = (params: {
 
   formData.append("file", file, file.name);
   formData.append("consent", values.consent ? "true" : "false");
+  formData.append("email", sanitizeText(values.email, PARSER_IMPROVEMENT_EMAIL_MAX_LENGTH).toLowerCase());
   formData.append("sourceFileName", sanitizeText(draft.sourceFileName, PARSER_IMPROVEMENT_METADATA_MAX_LENGTH));
   formData.append("confidence", String(draft.extraction.confidence));
   formData.append("unitCoverage", String(assessment.unitCoverage));

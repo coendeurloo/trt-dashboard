@@ -179,6 +179,7 @@ describe("/api/parser-improvement/submit", () => {
   it("returns 200 and forwards sanitized metadata to the email helper", async () => {
     const formData = new FormData();
     formData.append("consent", "true");
+    formData.append("email", "submitter@example.com");
     formData.append("file", makePdfFile());
     formData.append("sourceFileName", " poor-scan.pdf ");
     formData.append("confidence", "0.42");
@@ -203,6 +204,7 @@ describe("/api/parser-improvement/submit", () => {
     expect(sendParserImprovementEmailMock).toHaveBeenCalledTimes(1);
     expect(sendParserImprovementEmailMock.mock.calls[0]?.[0]).toMatchObject({
       fileName: "sample.pdf",
+      email: "submitter@example.com",
       sourceFileName: "poor-scan.pdf",
       confidence: 0.42,
       unitCoverage: 0.1,
@@ -216,5 +218,19 @@ describe("/api/parser-improvement/submit", () => {
       language: "Dutch",
       note: "Parser missed most rows."
     });
+  });
+
+  it("returns 400 when reporter email is missing", async () => {
+    const formData = new FormData();
+    formData.append("consent", "true");
+    formData.append("file", makePdfFile());
+
+    const req = await createMultipartRequest({ formData });
+    const res = createMockResponse();
+
+    await parserImprovementHandler(req, res.res);
+
+    expect(res.res.statusCode).toBe(400);
+    expect(JSON.parse(res.readBody()).error.code).toBe("EMAIL_REQUIRED");
   });
 });

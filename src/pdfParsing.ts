@@ -6,6 +6,7 @@ import tesseractCore from "tesseract.js-core/tesseract-core.wasm.js?url";
 import {
   AIConsentDecision,
   AICostMode,
+  ExtractionBatchResult,
   ExtractionAIReason,
   ExtractionDebugInfo,
   ExtractionDraft,
@@ -1601,6 +1602,38 @@ const toIsoYmd = (year: string, month: string, day: string): string | null => {
   return Number.isNaN(parsed.getTime()) ? null : iso;
 };
 
+const MONTH_NAME_TO_NUMBER: Record<string, string> = {
+  jan: "01",
+  january: "01",
+  feb: "02",
+  february: "02",
+  mar: "03",
+  march: "03",
+  apr: "04",
+  april: "04",
+  may: "05",
+  jun: "06",
+  june: "06",
+  jul: "07",
+  july: "07",
+  aug: "08",
+  august: "08",
+  sep: "09",
+  sept: "09",
+  september: "09",
+  oct: "10",
+  october: "10",
+  nov: "11",
+  november: "11",
+  dec: "12",
+  december: "12"
+};
+
+const resolveMonthNameNumber = (monthToken: string): string | null => {
+  const normalized = monthToken.replace(/\./g, "").trim().toLowerCase();
+  return MONTH_NAME_TO_NUMBER[normalized] ?? null;
+};
+
 const extractDateByPattern = (text: string, pattern: RegExp): string | null => {
   const match = text.match(pattern);
   if (!match) {
@@ -1653,6 +1686,36 @@ const collectAllDates = (text: string): string[] => {
 
   for (const match of dateMatches) {
     const iso = toIsoDate(match[1], match[2], match[3]);
+    if (iso && isPlausibleLabDate(iso)) {
+      result.add(iso);
+    }
+  }
+
+  const monthNamePattern =
+    "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+  const monthDayYearMatches = text.matchAll(
+    new RegExp(`\\b${monthNamePattern}\\s+([0-3]?\\d)(?:st|nd|rd|th)?\\s*,?\\s*(20\\d{2})\\b`, "gi")
+  );
+  for (const match of monthDayYearMatches) {
+    const month = resolveMonthNameNumber(match[1]);
+    if (!month) {
+      continue;
+    }
+    const iso = toIsoYmd(match[3], month, match[2]);
+    if (iso && isPlausibleLabDate(iso)) {
+      result.add(iso);
+    }
+  }
+
+  const dayMonthYearMatches = text.matchAll(
+    new RegExp(`\\b([0-3]?\\d)(?:st|nd|rd|th)?\\s+${monthNamePattern}\\s*,?\\s*(20\\d{2})\\b`, "gi")
+  );
+  for (const match of dayMonthYearMatches) {
+    const month = resolveMonthNameNumber(match[2]);
+    if (!month) {
+      continue;
+    }
+    const iso = toIsoYmd(match[3], month, match[1]);
     if (iso && isPlausibleLabDate(iso)) {
       result.add(iso);
     }
@@ -3475,6 +3538,285 @@ const parseSpatialRows = (rows: PdfSpatialRow[], profile: ParserProfile): Parsed
   }
 
   return parsedRows;
+};
+
+interface QuestTrendDateColumn {
+  isoDate: string;
+  x: number;
+}
+
+interface QuestMultiDateDraftParse {
+  drafts: ExtractionDraft[];
+  detectedDates: string[];
+  detectedDateColumns: string[];
+}
+
+const QUEST_RESULT_TRENDS_TITLE_PATTERN = /\bresult trends\b/i;
+const QUEST_RESULT_TRENDS_COMPONENT_PATTERN = /^component$/i;
+const QUEST_RESULT_TRENDS_STATUS_CELL_PATTERN = /^(?:high|low|normal)$/i;
+
+const getClusterCenterX = (cluster: SpatialCluster): number => (cluster.xStart + cluster.xEnd) / 2;
+
+const detectQuestTrendDateColumns = (
+  rowBundles: Array<{ row: PdfSpatialRow; clusters: SpatialCluster[] }>,
+  text: string
+): { page: number; headerY: number; componentBoundaryX: number; columns: QuestTrendDateColumn[] } | null => {
+  if (!QUEST_RESULT_TRENDS_TITLE_PATTERN.test(text)) {
+    return null;
+  }
+
+  let bestCandidate: { page: number; headerY: number; componentBoundaryX: number; columns: QuestTrendDateColumn[] } | null = null;
+  for (const bundle of rowBundles) {
+    const componentCluster = bundle.clusters.find((cluster) =>
+      QUEST_RESULT_TRENDS_COMPONENT_PATTERN.test(cleanWhitespace(cluster.text))
+    );
+    if (!componentCluster) {
+      continue;
+    }
+
+    const columns = bundle.clusters
+      .filter((cluster) => cluster !== componentCluster)
+      .map((cluster) => {
+        const dates = collectAllDates(cluster.text);
+        if (dates.length === 0) {
+          return null;
+        }
+        return {
+          isoDate: dates[0],
+          x: getClusterCenterX(cluster)
+        } satisfies QuestTrendDateColumn;
+      })
+      .filter((column): column is QuestTrendDateColumn => Boolean(column));
+
+    const uniqueColumns = Array.from(
+      columns.reduce((map, column) => {
+        const key = `${column.isoDate}::${Math.round(column.x / 6)}`;
+        if (!map.has(key)) {
+          map.set(key, column);
+        }
+        return map;
+      }, new Map<string, QuestTrendDateColumn>()).values()
+    ).sort((left, right) => left.x - right.x);
+
+    if (uniqueColumns.length < 2) {
+      continue;
+    }
+
+    const candidate = {
+      page: bundle.row.page,
+      headerY: bundle.row.y,
+      componentBoundaryX: uniqueColumns[0].x - 26,
+      columns: uniqueColumns
+    };
+
+    if (!bestCandidate) {
+      bestCandidate = candidate;
+      continue;
+    }
+    if (candidate.columns.length > bestCandidate.columns.length) {
+      bestCandidate = candidate;
+      continue;
+    }
+    if (candidate.columns.length === bestCandidate.columns.length && candidate.headerY > bestCandidate.headerY) {
+      bestCandidate = candidate;
+    }
+  }
+
+  return bestCandidate;
+};
+
+const looksLikeQuestTrendMarkerLabel = (text: string): boolean => {
+  const normalized = cleanWhitespace(text);
+  if (!normalized) {
+    return false;
+  }
+  if (looksLikeNoiseMarker(normalized) || looksLikeNonResultLine(normalized)) {
+    return false;
+  }
+  if (/^normal range:/i.test(normalized) || /^reference range:/i.test(normalized)) {
+    return false;
+  }
+  if (QUEST_RESULT_TRENDS_COMPONENT_PATTERN.test(normalized)) {
+    return false;
+  }
+  if (!/[A-Za-z]/.test(normalized) || /^\d/.test(normalized)) {
+    return false;
+  }
+  return normalized.split(" ").filter(Boolean).length <= 8;
+};
+
+const parseQuestResultTrendsMultiDateDrafts = (
+  text: string,
+  spatialRows: PdfSpatialRow[],
+  profile: ParserProfile,
+  fileName: string
+): QuestMultiDateDraftParse | null => {
+  if (!QUEST_RESULT_TRENDS_TITLE_PATTERN.test(text) || spatialRows.length === 0) {
+    return null;
+  }
+
+  const rowBundles = [...spatialRows]
+    .sort((a, b) => {
+      if (a.page !== b.page) {
+        return a.page - b.page;
+      }
+      if (Math.abs(a.y - b.y) > SPATIAL_ROW_Y_GROUP_TOLERANCE) {
+        return b.y - a.y;
+      }
+      return (a.items[0]?.x ?? 0) - (b.items[0]?.x ?? 0);
+    })
+    .map((row) => ({
+      row,
+      clusters: clusterSpatialRowItems(row.items)
+    }))
+    .filter((bundle) => bundle.clusters.length > 0);
+
+  const header = detectQuestTrendDateColumns(rowBundles, text);
+  if (!header) {
+    return null;
+  }
+
+  const rowsByDate = new Map<string, ParsedFallbackRow[]>();
+  header.columns.forEach((column) => rowsByDate.set(column.isoDate, []));
+  const pendingRowsByMarker = new Map<string, ParsedFallbackRow[]>();
+  let currentMarker = "";
+  let currentReference: ParsedReference = {
+    referenceMin: null,
+    referenceMax: null,
+    unit: ""
+  };
+
+  for (const bundle of rowBundles) {
+    if (bundle.row.page !== header.page || bundle.row.y >= header.headerY - SPATIAL_ROW_Y_GROUP_TOLERANCE) {
+      continue;
+    }
+
+    const leftClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) < header.componentBoundaryX);
+    const rightClusters = bundle.clusters.filter((cluster) => getClusterCenterX(cluster) >= header.componentBoundaryX);
+    const leftText = cleanWhitespace(leftClusters.map((cluster) => cluster.text).join(" "));
+
+    if (leftText) {
+      if (/^normal range:/i.test(leftText) || /^reference range:/i.test(leftText)) {
+        const parsedRef = extractReferenceAndUnit(leftText);
+        currentReference = {
+          referenceMin: parsedRef.referenceMin,
+          referenceMax: parsedRef.referenceMax,
+          unit: parsedRef.unit
+        };
+        if (currentMarker) {
+          const pending = pendingRowsByMarker.get(currentMarker) ?? [];
+          if (pending.length > 0 && (parsedRef.referenceMin !== null || parsedRef.referenceMax !== null || parsedRef.unit)) {
+            for (const row of pending) {
+              row.referenceMin = row.referenceMin ?? parsedRef.referenceMin;
+              row.referenceMax = row.referenceMax ?? parsedRef.referenceMax;
+              row.unit = row.unit || parsedRef.unit;
+              row.confidence = Math.max(row.confidence, 0.8);
+            }
+            pendingRowsByMarker.set(currentMarker, []);
+          }
+        }
+      } else if (looksLikeQuestTrendMarkerLabel(leftText)) {
+        currentMarker = applyProfileMarkerFixes(cleanMarkerName(leftText));
+        currentReference = {
+          referenceMin: null,
+          referenceMax: null,
+          unit: ""
+        };
+        if (!pendingRowsByMarker.has(currentMarker)) {
+          pendingRowsByMarker.set(currentMarker, []);
+        }
+      }
+    }
+
+    if (!currentMarker || rightClusters.length === 0) {
+      continue;
+    }
+
+    for (const cluster of rightClusters) {
+      const cellText = cleanWhitespace(cluster.text);
+      if (!cellText || QUEST_RESULT_TRENDS_STATUS_CELL_PATTERN.test(cellText)) {
+        continue;
+      }
+
+      const cellDates = collectAllDates(cellText);
+      if (cellDates.length > 0 && header.columns.some((column) => cellDates.includes(column.isoDate))) {
+        continue;
+      }
+
+      const parsed = parseSingleRow(`${currentMarker} ${cellText}`, 0.82, profile);
+      if (!parsed) {
+        continue;
+      }
+
+      const centerX = getClusterCenterX(cluster);
+      const nearestColumn = header.columns.reduce((best, column) => {
+        if (!best) {
+          return column;
+        }
+        const bestDistance = Math.abs(best.x - centerX);
+        const currentDistance = Math.abs(column.x - centerX);
+        return currentDistance < bestDistance ? column : best;
+      }, null as QuestTrendDateColumn | null);
+
+      if (!nearestColumn || Math.abs(nearestColumn.x - centerX) > 95) {
+        continue;
+      }
+
+      const normalizedRow: ParsedFallbackRow = {
+        markerName: currentMarker,
+        value: parsed.value,
+        unit: parsed.unit || currentReference.unit || "",
+        referenceMin: parsed.referenceMin ?? currentReference.referenceMin ?? null,
+        referenceMax: parsed.referenceMax ?? currentReference.referenceMax ?? null,
+        confidence: Math.max(parsed.confidence, 0.76)
+      };
+
+      rowsByDate.get(nearestColumn.isoDate)?.push(normalizedRow);
+      if (normalizedRow.referenceMin === null && normalizedRow.referenceMax === null) {
+        pendingRowsByMarker.set(currentMarker, [...(pendingRowsByMarker.get(currentMarker) ?? []), normalizedRow]);
+      }
+    }
+  }
+
+  const drafts: ExtractionDraft[] = [];
+  for (const column of header.columns) {
+    const parsedRows = (rowsByDate.get(column.isoDate) ?? []).filter((row) => shouldKeepParsedRow(row, profile));
+    if (parsedRows.length === 0) {
+      continue;
+    }
+
+    const deduped = dedupeRowsDetailed(parsedRows);
+    const markers = orderMarkersBySourceText(deduped.markers, text);
+    if (markers.length === 0) {
+      continue;
+    }
+
+    const avgConfidence = markers.reduce((sum, marker) => sum + marker.confidence, 0) / markers.length;
+    const unitCoverage = markers.filter((marker) => marker.unit.trim().length > 0).length / markers.length;
+    const confidence = Math.max(0.2, Math.min(0.92, avgConfidence * 0.72 + unitCoverage * 0.28));
+
+    drafts.push({
+      sourceFileName: fileName,
+      testDate: column.isoDate,
+      markers,
+      extraction: {
+        provider: "fallback",
+        model: `fallback-layered:${profile.id}:quest-result-trends-multidate`,
+        confidence,
+        needsReview: confidence < 0.72 || markers.length < 4
+      }
+    });
+  }
+
+  if (drafts.length < 2) {
+    return null;
+  }
+
+  return {
+    drafts,
+    detectedDates: drafts.map((draft) => draft.testDate),
+    detectedDateColumns: header.columns.map((column) => column.isoDate)
+  };
 };
 
 const looksLikeHistorySheetLayout = (text: string): boolean => {
@@ -5430,7 +5772,7 @@ const buildRoutingDebugInfo = (
   reason: decision.reason
 });
 
-export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
+const extractLabDataSingle = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
   try {
     const onStageChange = options.onStageChange ?? (() => {});
     const emitStage = (stage: ParserStage) => {
@@ -6147,6 +6489,102 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
   }
 };
 
+export const extractLabDataBatch = async (
+  file: File,
+  options: ExtractLabDataOptions = {}
+): Promise<ExtractionBatchResult> => {
+  const canAttemptQuestMultiDate =
+    !Boolean(options.forceAi) &&
+    !Boolean(options.externalAiAllowed) &&
+    (options.parserDebugMode ?? "text_ocr_ai") !== "text_only";
+
+  if (canAttemptQuestMultiDate) {
+    try {
+      options.onStageChange?.("reading_text_layer");
+      setMarkerAliasOverrides(options.markerAliasOverrides ?? null);
+      const arrayBuffer = await file.arrayBuffer();
+      const textResult = await extractPdfText(arrayBuffer);
+      if (textResult.textItemCount > 0 && textResult.spatialRows.length > 0) {
+        const profile = detectParserProfile(textResult.text, file.name);
+        const parsed = parseQuestResultTrendsMultiDateDrafts(textResult.text, textResult.spatialRows, profile, file.name);
+        if (parsed) {
+          const ocrMeta: OcrResult = {
+            text: "",
+            used: false,
+            pagesAttempted: 0,
+            pagesSucceeded: 0,
+            pagesFailed: 0,
+            initFailed: false,
+            timedOut: false
+          };
+          const drafts = parsed.drafts.map((draft) => {
+            const warningMeta = buildLocalExtractionWarnings(textResult, false, ocrMeta, draft);
+            return withExtractionMetadata(
+              {
+                ...draft,
+                extraction: {
+                  ...draft.extraction,
+                  costMode: options.costMode ?? "balanced",
+                  aiUsed: false,
+                  aiReason: "local_high_quality",
+                  needsReview: draft.extraction.needsReview || warningMeta.warnings.length > 0
+                }
+              },
+              warningMeta,
+              {
+                pageCount: textResult.pageCount,
+                textItems: textResult.textItemCount,
+                ocrUsed: false,
+                ocrPages: 0,
+                keptRows: draft.markers.length,
+                rejectedRows: 0,
+                topRejectReasons: {},
+                extractionRoute: "local-text",
+                multiDateDetected: true,
+                detectedDateColumns: parsed.detectedDateColumns
+              }
+            );
+          });
+          options.onStageChange?.("done");
+          return {
+            drafts,
+            detectedDates: parsed.detectedDates,
+            isMultiDate: true,
+            debug: {
+              parser: "quest-result-trends-multidate",
+              route: "local-text",
+              detectedDateColumns: parsed.detectedDateColumns
+            }
+          };
+        }
+      }
+    } catch (error) {
+      console.warn("[extractLabDataBatch] Multi-date pre-parse failed, continuing with single draft parser.", error);
+    }
+  }
+
+  const singleDraft = await extractLabDataSingle(file, options);
+  return {
+    drafts: [singleDraft],
+    detectedDates: [singleDraft.testDate],
+    isMultiDate: false,
+    debug: {
+      route: singleDraft.extraction.debug?.extractionRoute ?? "empty"
+    }
+  };
+};
+
+export const extractLabData = async (file: File, options: ExtractLabDataOptions = {}): Promise<ExtractionDraft> => {
+  const batch = await extractLabDataBatch(file, options);
+  const byDate = [...batch.drafts]
+    .sort((left, right) => left.testDate.localeCompare(right.testDate))
+    .pop();
+  if (byDate) {
+    return byDate;
+  }
+  return extractLabDataSingle(file, options);
+};
+
 export const __pdfParsingInternals = {
   detectParserProfile,
   extractDateCandidate,
@@ -6159,6 +6597,7 @@ export const __pdfParsingInternals = {
   parseLineRows,
   parseLifeLabsTableRows,
   parseQuestTrendRows,
+  parseQuestResultTrendsMultiDateDrafts,
   parseColumnRows,
   parseSpatialRows,
   parseHistoryCurrentColumnRows,
@@ -6169,6 +6608,7 @@ export const __pdfParsingInternals = {
   buildLocalExtractionWarnings,
   assessParserUncertainty,
   isLocalDraftGoodEnough,
+  extractLabDataBatch,
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
