@@ -651,6 +651,82 @@ describe("pdfParsing fallback layers", () => {
     expect(secondEgfr[0]?.value).toBe(120);
   });
 
+  it("parses marker rows when Normal Range appears without a colon", () => {
+    const spatialRows = [
+      {
+        page: 1,
+        y: 631,
+        items: [
+          { x: 56, text: "Component" },
+          { x: 256, text: "Feb 29, 2024" },
+          { x: 375, text: "Sep 2, 2025" }
+        ]
+      },
+      {
+        page: 1,
+        y: 611,
+        items: [
+          { x: 56, text: "Sodium Normal Range 135 - 148 mEq/L" },
+          { x: 257, text: "139 mEq/L" },
+          { x: 375, text: "140 mEq/L" }
+        ]
+      },
+      {
+        page: 1,
+        y: 572,
+        items: [
+          { x: 56, text: "eGFR (2021 CKD-EPI) Normal Range >=60 ml/min/1.73m2" },
+          { x: 257, text: "7 ml/min/1.73m2" },
+          { x: 375, text: "120 ml/min/1.73m2" }
+        ]
+      },
+      {
+        page: 1,
+        y: 539,
+        items: [
+          { x: 56, text: "Potassium Normal Range 3.5 - 5.3 mEq/L" },
+          { x: 257, text: "5.7 mEq/L" },
+          { x: 375, text: "4.7 mEq/L" }
+        ]
+      }
+    ];
+
+    const text = [
+      "Result Trends",
+      "Component Feb 29, 2024 Sep 2, 2025",
+      "Sodium Normal Range 135 - 148 mEq/L",
+      "eGFR (2021 CKD-EPI) Normal Range >=60 ml/min/1.73m2",
+      "Potassium Normal Range 3.5 - 5.3 mEq/L"
+    ].join("\n");
+
+    const parsed = __pdfParsingInternals.parseQuestResultTrendsMultiDateDrafts(
+      text,
+      spatialRows,
+      genericProfile,
+      "BasicMP.pdf"
+    );
+
+    expect(parsed).not.toBeNull();
+    const firstDraft = parsed?.drafts.find((draft) => draft.testDate === "2024-02-29");
+    const secondDraft = parsed?.drafts.find((draft) => draft.testDate === "2025-09-02");
+    expect(firstDraft).toBeDefined();
+    expect(secondDraft).toBeDefined();
+
+    const sodium = firstDraft?.markers.find((marker) => marker.canonicalMarker === "Sodium");
+    const egfr = firstDraft?.markers.find((marker) => marker.canonicalMarker === "eGFR");
+    const potassium = firstDraft?.markers.find((marker) => marker.canonicalMarker === "Potassium");
+
+    expect(sodium?.value).toBe(139);
+    expect(egfr?.value).toBe(7);
+    expect(potassium?.value).toBe(5.7);
+    expect(sodium?.referenceMin).toBe(135);
+    expect(egfr?.referenceMin).toBe(60);
+    expect(potassium?.referenceMin).toBe(3.5);
+
+    const secondPotassium = secondDraft?.markers.find((marker) => marker.canonicalMarker === "Potassium");
+    expect(secondPotassium?.value).toBe(4.7);
+  });
+
   it("drops calculator and url noise rows while keeping real lab markers", () => {
     const rows = __pdfParsingInternals.parseLineRows(
       [

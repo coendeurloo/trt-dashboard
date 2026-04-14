@@ -3658,7 +3658,7 @@ const splitQuestTrendMarkerAndReference = (
     return { markerText: "", referenceText: "" };
   }
 
-  const match = normalized.match(/\b(?:normal|reference)\s*range\s*:/i);
+  const match = normalized.match(/\b(?:normal|reference)\s*range\b\s*:?/i);
   if (!match || match.index === undefined) {
     return { markerText: normalized, referenceText: "" };
   }
@@ -6646,6 +6646,4 @@ export const __pdfParsingInternals = {
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
-
-
 
