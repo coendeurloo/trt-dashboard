@@ -495,6 +495,9 @@ describe("pdfParsing fallback layers", () => {
     expect(firstEgfr[0]?.value).toBe(7);
     expect(secondEgfr[0]?.value).toBe(120);
     expect(thirdEgfr[0]?.value).toBe(124);
+    expect(firstEgfr[0]?.marker).toBe("eGFR (2021 CKD-EPI)");
+    expect(secondEgfr[0]?.marker).toBe("eGFR (2021 CKD-EPI)");
+    expect(thirdEgfr[0]?.marker).toBe("eGFR (2021 CKD-EPI)");
     expect(firstEgfr[0]?.referenceMin).toBe(60);
     expect(secondEgfr[0]?.referenceMin).toBe(60);
     expect(thirdEgfr[0]?.referenceMin).toBe(60);
@@ -725,6 +728,12 @@ describe("pdfParsing fallback layers", () => {
 
     const secondPotassium = secondDraft?.markers.find((marker) => marker.canonicalMarker === "Potassium");
     expect(secondPotassium?.value).toBe(4.7);
+  });
+
+  it("keeps compound parenthesis abbreviations in marker labels", () => {
+    expect(__pdfParsingInternals.cleanMarkerName("eGFR (2021 CKD-EPI)")).toBe("eGFR (2021 CKD-EPI)");
+    expect(__pdfParsingInternals.cleanMarkerName("LIPOPROTEIN (a)")).toBe("LIPOPROTEIN (a)");
+    expect(__pdfParsingInternals.cleanMarkerName("Glucose ABC)")).toBe("Glucose");
   });
 
   it("maps value-only rows above marker labels to the nearest Quest marker anchor", () => {

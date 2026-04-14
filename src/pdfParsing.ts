@@ -2136,7 +2136,9 @@ const cleanMarkerName = (rawMarker: string): string => {
   marker = marker.replace(/\b(?:nz|us|usa)\s+ref(?:erence)?(?:\s*range|\s+[a-z]{1,4})*\b.*$/i, "").trim();
   marker = marker.replace(/\bref(?:erence)?\s*(?:r(?:ange)?)?\b.*$/i, "").trim();
   marker = marker.replace(/\b(?:discounted|dicounted)\s+lab'?s?\b.*$/i, "").trim();
-  marker = marker.replace(/\b[A-Za-z]{2,4}\)(?=\s|$)/g, "").replace(/\s+/g, " ").trim();
+  // Trim noisy trailing short tokens like "ABC)" only when they are standalone tokens.
+  // Do not trim fragments inside compound labels such as "CKD-EPI)".
+  marker = marker.replace(/(?:^|\s)[A-Za-z]{2,4}\)(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
   marker = trimEdgeNoiseTokens(marker);
   marker = marker.replace(/\s+\b[a-z]{1,3}\b\s*$/g, "").trim();
 
