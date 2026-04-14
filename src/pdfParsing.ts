@@ -2306,7 +2306,7 @@ const extractReferenceAndUnit = (rawValue: string): ParsedReference => {
   let unit = "";
 
   const rangeMatches = Array.from(
-    cleaned.matchAll(/(?:<=|>=|<|>|\u2264|\u2265)?\s*(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)/g)
+    cleaned.matchAll(/(?:<=|>=|<|>|\u2264|\u2265)?\s*(-?\d+(?:[.,]\d+)?)\s*[\-\u2013]\s*(-?\d+(?:[.,]\d+)?)/g)
   );
   if (rangeMatches.length > 0) {
     const last = rangeMatches[rangeMatches.length - 1];
@@ -3701,11 +3701,49 @@ const parseQuestResultTrendsMultiDateDrafts = (
   const rowsByDate = new Map<string, ParsedFallbackRow[]>();
   header.columns.forEach((column) => rowsByDate.set(column.isoDate, []));
   const pendingRowsByMarker = new Map<string, ParsedFallbackRow[]>();
+  const latestReferenceByMarker = new Map<string, ParsedReference>();
   let currentMarker = "";
   let currentReference: ParsedReference = {
     referenceMin: null,
     referenceMax: null,
     unit: ""
+  };
+
+  const markerAnchors = rowBundles
+    .filter((bundle) => bundle.row.page === header.page && bundle.row.y < header.headerY - SPATIAL_ROW_Y_GROUP_TOLERANCE)
+    .map((bundle) => {
+      const leftClusters = bundle.clusters.filter((cluster) => cluster.xStart < header.componentBoundaryX);
+      const leftText = cleanWhitespace(leftClusters.map((cluster) => cluster.text).join(" "));
+      const splitLeft = splitQuestTrendMarkerAndReference(leftText);
+      if (!splitLeft.markerText || !looksLikeQuestTrendMarkerLabel(splitLeft.markerText)) {
+        return null;
+      }
+      const markerName = applyProfileMarkerFixes(cleanMarkerName(splitLeft.markerText));
+      if (!markerName) {
+        return null;
+      }
+      return {
+        y: bundle.row.y,
+        markerName
+      };
+    })
+    .filter((anchor): anchor is { y: number; markerName: string } => Boolean(anchor));
+
+  const inferNearestMarkerForRow = (rowY: number): string => {
+    let best: { markerName: string; distance: number } | null = null;
+    for (const anchor of markerAnchors) {
+      const distance = Math.abs(anchor.y - rowY);
+      if (distance > 12) {
+        continue;
+      }
+      if (!best || distance < best.distance) {
+        best = {
+          markerName: anchor.markerName,
+          distance
+        };
+      }
+    }
+    return best?.markerName ?? "";
   };
 
   for (const bundle of rowBundles) {
@@ -3740,6 +3778,7 @@ const parseQuestResultTrendsMultiDateDrafts = (
         currentReference = parsedReference;
         referenceDetectedOnRow = true;
         if (currentMarker) {
+          latestReferenceByMarker.set(currentMarker, parsedReference);
           const pendingRows = pendingRowsByMarker.get(currentMarker) ?? [];
           for (const pendingRow of pendingRows) {
             if (pendingRow.referenceMin === null) {
@@ -3757,7 +3796,7 @@ const parseQuestResultTrendsMultiDateDrafts = (
       }
     }
 
-    if (!currentMarker || rightClusters.length === 0) {
+    if (rightClusters.length === 0) {
       continue;
     }
 
@@ -3766,6 +3805,25 @@ const parseQuestResultTrendsMultiDateDrafts = (
     if (leftText && !markerDetectedOnRow && !referenceDetectedOnRow) {
       continue;
     }
+
+    const isValueOnlyRow = !leftText && !markerDetectedOnRow && !referenceDetectedOnRow;
+    let effectiveMarker = currentMarker;
+    if (isValueOnlyRow) {
+      const inferredMarker = inferNearestMarkerForRow(bundle.row.y);
+      if (inferredMarker) {
+        // Quest sometimes renders the numeric value on the row above the marker label.
+        // In that layout we should prefer the nearest marker anchor over stale carry-over.
+        effectiveMarker = inferredMarker;
+      }
+    }
+    if (!effectiveMarker) {
+      continue;
+    }
+
+    const fallbackReference =
+      effectiveMarker === currentMarker
+        ? currentReference
+        : (latestReferenceByMarker.get(effectiveMarker) ?? { referenceMin: null, referenceMax: null, unit: "" });
 
     for (const cluster of rightClusters) {
       const cellText = cleanWhitespace(cluster.text);
@@ -3778,7 +3836,7 @@ const parseQuestResultTrendsMultiDateDrafts = (
         continue;
       }
 
-      const parsed = parseSingleRow(`${currentMarker} ${cellText}`, 0.82, profile);
+      const parsed = parseSingleRow(`${effectiveMarker} ${cellText}`, 0.82, profile);
       if (!parsed) {
         continue;
       }
@@ -3798,17 +3856,17 @@ const parseQuestResultTrendsMultiDateDrafts = (
       }
 
       const normalizedRow: ParsedFallbackRow = {
-        markerName: currentMarker,
+        markerName: effectiveMarker,
         value: parsed.value,
-        unit: parsed.unit || currentReference.unit || "",
-        referenceMin: parsed.referenceMin ?? currentReference.referenceMin ?? null,
-        referenceMax: parsed.referenceMax ?? currentReference.referenceMax ?? null,
+        unit: parsed.unit || fallbackReference.unit || "",
+        referenceMin: parsed.referenceMin ?? fallbackReference.referenceMin ?? null,
+        referenceMax: parsed.referenceMax ?? fallbackReference.referenceMax ?? null,
         confidence: Math.max(parsed.confidence, 0.76)
       };
 
       rowsByDate.get(nearestColumn.isoDate)?.push(normalizedRow);
       if (normalizedRow.referenceMin === null && normalizedRow.referenceMax === null) {
-        pendingRowsByMarker.set(currentMarker, [...(pendingRowsByMarker.get(currentMarker) ?? []), normalizedRow]);
+        pendingRowsByMarker.set(effectiveMarker, [...(pendingRowsByMarker.get(effectiveMarker) ?? []), normalizedRow]);
       }
     }
   }
@@ -6646,4 +6704,3 @@ export const __pdfParsingInternals = {
   shouldAutoPdfRescue,
   shouldRunOcrRescuePass
 };
-
