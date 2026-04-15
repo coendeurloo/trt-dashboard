@@ -1,4 +1,5 @@
 import React from "react";
+import { attemptChunkRecovery, isLikelyChunkLoadError } from "../chunkRecovery";
 import { captureAppException } from "../monitoring/sentry";
 
 interface ErrorBoundaryProps {
@@ -20,6 +21,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    if (isLikelyChunkLoadError(error) && attemptChunkRecovery()) {
+      return;
+    }
+
     // Keep debugging visibility for unexpected render/runtime crashes.
     console.error("UI render error:", error, errorInfo);
     captureAppException(error, {
