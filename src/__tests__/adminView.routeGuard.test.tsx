@@ -183,6 +183,7 @@ describe("AdminView route guard", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Admin Ops Cockpit").length).toBeGreaterThan(0);
       expect(screen.getByText("Accounts")).toBeTruthy();
+      expect(screen.getAllByText("All users").length).toBeGreaterThan(0);
       expect(screen.getByText("Runtime controls")).toBeTruthy();
       expect(screen.getByText("Verification funnel")).toBeTruthy();
     });

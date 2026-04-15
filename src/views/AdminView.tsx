@@ -473,6 +473,12 @@ const AdminView = ({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <a
+                href="#admin-users-directory"
+                className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-sm font-medium text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-500/20"
+              >
+                {tr("Alle users", "All users")}
+              </a>
               <button
                 type="button"
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
@@ -845,8 +851,9 @@ const AdminView = ({
             <p className="text-sm text-slate-400">{tr("Geen error reporting status", "No error reporting status")}</p>
           )}
         </AdminPanel>
+        <div id="admin-users-directory">
         <AdminPanel
-          title={tr("Users", "Users")}
+          title={tr("Alle users", "All users")}
           subtitle={tr(
             "Live userlijst vanuit Supabase Auth. Je ziet totaal users en e-mails direct hier.",
             "Live user list from Supabase Auth. You can see total users and emails directly here."
@@ -976,6 +983,7 @@ const AdminView = ({
             </div>
           </div>
         </AdminPanel>
+        </div>
 
         <AdminPanel
           title={tr("Audit Log", "Audit log")}
