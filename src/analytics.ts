@@ -21,7 +21,7 @@ import {
   getReportProtocol
 } from "./protocolUtils";
 import { buildSupplementStackKey, getEffectiveSupplements } from "./supplementUtils";
-import { canonicalizeMarker, convertBySystem } from "./unitConversion";
+import { canonicalizeMarker, convertBySystem, getMarkerConversionInput } from "./unitConversion";
 import { clip, createId, deriveAbnormalFlag, formatDate as formatHumanDate, sortReportsChronological } from "./utils";
 
 export interface MarkerSeriesPoint {
@@ -976,7 +976,8 @@ const extractCoreUnitToken = (unit: string): string => {
 
 const findRequiredInputMarker = (
   rawMarkers: MarkerValue[],
-  matcher: (marker: MarkerValue, normalizedCanonical: string, normalizedLabel: string) => boolean
+  matcher: (marker: MarkerValue, normalizedCanonical: string, normalizedLabel: string) => boolean,
+  scoreBoost?: (marker: MarkerValue, normalizedCanonical: string, normalizedLabel: string) => number
 ): MarkerValue | null => {
   const scored = rawMarkers
     .map((marker) => {
@@ -988,11 +989,19 @@ const findRequiredInputMarker = (
       }
       return {
         marker,
-        score: marker.confidence
+        score: marker.confidence + (scoreBoost?.(marker, normalizedCanonical, normalizedLabel) ?? 0)
       };
     })
     .filter((item): item is { marker: MarkerValue; score: number } => item !== null)
-    .sort((left, right) => right.score - left.score);
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      if (right.marker.confidence !== left.marker.confidence) {
+        return right.marker.confidence - left.marker.confidence;
+      }
+      return right.marker.value - left.marker.value;
+    });
 
   return scored[0]?.marker ?? null;
 };
@@ -1098,10 +1107,22 @@ const computeCalculatedFreeTestosteroneMarker = (
       if (canonical === "testosterone") {
         return true;
       }
-      if (label.includes("testosterone") || label.includes("testosteron")) {
-        return !label.includes("free") && !label.includes("vrij");
+      if (!(label.includes("testosterone") || label.includes("testosteron"))) {
+        return false;
       }
-      return false;
+      return !["free", "vrij", "bioavailable", "dihydro", "dht", "androgen", "ratio"].some((token) => label.includes(token));
+    }, (_marker, canonical, label) => {
+      let boost = 0;
+      if (canonical === "testosterone") {
+        boost += 2;
+      }
+      if (label === "testosterone") {
+        boost += 1;
+      }
+      if (label.includes("total")) {
+        boost += 0.5;
+      }
+      return boost;
     }) ?? null;
   if (!testosteroneMarker) {
     return logSkip("missing Total Testosterone");
@@ -1282,15 +1303,16 @@ export const buildMarkerSeries = (
         return null;
       }
 
-      const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
+      const conversionInput = getMarkerConversionInput(marker);
+      const converted = convertBySystem(conversionInput.canonicalMarker, conversionInput.value, conversionInput.unit, unitSystem);
       const convertedMin =
         marker.referenceMin === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMin, conversionInput.unit, unitSystem).value;
       const convertedMax =
         marker.referenceMax === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMax, conversionInput.unit, unitSystem).value;
 
       const protocol = getReportProtocol(report, protocols);
       const primaryFrequency = protocol?.compounds[0]?.frequency ?? "unknown";

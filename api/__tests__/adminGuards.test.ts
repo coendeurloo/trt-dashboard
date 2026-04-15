@@ -66,6 +66,7 @@ const ENDPOINTS = [
   { name: "overview", method: "GET" as const, url: "/api/admin?action=overview" },
   { name: "system-status", method: "GET" as const, url: "/api/admin?action=system-status" },
   { name: "users", method: "GET" as const, url: "/api/admin?action=users&query=test@example.com" },
+  { name: "users-directory", method: "GET" as const, url: "/api/admin?action=users-directory&limit=50" },
   { name: "runtime-config", method: "GET" as const, url: "/api/admin?action=runtime-config" },
   { name: "audit-log", method: "GET" as const, url: "/api/admin?action=audit-log" }
 ];

@@ -27,7 +27,7 @@ import {
 import { cloneCompoundEntries, normalizeInterventionSnapshot, todayIsoDate } from "../protocolVersions";
 import { AppLanguage, AppSettings, LabReport, MarkerValue, Protocol, ReportAnnotations, SupplementPeriod } from "../types";
 import { ResolvedReportSupplementContext, getActiveSupplementsAtDate, resolveReportSupplementContexts, supplementPeriodsToText } from "../supplementUtils";
-import { convertBySystem } from "../unitConversion";
+import { convertBySystem, getMarkerConversionInput } from "../unitConversion";
 import { createId, deriveAbnormalFlag, formatDate } from "../utils";
 import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
@@ -1639,16 +1639,32 @@ const ReportsView = ({
                           </thead>
                           <tbody className="divide-y divide-slate-800">
                             {group.markers.map((marker) => {
-                              const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, settings.unitSystem);
+                              const conversionInput = getMarkerConversionInput(marker);
+                              const converted = convertBySystem(
+                                conversionInput.canonicalMarker,
+                                conversionInput.value,
+                                conversionInput.unit,
+                                settings.unitSystem
+                              );
                               const markerAbnormal = markerAbnormalStatus(marker);
                               const min =
                                 marker.referenceMin === null
                                   ? null
-                                  : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, settings.unitSystem).value;
+                                  : convertBySystem(
+                                      conversionInput.canonicalMarker,
+                                      marker.referenceMin,
+                                      conversionInput.unit,
+                                      settings.unitSystem
+                                    ).value;
                               const max =
                                 marker.referenceMax === null
                                   ? null
-                                  : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, settings.unitSystem).value;
+                                  : convertBySystem(
+                                      conversionInput.canonicalMarker,
+                                      marker.referenceMax,
+                                      conversionInput.unit,
+                                      settings.unitSystem
+                                    ).value;
                               const issuesTitle = markerReviewTooltip(marker);
                               const issuesTooltipId = `report-marker-review-tooltip-${report.id}-${group.category}-${marker.id}`;
                               const unitReviewKey = `${report.id}:${marker.id}`;

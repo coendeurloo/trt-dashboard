@@ -5,6 +5,7 @@ import overviewHandler from "../server/admin/overview.js";
 import runtimeConfigHandler from "../server/admin/runtime-config.js";
 import systemStatusHandler from "../server/admin/system-status.js";
 import usersHandler from "../server/admin/users.js";
+import usersDirectoryHandler from "../server/admin/users-directory.js";
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -45,6 +46,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (action === "users") {
     await usersHandler(req, res);
+    return;
+  }
+  if (action === "users-directory") {
+    await usersDirectoryHandler(req, res);
     return;
   }
   if (action === "runtime-config") {

@@ -117,6 +117,21 @@ export interface AdminUserLookupResult {
   } | null;
 }
 
+export interface AdminUserDirectoryItem {
+  id: string;
+  email: string | null;
+  createdAt: string | null;
+  lastSignInAt: string | null;
+}
+
+export interface AdminUserDirectoryResult {
+  query: string;
+  totalUsers: number;
+  returnedUsers: number;
+  limit: number;
+  users: AdminUserDirectoryItem[];
+}
+
 export interface AdminAuditLogEntry {
   id: number;
   actorUserId: string | null;

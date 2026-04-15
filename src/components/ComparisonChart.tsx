@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { formatDate } from "../utils";
 import { AppLanguage, AppSettings, LabReport } from "../types";
-import { convertBySystem } from "../unitConversion";
+import { convertBySystem, getMarkerConversionInput } from "../unitConversion";
 import { buildYAxisDomain, formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
 import { motion } from "framer-motion";
@@ -28,7 +28,13 @@ const ComparisonChart = ({ leftMarker, rightMarker, reports, settings, language 
       }
 
       const best = matches.reduce((current, next) => (next.confidence > current.confidence ? next : current));
-      return convertBySystem(best.canonicalMarker, best.value, best.unit, settings.unitSystem).value;
+      const conversionInput = getMarkerConversionInput(best);
+      return convertBySystem(
+        conversionInput.canonicalMarker,
+        conversionInput.value,
+        conversionInput.unit,
+        settings.unitSystem
+      ).value;
     };
 
     return reports

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildAlerts,
@@ -5,8 +7,10 @@ import {
   buildProtocolImpactDoseEvents,
   calculatePercentChange,
   deriveCalculatedMarkers,
+  enrichReportWithCalculatedMarkers,
   getTargetZone
 } from "../analytics";
+import { __pdfParsingInternals } from "../pdfParsing";
 import { LabReport, Protocol } from "../types";
 
 const mkReport = (id: string, date: string, dose: number, markers: Array<{ marker: string; value: number; unit: string }>): LabReport => ({
@@ -33,6 +37,38 @@ const mkReport = (id: string, date: string, dose: number, markers: Array<{ marke
     symptoms: "",
     notes: "",
     samplingTiming: "trough"
+  },
+  extraction: {
+    provider: "fallback",
+    model: "unit-test",
+    confidence: 1,
+    needsReview: false
+  }
+});
+
+const mkReportFromParsedDraft = (id: string, fileName: string, draft: ReturnType<typeof __pdfParsingInternals.fallbackExtract>): LabReport => ({
+  id,
+  sourceFileName: fileName,
+  testDate: draft.testDate,
+  createdAt: `${draft.testDate}T08:00:00.000Z`,
+  markers: draft.markers.map((marker, index) => ({
+    id: `${id}-${index}`,
+    marker: marker.marker,
+    rawMarker: marker.rawMarker,
+    canonicalMarker: marker.canonicalMarker,
+    value: marker.value,
+    unit: marker.unit,
+    referenceMin: marker.referenceMin,
+    referenceMax: marker.referenceMax,
+    abnormal: marker.abnormal,
+    confidence: marker.confidence,
+    source: "measured"
+  })),
+  annotations: {
+    supplementOverrides: null,
+    symptoms: "",
+    notes: "",
+    samplingTiming: "unknown"
   },
   extraction: {
     provider: "fallback",
@@ -201,6 +237,130 @@ describe("analytics", () => {
     expect(ratio?.referenceMin).toBe(120);
     expect(ratio?.referenceMax).toBe(320);
     expect(ratio?.abnormal).toBe("normal");
+  });
+
+  it("derives August 12 2025 calculated Free Testosterone around 201 pg/mL in US units", () => {
+    const input = fs.readFileSync(
+      path.resolve(process.cwd(), "tests/parser-fixtures/drafts/B03/labrapport-latvia-250812/input.txt"),
+      "utf8"
+    );
+    const draft = __pdfParsingInternals.fallbackExtract(input, "labrapport-250812-lab-latvia.pdf");
+    const report = mkReportFromParsedDraft("r-aug-2025", "labrapport-250812-lab-latvia.pdf", draft);
+
+    const derived = deriveCalculatedMarkers(report, { enableCalculatedFreeTestosterone: true });
+    const freeT = derived.find((marker) => marker.canonicalMarker === "Free Testosterone");
+
+    expect(freeT).toBeDefined();
+    expect(freeT?.unit).toBe("nmol/L");
+    expect(freeT?.value ?? 0).toBeCloseTo(0.697, 2);
+
+    const enriched = enrichReportWithCalculatedMarkers(report, { enableCalculatedFreeTestosterone: true });
+    const series = buildMarkerSeries([enriched], "Free Testosterone", "us");
+
+    expect(series).toHaveLength(1);
+    expect(series[0]?.unit).toBe("pg/mL");
+    expect(series[0]?.value ?? 0).toBeCloseTo(201, 0);
+  });
+
+  it("prefers exact Testosterone over Bioavailable Testosterone or DHT when calculating Free Testosterone", () => {
+    const report: LabReport = {
+      ...mkReport("r-free-t-inputs", "2025-08-12", 120, []),
+      markers: [
+        {
+          id: "dht",
+          marker: "Dihydrotestosterone",
+          canonicalMarker: "Dihydrotestosteron (DHT)",
+          value: 0.1,
+          unit: "nmol/L",
+          referenceMin: 0.9,
+          referenceMax: 3.4,
+          abnormal: "low",
+          confidence: 1,
+          source: "measured"
+        },
+        {
+          id: "bio",
+          marker: "Bioavailable Testosterone",
+          canonicalMarker: "Bioavailable Testosterone",
+          value: 24.8,
+          unit: "nmol/L",
+          referenceMin: null,
+          referenceMax: null,
+          abnormal: "unknown",
+          confidence: 0.99,
+          source: "measured"
+        },
+        {
+          id: "tt",
+          marker: "Testosterone",
+          canonicalMarker: "Testosterone",
+          value: 8.51,
+          unit: "ng/mL",
+          referenceMin: 2.49,
+          referenceMax: 8.36,
+          abnormal: "high",
+          confidence: 0.8,
+          source: "measured"
+        },
+        {
+          id: "shbg",
+          marker: "SHBG",
+          canonicalMarker: "SHBG",
+          value: 29,
+          unit: "nmol/L",
+          referenceMin: 11.54,
+          referenceMax: 54.49,
+          abnormal: "normal",
+          confidence: 1,
+          source: "measured"
+        },
+        {
+          id: "alb",
+          marker: "Albumin",
+          canonicalMarker: "Albumine",
+          value: 44.8,
+          unit: "g/L",
+          referenceMin: 32,
+          referenceMax: 48,
+          abnormal: "normal",
+          confidence: 1,
+          source: "measured"
+        }
+      ]
+    };
+
+    const derived = deriveCalculatedMarkers(report, { enableCalculatedFreeTestosterone: true });
+    const freeT = derived.find((marker) => marker.canonicalMarker === "Free Testosterone");
+
+    expect(freeT).toBeDefined();
+    expect(freeT?.value ?? 0).toBeCloseTo(0.697, 2);
+  });
+
+  it("repairs mislabeled calculated Free Testosterone points before US display conversion", () => {
+    const report: LabReport = {
+      ...mkReport("r-free-t-mislabeled", "2025-08-12", 120, []),
+      markers: [
+        {
+          id: "ft-calc",
+          marker: "Free Testosterone",
+          canonicalMarker: "Free Testosterone",
+          value: 0.577,
+          unit: "pg/mL",
+          referenceMin: null,
+          referenceMax: null,
+          abnormal: "unknown",
+          confidence: 1,
+          isCalculated: true,
+          source: "calculated"
+        }
+      ]
+    };
+
+    const series = buildMarkerSeries([report], "Free Testosterone", "us");
+
+    expect(series).toHaveLength(1);
+    expect(series[0]?.unit).toBe("pg/mL");
+    expect(series[0]?.value ?? 0).toBeCloseTo(166.4, 1);
   });
 
   it("detects compound change only when version effective date is reached", () => {

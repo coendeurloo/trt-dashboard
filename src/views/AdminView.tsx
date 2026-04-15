@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+﻿import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2, RotateCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings } from "../types";
@@ -8,6 +8,7 @@ import {
   fetchAdminOverview,
   fetchAdminRuntimeConfig,
   fetchAdminSystemStatus,
+  fetchAdminUserDirectory,
   fetchAdminUserLookup,
   updateAdminRuntimeConfig
 } from "../admin/client";
@@ -17,6 +18,7 @@ import {
   AdminOverview,
   AdminRuntimeConfig,
   AdminSystemStatus,
+  AdminUserDirectoryResult,
   AdminUserLookupResult
 } from "../admin/types";
 import { formatDate } from "../utils";
@@ -157,6 +159,9 @@ const AdminView = ({
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [savingRuntime, setSavingRuntime] = useState(false);
+  const [userDirectory, setUserDirectory] = useState<AdminUserDirectoryResult | null>(null);
+  const [userDirectoryQuery, setUserDirectoryQuery] = useState("");
+  const [userDirectoryLoading, setUserDirectoryLoading] = useState(false);
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupResult, setLookupResult] = useState<AdminUserLookupResult | null>(null);
@@ -170,16 +175,18 @@ const AdminView = ({
       setLoadingData(true);
       setAdminError("");
       try {
-        const [nextOverview, nextSystemStatus, nextRuntimeConfig, nextAuditEntries] = await Promise.all([
+        const [nextOverview, nextSystemStatus, nextRuntimeConfig, nextAuditEntries, nextUserDirectory] = await Promise.all([
           fetchAdminOverview(token),
           fetchAdminSystemStatus(token),
           fetchAdminRuntimeConfig(token),
-          fetchAdminAuditLog(token)
+          fetchAdminAuditLog(token),
+          fetchAdminUserDirectory(token, { limit: 250 })
         ]);
         setOverview(nextOverview);
         setSystemStatus(nextSystemStatus);
         setRuntimeConfig(nextRuntimeConfig);
         setAuditEntries(nextAuditEntries);
+        setUserDirectory(nextUserDirectory);
       } catch (error) {
         setAdminError(mapAdminErrorToMessage(error, tr));
       } finally {
@@ -196,6 +203,7 @@ const AdminView = ({
       setSystemStatus(null);
       setRuntimeConfig(null);
       setAuditEntries([]);
+      setUserDirectory(null);
       return;
     }
 
@@ -275,6 +283,43 @@ const AdminView = ({
       setAdminError(mapAdminErrorToMessage(error, tr));
     } finally {
       setLookupLoading(false);
+    }
+  };
+
+  const handleDirectorySubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!accessToken) {
+      return;
+    }
+    setUserDirectoryLoading(true);
+    setAdminError("");
+    try {
+      const nextDirectory = await fetchAdminUserDirectory(accessToken, {
+        query: userDirectoryQuery.trim(),
+        limit: 250
+      });
+      setUserDirectory(nextDirectory);
+    } catch (error) {
+      setAdminError(mapAdminErrorToMessage(error, tr));
+    } finally {
+      setUserDirectoryLoading(false);
+    }
+  };
+
+  const handleDirectoryReset = async () => {
+    if (!accessToken) {
+      return;
+    }
+    setUserDirectoryQuery("");
+    setUserDirectoryLoading(true);
+    setAdminError("");
+    try {
+      const nextDirectory = await fetchAdminUserDirectory(accessToken, { limit: 250 });
+      setUserDirectory(nextDirectory);
+    } catch (error) {
+      setAdminError(mapAdminErrorToMessage(error, tr));
+    } finally {
+      setUserDirectoryLoading(false);
     }
   };
 
@@ -408,7 +453,7 @@ const AdminView = ({
 
   return (
     <div className={pageClassName}>
-      <div className="mx-auto w-full max-w-7xl space-y-3">
+      <div className="mx-auto w-full max-w-7xl space-y-4">
         <section className={topStatusCardClassName}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -654,7 +699,7 @@ const AdminView = ({
                 onToggle={(next) => void handleRuntimeToggle("aiAnalysisEnabled", next)}
               />
               <p className="text-xs text-slate-500">
-                {tr("Laatst gewijzigd", "Last updated")}: {formatDateTime(runtimeConfig.updatedAt)} · {tr("door", "by")} {runtimeConfig.updatedByEmail ?? "-"}
+                {tr("Laatst gewijzigd", "Last updated")}: {formatDateTime(runtimeConfig.updatedAt)} | {tr("door", "by")} {runtimeConfig.updatedByEmail ?? "-"}
               </p>
             </div>
           ) : (
@@ -701,7 +746,7 @@ const AdminView = ({
                     <div key={entry.key} className="rounded-lg border border-slate-700 bg-slate-950/40 px-2 py-1 text-xs text-slate-300">
                       <p className="font-medium text-slate-100">{entry.key}</p>
                       <p className="text-slate-400">
-                        {entry.scope === "server" ? tr("server", "server") : tr("client", "client")} · {entry.present ? tr("present", "present") : tr("missing", "missing")}
+                        {entry.scope === "server" ? tr("server", "server") : tr("client", "client")} | {entry.present ? tr("present", "present") : tr("missing", "missing")}
                       </p>
                     </div>
                   ))}
@@ -771,7 +816,7 @@ const AdminView = ({
                   )}
                 </p>
                 <p className="mt-2 text-xs text-slate-500">
-                  {tr("Release", "Release")}: {systemStatus.errorReporting.release ?? "-"} · {tr("Privacy", "Privacy")}:{" "}
+                  {tr("Release", "Release")}: {systemStatus.errorReporting.release ?? "-"} | {tr("Privacy", "Privacy")}:{" "}
                   {systemStatus.errorReporting.privacyMode === "strict" ? tr("streng", "strict") : "-"}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -800,54 +845,136 @@ const AdminView = ({
             <p className="text-sm text-slate-400">{tr("Geen error reporting status", "No error reporting status")}</p>
           )}
         </AdminPanel>
-
         <AdminPanel
-          title={tr("User Lookup", "User lookup")}
-          subtitle={tr("Zoek één gebruiker op e-mail voor read-only supportsamenvatting.", "Search one user by email for a read-only support summary.")}
+          title={tr("Users", "Users")}
+          subtitle={tr(
+            "Live userlijst vanuit Supabase Auth. Je ziet totaal users en e-mails direct hier.",
+            "Live user list from Supabase Auth. You can see total users and emails directly here."
+          )}
         >
-          <form className="flex flex-wrap gap-2" onSubmit={handleLookupSubmit}>
-            <input
-              value={lookupQuery}
-              onChange={(event) => setLookupQuery(event.target.value)}
-              className="min-w-[240px] flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-              placeholder={tr("bijv. user@email.com", "e.g. user@email.com")}
-            />
-            <button
-              type="submit"
-              disabled={lookupLoading || lookupQuery.trim().length < 2}
-              className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-2 text-sm font-medium text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {lookupLoading ? tr("Zoeken...", "Searching...") : tr("Zoek gebruiker", "Lookup user")}
-            </button>
-          </form>
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <AdminMetricCard
+                  label={tr("Totaal users", "Total users")}
+                  value={String(userDirectory?.totalUsers ?? 0)}
+                />
+                <AdminMetricCard
+                  label={tr("Getoond", "Shown")}
+                  value={String(userDirectory?.returnedUsers ?? 0)}
+                />
+                <AdminMetricCard
+                  label={tr("Met consent", "With consent")}
+                  value={String(overview?.totals.usersWithConsent ?? 0)}
+                  tone={overview && overview.totals.usersWithConsent > 0 ? "good" : "neutral"}
+                />
+              </div>
 
-          {lookupResult ? (
-            <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 text-sm text-slate-300">
-              {lookupResult.user ? (
-                <div className="space-y-1">
-                  <p><span className="text-slate-400">ID:</span> {lookupResult.user.id}</p>
-                  <p><span className="text-slate-400">Email:</span> {lookupResult.user.email ?? "-"}</p>
-                  <p><span className="text-slate-400">{tr("Aangemaakt", "Created")}</span>: {formatDateTime(lookupResult.user.createdAt)}</p>
-                  <p><span className="text-slate-400">{tr("Laatste login", "Last sign-in")}</span>: {formatDateTime(lookupResult.user.lastSignInAt)}</p>
-                  <p><span className="text-slate-400">{tr("Consent", "Consent")}</span>: {lookupResult.summary?.hasConsent ? tr("ja", "yes") : tr("nee", "no")}</p>
-                  <p>
-                    <span className="text-slate-400">{tr("Data", "Data")}</span>: {lookupResult.summary?.reportsCount ?? 0} reports, {lookupResult.summary?.checkInsCount ?? 0} check-ins, {lookupResult.summary?.protocolsCount ?? 0} protocols
-                  </p>
-                  <p>
-                    <span className="text-slate-400">{tr("Laatste sync", "Latest sync")}</span>: {formatDateTime(lookupResult.summary?.latestSyncAt ?? null)}
-                  </p>
-                  <p>
-                    <span className="text-slate-400">{tr("Plan", "Plan")}</span>: {lookupResult.plan?.plan ?? "-"}
-                    {lookupResult.plan?.entitlements?.length
-                      ? ` · ${lookupResult.plan.entitlements.join(", ")}`
-                      : ""}
-                  </p>
+              <form className="flex flex-wrap gap-2" onSubmit={handleDirectorySubmit}>
+                <input
+                  value={userDirectoryQuery}
+                  onChange={(event) => setUserDirectoryQuery(event.target.value)}
+                  className="min-w-[260px] flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  placeholder={tr("Filter op e-mail", "Filter by email")}
+                />
+                <button
+                  type="submit"
+                  disabled={userDirectoryLoading}
+                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-2 text-sm font-medium text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {userDirectoryLoading ? tr("Laden...", "Loading...") : tr("Filter", "Filter")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDirectoryReset()}
+                  disabled={userDirectoryLoading}
+                  className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {tr("Reset", "Reset")}
+                </button>
+              </form>
+
+              <div className="overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/40">
+                <div className="grid grid-cols-[minmax(180px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-2 border-b border-slate-700/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <span>{tr("E-mail", "Email")}</span>
+                  <span>{tr("Aangemaakt", "Created")}</span>
+                  <span>{tr("Laatste login", "Last sign-in")}</span>
                 </div>
-              ) : (
-                <p>{tr("Geen gebruiker gevonden.", "No user found.")}</p>
-              )}
+                <div className="max-h-[340px] overflow-y-auto">
+                  {userDirectory && userDirectory.users.length > 0 ? (
+                    userDirectory.users.map((user) => (
+                      <div
+                        key={user.id}
+                        className="grid grid-cols-[minmax(180px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-2 border-b border-slate-800/80 px-3 py-2 text-xs text-slate-300 last:border-b-0"
+                      >
+                        <span className="truncate text-slate-100">{user.email ?? "-"}</span>
+                        <span>{formatDateTime(user.createdAt)}</span>
+                        <span>{formatDateTime(user.lastSignInAt)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="px-3 py-4 text-sm text-slate-400">
+                      {tr("Geen users gevonden voor dit filter.", "No users found for this filter.")}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-          ) : null}
+
+            <div className="space-y-3 rounded-xl border border-slate-700/70 bg-slate-900/35 p-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{tr("User lookup", "User lookup")}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {tr(
+                    "Zoek één gebruiker op e-mail voor een read-only supportsamenvatting.",
+                    "Search one user by email for a read-only support summary."
+                  )}
+                </p>
+              </div>
+
+              <form className="flex flex-wrap gap-2" onSubmit={handleLookupSubmit}>
+                <input
+                  value={lookupQuery}
+                  onChange={(event) => setLookupQuery(event.target.value)}
+                  className="min-w-[220px] flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  placeholder={tr("bijv. user@email.com", "e.g. user@email.com")}
+                />
+                <button
+                  type="submit"
+                  disabled={lookupLoading || lookupQuery.trim().length < 2}
+                  className="rounded-md border border-cyan-500/45 bg-cyan-500/12 px-3 py-2 text-sm font-medium text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {lookupLoading ? tr("Zoeken...", "Searching...") : tr("Zoek", "Lookup")}
+                </button>
+              </form>
+
+              {lookupResult ? (
+                <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 text-sm text-slate-300">
+                  {lookupResult.user ? (
+                    <div className="space-y-1.5">
+                      <p><span className="text-slate-400">ID:</span> {lookupResult.user.id}</p>
+                      <p><span className="text-slate-400">Email:</span> {lookupResult.user.email ?? "-"}</p>
+                      <p><span className="text-slate-400">{tr("Aangemaakt", "Created")}:</span> {formatDateTime(lookupResult.user.createdAt)}</p>
+                      <p><span className="text-slate-400">{tr("Laatste login", "Last sign-in")}:</span> {formatDateTime(lookupResult.user.lastSignInAt)}</p>
+                      <p><span className="text-slate-400">{tr("Consent", "Consent")}:</span> {lookupResult.summary?.hasConsent ? tr("ja", "yes") : tr("nee", "no")}</p>
+                      <p>
+                        <span className="text-slate-400">{tr("Data", "Data")}:</span> {lookupResult.summary?.reportsCount ?? 0} reports, {lookupResult.summary?.checkInsCount ?? 0} check-ins, {lookupResult.summary?.protocolsCount ?? 0} protocols
+                      </p>
+                      <p>
+                        <span className="text-slate-400">{tr("Laatste sync", "Latest sync")}:</span> {formatDateTime(lookupResult.summary?.latestSyncAt ?? null)}
+                      </p>
+                      <p>
+                        <span className="text-slate-400">{tr("Plan", "Plan")}:</span> {lookupResult.plan?.plan ?? "-"}
+                        {lookupResult.plan?.entitlements?.length ? ` | ${lookupResult.plan.entitlements.join(", ")}` : ""}
+                      </p>
+                    </div>
+                  ) : (
+                    <p>{tr("Geen gebruiker gevonden.", "No user found.")}</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </AdminPanel>
 
         <AdminPanel
@@ -859,7 +986,7 @@ const AdminView = ({
               auditEntries.map((entry) => (
                 <article key={entry.id} className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 text-xs text-slate-300">
                   <p className="font-medium text-slate-100">
-                    {entry.action} · {entry.actorEmail ?? entry.actorUserId ?? "unknown"}
+                    {entry.action} | {entry.actorEmail ?? entry.actorUserId ?? "unknown"}
                   </p>
                   <p className="mt-1 text-slate-400">{renderChangeSummary(entry)}</p>
                   <p className="mt-1 text-slate-500">{formatDateTime(entry.createdAt)}</p>
@@ -876,3 +1003,6 @@ const AdminView = ({
 };
 
 export default AdminView;
+
+
+

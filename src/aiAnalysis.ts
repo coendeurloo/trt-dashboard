@@ -19,7 +19,7 @@ import {
   getReportSupplementsText,
   getReportProtocol
 } from "./protocolUtils";
-import { convertBySystem } from "./unitConversion";
+import { convertBySystem, getMarkerConversionInput } from "./unitConversion";
 import {
   DosePrediction,
   MarkerAlert,
@@ -1442,15 +1442,16 @@ export const generateAnalystMemory = async ({
         timing: report.annotations.samplingTiming
       },
       markers: report.markers.map((marker) => {
-        const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
+        const conversionInput = getMarkerConversionInput(marker);
+        const converted = convertBySystem(conversionInput.canonicalMarker, conversionInput.value, conversionInput.unit, unitSystem);
         const convertedMin =
           marker.referenceMin === null
             ? null
-            : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, unitSystem).value;
+            : convertBySystem(conversionInput.canonicalMarker, marker.referenceMin, conversionInput.unit, unitSystem).value;
         const convertedMax =
           marker.referenceMax === null
             ? null
-            : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+            : convertBySystem(conversionInput.canonicalMarker, marker.referenceMax, conversionInput.unit, unitSystem).value;
         return {
           m: marker.canonicalMarker,
           v: toRounded(converted.value),
@@ -1991,15 +1992,16 @@ const buildPayload = (
       };
     })(),
     markers: selectPromptMarkers(report.markers.map((marker) => {
-      const converted = convertBySystem(marker.canonicalMarker, marker.value, marker.unit, unitSystem);
+      const conversionInput = getMarkerConversionInput(marker);
+      const converted = convertBySystem(conversionInput.canonicalMarker, conversionInput.value, conversionInput.unit, unitSystem);
       const convertedMin =
         marker.referenceMin === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMin, conversionInput.unit, unitSystem).value;
       const convertedMax =
         marker.referenceMax === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMax, conversionInput.unit, unitSystem).value;
 
       return {
         m: marker.canonicalMarker,

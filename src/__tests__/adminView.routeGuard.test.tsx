@@ -153,7 +153,23 @@ describe("AdminView route guard", () => {
           }
         })
       )
-      .mockResolvedValueOnce(mockFetchResponse(200, { entries: [] }));
+      .mockResolvedValueOnce(mockFetchResponse(200, { entries: [] }))
+      .mockResolvedValueOnce(
+        mockFetchResponse(200, {
+          query: "",
+          totalUsers: 3,
+          returnedUsers: 3,
+          limit: 250,
+          users: [
+            {
+              id: "admin-1",
+              email: "admin@example.com",
+              createdAt: "2026-03-20T10:00:00.000Z",
+              lastSignInAt: "2026-03-22T09:00:00.000Z"
+            }
+          ]
+        })
+      );
 
     render(
       <AdminView

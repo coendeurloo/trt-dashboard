@@ -1,4 +1,4 @@
-import { UnitSystem } from "./types";
+import { MarkerValue, UnitSystem } from "./types";
 import {
   MarkerNormalizationMode,
   resolveCanonicalMarker
@@ -83,6 +83,7 @@ const normalizeUnitToken = (unit: string): string =>
 const isOneOf = (value: string, candidates: string[]): boolean => candidates.includes(value);
 const scaleNullable = (value: number | null, factor: number): number | null => (value === null ? null : value * factor);
 const isMilliequivalentPerLiterUnit = (normalizedUnit: string): boolean => isOneOf(normalizedUnit, ["meq/l", "meql"]);
+const CALCULATED_FREE_T_MISLABELED_PGML_MAX = 5;
 const roundToStoragePrecision = (value: number): number => {
   const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
   return Object.is(rounded, -0) ? 0 : rounded;
@@ -338,6 +339,34 @@ export const normalizeMarkerMeasurement = (measurement: MarkerMeasurement): Omit
     referenceMin: toPercentIfRatio(measurement.referenceMin),
     referenceMax: toPercentIfRatio(measurement.referenceMax)
   });
+};
+
+export const getMarkerConversionInput = (
+  marker: Pick<MarkerValue, "canonicalMarker" | "value" | "unit" | "isCalculated" | "source">
+): { canonicalMarker: string; value: number; unit: string } => {
+  const normalizedUnit = normalizeUnitToken(marker.unit);
+
+  // Repair legacy/mislabeled calculated Free T points where the calculator
+  // stored an nmol/L value but the unit was tagged as pg/mL.
+  if (
+    marker.isCalculated &&
+    marker.canonicalMarker === "Free Testosterone" &&
+    normalizedUnit === "pg/ml" &&
+    marker.value > 0 &&
+    marker.value <= CALCULATED_FREE_T_MISLABELED_PGML_MAX
+  ) {
+    return {
+      canonicalMarker: marker.canonicalMarker,
+      value: marker.value,
+      unit: "nmol/L"
+    };
+  }
+
+  return {
+    canonicalMarker: marker.canonicalMarker,
+    value: marker.value,
+    unit: marker.unit
+  };
 };
 
 export const convertBySystem = (

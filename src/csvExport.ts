@@ -1,4 +1,4 @@
-import { convertBySystem } from "./unitConversion";
+import { convertBySystem, getMarkerConversionInput } from "./unitConversion";
 import { LabReport, Protocol, SupplementPeriod, UnitSystem } from "./types";
 import { injectionFrequencyLabel } from "./protocolStandards";
 import {
@@ -52,21 +52,22 @@ export const buildCsv = (
         return;
       }
 
+      const conversionInput = getMarkerConversionInput(marker);
       const convertedValue = convertBySystem(
-        marker.canonicalMarker,
-        marker.value,
-        marker.unit,
+        conversionInput.canonicalMarker,
+        conversionInput.value,
+        conversionInput.unit,
         unitSystem
       );
 
       const convertedMin =
         marker.referenceMin === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMin, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMin, conversionInput.unit, unitSystem).value;
       const convertedMax =
         marker.referenceMax === null
           ? null
-          : convertBySystem(marker.canonicalMarker, marker.referenceMax, marker.unit, unitSystem).value;
+          : convertBySystem(conversionInput.canonicalMarker, marker.referenceMax, conversionInput.unit, unitSystem).value;
       const protocol = getReportProtocol(report, protocols);
 
       rows.push(

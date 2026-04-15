@@ -1,5 +1,6 @@
 import {
   AdminAuditLogEntry,
+  AdminUserDirectoryResult,
   AdminMe,
   AdminOverview,
   AdminRuntimeConfig,
@@ -92,6 +93,28 @@ export const fetchAdminUserLookup = async (
     headers: authHeaders(accessToken)
   });
   return parseJson<AdminUserLookupResult>(response);
+};
+
+export const fetchAdminUserDirectory = async (
+  accessToken: string,
+  options?: { query?: string; limit?: number }
+): Promise<AdminUserDirectoryResult> => {
+  const queryValue = String(options?.query ?? "").trim();
+  const limitValue =
+    typeof options?.limit === "number" && Number.isFinite(options.limit)
+      ? Math.max(1, Math.floor(options.limit))
+      : 250;
+  const query = new URLSearchParams();
+  query.set("limit", String(limitValue));
+  if (queryValue) {
+    query.set("query", queryValue);
+  }
+
+  const response = await fetch(`/api/admin/users-directory?${query.toString()}`, {
+    method: "GET",
+    headers: authHeaders(accessToken)
+  });
+  return parseJson<AdminUserDirectoryResult>(response);
 };
 
 export const fetchAdminAuditLog = async (accessToken: string): Promise<AdminAuditLogEntry[]> => {
