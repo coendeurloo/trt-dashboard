@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: March 27, 2026
+Last updated: April 11, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -13,6 +13,22 @@ Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
 
+- Protocol dose UX overhaul shipped (multi-pass):
+  - Dose input now supports both `Per administration` and `Weekly dose` in the same row
+  - 2-way sync works both directions based on last edited field when frequency is known
+  - Canonical storage stays weekly-compatible (`dose` and `doseMg` keep weekly values for simulator compatibility)
+  - Clarified compact column labels for dose fields in protocol editor and onboarding
+  - Fixed compound table overflow so the delete `X` stays inside the grid on desktop widths
+- AI analysis flow upgrade shipped:
+  - Refactored AI Analysis hero input flow for a clearer ask-first experience
+  - Optimized Claude analysis flow and related pipeline/build integration
+  - Analysis view tests updated to cover the new hero flow behavior
+- Cloud account flow polish shipped:
+  - Added branded verification email flow and centered verification layouts
+  - Added verification funnel analytics and sign-in prefill
+  - Added password reset flow and improved account UX
+  - Fixed stale `session expired` modal state behavior
+  - Added privacy-first Sentry monitoring plus timezone fix for keepalive monitor
 - Protocol Impact UX refinement shipped in multiple passes:
   - View restructured to single-event insight flow with clear hierarchy and progressive disclosure
   - Outcome is now primary: top "What changed after this update" summary with top 3 marker changes
@@ -78,7 +94,7 @@ Parser QA is active with batch registry + scorecards.
 - Parser robustness upgrades for Quest/LabCorp fixtures and expanded marker coverage (including Cardio IQ aliases)
 - Modal/UX polish round completed across extraction review, parser upload summary, reports cards/header density, and wellbeing check-ins
 - Parser batch workflow + scorecards added and running (B01-B04 currently logged as PASS/PASS* with source-quality caveats)
-- Test coverage expanded to 67 test files in `src/__tests__`
+- Test coverage expanded to 74 test files in `src/__tests__`
 
 ## In progress
 
