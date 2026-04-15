@@ -9,8 +9,6 @@ import {
   Heart,
   Lock,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pill,
   Plus,
   SlidersHorizontal,
@@ -129,7 +127,6 @@ const AppShell = ({
     cloudAuthStatus = "unauthenticated",
     cloudUserEmail = null,
     headerStats = [],
-    sidebarCollapsedDesktop = false,
     interfaceDensity = "comfortable"
   } = shellState;
   const {
@@ -149,8 +146,7 @@ const AppShell = ({
     onUploadFileSelected,
     onUploadIntent,
     onStartManualEntry,
-    onOpenCloudAuth,
-    onToggleDesktopSidebar
+    onOpenCloudAuth
   } = actions;
 
   const tabIsLockedDuringOnboarding = (key: TabKey) =>
@@ -256,31 +252,8 @@ const AppShell = ({
   };
 
   const renderNavigationSections = (onAfterNavigate?: () => void, compact = false) => {
-    const showDesktopSidebarToggle = !onAfterNavigate;
-    const sidebarToggleTitle = sidebarCollapsedDesktop
-      ? tr("Zijbalk uitklappen", "Expand sidebar")
-      : tr("Zijbalk inklappen", "Collapse sidebar");
-
     return (
       <nav className="space-y-0.5">
-        {showDesktopSidebarToggle ? (
-          <div className={`mb-1 mt-0 flex justify-end ${compact ? "px-1" : "px-3"}`}>
-            <button
-              type="button"
-              onClick={onToggleDesktopSidebar}
-              title={sidebarToggleTitle}
-              aria-label={sidebarToggleTitle}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
-                isLightTheme
-                  ? "border-slate-300 bg-white text-slate-600 hover:border-cyan-500/50 hover:text-cyan-700"
-                  : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-              }`}
-            >
-              {sidebarCollapsedDesktop ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        ) : null}
-
         {renderTabButton("dashboard", onAfterNavigate, compact)}
         {renderTabButton("checkIns", onAfterNavigate, compact)}
         {renderTabButton("reports", onAfterNavigate, compact)}
@@ -621,11 +594,11 @@ const AppShell = ({
         <aside
           className={
             isLightTheme
-              ? `hidden w-full rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
-              : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} ${sidebarCollapsedDesktop ? "lg:w-20" : "lg:w-72"} lg:self-start`
+              ? `hidden w-full rounded-2xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} lg:w-72 lg:self-start`
+              : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} lg:w-72 lg:self-start`
           }
         >
-          {renderSidebarContent({ includeUploadPanel: true, compact: sidebarCollapsedDesktop })}
+          {renderSidebarContent({ includeUploadPanel: true, compact: false })}
         </aside>
 
         <main className={`min-w-0 flex-1 ${isCompactDensity ? "space-y-2.5" : "space-y-3"}`} id="dashboard-export-root">

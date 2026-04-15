@@ -356,7 +356,7 @@ describe("AppShell onboarding lock", () => {
     expect(screen.getByText((_, node) => node?.textContent?.trim() === "19 Feblatest report")).toBeTruthy();
   });
 
-  it("supports compact desktop sidebar mode with icon-first navigation", () => {
+  it("ignores old compact desktop sidebar state and keeps the full sidebar visible", () => {
     const props = buildProps({
       isOnboardingLocked: false,
       hasReports: true,
@@ -368,9 +368,11 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    expect(screen.queryByText("Core")).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Upload PDF" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Protocols" })).toBeTruthy();
+    expect(screen.getByText("Upload PDF")).toBeTruthy();
+    expect(screen.getByText("Protocols")).toBeTruthy();
+    expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Collapse sidebar" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand sidebar" })).toBeNull();
   });
 
   it("shows Local-only instead of pending when authenticated outside cloud mode", () => {
