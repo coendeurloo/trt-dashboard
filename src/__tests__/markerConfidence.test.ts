@@ -353,4 +353,38 @@ describe("markerConfidence", () => {
     expect(confidence.unit).toBe("low");
     expect(confidence.issues.some((issue) => /not recognized/i.test(issue))).toBe(true);
   });
+
+  it("treats Labcorp-style zero values as valid when the expected lower bound is zero", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "Basophils abs.",
+        value: 0,
+        unit: "x10E3/uL",
+        referenceMin: 0,
+        referenceMax: 0.1
+      },
+      matchMarker("Basophils abs.")
+    );
+
+    expect(confidence.name).toBe("high");
+    expect(confidence.unit).toBe("high");
+    expect(confidence.value).toBe("high");
+    expect(confidence.issues.some((issue) => /zero/i.test(issue))).toBe(false);
+  });
+
+  it("keeps zero values under review when the marker range starts above zero", () => {
+    const confidence = scoreMarkerConfidence(
+      {
+        name: "TSH",
+        value: 0,
+        unit: "mIU/L",
+        referenceMin: 0.4,
+        referenceMax: 4
+      },
+      matchMarker("TSH")
+    );
+
+    expect(confidence.value).toBe("low");
+    expect(confidence.issues.some((issue) => /starts above zero/i.test(issue))).toBe(true);
+  });
 });

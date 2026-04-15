@@ -299,14 +299,26 @@ export function scoreMarkerConfidence(parsed: ParsedMarker, matchResult: MarkerM
   }
 
   const numericValue = toNullableNumber(parsed.value);
+  const parsedRange = parseRange(parsed);
   let valueConfidence: DimensionConfidence = "missing";
 
   if (numericValue === null) {
     valueConfidence = "missing";
     addIssue("Marker value could not be parsed as a number.", false);
-  } else if (numericValue <= 0) {
+  } else if (numericValue < 0) {
     valueConfidence = "low";
-    addIssue("Marker value is zero or negative. Please verify.", false);
+    addIssue("Marker value is negative. Please verify.", false);
+  } else if (numericValue === 0) {
+    const lowerBoundCandidates = [parsedRange.min, matchResult.canonical?.defaultRange?.min].filter(
+      (value): value is number => typeof value === "number" && Number.isFinite(value)
+    );
+    const expectsStrictlyPositiveValue = lowerBoundCandidates.some((value) => value > 0);
+    if (expectsStrictlyPositiveValue) {
+      valueConfidence = "low";
+      addIssue("Marker value is zero while the expected range starts above zero. Please verify.", false);
+    } else {
+      valueConfidence = "high";
+    }
   } else if (isWithinPlausibleBounds(numericValue, matchResult)) {
     valueConfidence = "high";
   } else {
@@ -314,7 +326,6 @@ export function scoreMarkerConfidence(parsed: ParsedMarker, matchResult: MarkerM
     addIssue("Marker value looks outside plausible parser bounds.", false);
   }
 
-  const parsedRange = parseRange(parsed);
   let rangeConfidence: DimensionConfidence = "missing";
 
   if (parsedRange.min !== null && parsedRange.max !== null) {

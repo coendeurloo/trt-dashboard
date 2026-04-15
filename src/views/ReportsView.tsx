@@ -33,8 +33,8 @@ import { findBaselineOverlapMarkers } from "../baselineUtils";
 import { ReviewMarker, enrichMarkerForReview } from "../utils/markerReview";
 
 const REVIEW_TOOLTIP_EDGE_PADDING = 10;
-const REVIEW_TOOLTIP_MIN_WIDTH = 240;
-const REVIEW_TOOLTIP_MAX_WIDTH = 520;
+const REVIEW_TOOLTIP_MIN_WIDTH = 280;
+const REVIEW_TOOLTIP_MAX_WIDTH = 420;
 const REVIEW_TOOLTIP_GAP = 10;
 
 const canonicalizeProtocolDraftForCompare = (draft: ProtocolDraft): string =>
@@ -117,7 +117,7 @@ const MarkerReviewBadge = ({ label, className, icon, tooltip, tooltipId, buttonR
           <div
             id={tooltipId}
             role="tooltip"
-            className="review-tooltip pointer-events-none fixed z-[120] whitespace-pre-line rounded-md border border-slate-600 bg-slate-900/95 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 shadow-lg"
+            className="review-tooltip pointer-events-none fixed z-[120] whitespace-normal break-words rounded-md border border-slate-600 bg-slate-900/95 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 shadow-lg"
             style={{ top: tooltipPosition.top, left: tooltipPosition.left, width: tooltipPosition.width }}
           >
             {tooltip}
@@ -289,7 +289,7 @@ const ReportsView = ({
   const markerReviewTooltip = (marker: ReviewMarker): string | undefined => {
     const issues = marker._confidence?.issues ?? [];
     if (issues.length > 0) {
-      return issues.map((issue) => `• ${issue}`).join("\n");
+      return issues.map((issue) => `- ${issue}`).join("\n");
     }
     const overall = markerReviewOverall(marker);
     if (overall === "review") {
