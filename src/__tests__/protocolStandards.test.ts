@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalizeCompound,
   compoundsForProtocolStorage,
+  inferCompoundFromProtocol,
   normalizeSupplementEntries,
   protocolDoseInputToCanonicalWeeklyDose,
   protocolDosePerAdministrationToWeeklyDose,
@@ -92,5 +94,18 @@ describe("protocolStandards protocol dose conversion", () => {
       doseMg: "two mg",
       frequency: "5x_week"
     });
+  });
+});
+
+describe("protocolStandards peptide catalog", () => {
+  it("canonicalizes popular peptide aliases", () => {
+    expect(canonicalizeCompound("Copper Peptide")).toBe("GHK-Cu");
+    expect(canonicalizeCompound("MOTS C")).toBe("MOTS-c");
+    expect(canonicalizeCompound("IGF-1 DES(1-3)")).toBe("IGF-1 DES");
+  });
+
+  it("infers newer peptides from protocol notes", () => {
+    expect(inferCompoundFromProtocol("Night stack: 300 mcg Semax daily")).toBe("Semax");
+    expect(inferCompoundFromProtocol("Added kisspeptin before labs")).toBe("Kisspeptin-10");
   });
 });
