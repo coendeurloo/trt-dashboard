@@ -820,12 +820,21 @@ const normalizeSettings = (settings?: Partial<AppSettings>): AppSettings => {
     rest.interfaceDensity === "compact" || rest.interfaceDensity === "comfortable"
       ? rest.interfaceDensity
       : DEFAULT_SETTINGS.interfaceDensity;
+  const aiExternalConsent =
+    typeof rest.aiExternalConsent === "boolean" ? rest.aiExternalConsent : DEFAULT_SETTINGS.aiExternalConsent;
+  const aiCoachConsentAsked =
+    typeof rest.aiCoachConsentAsked === "boolean"
+      ? rest.aiCoachConsentAsked
+      : typeof rest.aiExternalConsent === "boolean"
+        ? true
+        : DEFAULT_SETTINGS.aiCoachConsentAsked;
   const normalizedSettings = {
     ...DEFAULT_SETTINGS,
     ...rest,
     theme,
     interfaceDensity,
-    aiExternalConsent: true,
+    aiExternalConsent,
+    aiCoachConsentAsked,
     enableSamplingControls: true,
     enableCalculatedFreeTestosterone: true,
     sidebarCollapsedDesktop:
@@ -1048,4 +1057,3 @@ export const clearAnalystMemory = (): void => {
     console.error("Failed to clear analyst memory:", error);
   }
 };
-

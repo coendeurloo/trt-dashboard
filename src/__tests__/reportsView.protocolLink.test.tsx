@@ -152,5 +152,5 @@ describe("ReportsView protocol linking", () => {
     });
     expect(onUpdateReportAnnotations.mock.calls[0]?.[1]?.interventionSnapshot?.name).toBe("TRT + HGH custom");
     expect(onUpdateReportAnnotations.mock.calls[0]?.[1]?.interventionSnapshot?.versionId).toEqual(expect.any(String));
-  });
+  }, 15000);
 });

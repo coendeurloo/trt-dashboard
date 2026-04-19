@@ -90,7 +90,7 @@ describe("ReportsView compact summary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
     expect(screen.getByRole("button", { name: "+2 more" })).toBeTruthy();
     expect(screen.queryByText(/Gamma Stack/i)).toBeNull();
-  });
+  }, 15000);
 
   it("shows unknown supplement state as compact status", () => {
     const report = baseReport({

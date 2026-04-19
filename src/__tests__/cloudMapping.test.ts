@@ -128,6 +128,7 @@ const makeSampleData = () =>
       customRangeStart: "",
       customRangeEnd: "",
       aiExternalConsent: false,
+      aiCoachConsentAsked: false,
       parserRescueConsentState: "unset",
       parserRescueAllowPdfAttachment: false,
       aiAnalysisProvider: "auto",

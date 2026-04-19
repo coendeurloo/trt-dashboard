@@ -208,7 +208,7 @@ describe("AppShell onboarding lock", () => {
     expect((screen.getByRole("button", { name: "Settings" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Protocols" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Supplements" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /AI Lab Analysis/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /AI Coach/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("unlocks all tabs once a report exists", () => {
@@ -221,7 +221,7 @@ describe("AppShell onboarding lock", () => {
 
     expect((screen.getByRole("button", { name: "Protocols" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Supplements" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: /AI Lab Analysis/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /AI Coach/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("applies the same lock state inside mobile navigation", () => {
@@ -277,7 +277,7 @@ describe("AppShell onboarding lock", () => {
     expect(props.actions.onOpenCloudAuth).toHaveBeenCalledWith("signin");
   });
 
-  it("does not show a Pro badge on the AI Lab Analysis navigation item", () => {
+  it("does not show a Pro badge on the AI Coach navigation item", () => {
     const props = buildProps({
       isOnboardingLocked: false,
       hasReports: true
@@ -288,7 +288,7 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    expect(screen.getByRole("button", { name: /AI Lab Analysis/i }).textContent).not.toContain("Pro");
+    expect(screen.getByRole("button", { name: /AI Coach/i }).textContent).not.toContain("Pro");
   });
 
   it("shows account badge with sync status and opens Settings when authenticated", () => {

@@ -189,7 +189,7 @@ const TAB_LABELS: Record<TabKey, LocalizedText> = {
   alerts: { nl: "Alerts", en: "Alerts" },
   reports: { nl: "Labuitslagen", en: "Lab Results" },
   settings: { nl: "Instellingen", en: "Settings" },
-  analysis: { nl: "AI Lab Analyse", en: "AI Lab Analysis" }
+  analysis: { nl: "AI Coach", en: "AI Coach" }
 };
 
 export const getTabLabel = (tab: TabKey, language: AppLanguage): string => {

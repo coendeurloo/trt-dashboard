@@ -13,9 +13,8 @@ interface AIConsentModalProps {
 
 const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsentModalProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
+  const isAnalysisAction = action === "analysis";
   const [parserRescueEnabled, setParserRescueEnabled] = useState(true);
-  const [includeSymptoms, setIncludeSymptoms] = useState(false);
-  const [includeNotes, setIncludeNotes] = useState(false);
   const [allowPdfAttachment, setAllowPdfAttachment] = useState(action === "parser_rescue");
 
   useEffect(() => {
@@ -23,8 +22,6 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
       return;
     }
     setParserRescueEnabled(true);
-    setIncludeSymptoms(false);
-    setIncludeNotes(false);
     setAllowPdfAttachment(action === "parser_rescue");
   }, [open, action]);
 
@@ -36,10 +33,10 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
     action,
     scope,
     allowExternalAi: true,
-    parserRescueEnabled,
-    includeSymptoms,
-    includeNotes,
-    allowPdfAttachment
+    parserRescueEnabled: action === "parser_rescue" ? parserRescueEnabled : false,
+    includeSymptoms: false,
+    includeNotes: false,
+    allowPdfAttachment: action === "parser_rescue" ? allowPdfAttachment : false
   });
 
   return (
@@ -54,10 +51,10 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
               {tr("Toestemming voor externe AI", "Consent for external AI")}
             </h3>
             <p className="mt-1 text-sm text-slate-300">
-              {action === "analysis"
+              {isAnalysisAction
                 ? tr(
-                    "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat je wilt meesturen voor AI-analyse.",
-                    "Your data stays local unless you grant consent below. Choose what to include for AI analysis."
+                    "Je data blijft lokaal totdat je AI Coach gebruikt. Met jouw toestemming sturen we alleen relevante context naar een externe AI-provider.",
+                    "Your data stays local until you use AI Coach. With your consent, we only send relevant context to an external AI provider."
                   )
                 : tr(
                     "Je data blijft lokaal tenzij je hieronder toestemming geeft. Kies wat we extern mogen gebruiken om deze PDF beter uit te lezen.",
@@ -103,28 +100,16 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
             </>
           ) : (
             <>
-              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
-                <span>{tr("Symptomen meesturen", "Include symptoms")}</span>
-                <input
-                  type="checkbox"
-                  checked={includeSymptoms}
-                  onChange={(event) => setIncludeSymptoms(event.target.checked)}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
-                />
-              </label>
-              <label className="ai-consent-option flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2">
-                <span>{tr("Notities meesturen", "Include notes")}</span>
-                <input
-                  type="checkbox"
-                  checked={includeNotes}
-                  onChange={(event) => setIncludeNotes(event.target.checked)}
-                  className="ai-consent-checkbox h-5 w-5 rounded border border-slate-500 bg-slate-800 text-cyan-400"
-                />
-              </label>
+              <div className="rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-200">
+                {tr(
+                  "Voor AI Coach sturen we alleen relevante lab-context die nodig is om je vraag of analyse te beantwoorden.",
+                  "For AI Coach, we only send relevant lab context needed to answer your question or analysis."
+                )}
+              </div>
               <p className="text-xs text-slate-400">
                 {tr(
-                  "Symptomen en notities staan standaard uit en worden alleen meegestuurd als je ze hier aanzet.",
-                  "Symptoms and notes are off by default and only sent if you enable them here."
+                  "Je kunt deze keuze later altijd aanpassen in Instellingen.",
+                  "You can always change this choice later in Settings."
                 )}
               </p>
             </>
@@ -166,24 +151,34 @@ const AIConsentModal = ({ open, action, language, onDecide, onClose }: AIConsent
           >
             {tr("Niet toestaan", "Do not allow")}
           </button>
-          <button
-            type="button"
-            className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100"
-            onClick={() => onDecide(commonDecision("once"))}
-            disabled={action === "parser_rescue" && !parserRescueEnabled}
-          >
-            {tr("Alleen deze keer", "Only this time")}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
-            onClick={() => onDecide(commonDecision("always"))}
-            disabled={action === "parser_rescue" && !parserRescueEnabled}
-          >
-            {action === "parser_rescue"
-              ? tr("Altijd toestaan voor parser-rescue", "Always allow parser rescue")
-              : tr("Altijd toestaan", "Always allow")}
-          </button>
+          {isAnalysisAction ? (
+            <button
+              type="button"
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
+              onClick={() => onDecide(commonDecision("always"))}
+            >
+              {tr("AI Coach toestaan", "Allow AI Coach")}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-100"
+                onClick={() => onDecide(commonDecision("once"))}
+                disabled={action === "parser_rescue" && !parserRescueEnabled}
+              >
+                {tr("Alleen deze keer", "Only this time")}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-100"
+                onClick={() => onDecide(commonDecision("always"))}
+                disabled={action === "parser_rescue" && !parserRescueEnabled}
+              >
+                {tr("Altijd toestaan voor parser-rescue", "Always allow parser rescue")}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -9,7 +9,6 @@ import { getRelevantBenchmarks } from "../data/studyBenchmarks";
 import useAiQuestionSuggestions from "../hooks/useAiQuestionSuggestions";
 import { trLocale } from "../i18n";
 import { AppLanguage, AppSettings, LabReport } from "../types";
-import { AnalystMemory } from "../types/analystMemory";
 
 interface AnalysisViewProps {
   isAnalyzingLabs: boolean;
@@ -44,7 +43,6 @@ interface AnalysisViewProps {
   hasActiveProtocol: boolean;
   hasDemoData: boolean;
   isDemoMode: boolean;
-  memory: AnalystMemory | null;
   betaUsage: {
     dailyCount: number;
     monthlyCount: number;
@@ -82,7 +80,6 @@ const AnalysisView = ({
   hasActiveProtocol,
   hasDemoData,
   isDemoMode,
-  memory: _memory,
   betaUsage,
   betaLimits,
   settings,

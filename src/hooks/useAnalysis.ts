@@ -3,7 +3,6 @@ import { DosePrediction, MarkerAlert, MarkerTrendSummary, ProtocolImpactSummary,
 import { AnalysisScopeNotice, buildWellbeingSummary, selectReportsForAnalysis } from "../analysisScope";
 import { BETA_LIMITS, checkBetaLimit, getRemainingAnalyses, getUsage, recordAnalysisUsage } from "../betaLimits";
 import { AIConsentDecision, AppLanguage, AppSettings, LabReport, PersonalInfo, Protocol, SupplementPeriod, SymptomCheckIn } from "../types";
-import { AnalystMemory } from "../types/analystMemory";
 import { captureAppException, withMonitoringSpan } from "../monitoring/sentry";
 
 interface UseAnalysisOptions {
@@ -15,8 +14,6 @@ interface UseAnalysisOptions {
   checkIns: SymptomCheckIn[];
   protocols: Protocol[];
   supplementTimeline: SupplementPeriod[];
-  analystMemory: AnalystMemory | null;
-  onAnalystMemoryUpdate?: (memory: AnalystMemory) => void;
   samplingControlsEnabled: boolean;
   protocolImpactSummary: ProtocolImpactSummary;
   alerts: MarkerAlert[];
@@ -43,13 +40,11 @@ export const useAnalysis = ({
   settings,
   language,
   allReports,
-  visibleReports: _visibleReports,
+  visibleReports,
   personalInfo,
   checkIns,
   protocols,
   supplementTimeline,
-  analystMemory,
-  onAnalystMemoryUpdate,
   samplingControlsEnabled,
   protocolImpactSummary,
   alerts,
@@ -61,7 +56,7 @@ export const useAnalysis = ({
 }: UseAnalysisOptions) => {
   type AnalysisKind = "full" | "latestComparison" | "question";
   type AnalysisRequestState = "idle" | "preparing" | "streaming" | "completed" | "error";
-  const analysisBaseReports = allReports;
+  const analysisBaseReports = visibleReports;
   const activeRunIdRef = useRef(0);
   const activeAbortControllerRef = useRef<AbortController | null>(null);
   const [isAnalyzingLabs, setIsAnalyzingLabs] = useState(false);
@@ -210,7 +205,7 @@ export const useAnalysis = ({
             personalInfo,
             unitSystem: settings.unitSystem,
             profile: settings.userProfile,
-            memory: analystMemory,
+            memory: null,
             language,
             analysisType,
             customQuestion: normalizedQuestion.length > 0 ? normalizedQuestion : undefined,
@@ -260,30 +255,6 @@ export const useAnalysis = ({
       });
       setAnalysisGeneratedAt(new Date().toISOString());
       setAnalysisRequestState("completed");
-
-      void (async () => {
-        try {
-          const { generateAnalystMemory } = await import("../aiAnalysis");
-          const nextMemory = await generateAnalystMemory({
-            reports: allReports,
-            protocols,
-            supplementTimeline,
-            unitSystem: settings.unitSystem,
-            profile: settings.userProfile,
-            currentMemory: analystMemory,
-            analysisResult: result.text,
-            aiConsent: {
-              includeSymptoms: consentOverride?.includeSymptoms ?? false,
-              includeNotes: consentOverride?.includeNotes ?? false
-            }
-          });
-          if (nextMemory) {
-            onAnalystMemoryUpdate?.(nextMemory);
-          }
-        } catch (error) {
-          console.error("Analyst memory generation failed (non-fatal):", error);
-        }
-      })();
 
       recordAnalysisUsage();
       refreshBetaUsage();

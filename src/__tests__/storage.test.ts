@@ -185,7 +185,7 @@ it("preserves parser rescue consent settings when valid", () => {
   expect(coerced.settings.parserRescueAllowPdfAttachment).toBe(true);
 });
 
-it("forces legacy AI and sampling toggles on during normalization", () => {
+it("preserves AI consent flag and still forces legacy sampling toggles on during normalization", () => {
   const coerced = coerceStoredAppData({
     settings: {
       aiExternalConsent: false,
@@ -194,7 +194,8 @@ it("forces legacy AI and sampling toggles on during normalization", () => {
     }
   } as unknown as Parameters<typeof coerceStoredAppData>[0]);
 
-  expect(coerced.settings.aiExternalConsent).toBe(true);
+  expect(coerced.settings.aiExternalConsent).toBe(false);
+  expect(coerced.settings.aiCoachConsentAsked).toBe(true);
   expect(coerced.settings.enableSamplingControls).toBe(true);
   expect(coerced.settings.enableCalculatedFreeTestosterone).toBe(true);
 });
@@ -358,4 +359,3 @@ it("backfills legacy protocols to one version and preserves report intervention 
   expect(coerced.protocols[0]?.versions?.[0]?.effectiveFrom).toBe("2025-01-01");
   expect(coerced.reports[0]?.annotations.interventionSnapshot?.versionId).toBe("protocol-1-v1");
 });
-

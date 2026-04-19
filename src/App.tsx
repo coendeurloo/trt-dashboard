@@ -79,7 +79,6 @@ import { mapCloudAuthErrorToMessage } from "./lib/cloudErrorMessages";
 import { captureAppException, withMonitoringSpan } from "./monitoring/sentry";
 import { enrichMarkersForReview } from "./utils/markerReview";
 import { getDemoBannerButtonClassNames } from "./ui/demoBannerStyles";
-import { buildImplicitAnalysisConsent } from "./analysisConsent";
 import {
   ParserImprovementFormValues,
   ParserImprovementSubmissionError,
@@ -107,9 +106,7 @@ import {
   TimeRangeKey,
   ThemeMode
 } from "./types";
-import { AnalystMemory } from "./types/analystMemory";
 import { createId, deriveAbnormalFlag, formatDate, sortReportsChronological } from "./utils";
-import { loadAnalystMemory, saveAnalystMemory } from "./storage";
 
 const ProtocolView = lazy(() => import("./views/ProtocolView"));
 const SupplementsView = lazy(() => import("./views/SupplementsView"));
@@ -365,7 +362,6 @@ const buildFallbackParserAssessment = (draft: ExtractionDraft): ParserUncertaint
 
 const App = () => {
   const { shareBootstrap, sharedSnapshot, isShareMode, isShareResolving, isShareBootstrapError } = useShareBootstrap();
-  const [analystMemory, setAnalystMemory] = useState<AnalystMemory | null>(() => loadAnalystMemory());
 
   const {
     appData,
@@ -713,7 +709,7 @@ const App = () => {
   const hiddenUploadInputRef = useRef<HTMLInputElement | null>(null);
   const parserModuleRef = useRef<Promise<typeof import("./pdfParsing")> | null>(null);
   const consentResolveRef = useRef<((decision: AIConsentDecision | null) => void) | null>(null);
-  const [consentAction, setConsentAction] = useState<"parser_rescue" | null>(null);
+  const [consentAction, setConsentAction] = useState<"analysis" | "parser_rescue" | null>(null);
 
   const ensurePdfParsingModule = () => {
     if (!parserModuleRef.current) {
@@ -722,10 +718,10 @@ const App = () => {
     return parserModuleRef.current;
   };
 
-  const requestAiConsent = (): Promise<AIConsentDecision | null> =>
+  const requestAiConsent = (action: "analysis" | "parser_rescue"): Promise<AIConsentDecision | null> =>
     new Promise((resolve) => {
       consentResolveRef.current = resolve;
-      setConsentAction("parser_rescue");
+      setConsentAction(action);
     });
 
   const resetParserImprovementPrompt = () => {
@@ -891,6 +887,7 @@ const App = () => {
     analysisScopeNotice,
     betaUsage,
     betaLimits,
+    setAnalysisError,
     runAiAnalysis,
     runAiQuestion,
     copyAnalysis
@@ -903,11 +900,6 @@ const App = () => {
     checkIns: appData.checkIns,
     protocols: appData.protocols,
     supplementTimeline: appData.supplementTimeline,
-    analystMemory: isShareMode ? null : analystMemory,
-    onAnalystMemoryUpdate: (memory) => {
-      setAnalystMemory(memory);
-      saveAnalystMemory(memory);
-    },
     samplingControlsEnabled,
     protocolImpactSummary,
     alerts,
@@ -1479,6 +1471,16 @@ const App = () => {
     allowPdfAttachment: false
   });
 
+  const buildRememberedAiCoachConsent = (): AIConsentDecision => ({
+    action: "analysis",
+    scope: "once",
+    allowExternalAi: true,
+    parserRescueEnabled: false,
+    includeSymptoms: false,
+    includeNotes: false,
+    allowPdfAttachment: false
+  });
+
   const getRememberedParserRescueConsent = (): AIConsentDecision =>
     buildRememberedParserRescueConsent(appData.settings.parserRescueAllowPdfAttachment);
 
@@ -1492,7 +1494,7 @@ const App = () => {
       }
     }
 
-    const decision = await requestAiConsent();
+    const decision = await requestAiConsent("parser_rescue");
     if (!decision || !decision.allowExternalAi || !decision.parserRescueEnabled) {
       updateSettings({
         parserRescueConsentState: "denied",
@@ -2693,11 +2695,65 @@ const App = () => {
       );
 
   const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
-    await runAiAnalysis(analysisType, buildImplicitAnalysisConsent());
+    let consent: AIConsentDecision | null = null;
+
+    if (appData.settings.aiCoachConsentAsked) {
+      consent = appData.settings.aiExternalConsent ? buildRememberedAiCoachConsent() : null;
+    } else {
+      const decision = await requestAiConsent("analysis");
+      if (!decision) {
+        return;
+      }
+      const allowExternalAi = Boolean(decision?.allowExternalAi);
+      updateSettings({
+        aiCoachConsentAsked: true,
+        aiExternalConsent: allowExternalAi
+      });
+      consent = allowExternalAi ? buildRememberedAiCoachConsent() : null;
+    }
+
+    if (!consent) {
+      setAnalysisError(
+        tr(
+          "AI Coach staat uit. Open AI Coach opnieuw en geef toestemming om AI te gebruiken.",
+          "AI Coach is disabled. Open AI Coach again and grant consent to use AI."
+        )
+      );
+      return;
+    }
+
+    await runAiAnalysis(analysisType, consent);
   };
 
   const runAiQuestionWithConsent = async (question: string) => {
-    await runAiQuestion(question, buildImplicitAnalysisConsent());
+    let consent: AIConsentDecision | null = null;
+
+    if (appData.settings.aiCoachConsentAsked) {
+      consent = appData.settings.aiExternalConsent ? buildRememberedAiCoachConsent() : null;
+    } else {
+      const decision = await requestAiConsent("analysis");
+      if (!decision) {
+        return;
+      }
+      const allowExternalAi = Boolean(decision?.allowExternalAi);
+      updateSettings({
+        aiCoachConsentAsked: true,
+        aiExternalConsent: allowExternalAi
+      });
+      consent = allowExternalAi ? buildRememberedAiCoachConsent() : null;
+    }
+
+    if (!consent) {
+      setAnalysisError(
+        tr(
+          "AI Coach staat uit. Open AI Coach opnieuw en geef toestemming om AI te gebruiken.",
+          "AI Coach is disabled. Open AI Coach again and grant consent to use AI."
+        )
+      );
+      return;
+    }
+
+    await runAiQuestion(question, consent);
   };
 
   const activeTabTitle = getPersonaTabLabel(
@@ -3765,7 +3821,6 @@ const App = () => {
                     hasActiveProtocol={hasActiveAnalysisProtocol}
                     hasDemoData={hasDemoData}
                     isDemoMode={isDemoMode}
-                    memory={isShareMode ? null : analystMemory}
                     betaUsage={betaUsage}
                     betaLimits={betaLimits}
                     settings={resolvedSettings}
@@ -3796,10 +3851,7 @@ const App = () => {
                     onOpenRenameDialog={openRenameDialog}
                     onCreateBackup={exportJson}
                     onImportData={importData}
-                    onClearAllData={() => {
-                      clearAllData();
-                      setAnalystMemory(null);
-                    }}
+                    onClearAllData={() => clearAllData()}
                     onResetOnboarding={() => {
                       const replayReport = reports[0] ?? null;
                       if (!replayReport) {
@@ -3842,8 +3894,8 @@ const App = () => {
 
       <Suspense fallback={null}>
         <AIConsentModal
-          open={consentAction === "parser_rescue"}
-          action="parser_rescue"
+          open={consentAction !== null}
+          action={consentAction ?? "analysis"}
           language={appData.settings.language}
           onClose={() => resolveConsentRequest(null)}
           onDecide={(decision) => resolveConsentRequest(decision)}

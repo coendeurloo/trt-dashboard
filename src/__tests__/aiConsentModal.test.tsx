@@ -22,7 +22,7 @@ describe("AIConsentModal", () => {
     expect((screen.getByRole("checkbox", { name: /Send full PDF for parser rescue/i }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("keeps always-allow option for analysis", () => {
+  it("shows simple allow/deny controls for analysis", () => {
     render(
       <AIConsentModal
         open
@@ -33,6 +33,7 @@ describe("AIConsentModal", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /^Always allow$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Allow AI Coach/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Always allow$/i })).toBeNull();
   });
 });

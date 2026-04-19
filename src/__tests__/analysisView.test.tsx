@@ -78,7 +78,6 @@ describe("AnalysisView", () => {
     hasActiveProtocol: false,
     hasDemoData: false,
     isDemoMode: false,
-    memory: null,
     betaUsage: {
       dailyCount: 0,
       monthlyCount: 0
@@ -181,31 +180,9 @@ describe("AnalysisView", () => {
     expect(input.value).toMatch(/hematocrit/i);
   });
 
-  it("renders normally when analyst memory data is present", () => {
-    render(
-      <AnalysisView
-        {...baseProps}
-        memory={{
-          version: 1,
-          lastUpdated: "2026-03-01",
-          analysisCount: 4,
-          responderProfile: {
-            testosteroneResponse: "moderate",
-            aromatizationTendency: "unknown",
-            hematocritSensitivity: "unknown",
-            notes: ""
-          },
-          personalBaselines: {},
-          supplementHistory: [],
-          protocolHistory: [],
-          watchList: [],
-          analystNotes: ""
-        }}
-      />
-    );
-
+  it("renders normally without analyst memory", () => {
+    render(<AnalysisView {...baseProps} />);
     expect(screen.getByRole("heading", { name: /ask ai/i })).toBeTruthy();
-    expect(screen.queryByText(/Analyst memory active/i)).toBeNull();
   });
 
   it("scrolls to the output panel when streaming output appears", () => {

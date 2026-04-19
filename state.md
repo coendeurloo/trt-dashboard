@@ -1,6 +1,6 @@
 # state.md
 
-Last updated: April 11, 2026
+Last updated: April 19, 2026
 
 **Note for Claude:** Always work from `C:\Users\deurl\Documents\LabTracker` (not `/sessions/` clone)
 
@@ -12,6 +12,16 @@ Core flows are in place: upload -> extraction review -> save -> trend dashboard 
 Parser QA is active with batch registry + scorecards.
 
 ## Recently completed
+
+- AI Coach v2 consent and architecture cleanup shipped:
+  - First-use AI Coach consent modal is now enforced before any external AI request
+  - Explicit allow/deny decision is persisted via `aiCoachConsentAsked` + `aiExternalConsent`
+  - Analysis and Ask AI now use the same consent-gated flow (no hidden implicit consent path)
+  - Analysis tab/product naming updated to `AI Coach`
+  - Analyst-memory background generation removed from the analysis run path
+  - Legacy implicit-consent helper removed (`src/analysisConsent.ts`)
+  - Consent modal simplified for AI Coach while keeping parser-rescue specific controls
+  - Related test suite updated and stabilized; `npm run ci:check` green
 
 - Protocol dose UX overhaul shipped (multi-pass):
   - Dose input now supports both `Per administration` and `Weekly dose` in the same row

@@ -29,8 +29,8 @@ export const mapServiceErrorToMessage = ({
   if (scope === "ai") {
     if (code === "AI_CONSENT_REQUIRED") {
       return tr(
-        "AI staat uit. Geef eerst expliciete toestemming in Instellingen > Privacy & AI.",
-        "AI is disabled. Please grant explicit consent first in Settings > Privacy & AI."
+        "AI staat uit. Geef eerst expliciete toestemming in de AI Coach consent-popup.",
+        "AI is disabled. Please grant explicit consent first in the AI Coach consent modal."
       );
     }
     if (code === "AI_LIMITS_UNAVAILABLE") {

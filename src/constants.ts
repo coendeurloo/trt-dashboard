@@ -65,7 +65,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timeRange: "all",
   customRangeStart: "",
   customRangeEnd: "",
-  aiExternalConsent: true,
+  aiExternalConsent: false,
+  aiCoachConsentAsked: false,
   parserRescueConsentState: "unset",
   parserRescueAllowPdfAttachment: false,
   aiAnalysisProvider: "auto",
@@ -374,10 +375,9 @@ export const TAB_ITEMS = [
   { key: "protocol", label: "Protocols" },
   { key: "supplements", label: "Supplements" },
   { key: "doseResponse", label: "Dose Simulator" },
-  { key: "analysis", label: "AI Lab Analysis" },
+  { key: "analysis", label: "AI Coach" },
   { key: "protocolImpact", label: "Protocol Impact" },
   { key: "alerts", label: "Alerts" },
   { key: "reports", label: "All Reports" },
   { key: "settings", label: "Settings" }
 ] as const;
-

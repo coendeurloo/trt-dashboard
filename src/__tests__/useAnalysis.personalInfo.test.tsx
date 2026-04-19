@@ -2,7 +2,6 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildImplicitAnalysisConsent } from "../analysisConsent";
 import { DEFAULT_SETTINGS } from "../constants";
 import useAnalysis from "../hooks/useAnalysis";
 import { LabReport } from "../types";
@@ -95,8 +94,6 @@ describe("useAnalysis personal context forwarding", () => {
         checkIns: [],
         protocols: [],
         supplementTimeline: [],
-        analystMemory: null,
-        onAnalystMemoryUpdate: vi.fn(),
         samplingControlsEnabled: true,
         protocolImpactSummary: { events: [], insights: [] },
         alerts: [],
@@ -124,7 +121,7 @@ describe("useAnalysis personal context forwarding", () => {
     );
   });
 
-  it("forwards implicit analysis consent so notes and symptoms are included", async () => {
+  it("forwards explicit consent fields for external AI and context sharing", async () => {
     analyzeLabDataWithClaudeMock.mockResolvedValue({
       text: "ok",
       provider: "claude",
@@ -155,8 +152,6 @@ describe("useAnalysis personal context forwarding", () => {
         checkIns: [],
         protocols: [],
         supplementTimeline: [],
-        analystMemory: null,
-        onAnalystMemoryUpdate: vi.fn(),
         samplingControlsEnabled: true,
         protocolImpactSummary: { events: [], insights: [] },
         alerts: [],
@@ -169,7 +164,15 @@ describe("useAnalysis personal context forwarding", () => {
     );
 
     await act(async () => {
-      await result.current.runAiQuestion("What stands out?", buildImplicitAnalysisConsent());
+      await result.current.runAiQuestion("What stands out?", {
+        action: "analysis",
+        scope: "once",
+        allowExternalAi: true,
+        parserRescueEnabled: false,
+        includeSymptoms: true,
+        includeNotes: true,
+        allowPdfAttachment: false
+      });
     });
 
     expect(analyzeLabDataWithClaudeMock).toHaveBeenCalledWith(

@@ -386,6 +386,7 @@ export interface AppSettings {
   customRangeStart: string;
   customRangeEnd: string;
   aiExternalConsent: boolean;
+  aiCoachConsentAsked: boolean;
   parserRescueConsentState: ParserRescueConsentState;
   parserRescueAllowPdfAttachment: boolean;
   aiAnalysisProvider: AIAnalysisProvider;
