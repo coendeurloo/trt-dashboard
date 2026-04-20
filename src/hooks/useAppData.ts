@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { dedupeMarkersInReport, enforceSingleClinicalLayer, inferDashboardChartPresetFromSettings, markerSimilarity } from "../chartHelpers";
 import { trLocale } from "../i18n";
 import {
+  AiAnalysis,
   AppSettings,
   LabReport,
   PersonalInfo,
@@ -71,6 +72,13 @@ const withCheckIns = <T extends StoredAppData>(data: T, checkIns: SymptomCheckIn
   wellbeingEntries: checkIns,
   checkIns
 });
+
+const mergeAiAnalysesById = (existing: AiAnalysis[], incoming: AiAnalysis[]): AiAnalysis[] => {
+  const byId = new Map<string, AiAnalysis>();
+  existing.forEach((entry) => byId.set(entry.id, entry));
+  incoming.forEach((entry) => byId.set(entry.id, entry));
+  return Array.from(byId.values()).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+};
 
 export const detectMarkerMergeSuggestions = (
   incomingCanonicalMarkers: string[],
@@ -247,6 +255,19 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
       setAppData((prev) => ({
         ...prev,
         reports: sortReportsChronological([...prev.reports, report])
+      }));
+    },
+    [isShareMode]
+  );
+
+  const addAiAnalysis = useCallback(
+    (analysis: AiAnalysis) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        aiAnalyses: mergeAiAnalysesById(prev.aiAnalyses ?? [], [analysis])
       }));
     },
     [isShareMode]
@@ -678,6 +699,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
             ...incoming.settings
           },
           reports: normalizeBaselineFlags(importedReports),
+          aiAnalyses: incoming.aiAnalyses ?? [],
           markerAliasOverrides: incoming.markerAliasOverrides ?? {}
         });
 
@@ -709,6 +731,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
         return {
           ...withCheckIns(withProtocols(prev, mergedProtocols), mergedCheckIns),
           reports: merged,
+          aiAnalyses: mergeAiAnalysesById(prev.aiAnalyses ?? [], incoming.aiAnalyses ?? []),
           supplementTimeline: [...prev.supplementTimeline, ...incoming.supplementTimeline].sort(
             (left, right) => left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name)
           ),
@@ -883,6 +906,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     isNl,
     samplingControlsEnabled,
     addReport,
+    addAiAnalysis,
     deleteReport,
     deleteReports,
     updateReportAnnotations,

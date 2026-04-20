@@ -1,5 +1,7 @@
 import { APP_SCHEMA_VERSION, APP_STORAGE_KEY, DEFAULT_PERSONAL_INFO, DEFAULT_SETTINGS } from "./constants";
 import {
+  AiAnalysis,
+  AiAnalysisPresetKey,
   AppSettings,
   CompoundEntry,
   InterventionSnapshot,
@@ -37,6 +39,7 @@ type PartialAppData = Partial<StoredAppData> & {
   supplementTimeline?: Array<Partial<SupplementPeriod>>;
   wellbeingEntries?: Array<Partial<SymptomCheckIn>>;
   checkIns?: Array<Partial<SymptomCheckIn>>;
+  aiAnalyses?: Array<Partial<AiAnalysis>>;
   markerAliasOverrides?: Record<string, string>;
   settings?: Partial<AppSettings>;
 };
@@ -56,6 +59,7 @@ const createDefaultData = (): StoredAppData => ({
   supplementTimeline: [],
   wellbeingEntries: [],
   checkIns: [],
+  aiAnalyses: [],
   markerAliasOverrides: {},
   settings: DEFAULT_SETTINGS,
   personalInfo: DEFAULT_PERSONAL_INFO
@@ -94,6 +98,70 @@ const normalizeIsoDate = (value: unknown): string | null => {
     return null;
   }
   return trimmed;
+};
+
+const normalizeIsoTimestamp = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return new Date(parsed).toISOString();
+};
+
+const normalizePresetKey = (value: unknown): AiAnalysisPresetKey | undefined => {
+  if (value === "full-analysis" || value === "compare-latest-previous") {
+    return value;
+  }
+  return undefined;
+};
+
+const normalizeAiAnalysis = (value: unknown): AiAnalysis | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Partial<AiAnalysis> & {
+    scopeSnapshot?: Partial<AiAnalysis["scopeSnapshot"]>;
+  };
+  const prompt = typeof row.prompt === "string" ? row.prompt.trim() : "";
+  const answer = typeof row.answer === "string" ? row.answer.trim() : "";
+  const createdAt = normalizeIsoTimestamp(row.createdAt);
+  if (!prompt || !answer || !createdAt) {
+    return null;
+  }
+  const titleCandidate = typeof row.title === "string" ? row.title.trim() : "";
+  const title = titleCandidate || prompt.slice(0, 60);
+  const scopeSnapshot: Partial<AiAnalysis["scopeSnapshot"]> = row.scopeSnapshot ?? {};
+  const reportCount = Number(scopeSnapshot.reportCount);
+  const biomarkerCount = Number(scopeSnapshot.biomarkerCount);
+  const units =
+    typeof scopeSnapshot.units === "string" && scopeSnapshot.units.trim().length > 0
+      ? scopeSnapshot.units.trim()
+      : "unknown";
+  const activeProtocolRaw = scopeSnapshot.activeProtocol;
+  const activeProtocol =
+    typeof activeProtocolRaw === "string" && activeProtocolRaw.trim().length > 0 ? activeProtocolRaw.trim() : null;
+
+  return {
+    id: typeof row.id === "string" && row.id.trim().length > 0 ? row.id : createId(),
+    createdAt,
+    prompt,
+    presetKey: normalizePresetKey(row.presetKey),
+    title,
+    answer,
+    scopeSnapshot: {
+      reportCount: Number.isFinite(reportCount) && reportCount >= 0 ? Math.round(reportCount) : 0,
+      biomarkerCount: Number.isFinite(biomarkerCount) && biomarkerCount >= 0 ? Math.round(biomarkerCount) : 0,
+      units,
+      activeProtocol
+    }
+  };
 };
 
 const normalizeSupplementPeriod = (value: unknown): SupplementPeriod | null => {
@@ -928,6 +996,19 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
         .map((entry) => normalizeSymptomCheckIn(entry))
         .filter((entry): entry is SymptomCheckIn => entry !== null)
         .sort((left, right) => left.date.localeCompare(right.date));
+  const aiAnalyses = Array.isArray(raw.aiAnalyses)
+    ? raw.aiAnalyses
+        .map((entry) => normalizeAiAnalysis(entry))
+        .filter((entry): entry is AiAnalysis => entry !== null)
+        .reduce((deduped, entry) => {
+          if (deduped.some((current) => current.id === entry.id)) {
+            return deduped;
+          }
+          deduped.push(entry);
+          return deduped;
+        }, [] as AiAnalysis[])
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    : [];
 
   // Allow multiple baselines only when they do not overlap by marker.
   const normalizedReports = normalizeBaselineFlagsByMarkerOverlap(reports);
@@ -940,6 +1021,7 @@ export const coerceStoredAppData = (raw: PartialAppData | null | undefined): Sto
     supplementTimeline,
     wellbeingEntries,
     checkIns: wellbeingEntries,
+    aiAnalyses,
     markerAliasOverrides,
     settings: normalizeSettings(raw.settings),
     personalInfo: {

@@ -29,6 +29,14 @@
       "destination": "/"
     },
     {
+      "source": "/ai-coach/history",
+      "destination": "/"
+    },
+    {
+      "source": "/ai-coach/history/:id",
+      "destination": "/"
+    },
+    {
       "source": "/admin",
       "destination": "/"
     },

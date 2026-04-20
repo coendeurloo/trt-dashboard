@@ -80,7 +80,7 @@ describe("AnalysisView", () => {
     isDemoMode: false,
     betaUsage: {
       dailyCount: 0,
-      monthlyCount: 0
+      monthlyCount: 1
     },
     betaLimits: {
       maxAnalysesPerDay: 5,
@@ -88,67 +88,30 @@ describe("AnalysisView", () => {
     },
     settings: DEFAULT_SETTINGS,
     language: "en" as const,
-    onRunAnalysis: vi.fn(),
+    aiAnalyses: [],
+    recentStatus: "ready" as const,
     onAskQuestion: vi.fn(),
-    onCopyAnalysis: vi.fn()
+    onCopyAnalysis: vi.fn(),
+    onOpenHistoryList: vi.fn(),
+    onOpenHistoryDetail: vi.fn(),
+    onRetryRecent: vi.fn()
   };
 
-  it("shows usage as used/limit counts", () => {
+  it("renders the explicit meter counts", () => {
     render(<AnalysisView {...baseProps} />);
-    expect(screen.getAllByText(/0\/5 today/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/0\/25 month/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/0/i)).toBeTruthy();
+    expect(screen.getByText(/of 5/i)).toBeTruthy();
+    expect(screen.getByText(/of 25/i)).toBeTruthy();
   });
 
-  it("renders compact scope hint", () => {
+  it("renders the new question heading and removes old scope line", () => {
     render(<AnalysisView {...baseProps} />);
-    expect(screen.getByText(/1 reports in scope/i)).toBeTruthy();
-    expect(screen.getByText(/35 biomarkers/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /your question/i })).toBeTruthy();
+    expect(screen.queryByText(/reports in scope/i)).toBeNull();
+    expect(screen.queryByText(/biomarkers/i)).toBeNull();
   });
 
-  it("keeps copy button in output area only when a result exists", () => {
-    const { rerender } = render(<AnalysisView {...baseProps} />);
-    expect(screen.queryByRole("button", { name: /copy analysis/i })).toBeNull();
-    expect(screen.queryByText(/run an analysis or ask a question to get started/i)).toBeNull();
-
-    rerender(
-      <AnalysisView
-        {...baseProps}
-        analysisResult="## Result"
-        analysisResultDisplay="Result"
-        analysisKind="full"
-      />
-    );
-
-    expect(screen.getByRole("button", { name: /copy analysis/i })).toBeTruthy();
-  });
-
-  it("disables latest comparison action when there are fewer than 2 reports", () => {
-    render(<AnalysisView {...baseProps} reportsInScope={1} />);
-    const latestButton = screen.getByRole("button", { name: /compare latest vs previous/i });
-    expect(latestButton.getAttribute("disabled")).not.toBeNull();
-  });
-
-  it("shows scope notice when available", () => {
-    render(
-      <AnalysisView
-        {...baseProps}
-        analysisResult="Scoped result"
-        analysisResultDisplay="Scoped result"
-        analysisKind="full"
-        analysisScopeNotice={{
-          usedReports: 10,
-          totalReports: 27,
-          lookbackApplied: false,
-          capApplied: true,
-          reason: "timeline_sampled"
-        }}
-      />
-    );
-
-    expect(screen.getByText(/AI uses 10 of 27 reports for this run/i)).toBeTruthy();
-  });
-
-  it("fills the question input when clicking a suggestion chip", () => {
+  it("prefills the textarea when a suggestion is clicked", () => {
     render(
       <AnalysisView
         {...baseProps}
@@ -176,16 +139,56 @@ describe("AnalysisView", () => {
     const suggestionChip = screen.getByRole("button", { name: /why is my hematocrit/i });
     fireEvent.click(suggestionChip);
 
-    const input = screen.getByLabelText(/your question/i) as HTMLTextAreaElement;
+    const input = screen.getByPlaceholderText(/why is my hematocrit rising/i) as HTMLTextAreaElement;
     expect(input.value).toMatch(/hematocrit/i);
   });
 
-  it("renders normally without analyst memory", () => {
-    render(<AnalysisView {...baseProps} />);
-    expect(screen.getByRole("heading", { name: /ask ai/i })).toBeTruthy();
+  it("prefills a preset without auto-submit", () => {
+    const onAskQuestion = vi.fn();
+    render(<AnalysisView {...baseProps} onAskQuestion={onAskQuestion} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /full analysis of latest report/i }));
+    const input = screen.getByPlaceholderText(/why is my hematocrit rising/i) as HTMLTextAreaElement;
+    expect(input.value.toLowerCase()).toContain("full analysis");
+    expect(onAskQuestion).not.toHaveBeenCalled();
   });
 
-  it("scrolls to the output panel when streaming output appears", () => {
+  it("hides recent section when there are no analyses", () => {
+    render(<AnalysisView {...baseProps} aiAnalyses={[]} recentStatus="ready" />);
+    expect(screen.queryByRole("heading", { name: /recent/i })).toBeNull();
+  });
+
+  it("shows recent cards when analyses exist", () => {
+    render(
+      <AnalysisView
+        {...baseProps}
+        aiAnalyses={[
+          {
+            id: "a1",
+            createdAt: "2026-04-14T09:00:00.000Z",
+            prompt: "Compare latest vs previous",
+            title: "Compared latest vs previous",
+            answer: "Testosterone up 18% vs last draw.",
+            scopeSnapshot: {
+              reportCount: 4,
+              biomarkerCount: 28,
+              units: "Conventional",
+              activeProtocol: "Test E 105mg"
+            }
+          }
+        ]}
+      />
+    );
+    expect(screen.getByRole("heading", { name: /recent/i })).toBeTruthy();
+    expect(screen.getByText(/compared latest vs previous/i)).toBeTruthy();
+  });
+
+  it("renders loading skeleton placeholders for recent", () => {
+    const { container } = render(<AnalysisView {...baseProps} recentStatus="loading" />);
+    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+  });
+
+  it("scrolls to output panel when streaming starts", async () => {
     const { rerender } = render(<AnalysisView {...baseProps} />);
 
     rerender(
@@ -198,15 +201,8 @@ describe("AnalysisView", () => {
       />
     );
 
-    return waitFor(() => {
+    await waitFor(() => {
       expect(scrollIntoViewMock).toHaveBeenCalled();
     });
-  });
-
-  it("does not render the output panel before the first run", () => {
-    render(<AnalysisView {...baseProps} />);
-
-    expect(screen.queryByRole("heading", { name: /analysis output/i })).toBeNull();
-    expect(screen.queryByText(/run an analysis or ask a question to get started/i)).toBeNull();
   });
 });

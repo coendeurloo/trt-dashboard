@@ -60,7 +60,6 @@ import {
 import {
   buildRememberedParserRescueConsent,
   isSevereParserExtraction,
-  resolveUploadFallbackAction,
   shouldPresentUploadAsNeedsReview,
   shouldOfferParserImprovementSubmission,
   shouldAutoApplyAiRescueResult
@@ -90,6 +89,8 @@ import CloudPasswordResetView from "./views/CloudPasswordResetView";
 import CloudEmailVerifiedView from "./views/CloudEmailVerifiedView";
 import {
   AIConsentDecision,
+  AiAnalysisPresetKey,
+  AiAnalysisScopeSnapshot,
   AppMode,
   AppSettings,
   ExtractionDraft,
@@ -116,6 +117,8 @@ const ProtocolImpactView = lazy(() => import("./views/ProtocolImpactView"));
 const DoseResponseView = lazy(() => import("./views/DoseResponseView"));
 const ReportsView = lazy(() => import("./views/ReportsView"));
 const AnalysisView = lazy(() => import("./views/AnalysisView"));
+const AnalysisHistoryListView = lazy(() => import("./views/AnalysisHistoryListView"));
+const AnalysisHistoryDetailView = lazy(() => import("./views/AnalysisHistoryDetailView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
 const AdminView = lazy(() => import("./views/AdminView"));
 const ExtractionReviewTable = lazy(() => import("./components/ExtractionReviewTable"));
@@ -147,6 +150,10 @@ type UploadSummary =
 
 type OnboardingEntryPoint = "first_report" | "replay";
 type TopLevelRouteMode = "app" | "admin" | "auth_confirm" | "auth_verified" | "auth_reset";
+type AnalysisRouteState =
+  | { kind: "coach" }
+  | { kind: "history" }
+  | { kind: "history_detail"; id: string };
 
 interface PendingUndoAction {
   id: number;
@@ -157,6 +164,7 @@ interface PendingUndoAction {
 const CLOUD_POST_AUTH_INTENT_STORAGE_KEY = "labtracker-cloud-post-auth-intent-v1";
 const CLOUD_POST_AUTH_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
 const WELLBEING_REMINDER_DISMISS_STORAGE_KEY = "labtracker-wellbeing-reminder-dismiss-v1";
+const AI_HISTORY_PATH = "/ai-coach/history";
 
 type PendingCloudAuthIntent = {
   view: CloudAuthView;
@@ -244,6 +252,39 @@ const resolveTopLevelRouteMode = (): TopLevelRouteMode => {
     return "auth_reset";
   }
   return "app";
+};
+
+const normalizePathname = (pathname: string): string => pathname.replace(/\/+$/, "") || "/";
+
+const parseAnalysisRouteFromPathname = (pathname: string): AnalysisRouteState => {
+  const normalized = normalizePathname(pathname);
+  if (normalized === AI_HISTORY_PATH) {
+    return { kind: "history" };
+  }
+  if (normalized.startsWith(`${AI_HISTORY_PATH}/`)) {
+    const id = decodeURIComponent(normalized.slice(AI_HISTORY_PATH.length + 1)).trim();
+    if (id.length > 0) {
+      return { kind: "history_detail", id };
+    }
+  }
+  return { kind: "coach" };
+};
+
+const readAnalysisRouteFromLocation = (): AnalysisRouteState => {
+  if (typeof window === "undefined") {
+    return { kind: "coach" };
+  }
+  return parseAnalysisRouteFromPathname(window.location.pathname);
+};
+
+const buildPathForAnalysisRoute = (route: AnalysisRouteState): string => {
+  if (route.kind === "history") {
+    return AI_HISTORY_PATH;
+  }
+  if (route.kind === "history_detail") {
+    return `${AI_HISTORY_PATH}/${encodeURIComponent(route.id)}`;
+  }
+  return "/";
 };
 
 const isAllowedSupabaseActionUrl = (value: string): boolean => {
@@ -370,6 +411,7 @@ const App = () => {
     updatePersonalInfo,
     isNl,
     samplingControlsEnabled,
+    addAiAnalysis,
     deleteReport: deleteReportFromData,
     deleteReports: deleteReportsFromData,
     updateReportAnnotations,
@@ -444,7 +486,10 @@ const App = () => {
   const showAdvancedParserActions =
     import.meta.env.DEV || /^(1|true|yes)$/i.test(String(import.meta.env.VITE_ENABLE_PARSER_DEBUG ?? "").trim());
   const [topLevelRouteMode, setTopLevelRouteMode] = useState<TopLevelRouteMode>(() => resolveTopLevelRouteMode());
+  const [analysisRoute, setAnalysisRoute] = useState<AnalysisRouteState>(() => readAnalysisRouteFromLocation());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [isUploadPanelOpen, setIsUploadPanelOpen] = useState(false);
+  const [recentAnalysesStatus, setRecentAnalysesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [onboardingReport, setOnboardingReport] = useState<LabReport | null>(null);
   const [onboardingEntryPoint, setOnboardingEntryPoint] = useState<OnboardingEntryPoint | null>(null);
@@ -580,7 +625,9 @@ const App = () => {
     }
     const syncRouteMode = () => {
       setTopLevelRouteMode(resolveTopLevelRouteMode());
+      setAnalysisRoute(readAnalysisRouteFromLocation());
     };
+    syncRouteMode();
     window.addEventListener("popstate", syncRouteMode);
     return () => {
       window.removeEventListener("popstate", syncRouteMode);
@@ -888,7 +935,6 @@ const App = () => {
     betaUsage,
     betaLimits,
     setAnalysisError,
-    runAiAnalysis,
     runAiQuestion,
     copyAnalysis
   } = useAnalysis({
@@ -909,12 +955,58 @@ const App = () => {
     mapErrorToMessage: mapErrorToMessage,
     tr
   });
+  const aiAnalyses = useMemo(
+    () => [...(appData.aiAnalyses ?? [])].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    [appData.aiAnalyses]
+  );
+  const activeAnalysisHistoryEntry = useMemo(() => {
+    if (analysisRoute.kind !== "history_detail") {
+      return null;
+    }
+    return aiAnalyses.find((entry) => entry.id === analysisRoute.id) ?? null;
+  }, [aiAnalyses, analysisRoute]);
+  const retryRecentAnalyses = useCallback(() => {
+    setRecentAnalysesStatus("loading");
+    window.setTimeout(() => setRecentAnalysesStatus("ready"), 120);
+  }, []);
+
+  useEffect(() => {
+    setRecentAnalysesStatus("loading");
+    const timeout = window.setTimeout(() => {
+      setRecentAnalysesStatus("ready");
+    }, 120);
+    return () => window.clearTimeout(timeout);
+  }, [aiAnalyses.length]);
 
   useEffect(() => {
     if (isShareMode && activeTab !== "dashboard") {
       setActiveTab("dashboard");
     }
   }, [activeTab, isShareMode]);
+
+  useEffect(() => {
+    if ((isShareMode || topLevelRouteMode !== "app") && analysisRoute.kind !== "coach") {
+      setAnalysisRoute({ kind: "coach" });
+    }
+  }, [analysisRoute.kind, isShareMode, topLevelRouteMode]);
+
+  useEffect(() => {
+    if (isShareMode && isUploadPanelOpen) {
+      setIsUploadPanelOpen(false);
+    }
+  }, [isShareMode, isUploadPanelOpen]);
+
+  useEffect(() => {
+    if (topLevelRouteMode !== "app" || isShareMode) {
+      return;
+    }
+    if (analysisRoute.kind === "coach") {
+      return;
+    }
+    if (activeTab !== "analysis") {
+      setActiveTab("analysis");
+    }
+  }, [activeTab, analysisRoute.kind, isShareMode, topLevelRouteMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1196,6 +1288,7 @@ const App = () => {
   };
 
   const startManualEntry = () => {
+    setIsUploadPanelOpen(false);
     setUploadError("");
     setUploadNotice("");
     setUploadSummary(null);
@@ -1321,25 +1414,31 @@ const App = () => {
     }
   };
 
+  const navigateAnalysisRoute = useCallback(
+    (nextRoute: AnalysisRouteState, options?: { replace?: boolean }) => {
+      setAnalysisRoute(nextRoute);
+      if (typeof window === "undefined" || topLevelRouteMode !== "app" || isShareMode) {
+        return;
+      }
+      const targetPath = buildPathForAnalysisRoute(nextRoute);
+      if (normalizePathname(window.location.pathname) === normalizePathname(targetPath)) {
+        return;
+      }
+      if (options?.replace) {
+        window.history.replaceState({}, document.title, targetPath);
+      } else {
+        window.history.pushState({}, document.title, targetPath);
+      }
+    },
+    [isShareMode, topLevelRouteMode]
+  );
+
   const focusUploadPanelFallback = useCallback(() => {
     if (activeTab !== "dashboard") {
       setActiveTab("dashboard");
     }
-    requestAnimationFrame(() => {
-      const fallbackAction = resolveUploadFallbackAction({
-        isShareMode,
-        hasUploadPanel: Boolean(uploadPanelRef.current),
-        isProcessing,
-        pickerOpened: false
-      });
-      if (fallbackAction !== "scroll-to-panel") {
-        return;
-      }
-      if (uploadPanelRef.current) {
-        uploadPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
-  }, [activeTab, isProcessing, isShareMode]);
+    setIsUploadPanelOpen(true);
+  }, [activeTab]);
 
   const startSecondUpload = useCallback(() => {
     if (isShareMode || isProcessing) {
@@ -1556,6 +1655,7 @@ const App = () => {
   };
 
   const handleUpload = async (file: File) => {
+    setIsUploadPanelOpen(false);
     setIsProcessing(true);
     setUploadStage("reading_text_layer");
     setUploadError("");
@@ -2694,7 +2794,10 @@ const App = () => {
         "Biomarkers, units, and reference ranges are extracted locally (without external AI). If quality is low, you can then optionally start AI rescue (after consent)."
       );
 
-  const runAiAnalysisWithConsent = async (analysisType: "full" | "latestComparison") => {
+  const runAiQuestionWithConsent = async (
+    question: string,
+    meta?: { presetKey?: AiAnalysisPresetKey; title?: string }
+  ) => {
     let consent: AIConsentDecision | null = null;
 
     if (appData.settings.aiCoachConsentAsked) {
@@ -2722,38 +2825,34 @@ const App = () => {
       return;
     }
 
-    await runAiAnalysis(analysisType, consent);
-  };
-
-  const runAiQuestionWithConsent = async (question: string) => {
-    let consent: AIConsentDecision | null = null;
-
-    if (appData.settings.aiCoachConsentAsked) {
-      consent = appData.settings.aiExternalConsent ? buildRememberedAiCoachConsent() : null;
-    } else {
-      const decision = await requestAiConsent("analysis");
-      if (!decision) {
-        return;
-      }
-      const allowExternalAi = Boolean(decision?.allowExternalAi);
-      updateSettings({
-        aiCoachConsentAsked: true,
-        aiExternalConsent: allowExternalAi
-      });
-      consent = allowExternalAi ? buildRememberedAiCoachConsent() : null;
-    }
-
-    if (!consent) {
-      setAnalysisError(
-        tr(
-          "AI Coach staat uit. Open AI Coach opnieuw en geef toestemming om AI te gebruiken.",
-          "AI Coach is disabled. Open AI Coach again and grant consent to use AI."
-        )
-      );
+    const scopeSnapshot: AiAnalysisScopeSnapshot = {
+      reportCount: reports.length,
+      biomarkerCount: allMarkers.length,
+      units: appData.settings.unitSystem === "eu" ? "SI (Metric)" : "Conventional",
+      activeProtocol:
+        hasActiveAnalysisProtocol && activeAnalysisProtocolLabel.trim().length > 0
+          ? activeAnalysisProtocolLabel
+          : null
+    };
+    const completed = await runAiQuestion(question, consent, {
+      presetKey: meta?.presetKey,
+      title: meta?.title,
+      scopeSnapshot
+    });
+    if (!completed || !completed.answer.trim()) {
       return;
     }
-
-    await runAiQuestion(question, consent);
+    const fallbackTitle = question.trim().slice(0, 60);
+    const normalizedTitle = (meta?.title ?? fallbackTitle).trim();
+    addAiAnalysis({
+      id: createId(),
+      createdAt: completed.generatedAt,
+      prompt: question.trim(),
+      presetKey: meta?.presetKey,
+      title: normalizedTitle.length > 0 ? normalizedTitle : fallbackTitle,
+      answer: completed.answer,
+      scopeSnapshot
+    });
   };
 
   const activeTabTitle = getPersonaTabLabel(
@@ -2791,7 +2890,24 @@ const App = () => {
     }
     if (activeTab === "doseResponse") return tr("Simuleer hoe dosisaanpassingen je waarden beïnvloeden.", "Model how dose changes may affect your levels.");
     if (activeTab === "checkIns") return tr("Volg hoe je je voelt naast je labwaarden.", "Track how you feel alongside your lab results.");
-    if (activeTab === "analysis") return tr("AI-inzichten gebaseerd op je labdata.", "AI-powered insights from your lab data.");
+    if (activeTab === "analysis") {
+      if (analysisRoute.kind === "coach") {
+        return tr(
+          "Ask questions about your lab data. AI only runs when you start an action.",
+          "Ask questions about your lab data. AI only runs when you start an action."
+        );
+      }
+      if (analysisRoute.kind === "history") {
+        return tr(
+          "Bekijk en heropen je eerdere AI-analyses.",
+          "Review and reopen your previous AI analyses."
+        );
+      }
+      return tr(
+        "Volledige AI-analyse met prompt en antwoord.",
+        "Full AI analysis with prompt and answer."
+      );
+    }
     return null;
   })();
   const isReviewMode = Boolean((draft || multiDateDrafts.length > 0) && !isShareMode);
@@ -2957,6 +3073,9 @@ const App = () => {
   const visibleTabKeys = useMemo(() => new Set(visibleTabs.map((tab) => tab.key as TabKey)), [visibleTabs]);
   const requestTabChange = (nextTab: TabKey) => {
     if (nextTab === activeTab) {
+      if (nextTab === "analysis" && analysisRoute.kind !== "coach") {
+        navigateAnalysisRoute({ kind: "coach" }, { replace: true });
+      }
       return;
     }
     if (!visibleTabKeys.has(nextTab)) {
@@ -2969,8 +3088,32 @@ const App = () => {
       setPendingTabChange(nextTab);
       return;
     }
+    if (nextTab !== "analysis" && analysisRoute.kind !== "coach") {
+      navigateAnalysisRoute({ kind: "coach" }, { replace: true });
+    }
     setActiveTab(nextTab);
   };
+  const openAnalysisCoach = useCallback(() => {
+    if (activeTab !== "analysis") {
+      setActiveTab("analysis");
+    }
+    navigateAnalysisRoute({ kind: "coach" });
+  }, [activeTab, navigateAnalysisRoute]);
+  const openAnalysisHistoryList = useCallback(() => {
+    if (activeTab !== "analysis") {
+      setActiveTab("analysis");
+    }
+    navigateAnalysisRoute({ kind: "history" });
+  }, [activeTab, navigateAnalysisRoute]);
+  const openAnalysisHistoryDetail = useCallback(
+    (analysisId: string) => {
+      if (activeTab !== "analysis") {
+        setActiveTab("analysis");
+      }
+      navigateAnalysisRoute({ kind: "history_detail", id: analysisId });
+    },
+    [activeTab, navigateAnalysisRoute]
+  );
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
@@ -3305,13 +3448,21 @@ const App = () => {
           isProcessing,
           uploadStage,
           uploadError,
-          uploadNotice
+          uploadNotice,
+          isUploadPanelOpen
         }}
         actions={{
           onRequestTabChange: requestTabChange,
           onToggleMobileMenu: () => setIsMobileMenuOpen((current) => !current),
           onCloseMobileMenu: closeMobileMenu,
           onQuickUpload: startSecondUpload,
+          onOpenUploadPanel: () => {
+            if (isShareMode || quickUploadDisabled) {
+              return;
+            }
+            setIsUploadPanelOpen(true);
+          },
+          onCloseUploadPanel: () => setIsUploadPanelOpen(false),
           onToggleTheme: () =>
             updateSettings({
               theme:
@@ -3799,36 +3950,58 @@ const App = () => {
                 ) : null}
 
                 {activeTab === "analysis" ? (
-                  <AnalysisView
-                    isAnalyzingLabs={isAnalyzingLabs}
-                    analysisRequestState={analysisRequestState}
-                    analysisError={analysisError}
-                    analysisResult={analysisResult}
-                    analysisResultDisplay={analysisResultDisplay}
-                    analysisGeneratedAt={analysisGeneratedAt}
-                    analysisQuestion={analysisQuestion}
-                    analysisCopied={analysisCopied}
-                    analysisModelInfo={analysisModelInfo}
-                    analysisKind={analysisKind}
-                    analyzingKind={analyzingKind}
-                    analysisScopeNotice={analysisScopeNotice}
-                    reports={reports}
-                    trendByMarker={trendByMarker}
-                    reportsInScope={reports.length}
-                    markersTracked={allMarkers.length}
-                    analysisMarkerNames={analysisMarkerNames}
-                    activeProtocolLabel={activeAnalysisProtocolLabel}
-                    hasActiveProtocol={hasActiveAnalysisProtocol}
-                    hasDemoData={hasDemoData}
-                    isDemoMode={isDemoMode}
-                    betaUsage={betaUsage}
-                    betaLimits={betaLimits}
-                    settings={resolvedSettings}
-                    language={appData.settings.language}
-                    onRunAnalysis={runAiAnalysisWithConsent}
-                    onAskQuestion={runAiQuestionWithConsent}
-                    onCopyAnalysis={copyAnalysis}
-                  />
+                  analysisRoute.kind === "coach" ? (
+                    <AnalysisView
+                      isAnalyzingLabs={isAnalyzingLabs}
+                      analysisRequestState={analysisRequestState}
+                      analysisError={analysisError}
+                      analysisResult={analysisResult}
+                      analysisResultDisplay={analysisResultDisplay}
+                      analysisGeneratedAt={analysisGeneratedAt}
+                      analysisQuestion={analysisQuestion}
+                      analysisCopied={analysisCopied}
+                      analysisModelInfo={analysisModelInfo}
+                      analysisKind={analysisKind}
+                      analyzingKind={analyzingKind}
+                      analysisScopeNotice={analysisScopeNotice}
+                      reports={reports}
+                      trendByMarker={trendByMarker}
+                      reportsInScope={reports.length}
+                      markersTracked={allMarkers.length}
+                      analysisMarkerNames={analysisMarkerNames}
+                      activeProtocolLabel={activeAnalysisProtocolLabel}
+                      hasActiveProtocol={hasActiveAnalysisProtocol}
+                      hasDemoData={hasDemoData}
+                      isDemoMode={isDemoMode}
+                      betaUsage={betaUsage}
+                      betaLimits={betaLimits}
+                      settings={resolvedSettings}
+                      language={appData.settings.language}
+                      aiAnalyses={aiAnalyses}
+                      recentStatus={recentAnalysesStatus}
+                      onAskQuestion={runAiQuestionWithConsent}
+                      onCopyAnalysis={copyAnalysis}
+                      onOpenHistoryList={openAnalysisHistoryList}
+                      onOpenHistoryDetail={openAnalysisHistoryDetail}
+                      onRetryRecent={retryRecentAnalyses}
+                    />
+                  ) : analysisRoute.kind === "history" ? (
+                    <AnalysisHistoryListView
+                      analyses={aiAnalyses}
+                      language={appData.settings.language}
+                      isDarkTheme={resolvedTheme === "dark"}
+                      onBackToCoach={openAnalysisCoach}
+                      onOpenDetail={openAnalysisHistoryDetail}
+                    />
+                  ) : (
+                    <AnalysisHistoryDetailView
+                      analysis={activeAnalysisHistoryEntry}
+                      language={appData.settings.language}
+                      isDarkTheme={resolvedTheme === "dark"}
+                      onBackToHistory={openAnalysisHistoryList}
+                      onBackToCoach={openAnalysisCoach}
+                    />
+                  )
                 ) : null}
 
                 {activeTab === "settings" ? (

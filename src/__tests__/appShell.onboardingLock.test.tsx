@@ -43,7 +43,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     isProcessing: false,
     uploadStage: null,
     uploadError: "",
-    uploadNotice: ""
+    uploadNotice: "",
+    isUploadPanelOpen: false
   };
 
   const actions: AppShellActions = {
@@ -51,6 +52,8 @@ const buildProps = (overrides?: Partial<AppShellState>) => {
     onToggleMobileMenu: vi.fn(),
     onCloseMobileMenu: vi.fn(),
     onQuickUpload: vi.fn(),
+    onOpenUploadPanel: vi.fn(),
+    onCloseUploadPanel: vi.fn(),
     onToggleTheme: vi.fn(),
     onUploadFileSelected: vi.fn(),
     onUploadIntent: vi.fn(),
@@ -368,8 +371,8 @@ describe("AppShell onboarding lock", () => {
       </AppShell>
     );
 
-    expect(screen.getByText("Upload PDF")).toBeTruthy();
-    expect(screen.getByText("Protocols")).toBeTruthy();
+    expect(screen.getByText("Upload lab PDF")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Protocols" })).toBeTruthy();
     expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Collapse sidebar" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Expand sidebar" })).toBeNull();

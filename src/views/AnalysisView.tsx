@@ -1,14 +1,15 @@
+import { format, parseISO } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkerTrendSummary } from "../analytics";
 import { AnalysisScopeNotice } from "../analysisScope";
 import { betaLimitsDisabled } from "../betaLimits";
 import AIInfoBar from "../components/analysis/AIInfoBar";
 import AIOutputPanel from "../components/analysis/AIOutputPanel";
-import AIQuestionInput, { type IntentChip } from "../components/analysis/AIQuestionInput";
+import AIQuestionInput, { type PresetChip } from "../components/analysis/AIQuestionInput";
 import { getRelevantBenchmarks } from "../data/studyBenchmarks";
 import useAiQuestionSuggestions from "../hooks/useAiQuestionSuggestions";
 import { trLocale } from "../i18n";
-import { AppLanguage, AppSettings, LabReport } from "../types";
+import { AiAnalysis, AiAnalysisPresetKey, AppLanguage, AppSettings, LabReport } from "../types";
 
 interface AnalysisViewProps {
   isAnalyzingLabs: boolean;
@@ -53,10 +54,35 @@ interface AnalysisViewProps {
   };
   settings: AppSettings;
   language: AppLanguage;
-  onRunAnalysis: (mode: "full" | "latestComparison") => void;
-  onAskQuestion: (question: string) => void;
+  aiAnalyses: AiAnalysis[];
+  recentStatus: "loading" | "ready" | "error";
+  onAskQuestion: (question: string, meta?: { presetKey?: AiAnalysisPresetKey; title?: string }) => void;
   onCopyAnalysis: () => void;
+  onOpenHistoryList: () => void;
+  onOpenHistoryDetail: (id: string) => void;
+  onRetryRecent: () => void;
 }
+
+const PRESET_TITLE_BY_KEY: Record<AiAnalysisPresetKey, { en: string; nl: string }> = {
+  "full-analysis": {
+    nl: "Volledige analyse van laatste rapport",
+    en: "Full analysis of latest report"
+  },
+  "compare-latest-previous": {
+    nl: "Vergelijk laatste met vorige",
+    en: "Compare latest vs previous"
+  }
+};
+
+const formatRecentDate = (value: string): string => {
+  try {
+    return format(parseISO(value), "MMM dd");
+  } catch {
+    return value.slice(0, 10);
+  }
+};
+
+const summarizeAnswer = (value: string): string => value.replace(/\s+/g, " ").trim();
 
 const AnalysisView = ({
   isAnalyzingLabs,
@@ -74,32 +100,30 @@ const AnalysisView = ({
   reports,
   trendByMarker,
   reportsInScope,
-  markersTracked,
+  markersTracked: _markersTracked,
   analysisMarkerNames,
-  activeProtocolLabel,
+  activeProtocolLabel: _activeProtocolLabel,
   hasActiveProtocol,
-  hasDemoData,
-  isDemoMode,
+  hasDemoData: _hasDemoData,
+  isDemoMode: _isDemoMode,
   betaUsage,
   betaLimits,
   settings,
   language,
-  onRunAnalysis,
+  aiAnalyses,
+  recentStatus,
   onAskQuestion,
-  onCopyAnalysis
+  onCopyAnalysis,
+  onOpenHistoryList,
+  onOpenHistoryDetail,
+  onRetryRecent
 }: AnalysisViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
-  const unitSystemLabel = settings.unitSystem === "eu" ? tr("SI (metrisch)", "SI (Metric)") : tr("Conventioneel", "Conventional");
   const isDarkTheme = settings.theme === "dark";
   const limitsDisabled = betaLimitsDisabled();
   const dayLimitReached = !limitsDisabled && betaUsage.dailyCount >= betaLimits.maxAnalysesPerDay;
   const monthLimitReached = !limitsDisabled && betaUsage.monthlyCount >= betaLimits.maxAnalysesPerMonth;
   const blockedByLimits = dayLimitReached || monthLimitReached;
-  const isAnalyzingFull = isAnalyzingLabs && analyzingKind === "full";
-  const isAnalyzingLatest = isAnalyzingLabs && analyzingKind === "latestComparison";
-  const isAnalyzingQuestion = isAnalyzingLabs && analyzingKind === "question";
-  const canRunFull = !isAnalyzingLabs && reportsInScope > 0 && !blockedByLimits;
-  const canRunLatest = !isAnalyzingLabs && reportsInScope >= 2 && !blockedByLimits;
   const hasActiveRun = analysisRequestState === "preparing" || analysisRequestState === "streaming";
   const hasOutput = analysisResult.trim().length > 0;
   const hasError = analysisError.trim().length > 0;
@@ -108,6 +132,9 @@ const AnalysisView = ({
     () => getRelevantBenchmarks(analysisMarkerNames),
     [analysisMarkerNames]
   );
+  const recentAnalyses = useMemo(() => aiAnalyses.slice(0, 4), [aiAnalyses]);
+  const shouldShowRecent =
+    recentStatus === "loading" || recentStatus === "error" || recentAnalyses.length > 0;
 
   const suggestedQuestions = useAiQuestionSuggestions({
     reports,
@@ -118,6 +145,7 @@ const AnalysisView = ({
   });
 
   const [questionInput, setQuestionInput] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<AiAnalysisPresetKey | undefined>();
   const outputPanelRef = useRef<HTMLDivElement | null>(null);
   const canAskQuestion = !isAnalyzingLabs && questionInput.trim().length > 0 && reportsInScope > 0 && !blockedByLimits;
 
@@ -140,45 +168,45 @@ const AnalysisView = ({
     return () => cancelAnimationFrame(frame);
   }, [hasActiveRun, hasOutput, shouldShowOutputPanel]);
 
-  const usageLabel = limitsDisabled
-    ? tr("Beta limieten uit", "Beta limits disabled")
-    : `${betaUsage.dailyCount}/${betaLimits.maxAnalysesPerDay} ${tr("vandaag", "today")} · ${betaUsage.monthlyCount}/${betaLimits.maxAnalysesPerMonth} ${tr("maand", "month")}`;
-  const usageHint = dayLimitReached
-    ? tr("Daglimiet bereikt, reset om middernacht.", "Daily limit reached, resets at midnight.")
-    : monthLimitReached
-      ? tr("Maandlimiet bereikt, probeer later opnieuw.", "Monthly limit reached, try again later.")
-      : null;
-  const scopeHint = hasActiveProtocol
-    ? tr(
-        `${reportsInScope} rapporten in scope · ${markersTracked} biomarkers · ${unitSystemLabel} · ${activeProtocolLabel}`,
-        `${reportsInScope} reports in scope · ${markersTracked} biomarkers · ${unitSystemLabel} · ${activeProtocolLabel}`
-      )
-    : tr(
-        `${reportsInScope} rapporten in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`,
-        `${reportsInScope} reports in scope · ${markersTracked} biomarkers · ${unitSystemLabel}`
+  const applyPreset = (preset: AiAnalysisPresetKey) => {
+    if (preset === "full-analysis") {
+      setQuestionInput(
+        tr(
+          "Geef een volledige analyse van mijn nieuwste labrapport. Benoem wat buiten bereik valt of de verkeerde kant op trent, en wat ik eerst moet prioriteren.",
+          "Run a full analysis of my latest lab report. Call out anything outside range or trending the wrong way, and tell me what to prioritize."
+        )
       );
-  const intents: IntentChip[] = [
+    } else {
+      setQuestionInput(
+        tr(
+          "Vergelijk mijn nieuwste rapport met het vorige en benoem de belangrijkste veranderingen, mogelijke oorzaken en wat ik nu moet opvolgen.",
+          "Compare my latest report with the previous one and explain the most important changes, likely drivers, and what I should follow up on now."
+        )
+      );
+    }
+    setSelectedPreset(preset);
+  };
+
+  const presetChips: PresetChip[] = [
     {
-      key: "full",
-      label: isAnalyzingFull ? tr("Analyseren...", "Analyzing...") : tr("Run full analysis", "Run full analysis"),
-      icon: "sparkles",
-      variant: "primary",
-      isRunning: isAnalyzingFull,
-      disabled: !canRunFull,
-      onClick: () => onRunAnalysis("full")
+      key: "full-analysis",
+      label: tr("Full analysis of latest report", "Full analysis of latest report"),
+      variant: "teal",
+      onClick: () => applyPreset("full-analysis")
     },
     {
-      key: "latest",
-      label: isAnalyzingLatest ? tr("Vergelijken...", "Comparing...") : tr("Compare latest vs previous", "Compare latest vs previous"),
-      icon: "sparkles",
-      variant: "secondary",
-      isRunning: isAnalyzingLatest,
-      disabled: !canRunLatest,
-      helperText:
-        reportsInScope < 2
-          ? tr("Minimaal 2 rapporten nodig voor vergelijking.", "At least 2 reports are required for comparison.")
-          : undefined,
-      onClick: () => onRunAnalysis("latestComparison")
+      key: "compare-latest-previous",
+      label: tr("Compare latest vs previous", "Compare latest vs previous"),
+      variant: "teal",
+      onClick: () => applyPreset("compare-latest-previous")
+    },
+    {
+      key: "more",
+      label: tr("More presets", "More presets"),
+      variant: "neutral",
+      onClick: () => {
+        // TODO: wire preset library modal
+      }
     }
   ];
 
@@ -186,53 +214,135 @@ const AnalysisView = ({
     <section className="space-y-4 fade-in sm:space-y-5">
       <AIInfoBar
         isDarkTheme={isDarkTheme}
-        hasDemoData={hasDemoData}
-        isDemoMode={isDemoMode}
-        usageLabelTitle={tr("Gebruik", "Usage")}
-        usageLabel={usageLabel}
-        usageHint={usageHint}
-        actionGuardLabel={tr(
-          "AI draait alleen wanneer jij expliciet een actie start.",
-          "AI runs only when you explicitly start an action."
+        trustLabel={tr("AI only runs when you start an action", "AI only runs when you start an action")}
+        todayLabel={tr("Today's analyses", "Today's analyses")}
+        todayCount={betaUsage.dailyCount}
+        todayLimit={betaLimits.maxAnalysesPerDay}
+        monthLabel={tr("This month", "This month")}
+        monthCount={betaUsage.monthlyCount}
+        monthLimit={betaLimits.maxAnalysesPerMonth}
+        whatsThisLabel={tr("What's this?", "What's this?")}
+        whatsThisTitle={tr(
+          "Analyse runs zijn AI-calls. Daglimiet reset rond middernacht; maandlimiet reset bij een nieuwe maand.",
+          "Analysis runs are AI calls. Daily limit resets around midnight; monthly limit resets on a new month."
         )}
-        demoModeLabel={tr("Je werkt nu met demodata.", "You're currently using demo data.")}
-        demoMixedLabel={tr("Demodata staat nog deels actief.", "Demo data is still partially active.")}
-        consentRequiredLabel={null}
       />
 
       <AIQuestionInput
-        title={tr("Ask AI", "Ask AI")}
+        title={tr("Your question", "Your question")}
         subtitle={tr(
-          "Ask a focused question or run a broader analysis when you need it.",
-          "Ask a focused question or run a broader analysis when you need it."
+          "Start from a suggestion, pick a preset, or write your own.",
+          "Start from a suggestion, pick a preset, or write your own."
         )}
-        scopeHint={scopeHint}
-        inputLabel={tr("Jouw vraag", "Your question")}
+        suggestionsTitle={tr("Suggested from your data", "Suggested from your data")}
+        presetsTitle={tr("Or start from a preset", "Or start from a preset")}
         inputPlaceholder={tr(
           "Bijv. waarom stijgt mijn hematocriet en wat moet ik nu monitoren?",
-          "E.g. why is my hematocrit rising and what should I monitor next?"
+          "e.g. Why is my hematocrit rising, and what should I monitor next?"
         )}
-        askButtonLabel={isAnalyzingQuestion ? tr("Bezig...", "Asking...") : tr("Ask AI", "Ask AI")}
-        suggestionsTitle={tr("Snelle lokale suggesties", "Quick local suggestions")}
+        askButtonLabel={isAnalyzingLabs && analyzingKind === "question" ? tr("Bezig...", "Asking...") : tr("Ask AI", "Ask AI")}
+        keyboardHintLabel={tr("Ctrl + Enter om te verzenden", "Ctrl + Enter to submit")}
         localNote={tr(
-          "Suggesties worden lokaal gegenereerd uit je rapportdata. AI start alleen na jouw klik.",
-          "Suggestions are generated locally from your report data. AI starts only after your click."
+          "Generated locally from your reports - the AI only runs after you submit.",
+          "Generated locally from your reports - the AI only runs after you submit."
         )}
-        intents={intents}
         reportsHint={
           reportsInScope === 0
             ? tr("Voeg eerst minstens één rapport toe om vragen te kunnen stellen.", "Add at least one report first to ask questions.")
-            : null
+            : dayLimitReached
+              ? tr("Daglimiet bereikt, reset om middernacht.", "Daily limit reached, resets at midnight.")
+              : monthLimitReached
+                ? tr("Maandlimiet bereikt, probeer later opnieuw.", "Monthly limit reached, try again later.")
+                : null
         }
         value={questionInput}
         suggestions={suggestedQuestions.slice(0, 4)}
-        isSubmitting={isAnalyzingQuestion}
+        presets={presetChips}
+        isSubmitting={isAnalyzingLabs && analyzingKind === "question"}
         canSubmit={canAskQuestion}
         isDarkTheme={isDarkTheme}
-        onChange={setQuestionInput}
-        onSubmit={() => onAskQuestion(questionInput.trim())}
-        onSelectSuggestion={setQuestionInput}
+        onChange={(value) => {
+          setQuestionInput(value);
+        }}
+        onSubmit={() =>
+          onAskQuestion(questionInput.trim(), {
+            presetKey: selectedPreset,
+            title: selectedPreset
+              ? tr(PRESET_TITLE_BY_KEY[selectedPreset].nl, PRESET_TITLE_BY_KEY[selectedPreset].en)
+              : undefined
+          })
+        }
+        onSelectSuggestion={(question) => {
+          setSelectedPreset(undefined);
+          setQuestionInput(question);
+        }}
       />
+
+      {shouldShowRecent ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className={isDarkTheme ? "text-[13px] font-semibold uppercase tracking-[0.12em] text-slate-300" : "text-[13px] font-semibold uppercase tracking-[0.12em] text-slate-700"}>
+              {tr("Recent", "Recent")}
+            </h3>
+            <button
+              type="button"
+              onClick={onOpenHistoryList}
+              className={isDarkTheme ? "text-sm text-cyan-300 hover:underline" : "text-sm text-cyan-700 hover:underline"}
+            >
+              {tr("View all", "View all")}
+            </button>
+          </div>
+
+          {recentStatus === "loading" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`recent-skeleton-${index}`}
+                  className={isDarkTheme ? "h-28 animate-pulse rounded-xl border border-slate-700 bg-slate-900/55" : "h-28 animate-pulse rounded-xl border border-slate-200 bg-slate-100"}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {recentStatus === "error" ? (
+            <div className={isDarkTheme ? "rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100" : "rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900"}>
+              <p>{tr("Couldn't load recent analyses.", "Couldn't load recent analyses.")}</p>
+              <button type="button" onClick={onRetryRecent} className="mt-1 text-sm underline">
+                {tr("Retry", "Retry")}
+              </button>
+            </div>
+          ) : null}
+
+          {recentStatus === "ready" && recentAnalyses.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {recentAnalyses.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => onOpenHistoryDetail(entry.id)}
+                  className={
+                    isDarkTheme
+                      ? "rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 text-left transition hover:border-cyan-500/45"
+                      : "rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-cyan-500/60"
+                  }
+                >
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <span className={isDarkTheme ? "text-xs text-slate-300" : "text-xs text-slate-600"}>
+                      {formatRecentDate(entry.createdAt)} {" · "} {entry.title}
+                    </span>
+                    <span className={isDarkTheme ? "rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200" : "rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700"}>
+                      AI
+                    </span>
+                  </div>
+                  <p className={isDarkTheme ? "line-clamp-2 text-sm text-slate-100" : "line-clamp-2 text-sm text-slate-800"}>
+                    {summarizeAnswer(entry.answer)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {shouldShowOutputPanel ? (
         <div ref={outputPanelRef}>
@@ -273,13 +383,14 @@ const AnalysisView = ({
             aiUsesMiddle={tr("van", "of")}
             aiUsesSuffix={tr("rapporten voor deze run.", "reports for this run.")}
             questionPrefixLabel={tr("Vraag:", "Question:")}
-            preparingStatusLabel={tr("Analyzing your reports…", "Analyzing your reports...")}
-            streamingStatusLabel={tr("Generating response…", "Generating response...")}
+            preparingStatusLabel={tr("Analyzing your reports...", "Analyzing your reports...")}
+            streamingStatusLabel={tr("Generating response...", "Generating response...")}
             streamingHintLabel={tr("Tekst verschijnt live terwijl Claude antwoordt.", "Text appears live while Claude responds.")}
             onCopyAnalysis={onCopyAnalysis}
           />
         </div>
       ) : null}
+
     </section>
   );
 };

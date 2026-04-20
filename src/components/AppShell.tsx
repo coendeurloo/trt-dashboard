@@ -74,6 +74,7 @@ export interface AppShellUploadState {
   uploadStage: ParserStage | null;
   uploadError: string;
   uploadNotice: string;
+  isUploadPanelOpen: boolean;
 }
 
 export interface AppShellActions {
@@ -81,6 +82,8 @@ export interface AppShellActions {
   onToggleMobileMenu: () => void;
   onCloseMobileMenu: () => void;
   onQuickUpload: () => void;
+  onOpenUploadPanel: () => void;
+  onCloseUploadPanel: () => void;
   onToggleTheme: () => void;
   onUploadFileSelected: (file: File) => void | Promise<void>;
   onUploadIntent: () => void;
@@ -130,18 +133,20 @@ const AppShell = ({
     interfaceDensity = "comfortable"
   } = shellState;
   const {
-    uploadPanelRef,
     hiddenUploadInputRef,
     isProcessing,
     uploadStage,
     uploadError,
-    uploadNotice
+    uploadNotice,
+    isUploadPanelOpen
   } = uploadState;
   const {
     onRequestTabChange,
     onToggleMobileMenu,
     onCloseMobileMenu,
     onQuickUpload,
+    onOpenUploadPanel,
+    onCloseUploadPanel,
     onToggleTheme,
     onUploadFileSelected,
     onUploadIntent,
@@ -252,19 +257,53 @@ const AppShell = ({
   };
 
   const renderNavigationSections = (onAfterNavigate?: () => void, compact = false) => {
+    const labelClassName = isLightTheme
+      ? "px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500"
+      : "px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400";
     return (
-      <nav className="space-y-0.5">
-        {renderTabButton("dashboard", onAfterNavigate, compact)}
-        {renderTabButton("checkIns", onAfterNavigate, compact)}
-        {renderTabButton("reports", onAfterNavigate, compact)}
-        {renderTabButton("alerts", onAfterNavigate, compact)}
+      <nav className="space-y-1">
+        <div>
+          <p className={labelClassName}>{tr("Your data", "Your data")}</p>
+          <div className="space-y-0.5">
+            {renderTabButton("dashboard", onAfterNavigate, compact)}
+            {renderTabButton("checkIns", onAfterNavigate, compact)}
+            {renderTabButton("reports", onAfterNavigate, compact)}
+            {renderTabButton("alerts", onAfterNavigate, compact)}
+          </div>
+        </div>
 
-        <div className="mt-2 space-y-0.5">
-          {renderTabButton("protocol", onAfterNavigate, compact)}
-          {renderTabButton("supplements", onAfterNavigate, compact)}
-          {renderTabButton("protocolImpact", onAfterNavigate, compact)}
-          {renderTabButton("doseResponse", onAfterNavigate, compact)}
-          {renderTabButton("analysis", onAfterNavigate, compact)}
+        <div className="mt-1">
+          <p className={labelClassName}>{tr("Protocols", "Protocols")}</p>
+          <div className="space-y-0.5">
+            {renderTabButton("protocol", onAfterNavigate, compact)}
+            {renderTabButton("supplements", onAfterNavigate, compact)}
+            {renderTabButton("protocolImpact", onAfterNavigate, compact)}
+            {renderTabButton("doseResponse", onAfterNavigate, compact)}
+          </div>
+        </div>
+
+        <div className="mt-1">
+          <p className={labelClassName}>AI</p>
+          <div className="space-y-0.5">
+            {renderTabButton("analysis", onAfterNavigate, compact)}
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-0.5">
+          {renderUploadShortcut(compact)}
+          <button
+            type="button"
+            onClick={onStartManualEntry}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+              isLightTheme
+                ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
+                : "border-slate-700 bg-slate-900/60 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+            }`}
+          >
+            <Plus className="h-4 w-4" />
+            {t(language, "addManualValue")}
+          </button>
+          {renderTabButton("settings", onAfterNavigate, compact)}
         </div>
       </nav>
     );
@@ -299,7 +338,7 @@ const AppShell = ({
                 ? "text-slate-900"
                 : "text-slate-100";
         const baseClassName = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
-          isLightTheme ? "border-slate-300 bg-white text-slate-600" : "border-slate-700/70 bg-slate-900/55 text-slate-400"
+          isLightTheme ? "border-slate-300 bg-white text-slate-600" : "border-slate-700/70 bg-slate-900/55 text-slate-300"
         }`;
         if (!isInteractive) {
           return (
@@ -340,20 +379,21 @@ const AppShell = ({
           ? `hidden max-w-[320px] items-center gap-2 rounded-full border px-2.5 py-1 text-left text-xs transition lg:inline-flex ${
               isLightTheme
                 ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
-                : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
+                : "border-slate-700 bg-slate-900/65 text-slate-100 hover:border-cyan-500/45 hover:text-cyan-100"
             }`
           : `flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
               isLightTheme
                 ? "border-slate-300 bg-white text-slate-700 hover:border-cyan-500/45 hover:text-cyan-700"
-                : "border-slate-700 bg-slate-900/65 text-slate-200 hover:border-cyan-500/45 hover:text-cyan-100"
+                : "border-slate-700 bg-slate-900/65 text-slate-100 hover:border-cyan-500/45 hover:text-cyan-100"
             }`
       }
     >
       <span className={`h-2 w-2 rounded-full ${syncDotClassName}`} />
       <span className="min-w-0 flex-1 truncate">{cloudUserEmail || tr("Cloud account", "Cloud account")}</span>
       <span
+        title={tr("Your data is synced across devices", "Your data is synced across devices")}
         className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${
-          isLightTheme ? "border-slate-300 bg-slate-50 text-slate-600" : "border-slate-700/80 bg-slate-900/70 text-slate-300"
+          isLightTheme ? "border-slate-300 bg-slate-50 text-slate-700" : "border-slate-700/80 bg-slate-900/70 text-slate-200"
         }`}
       >
         {syncBadgeLabel}
@@ -391,10 +431,10 @@ const AppShell = ({
   const renderUploadShortcut = (compact: boolean) => (
     <button
       type="button"
-      onClick={onQuickUpload}
+      onClick={onOpenUploadPanel}
       disabled={quickUploadDisabled}
-      title={tr("Upload PDF", "Upload PDF")}
-      aria-label={tr("Upload PDF", "Upload PDF")}
+      title={tr("Upload lab PDF", "Upload lab PDF")}
+      aria-label={tr("Upload lab PDF", "Upload lab PDF")}
       className={`inline-flex items-center justify-center rounded-lg border transition ${
         compact ? "h-10 w-10" : "w-full gap-2 px-3 py-2 text-sm"
       } ${
@@ -403,88 +443,22 @@ const AppShell = ({
             ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
             : "cursor-not-allowed border-slate-700 bg-slate-900/60 text-slate-500"
           : isLightTheme
-            ? "border-cyan-500/45 bg-cyan-50 text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-100"
-            : "border-cyan-500/45 bg-cyan-500/12 text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/20"
+            ? "border-cyan-500/45 bg-transparent text-cyan-800 hover:border-cyan-500/70 hover:bg-cyan-50"
+            : "border-cyan-500/45 bg-transparent text-cyan-100 hover:border-cyan-400/70 hover:bg-cyan-500/12"
       }`}
     >
       <Upload className={compact ? "h-4 w-4" : "h-4 w-4"} />
-      {!compact ? <span>{tr("Upload PDF", "Upload PDF")}</span> : null}
+      {!compact ? <span>{tr("Upload lab PDF", "Upload lab PDF")}</span> : null}
     </button>
   );
 
-  const renderUploadPanelCard = (containerClassName: string) => {
-    if (isShareMode) {
-      return null;
-    }
-
-    return (
-      <div ref={uploadPanelRef} className={containerClassName}>
-        <p className={`mb-2 text-xs uppercase tracking-wide ${isLightTheme ? "text-slate-500" : "text-slate-400"}`}>
-          {t(language, "uploadPdf")}
-        </p>
-        {hasReports ? (
-          <>
-            <UploadPanel
-              isProcessing={isProcessing}
-              processingStage={uploadStage}
-              onFileSelected={(file) => {
-                void onUploadFileSelected(file);
-              }}
-              onUploadIntent={onUploadIntent}
-              language={language}
-            />
-            <button
-              type="button"
-              className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm ${
-                isLightTheme
-                  ? "border-slate-300 text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
-                  : "border-slate-600 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-              }`}
-              onClick={onStartManualEntry}
-            >
-              <Plus className="h-4 w-4" /> {t(language, "addManualValue")}
-            </button>
-          </>
-        ) : (
-          renderUploadShortcut(false)
-        )}
-        {uploadError ? (
-          <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {uploadError}
-          </div>
-        ) : null}
-        {uploadNotice ? (
-          <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-            {uploadNotice}
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
   const renderSidebarContent = ({
-    includeUploadPanel,
     onAfterNavigate,
     compact
   }: {
-    includeUploadPanel: boolean;
     onAfterNavigate?: () => void;
     compact?: boolean;
   }) => {
-    const sidebarUploadPanel =
-      !isShareMode && includeUploadPanel
-        ? compact
-          ? (
-            <div className={isLightTheme ? "mt-4 flex justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm" : "mt-4 flex justify-center rounded-xl border border-slate-700 bg-slate-900/80 p-2"}>
-              {renderUploadShortcut(true)}
-            </div>
-          )
-          : renderUploadPanelCard(
-              isLightTheme
-                ? "mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-                : "mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3"
-            )
-        : null;
     const showAccountTools = showCloudAuthEntryPoints && !compact && Boolean(onAfterNavigate);
     return (
       <>
@@ -532,12 +506,6 @@ const AppShell = ({
 
         {renderNavigationSections(onAfterNavigate, compact)}
         {isShareMode && !compact ? renderShareSnapshotCard() : null}
-        {sidebarUploadPanel}
-        {visibleTabKeys.has("settings") ? (
-          <div className={`mt-4 border-t border-slate-800 pt-3 ${compact ? "px-1" : ""}`}>
-            {renderTabButton("settings", onAfterNavigate, compact)}
-          </div>
-        ) : null}
       </>
     );
   };
@@ -586,9 +554,71 @@ const AppShell = ({
               : `rounded-2xl border border-slate-700/70 bg-slate-900/80 ${isCompactDensity ? "p-2.5" : "p-3"}`
           }
         >
-          {renderSidebarContent({ includeUploadPanel: false, onAfterNavigate: onCloseMobileMenu, compact: false })}
+          {renderSidebarContent({ onAfterNavigate: onCloseMobileMenu, compact: false })}
         </div>
       </MobileNavDrawer>
+
+      {isUploadPanelOpen && !isShareMode ? (
+        <div className="app-modal-overlay z-[72] p-3 sm:p-6" onClick={onCloseUploadPanel}>
+          <div
+            className={isLightTheme ? "app-modal-shell w-full max-w-lg border border-slate-200 bg-white p-4 shadow-soft" : "app-modal-shell w-full max-w-lg bg-slate-900 p-4 shadow-soft"}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-panel-title"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 id="upload-panel-title" className={isLightTheme ? "text-base font-semibold text-slate-900" : "text-base font-semibold text-slate-100"}>
+                {tr("Upload lab PDF", "Upload lab PDF")}
+              </h3>
+              <button
+                type="button"
+                onClick={onCloseUploadPanel}
+                className={isLightTheme ? "rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-slate-400" : "rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:border-slate-500"}
+              >
+                {tr("Sluiten", "Close")}
+              </button>
+            </div>
+
+            <UploadPanel
+              isProcessing={isProcessing}
+              processingStage={uploadStage}
+              onFileSelected={(file) => {
+                void onUploadFileSelected(file);
+                onCloseUploadPanel();
+              }}
+              onUploadIntent={onUploadIntent}
+              language={language}
+            />
+
+            <button
+              type="button"
+              className={`mt-3 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm ${
+                isLightTheme
+                  ? "border-slate-300 text-slate-700 hover:border-cyan-500/50 hover:text-cyan-700"
+                  : "border-slate-600 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
+              }`}
+              onClick={() => {
+                onCloseUploadPanel();
+                onStartManualEntry();
+              }}
+            >
+              <Plus className="h-4 w-4" /> {t(language, "addManualValue")}
+            </button>
+
+            {uploadError ? (
+              <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {uploadError}
+              </div>
+            ) : null}
+            {uploadNotice ? (
+              <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                {uploadNotice}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className={`mx-auto flex w-full max-w-[1400px] flex-col ${isCompactDensity ? "gap-3" : "gap-4"} lg:flex-row`}>
         <aside
@@ -598,7 +628,7 @@ const AppShell = ({
               : `hidden w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 lg:sticky lg:top-4 lg:block ${isCompactDensity ? "p-2.5" : "p-3"} lg:w-72 lg:self-start`
           }
         >
-          {renderSidebarContent({ includeUploadPanel: true, compact: false })}
+          {renderSidebarContent({ compact: false })}
         </aside>
 
         <main className={`min-w-0 flex-1 ${isCompactDensity ? "space-y-2.5" : "space-y-3"}`} id="dashboard-export-root">
@@ -696,7 +726,11 @@ const AppShell = ({
                     type="button"
                     onClick={onToggleTheme}
                     className="theme-toggle hidden lg:inline-flex"
-                    aria-label={tr("Schakel thema", "Toggle theme")}
+                    aria-label={
+                      theme === "dark"
+                        ? tr("Schakel naar lichte modus", "Switch to light mode")
+                        : tr("Schakel naar donkere modus", "Switch to dark mode")
+                    }
                     title={tr("Thema wisselen", "Toggle theme")}
                   >
                     <span className="toggle-thumb">

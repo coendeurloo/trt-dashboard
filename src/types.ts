@@ -34,6 +34,24 @@ export type DashboardViewMode = "cards" | "compare2";
 export type AIAnalysisProvider = "auto" | "claude" | "gemini";
 export type UserProfile = "trt" | "enhanced" | "health" | "biohacker";
 export type WellbeingMetricId = "energy" | "mood" | "sleep" | "libido" | "motivation" | "recovery" | "stress" | "focus";
+export type AiAnalysisPresetKey = "full-analysis" | "compare-latest-previous";
+
+export interface AiAnalysisScopeSnapshot {
+  reportCount: number;
+  biomarkerCount: number;
+  units: string;
+  activeProtocol: string | null;
+}
+
+export interface AiAnalysis {
+  id: string;
+  createdAt: string;
+  prompt: string;
+  presetKey?: AiAnalysisPresetKey;
+  title: string;
+  answer: string;
+  scopeSnapshot: AiAnalysisScopeSnapshot;
+}
 
 export interface UserProfileConfig {
   id: UserProfile;
@@ -410,6 +428,7 @@ export interface StoredAppData {
   markerAliasOverrides: Record<string, string>;
   settings: AppSettings;
   personalInfo: PersonalInfo;
+  aiAnalyses?: AiAnalysis[];
 }
 
 export interface ExtractionDraft {
