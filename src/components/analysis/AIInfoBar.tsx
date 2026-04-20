@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 
 interface AIUsageMeterProps {
   isDarkTheme: boolean;
+  badgeLabel?: string;
   trustLabel: string;
   todayLabel: string;
   todayCount: number;
@@ -22,6 +23,7 @@ const getFillPercent = (count: number, limit: number): number => {
 
 const AIInfoBar = ({
   isDarkTheme,
+  badgeLabel,
   trustLabel,
   todayLabel,
   todayCount,
@@ -36,15 +38,27 @@ const AIInfoBar = ({
   const monthFill = getFillPercent(monthCount, monthLimit);
 
   return (
-    <section
-      className={
-        isDarkTheme
-          ? "rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3"
-          : "rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
-      }
-      aria-label="Analysis usage meter"
-    >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <section className="relative" aria-label="Analysis usage meter">
+      {badgeLabel ? (
+        <span
+          className={
+            isDarkTheme
+              ? "pointer-events-none absolute -top-3 right-4 z-[1] rounded-md border border-cyan-500/50 bg-slate-900/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200"
+              : "pointer-events-none absolute -top-3 right-4 z-[1] rounded-md border border-cyan-500/50 bg-white/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-700"
+          }
+        >
+          {badgeLabel}
+        </span>
+      ) : null}
+
+      <div
+        className={
+          isDarkTheme
+            ? "rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3"
+            : "rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+        }
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <p className={isDarkTheme ? "inline-flex items-center gap-1.5 text-sm text-slate-200" : "inline-flex items-center gap-1.5 text-sm text-slate-700"}>
           <ShieldCheck className="h-4 w-4 shrink-0 text-cyan-300" />
           {trustLabel}
@@ -83,6 +97,7 @@ const AIInfoBar = ({
             {whatsThisLabel}
           </button>
         </div>
+      </div>
       </div>
     </section>
   );

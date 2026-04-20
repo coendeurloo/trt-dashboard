@@ -412,6 +412,7 @@ const App = () => {
     isNl,
     samplingControlsEnabled,
     addAiAnalysis,
+    deleteAiAnalysis,
     deleteReport: deleteReportFromData,
     deleteReports: deleteReportsFromData,
     updateReportAnnotations,
@@ -3114,6 +3115,26 @@ const App = () => {
     },
     [activeTab, navigateAnalysisRoute]
   );
+  const handleDeleteAiAnalysis = useCallback(
+    (analysisId: string) => {
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(
+          tr(
+            "Weet je zeker dat je deze AI-analyse wilt verwijderen?",
+            "Are you sure you want to delete this AI analysis?"
+          )
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      deleteAiAnalysis(analysisId);
+      if (analysisRoute.kind === "history_detail" && analysisRoute.id === analysisId) {
+        navigateAnalysisRoute({ kind: "history" }, { replace: true });
+      }
+    },
+    [analysisRoute, deleteAiAnalysis, navigateAnalysisRoute, tr]
+  );
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
@@ -3984,6 +4005,7 @@ const App = () => {
                       onOpenHistoryList={openAnalysisHistoryList}
                       onOpenHistoryDetail={openAnalysisHistoryDetail}
                       onRetryRecent={retryRecentAnalyses}
+                      onDeleteAnalysis={handleDeleteAiAnalysis}
                     />
                   ) : analysisRoute.kind === "history" ? (
                     <AnalysisHistoryListView
@@ -3992,6 +4014,7 @@ const App = () => {
                       isDarkTheme={resolvedTheme === "dark"}
                       onBackToCoach={openAnalysisCoach}
                       onOpenDetail={openAnalysisHistoryDetail}
+                      onDelete={handleDeleteAiAnalysis}
                     />
                   ) : (
                     <AnalysisHistoryDetailView
@@ -4000,6 +4023,7 @@ const App = () => {
                       isDarkTheme={resolvedTheme === "dark"}
                       onBackToHistory={openAnalysisHistoryList}
                       onBackToCoach={openAnalysisCoach}
+                      onDelete={handleDeleteAiAnalysis}
                     />
                   )
                 ) : null}

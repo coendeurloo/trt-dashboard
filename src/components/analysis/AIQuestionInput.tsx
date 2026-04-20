@@ -1,16 +1,18 @@
 import { KeyboardEvent } from "react";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { SuggestedAiQuestion } from "../../analysisSuggestions";
 
 export interface PresetChip {
   key: string;
   label: string;
   variant: "teal" | "neutral";
+  icon?: "sparkles" | "x" | "plus";
   disabled?: boolean;
   onClick: () => void;
 }
 
 interface AIQuestionInputProps {
+  badgeLabel?: string;
   title: string;
   subtitle: string;
   suggestionsTitle: string;
@@ -32,6 +34,7 @@ interface AIQuestionInputProps {
 }
 
 const AIQuestionInput = ({
+  badgeLabel,
   title,
   subtitle,
   suggestionsTitle,
@@ -72,17 +75,30 @@ const AIQuestionInput = ({
     : `${chipBaseClass} gap-1.5 rounded-full border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50`;
 
   return (
-    <section
-      className={
-        isDarkTheme
-          ? "app-teal-glow-surface rounded-[24px] border border-slate-700/70 bg-slate-900/65 p-4 shadow-soft sm:p-6"
-          : "rounded-[24px] border border-slate-200/90 bg-white/95 p-4 shadow-[0_20px_42px_-32px_rgba(15,23,42,0.32)] sm:p-6"
-      }
-    >
-      <div className="mb-4 space-y-1">
-        <h4 className={isDarkTheme ? "text-3xl font-semibold tracking-tight text-slate-100" : "text-3xl font-semibold tracking-tight text-slate-900"}>{title}</h4>
-        <p className={isDarkTheme ? "max-w-2xl text-base text-slate-200" : "max-w-2xl text-base text-slate-700"}>{subtitle}</p>
-      </div>
+    <section className="relative">
+      {badgeLabel ? (
+        <span
+          className={
+            isDarkTheme
+              ? "pointer-events-none absolute -top-3 right-4 z-[1] rounded-md border border-cyan-500/50 bg-slate-900/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200"
+              : "pointer-events-none absolute -top-3 right-4 z-[1] rounded-md border border-cyan-500/50 bg-white/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-700"
+          }
+        >
+          {badgeLabel}
+        </span>
+      ) : null}
+
+      <div
+        className={
+          isDarkTheme
+            ? "app-teal-glow-surface rounded-[24px] border border-slate-700/70 bg-slate-900/65 p-4 shadow-soft sm:p-6"
+            : "rounded-[24px] border border-slate-200/90 bg-white/95 p-4 shadow-[0_20px_42px_-32px_rgba(15,23,42,0.32)] sm:p-6"
+        }
+      >
+        <div className="mb-4 space-y-1">
+          <h4 className={isDarkTheme ? "text-3xl font-semibold tracking-tight text-slate-100" : "text-3xl font-semibold tracking-tight text-slate-900"}>{title}</h4>
+          <p className={isDarkTheme ? "max-w-2xl text-base text-slate-200" : "max-w-2xl text-base text-slate-700"}>{subtitle}</p>
+        </div>
 
       {suggestions.length > 0 ? (
         <div className="mb-3 space-y-2.5">
@@ -118,7 +134,9 @@ const AIQuestionInput = ({
               disabled={preset.disabled}
               className={`${preset.variant === "teal" ? presetTealClass : presetNeutralClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
-              {preset.key === "more" ? <Plus className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {preset.icon === "plus" || preset.key === "more" ? <Plus className="h-3.5 w-3.5" /> : null}
+              {preset.icon === "x" ? <X className="h-3.5 w-3.5" /> : null}
+              {(preset.icon === "sparkles" || (!preset.icon && preset.key !== "more")) ? <Sparkles className="h-3.5 w-3.5" /> : null}
               {preset.label}
             </button>
           ))}
@@ -151,7 +169,7 @@ const AIQuestionInput = ({
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit}
-            className="inline-flex min-h-[38px] items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-cyan-400 px-5 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {askButtonLabel}
@@ -160,6 +178,7 @@ const AIQuestionInput = ({
       </div>
 
       {reportsHint ? <p className={isDarkTheme ? "mt-2 text-xs text-slate-300" : "mt-2 text-xs text-slate-600"}>{reportsHint}</p> : null}
+      </div>
     </section>
   );
 };

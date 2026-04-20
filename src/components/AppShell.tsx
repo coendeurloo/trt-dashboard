@@ -289,7 +289,7 @@ const AppShell = ({
           </div>
         </div>
 
-        <div className="mt-3 space-y-0.5">
+        <div className={`mt-5 space-y-1.5 border-t pt-3 ${isLightTheme ? "border-slate-200" : "border-slate-700/70"}`}>
           {renderUploadShortcut(compact)}
           <button
             type="button"

@@ -13,6 +13,7 @@ interface AnalysisHistoryDetailViewProps {
   isDarkTheme: boolean;
   onBackToHistory: () => void;
   onBackToCoach: () => void;
+  onDelete: (id: string) => void;
 }
 
 const formatDateTime = (value: string): string => {
@@ -28,7 +29,8 @@ const AnalysisHistoryDetailView = ({
   language,
   isDarkTheme,
   onBackToHistory,
-  onBackToCoach
+  onBackToCoach,
+  onDelete
 }: AnalysisHistoryDetailViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
@@ -59,7 +61,10 @@ const AnalysisHistoryDetailView = ({
           </h3>
           <p className={isDarkTheme ? "text-sm text-slate-300" : "text-sm text-slate-600"}>{formatDateTime(analysis.createdAt)}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => onDelete(analysis.id)} className={isDarkTheme ? "text-sm text-rose-300 hover:underline" : "text-sm text-rose-700 hover:underline"}>
+            {tr("Delete", "Delete")}
+          </button>
           <button type="button" onClick={onBackToHistory} className={isDarkTheme ? "text-sm text-cyan-300 hover:underline" : "text-sm text-cyan-700 hover:underline"}>
             {tr("Back to history", "Back to history")}
           </button>

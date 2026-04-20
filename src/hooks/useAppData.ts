@@ -273,6 +273,19 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     [isShareMode]
   );
 
+  const deleteAiAnalysis = useCallback(
+    (analysisId: string) => {
+      if (isShareMode) {
+        return;
+      }
+      setAppData((prev) => ({
+        ...prev,
+        aiAnalyses: (prev.aiAnalyses ?? []).filter((entry) => entry.id !== analysisId)
+      }));
+    },
+    [isShareMode]
+  );
+
   const deleteReport = useCallback(
     (reportId: string) => {
       if (isShareMode) {
@@ -907,6 +920,7 @@ export const useAppData = ({ sharedData, isShareMode }: UseAppDataOptions) => {
     samplingControlsEnabled,
     addReport,
     addAiAnalysis,
+    deleteAiAnalysis,
     deleteReport,
     deleteReports,
     updateReportAnnotations,

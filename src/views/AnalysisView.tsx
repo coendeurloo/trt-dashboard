@@ -61,6 +61,7 @@ interface AnalysisViewProps {
   onOpenHistoryList: () => void;
   onOpenHistoryDetail: (id: string) => void;
   onRetryRecent: () => void;
+  onDeleteAnalysis: (id: string) => void;
 }
 
 const PRESET_TITLE_BY_KEY: Record<AiAnalysisPresetKey, { en: string; nl: string }> = {
@@ -82,7 +83,21 @@ const formatRecentDate = (value: string): string => {
   }
 };
 
-const summarizeAnswer = (value: string): string => value.replace(/\s+/g, " ").trim();
+const stripMarkdownForPreview = (value: string): string =>
+  value
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/^>\s+/gm, "")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const summarizeAnswer = (value: string): string =>
+  stripMarkdownForPreview(value).replace(/^direct answer\s*[:\-]?\s*/i, "").trim();
 
 const AnalysisView = ({
   isAnalyzingLabs,
@@ -116,7 +131,8 @@ const AnalysisView = ({
   onCopyAnalysis,
   onOpenHistoryList,
   onOpenHistoryDetail,
-  onRetryRecent
+  onRetryRecent,
+  onDeleteAnalysis
 }: AnalysisViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isDarkTheme = settings.theme === "dark";
@@ -192,18 +208,21 @@ const AnalysisView = ({
       key: "full-analysis",
       label: tr("Full analysis of latest report", "Full analysis of latest report"),
       variant: "teal",
+      icon: "sparkles",
       onClick: () => applyPreset("full-analysis")
     },
     {
       key: "compare-latest-previous",
       label: tr("Compare latest vs previous", "Compare latest vs previous"),
       variant: "teal",
+      icon: "x",
       onClick: () => applyPreset("compare-latest-previous")
     },
     {
       key: "more",
       label: tr("More presets", "More presets"),
       variant: "neutral",
+      icon: "plus",
       onClick: () => {
         // TODO: wire preset library modal
       }
@@ -214,6 +233,7 @@ const AnalysisView = ({
     <section className="space-y-4 fade-in sm:space-y-5">
       <AIInfoBar
         isDarkTheme={isDarkTheme}
+        badgeLabel={tr("Clearer meter", "Clearer meter")}
         trustLabel={tr("AI only runs when you start an action", "AI only runs when you start an action")}
         todayLabel={tr("Today's analyses", "Today's analyses")}
         todayCount={betaUsage.dailyCount}
@@ -229,6 +249,7 @@ const AnalysisView = ({
       />
 
       <AIQuestionInput
+        badgeLabel={tr("Single primary flow", "Single primary flow")}
         title={tr("Your question", "Your question")}
         subtitle={tr(
           "Start from a suggestion, pick a preset, or write your own.",
@@ -316,28 +337,39 @@ const AnalysisView = ({
           {recentStatus === "ready" && recentAnalyses.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-2">
               {recentAnalyses.map((entry) => (
-                <button
+                <article
                   key={entry.id}
-                  type="button"
-                  onClick={() => onOpenHistoryDetail(entry.id)}
                   className={
                     isDarkTheme
-                      ? "rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 text-left transition hover:border-cyan-500/45"
-                      : "rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-cyan-500/60"
+                      ? "rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 transition hover:border-cyan-500/45"
+                      : "rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/60"
                   }
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <span className={isDarkTheme ? "text-xs text-slate-300" : "text-xs text-slate-600"}>
-                      {formatRecentDate(entry.createdAt)} {" · "} {entry.title}
-                    </span>
-                    <span className={isDarkTheme ? "rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200" : "rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700"}>
-                      AI
-                    </span>
+                    <button type="button" onClick={() => onOpenHistoryDetail(entry.id)} className="min-w-0 text-left">
+                      <span className={isDarkTheme ? "text-xs text-slate-300" : "text-xs text-slate-600"}>
+                        {formatRecentDate(entry.createdAt)} {" · "} {entry.title}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className={isDarkTheme ? "rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200" : "rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700"}>
+                        AI
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteAnalysis(entry.id)}
+                        className={isDarkTheme ? "rounded border border-slate-600 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-300 hover:border-rose-400/60 hover:text-rose-200" : "rounded border border-slate-300 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-700 hover:border-rose-300 hover:text-rose-700"}
+                      >
+                        {tr("Delete", "Delete")}
+                      </button>
+                    </div>
                   </div>
-                  <p className={isDarkTheme ? "line-clamp-2 text-sm text-slate-100" : "line-clamp-2 text-sm text-slate-800"}>
-                    {summarizeAnswer(entry.answer)}
-                  </p>
-                </button>
+                  <button type="button" onClick={() => onOpenHistoryDetail(entry.id)} className="w-full text-left">
+                    <p className={isDarkTheme ? "line-clamp-2 text-sm text-slate-100" : "line-clamp-2 text-sm text-slate-800"}>
+                      {summarizeAnswer(entry.answer)}
+                    </p>
+                  </button>
+                </article>
               ))}
             </div>
           ) : null}

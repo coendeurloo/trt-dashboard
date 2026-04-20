@@ -8,6 +8,7 @@ interface AnalysisHistoryListViewProps {
   isDarkTheme: boolean;
   onBackToCoach: () => void;
   onOpenDetail: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 const formatDateTime = (value: string): string => {
@@ -18,14 +19,27 @@ const formatDateTime = (value: string): string => {
   }
 };
 
-const summarize = (value: string): string => value.replace(/\s+/g, " ").trim();
+const summarize = (value: string): string =>
+  value
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/^>\s+/gm, "")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/^direct answer\s*[:\-]?\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const AnalysisHistoryListView = ({
   analyses,
   language,
   isDarkTheme,
   onBackToCoach,
-  onOpenDetail
+  onOpenDetail,
+  onDelete
 }: AnalysisHistoryListViewProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
 
@@ -51,28 +65,49 @@ const AnalysisHistoryListView = ({
 
       <div className="space-y-3">
         {analyses.map((entry) => (
-          <button
+          <article
             key={entry.id}
-            type="button"
-            onClick={() => onOpenDetail(entry.id)}
             className={
               isDarkTheme
-                ? "w-full rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 text-left transition hover:border-cyan-500/45"
-                : "w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-cyan-500/60"
+                ? "w-full rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 transition hover:border-cyan-500/45"
+                : "w-full rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/60"
             }
           >
             <div className="mb-2 flex items-start justify-between gap-2">
-              <span className={isDarkTheme ? "text-xs text-slate-300" : "text-xs text-slate-600"}>
-                {formatDateTime(entry.createdAt)} {" Â· "} {entry.title}
-              </span>
-              <span className={isDarkTheme ? "rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200" : "rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700"}>
-                AI
-              </span>
+              <button type="button" onClick={() => onOpenDetail(entry.id)} className="min-w-0 text-left">
+                <span className={isDarkTheme ? "text-xs text-slate-300" : "text-xs text-slate-600"}>
+                  {formatDateTime(entry.createdAt)} {" · "} {entry.title}
+                </span>
+              </button>
+              <div className="flex items-center gap-2">
+                <span
+                  className={
+                    isDarkTheme
+                      ? "rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200"
+                      : "rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700"
+                  }
+                >
+                  AI
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(entry.id)}
+                  className={
+                    isDarkTheme
+                      ? "rounded border border-slate-600 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-300 hover:border-rose-400/60 hover:text-rose-200"
+                      : "rounded border border-slate-300 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-700 hover:border-rose-300 hover:text-rose-700"
+                  }
+                >
+                  {tr("Delete", "Delete")}
+                </button>
+              </div>
             </div>
-            <p className={isDarkTheme ? "line-clamp-2 text-sm text-slate-100" : "line-clamp-2 text-sm text-slate-800"}>
-              {summarize(entry.answer)}
-            </p>
-          </button>
+            <button type="button" onClick={() => onOpenDetail(entry.id)} className="w-full text-left">
+              <p className={isDarkTheme ? "line-clamp-2 text-sm text-slate-100" : "line-clamp-2 text-sm text-slate-800"}>
+                {summarize(entry.answer)}
+              </p>
+            </button>
+          </article>
         ))}
       </div>
     </section>

@@ -94,7 +94,8 @@ describe("AnalysisView", () => {
     onCopyAnalysis: vi.fn(),
     onOpenHistoryList: vi.fn(),
     onOpenHistoryDetail: vi.fn(),
-    onRetryRecent: vi.fn()
+    onRetryRecent: vi.fn(),
+    onDeleteAnalysis: vi.fn()
   };
 
   it("renders the explicit meter counts", () => {
@@ -181,6 +182,34 @@ describe("AnalysisView", () => {
     );
     expect(screen.getByRole("heading", { name: /recent/i })).toBeTruthy();
     expect(screen.getByText(/compared latest vs previous/i)).toBeTruthy();
+  });
+
+  it("deletes a recent analysis from the saved list", () => {
+    const onDeleteAnalysis = vi.fn();
+    render(
+      <AnalysisView
+        {...baseProps}
+        onDeleteAnalysis={onDeleteAnalysis}
+        aiAnalyses={[
+          {
+            id: "a1",
+            createdAt: "2026-04-14T09:00:00.000Z",
+            prompt: "Compare latest vs previous",
+            title: "Compared latest vs previous",
+            answer: "## Direct answer **LDL** should be your top priority.",
+            scopeSnapshot: {
+              reportCount: 4,
+              biomarkerCount: 28,
+              units: "Conventional",
+              activeProtocol: "Test E 105mg"
+            }
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    expect(onDeleteAnalysis).toHaveBeenCalledWith("a1");
   });
 
   it("renders loading skeleton placeholders for recent", () => {
