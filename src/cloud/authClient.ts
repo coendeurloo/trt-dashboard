@@ -161,13 +161,21 @@ export const fetchCurrentSession = async (): Promise<CloudSession | null> => {
 };
 
 export const parseOAuthHashSession = async (
-  hash: string
+  hash: string,
+  expectedState?: string | null
 ): Promise<CloudSession | null> => {
   const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
   if (!cleanHash) {
     return null;
   }
   const params = new URLSearchParams(cleanHash);
+  const state = String(params.get("state") ?? "").trim();
+  const normalizedExpectedState = String(expectedState ?? "").trim();
+  if (normalizedExpectedState) {
+    if (!state || state !== normalizedExpectedState) {
+      throw new Error("AUTH_OAUTH_STATE_INVALID");
+    }
+  }
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
   const expiresIn = Number(params.get("expires_in") ?? "0");
@@ -348,9 +356,12 @@ export const trackVerificationEvent = async (
   }
 };
 
-export const buildGoogleOAuthUrl = (redirectTo: string): string => {
+export const buildGoogleOAuthUrl = (redirectTo: string, state?: string): string => {
   const url = new URL(buildAuthUrl("/authorize"));
   url.searchParams.set("provider", "google");
   url.searchParams.set("redirect_to", redirectTo);
+  if (typeof state === "string" && state.trim().length > 0) {
+    url.searchParams.set("state", state.trim());
+  }
   return url.toString();
 };

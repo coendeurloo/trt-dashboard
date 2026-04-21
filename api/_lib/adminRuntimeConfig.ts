@@ -215,6 +215,15 @@ export const getDefaultRuntimeConfig = (): RuntimeConfigSnapshot => ({
   source: "defaults"
 });
 
+const getSafeFallbackRuntimeConfig = (): RuntimeConfigSnapshot => ({
+  ...getDefaultRuntimeConfig(),
+  upstashKeepaliveEnabled: false,
+  cloudSignupEnabled: false,
+  shareLinksEnabled: false,
+  parserImprovementEnabled: false,
+  aiAnalysisEnabled: false
+});
+
 export const getRuntimeConfig = async (env: SupabaseServerEnv): Promise<RuntimeConfigSnapshot> => {
   try {
     const row = await readRuntimeRow(env);
@@ -248,11 +257,17 @@ export const getRuntimeConfig = async (env: SupabaseServerEnv): Promise<RuntimeC
 };
 
 export const getRuntimeConfigWithFallback = async (): Promise<RuntimeConfigSnapshot> => {
+  let env: SupabaseServerEnv;
   try {
-    const env = resolveSupabaseEnv();
-    return await getRuntimeConfig(env);
+    env = resolveSupabaseEnv();
   } catch {
     return getDefaultRuntimeConfig();
+  }
+
+  try {
+    return await getRuntimeConfig(env);
+  } catch {
+    return getSafeFallbackRuntimeConfig();
   }
 };
 

@@ -3,6 +3,7 @@ import { APP_SCHEMA_VERSION } from "../constants";
 export const CLOUD_MODE_STORAGE_KEY = "labtracker-cloud-mode-enabled-v1";
 export const CLOUD_SESSION_STORAGE_KEY = "labtracker-cloud-session-v1";
 export const CLOUD_DEVICE_ID_STORAGE_KEY = "labtracker-cloud-device-id-v1";
+export const CLOUD_OAUTH_STATE_STORAGE_KEY = "labtracker-cloud-oauth-state-v1";
 export const CLOUD_PENDING_SIGNUP_CONSENT_STORAGE_KEY = "labtracker-cloud-pending-signup-consent-v1";
 export const CLOUD_BACKUP_PROMPT_DISMISSED_STORAGE_KEY = "labtracker-cloud-backup-prompt-dismissed-v1";
 export const CLOUD_LAST_AUTH_EMAIL_STORAGE_KEY = "labtracker-cloud-last-auth-email-v1";

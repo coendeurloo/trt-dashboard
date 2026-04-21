@@ -38,6 +38,29 @@ export const parseShortShareCodeFromPath = (pathname: string): string | null => 
   return match[1];
 };
 
+const parseHashParams = (): URLSearchParams => {
+  if (typeof window === "undefined") {
+    return new URLSearchParams();
+  }
+  const cleanHash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  return new URLSearchParams(cleanHash);
+};
+
+const scrubLegacyShareTokenFromUrl = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const currentUrl = new URL(window.location.href);
+  currentUrl.searchParams.delete("share");
+  const hashParams = parseHashParams();
+  hashParams.delete("share");
+  const hashString = hashParams.toString();
+  const nextUrl = `${currentUrl.pathname}${currentUrl.search}${hashString ? `#${hashString}` : ""}`;
+  window.history.replaceState({}, document.title, nextUrl);
+};
+
 export const createInitialShareBootstrapState = (): ShareBootstrapState => {
   if (typeof window === "undefined") {
     return {
@@ -50,8 +73,10 @@ export const createInitialShareBootstrapState = (): ShareBootstrapState => {
   }
 
   const params = new URLSearchParams(window.location.search);
-  const legacyToken = (params.get("share") ?? "").trim();
+  const hashParams = parseHashParams();
+  const legacyToken = ((hashParams.get("share") ?? params.get("share")) ?? "").trim();
   if (legacyToken) {
+    scrubLegacyShareTokenFromUrl();
     const parsed = parseShareToken(legacyToken);
     if (parsed) {
       return {

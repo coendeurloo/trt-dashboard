@@ -18,7 +18,12 @@ export type RequestType =
   | "auth_login"
   | "auth_register"
   | "auth_resend_verification"
-  | "auth_unlock";
+  | "auth_unlock"
+  | "cloud_sync_write"
+  | "cloud_consent_write"
+  | "cloud_delete_account"
+  | "share_shorten"
+  | "share_resolve";
 
 const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   extraction: {
@@ -48,6 +53,26 @@ const RATE_LIMITS: Record<RequestType, RateLimitConfig> = {
   auth_unlock: {
     windowMs: 15 * 60 * 1000,
     maxRequests: 5
+  },
+  cloud_sync_write: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 120
+  },
+  cloud_consent_write: {
+    windowMs: 60 * 60 * 1000,
+    maxRequests: 30
+  },
+  cloud_delete_account: {
+    windowMs: 60 * 60 * 1000,
+    maxRequests: 5
+  },
+  share_shorten: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 30
+  },
+  share_resolve: {
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 240
   }
 };
 

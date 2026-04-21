@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LabTracker — AI Coach (revised mockup)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: {
+            900: '#060d1a',
+            800: '#0a1628',
+            700: '#0f1f36',
+            600: '#15294a',
+          },
+          ink: {
+            100: '#e6edf7',
+            200: '#c5d0e0',
+            300: '#95a3ba',
+            400: '#6c7a94',
+          },
+          teal: {
+            300: '#5eead4',
+            400: '#2dd4bf',
+            500: '#14b8a6',
+          },
+        },
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .card {
+    background: linear-gradient(180deg, rgba(20,38,68,0.6) 0%, rgba(10,22,40,0.6) 100%);
+    border: 1px solid rgba(94,234,212,0.08);
+    backdrop-filter: blur(8px);
+  }
+  .card-glow {
+    box-shadow: 0 0 0 1px rgba(94,234,212,0.12), 0 24px 60px -20px rgba(20,184,166,0.15);
+  }
+  .chip {
+    transition: all .15s ease;
+  }
+  .chip:hover {
+    border-color: rgba(94,234,212,0.4);
+    background: rgba(94,234,212,0.08);
+  }
+  .chip-active {
+    border-color: rgba(94,234,212,0.6) !important;
+    background: rgba(94,234,212,0.12) !important;
+    color: #5eead4 !important;
+  }
+  .nav-item {
+    transition: all .12s ease;
+  }
+  .nav-item:hover {
+    background: rgba(94,234,212,0.06);
+    color: #e6edf7;
+  }
+  .nav-active {
+    background: linear-gradient(90deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.02) 100%);
+    color: #5eead4;
+    border-left: 2px solid #5eead4;
+  }
+  textarea {
+    resize: none;
+  }
+  .diff-label {
+    position: absolute;
+    top: -10px;
+    right: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: #0a1628;
+    color: #5eead4;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(94,234,212,0.3);
+  }
+</style>
+</head>
+<body class="bg-bg-900 text-ink-100 min-h-screen">
+
+<!-- Top banner explaining the mockup -->
+<div class="bg-teal-500/10 border-b border-teal-500/20 text-teal-300 text-sm">
+  <div class="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between">
+    <span><strong class="font-semibold">Revised mockup</strong> — changes highlighted with a teal label in the top-right of each card.</span>
+    <span class="text-ink-300">Compare to original LabTracker AI Coach screen</span>
+  </div>
+</div>
+
+<div class="flex min-h-[calc(100vh-42px)]">
+
+  <!-- ===== SIDEBAR (grouped) ===== -->
+  <aside class="w-[260px] shrink-0 bg-bg-800/70 border-r border-white/5 flex flex-col">
+    <!-- Brand -->
+    <div class="p-5 border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-bg-700 border border-teal-300/30 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#5eead4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h3l2-6 4 12 2-6h7"/>
+          </svg>
+        </div>
+        <div>
+          <div class="text-[15px] font-semibold leading-tight">LabTracker</div>
+          <div class="text-[10px] tracking-[0.15em] text-ink-400 uppercase leading-tight mt-0.5">Blood Work Intelligence</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav groups -->
+    <nav class="flex-1 py-3 text-[14px]">
+
+      <div class="px-5 pt-2 pb-1.5 text-[10px] tracking-[0.12em] uppercase text-ink-400 font-semibold">Your data</div>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        Wellbeing
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        Lab Results
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        Alerts
+        <span class="ml-auto text-[11px] bg-amber-400/15 text-amber-300 px-1.5 py-0.5 rounded">2</span>
+      </a>
+
+      <div class="px-5 pt-4 pb-1.5 text-[10px] tracking-[0.12em] uppercase text-ink-400 font-semibold">Protocols</div>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a2 2 0 012 2v2H7V4a2 2 0 012-2zM7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
+        Protocols
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 13.5L3 21m18-18l-7.5 7.5M12 4l8 8-8 8-8-8 8-8z"/></svg>
+        Supplements
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Protocol Impact
+      </a>
+      <a class="nav-item flex items-center gap-3 px-5 py-2 text-ink-200">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Dose Simulator
+      </a>
+
+      <div class="px-5 pt-4 pb-1.5 text-[10px] tracking-[0.12em] uppercase text-ink-400 font-semibold">AI</div>
+      <a class="nav-item nav-active flex items-center gap-3 px-5 py-2 font-medium">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/><path d="M5 17l.75 2.25L8 20l-2.25.75L5 23l-.75-2.25L2 20l2.25-.75L5 17z"/></svg>
+        AI Coach
+      </a>
+    </nav>
+
+    <!-- Footer utility (upload demoted to compact action) -->
+    <div class="p-4 border-t border-white/5 space-y-2">
+      <button class="w-full flex items-center justify-center gap-2 py-2.5 rounded-md border border-teal-300/30 text-teal-300 hover:bg-teal-300/10 text-sm font-medium">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload lab PDF
+      </button>
+      <button class="w-full flex items-center justify-center gap-2 py-2.5 rounded-md text-ink-200 hover:bg-white/5 text-sm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add manual values
+      </button>
+      <a class="nav-item flex items-center gap-3 px-3 py-2 text-ink-200 text-sm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Settings
+      </a>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="flex-1 px-10 py-8 max-w-[1140px]">
+
+    <!-- Header row -->
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="text-[28px] font-semibold text-ink-100 leading-tight">AI Coach</h1>
+        <p class="text-ink-300 mt-1 text-[15px]">Ask questions about your lab data. AI only runs when you start an action.</p>
+      </div>
+      <!-- Account + theme -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 text-sm bg-bg-700/60 border border-white/5 rounded-full pl-2 pr-3 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400" aria-hidden="true"></span>
+          <span class="text-ink-200">coendeurloo@gmail.com</span>
+          <span class="text-[11px] bg-emerald-400/15 text-emerald-300 px-1.5 py-0.5 rounded" title="Your data is synced across devices">Synced</span>
+        </div>
+        <button aria-label="Switch to light mode" class="w-10 h-10 rounded-full bg-bg-700/60 border border-white/5 flex items-center justify-center text-ink-200 hover:text-teal-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Usage meter (explicit + progress bar) -->
+    <div class="card rounded-xl p-4 mb-4 relative">
+      <span class="diff-label">Clearer meter</span>
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2 text-sm text-ink-200">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5eead4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>AI only runs when you start an action</span>
+        </div>
+        <div class="flex-1 flex items-center gap-4">
+          <div class="flex-1">
+            <div class="flex items-center justify-between text-[12px] text-ink-200 mb-1">
+              <span>Today’s analyses</span>
+              <span><span class="text-ink-100 font-semibold">0</span> of 5</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full bg-teal-400" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between text-[12px] text-ink-200 mb-1">
+              <span>This month</span>
+              <span><span class="text-ink-100 font-semibold">1</span> of 25</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full bg-teal-400" style="width: 4%"></div>
+            </div>
+          </div>
+          <button class="text-[12px] text-ink-300 hover:text-teal-300" title="What counts as an analysis?">What’s this?</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Hero: Your question ===== -->
+    <section class="card card-glow rounded-2xl p-6 mb-4 relative">
+      <span class="diff-label">Single primary flow</span>
+
+      <div class="mb-4">
+        <h2 class="text-[20px] font-semibold text-ink-100">Your question</h2>
+        <p class="text-ink-300 text-sm mt-1">Start from a suggestion, pick a preset, or write your own.</p>
+      </div>
+
+      <!-- Suggestions moved ABOVE the input, so they scaffold the question -->
+      <div class="mb-3">
+        <div class="text-[11px] uppercase tracking-[0.12em] text-ink-300 font-semibold mb-2">Suggested from your data</div>
+        <div class="flex flex-wrap gap-2">
+          <button class="chip text-left text-sm px-3.5 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 hover:text-ink-100">
+            Which marker should I prioritize first for protocol safety?
+          </button>
+          <button class="chip text-left text-sm px-3.5 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 hover:text-ink-100">
+            Why is my Estradiol high?
+          </button>
+          <button class="chip text-left text-sm px-3.5 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 hover:text-ink-100">
+            Is my Estradiol trend (falling) something to act on now?
+          </button>
+          <button class="chip text-left text-sm px-3.5 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 hover:text-ink-100">
+            Does my active protocol explain these results?
+          </button>
+        </div>
+        <div class="text-[12px] text-ink-300 mt-1.5">Generated locally from your reports — the AI only runs after you submit.</div>
+      </div>
+
+      <!-- Presets — demoted to look like templates, not rival CTAs -->
+      <div class="mb-3">
+        <div class="text-[11px] uppercase tracking-[0.12em] text-ink-300 font-semibold mb-2">Or start from a preset</div>
+        <div class="flex flex-wrap gap-2">
+          <button class="chip flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border border-teal-300/25 text-teal-300 bg-teal-300/[0.04] hover:bg-teal-300/[0.08]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/></svg>
+            Full analysis of latest report
+          </button>
+          <button class="chip flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border border-teal-300/25 text-teal-300 bg-teal-300/[0.04] hover:bg-teal-300/[0.08]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+            Compare latest vs previous
+          </button>
+          <button class="chip flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-ink-200 hover:text-ink-100">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            More presets
+          </button>
+        </div>
+      </div>
+
+      <!-- The hero input -->
+      <div class="relative rounded-xl border border-white/10 bg-bg-900/70 focus-within:border-teal-300/40 transition">
+        <textarea
+          rows="4"
+          placeholder="e.g. Why is my hematocrit rising, and what should I monitor next?"
+          class="w-full bg-transparent text-ink-100 placeholder:text-ink-400 text-[15px] leading-relaxed px-4 pt-3 pb-14 focus:outline-none"
+        ></textarea>
+
+        <!-- Toolbar inside the input, tight to submit -->
+        <div class="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2 border-t border-white/5">
+          <div class="flex items-center gap-2 text-ink-400">
+            <span class="text-[12px]">Ctrl + Enter to submit</span>
+          </div>
+          <button class="flex items-center gap-2 bg-teal-400 hover:bg-teal-300 text-bg-900 font-semibold text-sm px-4 py-2 rounded-lg shadow-lg shadow-teal-400/20">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/></svg>
+            Ask AI
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Optional: recent Q&A (quick reinforcement of the "safe, finite" promise) -->
+    <section class="mt-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-[13px] uppercase tracking-[0.12em] text-ink-300 font-semibold">Recent</h3>
+        <a class="text-[12px] text-teal-300 hover:underline">View all</a>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="card rounded-xl p-4">
+          <div class="flex items-start justify-between mb-1.5">
+            <span class="text-[11px] text-ink-400">Apr 14 · Compared latest vs previous</span>
+            <span class="text-[10px] uppercase tracking-wider bg-teal-300/10 text-teal-300 px-1.5 py-0.5 rounded">AI</span>
+          </div>
+          <p class="text-sm text-ink-100 line-clamp-2">Testosterone up 18% vs last draw; SHBG dropped — free T likely above lab range. Consider re-check in 2 weeks.</p>
+        </div>
+        <div class="card rounded-xl p-4">
+          <div class="flex items-start justify-between mb-1.5">
+            <span class="text-[11px] text-ink-400">Apr 03 · Why is my Estradiol high?</span>
+            <span class="text-[10px] uppercase tracking-wider bg-teal-300/10 text-teal-300 px-1.5 py-0.5 rounded">AI</span>
+          </div>
+          <p class="text-sm text-ink-100 line-clamp-2">E2 at 58 pg/mL is consistent with the Test E dose; HCG adds aromatization load. Symptoms matter more than the number alone.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Legend of changes (below the fold, for the reviewer) -->
+<section class="max-w-[1400px] mx-auto px-6 py-10 border-t border-white/5 mt-6">
+  <h3 class="text-[13px] uppercase tracking-[0.12em] text-ink-300 font-semibold mb-4">What changed (summary of the priority fixes)</h3>
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+    <div class="card rounded-lg p-4">
+      <div class="text-teal-300 font-semibold mb-1">1. One primary flow</div>
+      <p class="text-ink-200">Textarea is the hero. "Run full analysis" and "Compare latest vs previous" become presets that fill the input. Suggestion chips moved above the input.</p>
+    </div>
+    <div class="card rounded-lg p-4">
+      <div class="text-teal-300 font-semibold mb-1">2. Context line removed</div>
+      <p class="text-ink-200">The dense "11 reports · 74 biomarkers · Conventional · Test E…" string is gone. Users have no control over those values, so showing them adds noise without adding a decision.</p>
+    </div>
+    <div class="card rounded-lg p-4">
+      <div class="text-teal-300 font-semibold mb-1">3. Explicit usage meter</div>
+      <p class="text-ink-200">"0/5 today · 1/25 month" replaced with labeled progress bars and a "What's this?" affordance.</p>
+    </div>
+    <div class="card rounded-lg p-4">
+      <div class="text-teal-300 font-semibold mb-1">4. Grouped sidebar</div>
+      <p class="text-ink-200">Nine flat items reorganized into Your data / Protocols / AI. Upload PDF demoted to a compact button in the sidebar footer.</p>
+    </div>
+    <div class="card rounded-lg p-4">
+      <div class="text-teal-300 font-semibold mb-1">5. Less label redundancy</div>
+      <p class="text-ink-200">"Ask AI" no longer appears as page + section + button. Page = AI Coach, section = Your question, button = Ask AI.</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

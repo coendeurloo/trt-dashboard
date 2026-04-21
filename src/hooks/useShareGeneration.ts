@@ -61,7 +61,7 @@ export const useShareGeneration = ({ appData, tr }: UseShareGenerationParams): U
       }
 
       const publishDirectShareLink = async (reason: "local" | "fallback") => {
-        const shareUrl = `${window.location.origin}/?share=${encodeURIComponent(token)}`;
+        const shareUrl = `${window.location.origin}/#share=${encodeURIComponent(token)}`;
         const includedReports = subset.reports.length;
         setShareStatus("success");
         setShareLink(shareUrl);

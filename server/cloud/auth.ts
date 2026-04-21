@@ -14,6 +14,7 @@ import {
   recordVerificationResendRequested,
   recordVerificationSignupStarted
 } from "../../api/_lib/cloudVerificationFunnel.js";
+import { getRuntimeConfigWithFallback } from "../../api/_lib/adminRuntimeConfig.js";
 import { checkRateLimit } from "../../api/_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import {
@@ -43,6 +44,7 @@ import {
   storePendingVerificationLink,
   toCloudSessionPayload
 } from "./authShared.js";
+import { readJsonBodyWithLimit } from "./readJsonBody.js";
 
 interface AuthCredentialsBody {
   email?: string;
@@ -84,6 +86,8 @@ interface SupabaseUserUpdateResponse {
 
 const ACCESS_TOKEN_FALLBACK_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_FALLBACK_TTL_SECONDS = 7 * 24 * 60 * 60;
+const AUTH_REQUEST_MAX_JSON_BYTES = 64 * 1024;
+const AUTH_REQUEST_TIMEOUT_MS = 10_000;
 const VERIFICATION_REQUIRED_RESPONSE = {
   ok: true,
   requiresEmailVerification: true
@@ -96,19 +100,39 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
   res.end(JSON.stringify(payload));
 };
 
+const sendBodyReadError = (res: ServerResponse, error: unknown) => {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "Request body too large") {
+    sendJson(res, 413, {
+      error: {
+        code: "AUTH_REQUEST_TOO_LARGE",
+        message: "Request body too large."
+      }
+    });
+    return;
+  }
+  if (message === "Request body timeout") {
+    sendJson(res, 408, {
+      error: {
+        code: "AUTH_REQUEST_TIMEOUT",
+        message: "Request body timeout."
+      }
+    });
+    return;
+  }
+  sendJson(res, 400, {
+    error: {
+      code: "AUTH_INVALID_INPUT",
+      message: "Invalid JSON body."
+    }
+  });
+};
+
 const readRequestBody = async <T>(req: IncomingMessage): Promise<T> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  if (chunks.length === 0) {
-    return {} as T;
-  }
-  const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw) {
-    return {} as T;
-  }
-  return JSON.parse(raw) as T;
+  return readJsonBodyWithLimit<T>(req, {
+    maxBytes: AUTH_REQUEST_MAX_JSON_BYTES,
+    timeoutMs: AUTH_REQUEST_TIMEOUT_MS
+  });
 };
 
 const normalizeEmail = (value: unknown): string => String(value ?? "").trim().toLowerCase();
@@ -406,8 +430,8 @@ export const signInHandler = async (req: IncomingMessage, res: ServerResponse) =
     let body: AuthCredentialsBody = {};
     try {
       body = await readRequestBody<AuthCredentialsBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -532,11 +556,22 @@ export const signUpHandler = async (req: IncomingMessage, res: ServerResponse) =
       return;
     }
 
+    const runtimeConfig = await getRuntimeConfigWithFallback();
+    if (!runtimeConfig.cloudSignupEnabled) {
+      sendJson(res, 403, {
+        error: {
+          code: "AUTH_SIGNUP_DISABLED",
+          message: "Cloud sign-up is currently disabled."
+        }
+      });
+      return;
+    }
+
     let body: AuthCredentialsBody = {};
     try {
       body = await readRequestBody<AuthCredentialsBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -685,8 +720,8 @@ export const resendVerificationHandler = async (req: IncomingMessage, res: Serve
     let body: { email?: string } = {};
     try {
       body = await readRequestBody<{ email?: string }>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -749,8 +784,8 @@ export const verificationEventHandler = async (req: IncomingMessage, res: Server
     let body: VerificationEventBody = {};
     try {
       body = await readRequestBody<VerificationEventBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -939,8 +974,8 @@ export const oauthHashHandler = async (req: IncomingMessage, res: ServerResponse
     let body: OAuthHashBody = {};
     try {
       body = await readRequestBody<OAuthHashBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -998,8 +1033,8 @@ export const passwordResetEmailHandler = async (req: IncomingMessage, res: Serve
     let body: PasswordResetBody = {};
     try {
       body = await readRequestBody<PasswordResetBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 
@@ -1116,8 +1151,8 @@ export const resetPasswordHandler = async (req: IncomingMessage, res: ServerResp
     let body: PasswordUpdateBody = {};
     try {
       body = await readRequestBody<PasswordUpdateBody>(req);
-    } catch {
-      sendJson(res, 400, { error: { code: "AUTH_INVALID_INPUT", message: "Invalid JSON body." } });
+    } catch (error) {
+      sendBodyReadError(res, error);
       return;
     }
 

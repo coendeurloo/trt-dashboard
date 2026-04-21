@@ -161,6 +161,28 @@ const mapKnownAuthCode = (code: string, tr: TranslateFn): string | null => {
       "The verification email could not be sent. Please try again."
     );
   }
+  if (code === "AUTH_SIGNUP_DISABLED") {
+    return tr(
+      "Nieuwe cloud-accounts zijn tijdelijk uitgeschakeld.",
+      "New cloud signups are temporarily disabled."
+    );
+  }
+  if (code === "AUTH_OAUTH_STATE_INVALID") {
+    return tr(
+      "Deze inloglink is verlopen of ongeldig. Start de Google login opnieuw vanuit de app.",
+      "This sign-in link is expired or invalid. Start Google sign-in again from the app."
+    );
+  }
+  if (
+    code === "CSRF_CROSS_SITE_BLOCKED" ||
+    code === "CSRF_ORIGIN_MISMATCH" ||
+    code === "CSRF_REFERER_MISMATCH"
+  ) {
+    return tr(
+      "Deze aanvraag werd geblokkeerd om je account te beschermen. Probeer opnieuw vanuit LabTracker.",
+      "This request was blocked to protect your account. Try again from LabTracker."
+    );
+  }
   if (code === "AUTH_BAD_REQUEST" || code === "AUTH_UNPROCESSABLE") {
     return tr(
       "De aanvraag kon niet worden verwerkt. Controleer je gegevens en probeer opnieuw.",
@@ -303,6 +325,22 @@ export const mapCloudSyncErrorToMessage = (
     return tr(
       "Cloud-sync is mislukt. Probeer opnieuw.",
       "Cloud sync failed. Please try again."
+    );
+  }
+  if (code === "CLOUD_RATE_LIMITED") {
+    return tr(
+      "Je syncverzoeken gaan te snel. Wacht even en probeer opnieuw.",
+      "Your sync requests are too frequent. Wait a moment and try again."
+    );
+  }
+  if (
+    code === "CSRF_CROSS_SITE_BLOCKED" ||
+    code === "CSRF_ORIGIN_MISMATCH" ||
+    code === "CSRF_REFERER_MISMATCH"
+  ) {
+    return tr(
+      "Deze aanvraag werd geblokkeerd om je gegevens te beschermen. Probeer opnieuw vanuit LabTracker.",
+      "This request was blocked to protect your data. Try again from LabTracker."
     );
   }
 

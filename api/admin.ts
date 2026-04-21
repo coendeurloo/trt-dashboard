@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { applyApiSecurityHeaders } from "./_lib/httpSecurity.js";
 import auditLogHandler from "../server/admin/audit-log.js";
 import meHandler from "../server/admin/me.js";
 import overviewHandler from "../server/admin/overview.js";
@@ -8,6 +9,7 @@ import usersHandler from "../server/admin/users.js";
 import usersDirectoryHandler from "../server/admin/users-directory.js";
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
+  applyApiSecurityHeaders(res);
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -30,6 +32,7 @@ const resolveAdminAction = (req: IncomingMessage): string => {
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  applyApiSecurityHeaders(res);
   const action = resolveAdminAction(req);
 
   if (action === "me") {

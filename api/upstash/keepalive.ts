@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { getRuntimeConfig } from "../_lib/adminRuntimeConfig.js";
+import { applyApiSecurityHeaders } from "../_lib/httpSecurity.js";
 import { getCounter, RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import { resolveSupabaseEnv } from "../_lib/supabaseAdmin.js";
 import { captureServerException, initServerSentry, withServerMonitor } from "../_lib/sentry.js";
@@ -9,6 +10,7 @@ const KEEPALIVE_RUNTIME_CONFIG_TIMEOUT_MS = 2500;
 const KEEPALIVE_REDIS_PROBE_TIMEOUT_MS = 3000;
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
+  applyApiSecurityHeaders(res);
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");

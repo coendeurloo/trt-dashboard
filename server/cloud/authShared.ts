@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
 import {
   deleteKey,
   getCounter,
@@ -199,15 +200,7 @@ const parseJwtExpiry = (token: string): number | null => {
 };
 
 export const getClientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers["x-forwarded-for"];
-  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (typeof candidate === "string" && candidate.trim()) {
-    const first = candidate.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-  return req.socket.remoteAddress ?? "unknown";
+  return getTrustedClientIp(req);
 };
 
 export const readCloudAccessToken = (

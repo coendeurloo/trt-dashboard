@@ -1,6 +1,9 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { getRuntimeConfigWithFallback } from "../../api/_lib/adminRuntimeConfig.js";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
+import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import { encryptShareToken, ShareCryptoConfigError } from "../../api/_lib/shareCrypto.js";
 import { saveShareRecord, ShareStoreUnavailableError } from "../../api/_lib/shareStore.js";
 
@@ -110,6 +113,30 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (req.method !== "POST") {
       sendJson(res, 405, { error: { message: "Method not allowed" } });
       return;
+    }
+
+    const ip = getTrustedClientIp(req);
+    try {
+      const limit = await checkRateLimit(ip, "share_shorten");
+      const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+      res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+      res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+      if (!limit.allowed) {
+        sendJson(res, 429, {
+          error: {
+            code: "SHARE_RATE_LIMIT",
+            message: "Too many share links created. Try again later."
+          },
+          retryAfter,
+          remaining: limit.remaining
+        });
+        return;
+      }
+    } catch (error) {
+      if (!(error instanceof RedisStoreUnavailableError)) {
+        throw error;
+      }
+      // Best effort: when limiter storage is unavailable we continue and rely on share store constraints.
     }
 
     const runtimeConfig = await getRuntimeConfigWithFallback();

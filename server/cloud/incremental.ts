@@ -1,10 +1,17 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
+import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
+import { readJsonBodyWithLimit } from "./readJsonBody.js";
 
 type IncrementalBody = {
   deviceId?: string;
   expectedRevision?: number | null;
   patch?: unknown;
 };
+
+const INCREMENTAL_MAX_JSON_BYTES = 5 * 1024 * 1024;
+const INCREMENTAL_TIMEOUT_MS = 12_000;
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -14,15 +21,10 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
 };
 
 const readRequestBody = async (req: IncomingMessage): Promise<IncrementalBody> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  if (chunks.length === 0) {
-    return {};
-  }
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(raw) as IncrementalBody;
+  return readJsonBodyWithLimit<IncrementalBody>(req, {
+    maxBytes: INCREMENTAL_MAX_JSON_BYTES,
+    timeoutMs: INCREMENTAL_TIMEOUT_MS
+  });
 };
 
 const getBearerToken = (req: IncomingMessage): string | null => {
@@ -85,7 +87,52 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const body = await readRequestBody(req);
+    const ip = getTrustedClientIp(req);
+    try {
+      const limit = await checkRateLimit(ip, "cloud_sync_write");
+      const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+      res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+      res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+      if (!limit.allowed) {
+        sendJson(res, 429, {
+          error: {
+            code: "CLOUD_RATE_LIMITED",
+            message: "Too many sync writes. Try again later."
+          },
+          retryAfter,
+          remaining: limit.remaining
+        });
+        return;
+      }
+    } catch (error) {
+      if (!(error instanceof RedisStoreUnavailableError)) {
+        throw error;
+      }
+      // Best effort: keep sync route available when shared limiter storage is degraded.
+    }
+
+    let body: IncrementalBody;
+    try {
+      body = await readRequestBody(req);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "Request body too large") {
+        sendJson(res, 413, {
+          error: { code: "REQUEST_TOO_LARGE", message: "Request body too large." }
+        });
+        return;
+      }
+      if (message === "Request body timeout") {
+        sendJson(res, 408, {
+          error: { code: "REQUEST_TIMEOUT", message: "Request body timeout." }
+        });
+        return;
+      }
+      sendJson(res, 400, {
+        error: { code: "INVALID_JSON_BODY", message: "Invalid JSON body." }
+      });
+      return;
+    }
     const deviceId = String(body.deviceId ?? "").trim();
     if (!deviceId) {
       sendJson(res, 400, {
@@ -163,4 +210,3 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
   }
 }
-

@@ -1,5 +1,7 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
+import { getTrustedClientIp } from "../_lib/clientIp.js";
+import { applyApiSecurityHeaders, validateSameOriginRequest } from "../_lib/httpSecurity.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import { requireAiEntitlement } from "../_lib/entitlements.js";
@@ -48,6 +50,7 @@ const aiLimitsDisabled = (): boolean => {
 };
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
+  applyApiSecurityHeaders(res);
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -56,12 +59,14 @@ const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => 
 
 const pipeWebResponseStream = async (upstream: Response, res: ServerResponse): Promise<void> => {
   if (!upstream.body) {
+    applyApiSecurityHeaders(res);
     res.statusCode = 502;
     res.setHeader("content-type", "application/json; charset=utf-8");
     res.end(JSON.stringify({ error: { message: "Anthropic stream body missing" } }));
     return;
   }
 
+  applyApiSecurityHeaders(res);
   res.statusCode = upstream.status;
   res.setHeader("content-type", "text/event-stream; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -158,18 +163,6 @@ const readParsedBody = (req: IncomingMessage): ProxyRequestBody | null => {
   return null;
 };
 
-const getClientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers["x-forwarded-for"];
-  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (candidate && typeof candidate === "string") {
-    const first = candidate.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-  return req.socket.remoteAddress ?? "unknown";
-};
-
 const inferRequestType = (body: ProxyRequestBody): "analysis" | "extraction" => {
   if (body.requestType === "analysis" || body.requestType === "extraction") {
     return body.requestType;
@@ -192,10 +185,22 @@ const inferRequestType = (body: ProxyRequestBody): "analysis" | "extraction" => 
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   initServerSentry();
+  applyApiSecurityHeaders(res);
 
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: { message: "Method not allowed" } });
+      return;
+    }
+
+    const sameOrigin = validateSameOriginRequest(req);
+    if (!sameOrigin.allowed) {
+      sendJson(res, 403, {
+        error: {
+          code: sameOrigin.code ?? "CSRF_ORIGIN_MISMATCH",
+          message: sameOrigin.message ?? "Cross-site request blocked."
+        }
+      });
       return;
     }
 
@@ -247,7 +252,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (!aiLimitsDisabled()) {
-      const ip = getClientIp(req);
+      const ip = getTrustedClientIp(req);
       let limit: Awaited<ReturnType<typeof checkRateLimit>>;
       try {
         limit = await checkRateLimit(ip, requestType);

@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { getRuntimeConfigWithFallback } from "../_lib/adminRuntimeConfig.js";
+import { validateSameOriginRequest } from "../_lib/httpSecurity.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../_lib/redisStore.js";
 import {
@@ -48,6 +49,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (req.method !== "POST") {
     sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } });
+    return;
+  }
+
+  const sameOrigin = validateSameOriginRequest(req);
+  if (!sameOrigin.allowed) {
+    sendJson(res, 403, {
+      error: {
+        code: sameOrigin.code ?? "CSRF_ORIGIN_MISMATCH",
+        message: sameOrigin.message ?? "Cross-site request blocked."
+      }
+    });
     return;
   }
 

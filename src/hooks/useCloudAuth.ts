@@ -15,6 +15,7 @@ import {
 } from "../cloud/authClient";
 import {
   CLOUD_MODE_STORAGE_KEY,
+  CLOUD_OAUTH_STATE_STORAGE_KEY,
   CLOUD_PENDING_SIGNUP_CONSENT_STORAGE_KEY,
   CLOUD_PRIVACY_POLICY_VERSION,
   isSupabaseConfigured
@@ -56,6 +57,14 @@ type PendingSignupConsent = {
   payload: CloudConsentPayload;
   createdAt: string;
 };
+
+type PendingOAuthState = {
+  state: string;
+  intent: GoogleAuthIntent;
+  createdAt: string;
+};
+
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 const loadCloudEnabledPref = (): boolean => {
   if (typeof window === "undefined") {
@@ -103,6 +112,85 @@ const persistPendingSignupConsent = (pending: PendingSignupConsent | null): void
     return;
   }
   window.localStorage.setItem(CLOUD_PENDING_SIGNUP_CONSENT_STORAGE_KEY, JSON.stringify(pending));
+};
+
+const createOAuthState = (): string => {
+  if (typeof window === "undefined" || !window.crypto || typeof window.crypto.getRandomValues !== "function") {
+    throw new Error("AUTH_OAUTH_STATE_UNAVAILABLE");
+  }
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+};
+
+const clearPendingOAuthState = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(CLOUD_OAUTH_STATE_STORAGE_KEY);
+};
+
+const loadPendingOAuthState = (): PendingOAuthState | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = window.localStorage.getItem(CLOUD_OAUTH_STATE_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as PendingOAuthState;
+    const normalizedState = String(parsed.state ?? "").trim();
+    const createdAtMs = Date.parse(String(parsed.createdAt ?? ""));
+    if (
+      (parsed.intent !== "signin" && parsed.intent !== "signup") ||
+      !/^[a-f0-9]{48}$/i.test(normalizedState) ||
+      !Number.isFinite(createdAtMs) ||
+      Date.now() - createdAtMs > OAUTH_STATE_MAX_AGE_MS
+    ) {
+      clearPendingOAuthState();
+      return null;
+    }
+    return {
+      state: normalizedState,
+      intent: parsed.intent,
+      createdAt: new Date(createdAtMs).toISOString()
+    };
+  } catch {
+    clearPendingOAuthState();
+    return null;
+  }
+};
+
+const persistPendingOAuthState = (intent: GoogleAuthIntent): string => {
+  if (typeof window === "undefined") {
+    throw new Error("AUTH_OAUTH_STATE_UNAVAILABLE");
+  }
+  const state = createOAuthState();
+  const pending: PendingOAuthState = {
+    state,
+    intent,
+    createdAt: new Date().toISOString()
+  };
+  window.localStorage.setItem(CLOUD_OAUTH_STATE_STORAGE_KEY, JSON.stringify(pending));
+  return state;
+};
+
+const hasOAuthTokensInHash = (hash: string): boolean => {
+  const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!cleanHash) {
+    return false;
+  }
+  const params = new URLSearchParams(cleanHash);
+  return Boolean(params.get("access_token") || params.get("refresh_token"));
+};
+
+const clearOAuthHashFromUrl = (): void => {
+  if (typeof window === "undefined" || !window.location.hash) {
+    return;
+  }
+  const cleanUrl = `${window.location.pathname}${window.location.search}`;
+  window.history.replaceState({}, document.title, cleanUrl);
 };
 
 const normalizeConsentStatus = (
@@ -163,17 +251,31 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
       setError(null);
       try {
         const hasStoredPreference = hasStoredCloudEnabledPref();
+        let oauthErrorMessage: string | null = null;
         let usedOAuthReturn = false;
         let nextSession: CloudSession | null = null;
 
         if (typeof window !== "undefined") {
           if (shouldHandleOAuthHashFromPath(window.location.pathname)) {
-            const hashSession = await parseOAuthHashSession(window.location.hash);
-            if (hashSession) {
-              nextSession = hashSession;
-              usedOAuthReturn = true;
-              const cleanUrl = `${window.location.pathname}${window.location.search}`;
-              window.history.replaceState({}, document.title, cleanUrl);
+            const pendingOAuthState = loadPendingOAuthState();
+            const containsOAuthHash = hasOAuthTokensInHash(window.location.hash);
+
+            if (pendingOAuthState) {
+              try {
+                const hashSession = await parseOAuthHashSession(window.location.hash, pendingOAuthState.state);
+                if (hashSession) {
+                  nextSession = hashSession;
+                  usedOAuthReturn = true;
+                }
+              } catch (oauthError) {
+                oauthErrorMessage = oauthError instanceof Error ? oauthError.message : "AUTH_OAUTH_STATE_INVALID";
+              } finally {
+                clearPendingOAuthState();
+                clearOAuthHashFromUrl();
+              }
+            } else if (containsOAuthHash) {
+              oauthErrorMessage = "AUTH_OAUTH_STATE_INVALID";
+              clearOAuthHashFromUrl();
             }
           }
         }
@@ -188,7 +290,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
             setConsent(null);
             setConsentStatus("required");
             setStatus("unauthenticated");
-            setError(null);
+            setError(oauthErrorMessage);
           }
           return;
         }
@@ -199,6 +301,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
 
         setSession(nextSession);
         setStatus("authenticated");
+        setError(oauthErrorMessage);
         if (usedOAuthReturn || !hasStoredPreference) {
           setCloudEnabled(true);
         }
@@ -260,6 +363,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
   const signInEmailHandler = async (email: string, password: string) => {
     setError(null);
     setConsentStatus("loading");
+    clearPendingOAuthState();
     const nextSession = await signInWithPassword(email.trim(), password);
     const pendingSignupConsent = loadPendingSignupConsent();
     let nextConsent: CloudConsentState;
@@ -283,6 +387,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
   ) => {
     setError(null);
     setConsentStatus("required");
+    clearPendingOAuthState();
     persistPendingSignupConsent({
       payload,
       createdAt: new Date().toISOString()
@@ -326,7 +431,8 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     }
 
     const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-    window.location.assign(buildGoogleOAuthUrl(redirectTo));
+    const oauthState = persistPendingOAuthState(intent);
+    window.location.assign(buildGoogleOAuthUrl(redirectTo, oauthState));
   };
 
   const requestUnlockEmail = async (email: string) => {
@@ -360,6 +466,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     setConsent(null);
     setConsentStatus("required");
     persistPendingSignupConsent(null);
+    clearPendingOAuthState();
     setCloudEnabled(false);
     setStatus("unauthenticated");
   };

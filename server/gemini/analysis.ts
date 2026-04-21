@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { getRuntimeConfigWithFallback } from "../../api/_lib/adminRuntimeConfig.js";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
 import { checkRateLimit } from "../../api/_lib/rateLimit.js";
 import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 import { requireAiEntitlement } from "../../api/_lib/entitlements.js";
@@ -76,18 +77,6 @@ const readJsonBody = async (req: IncomingMessage): Promise<ProxyRequestBody> =>
     });
   });
 
-const getClientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers["x-forwarded-for"];
-  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (candidate && typeof candidate === "string") {
-    const first = candidate.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-  return req.socket.remoteAddress ?? "unknown";
-};
-
 const extractText = (body: ProxyRequestBody): string => {
   const content = body.payload?.messages?.[0]?.content;
   return typeof content === "string" ? content : "";
@@ -158,7 +147,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (!aiLimitsDisabled()) {
-      const ip = getClientIp(req);
+      const ip = getTrustedClientIp(req);
       let limit: Awaited<ReturnType<typeof checkRateLimit>>;
       try {
         limit = await checkRateLimit(ip, "analysis");

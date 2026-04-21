@@ -1,5 +1,10 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import {
+  applyApiSecurityHeaders,
+  isMutationMethod,
+  validateSameOriginRequest
+} from "./_lib/httpSecurity.js";
+import {
   logoutHandler,
   oauthHashHandler,
   passwordResetEmailHandler,
@@ -18,6 +23,7 @@ import { hasCloudEnv, resolveCloudAuthContext, resolveCloudEnv } from "../server
 import replaceHandler from "../server/cloud/replace.js";
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
+  applyApiSecurityHeaders(res);
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -46,8 +52,39 @@ const PROTECTED_ACTIONS = new Set([
   "delete-account"
 ]);
 
+const MUTATING_ACTIONS = new Set([
+  "consent",
+  "replace",
+  "incremental",
+  "delete-account",
+  "auth-signin",
+  "auth-signup",
+  "auth-resend-verification",
+  "auth-logout",
+  "auth-oauth-hash",
+  "auth-unlock-email",
+  "auth-password-reset-email",
+  "auth-reset-password",
+  "auth-verification-event"
+]);
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  applyApiSecurityHeaders(res);
   const action = resolveCloudAction(req);
+
+  if (MUTATING_ACTIONS.has(action) && isMutationMethod(req.method)) {
+    const sameOrigin = validateSameOriginRequest(req);
+    if (!sameOrigin.allowed) {
+      sendJson(res, 403, {
+        error: {
+          code: sameOrigin.code ?? "CSRF_ORIGIN_MISMATCH",
+          message: sameOrigin.message ?? "Cross-site request blocked."
+        }
+      });
+      return;
+    }
+  }
+
   if (PROTECTED_ACTIONS.has(action)) {
     const env = resolveCloudEnv();
     if (!hasCloudEnv(env)) {

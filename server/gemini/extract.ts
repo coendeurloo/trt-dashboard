@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
 import {
   RedisStoreUnavailableError,
   getCounter,
@@ -110,18 +111,6 @@ const readJsonBody = async (req: IncomingMessage): Promise<GeminiExtractRequestB
       reject(error);
     });
   });
-
-const getClientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers["x-forwarded-for"];
-  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (candidate && typeof candidate === "string") {
-    const first = candidate.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-  return req.socket.remoteAddress ?? "unknown";
-};
 
 const extractJsonBlock = (input: string): string | null => {
   const fenced = input.match(/```json\s*([\s\S]*?)```/i);
@@ -433,7 +422,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     };
 
-    const ip = getClientIp(req);
+    const ip = getTrustedClientIp(req);
     const today = getDayKey();
     const userKey = makeDailyUserCallsKey(today, ip);
     if (!aiLimitsDisabled()) {

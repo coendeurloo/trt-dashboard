@@ -1,4 +1,7 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getTrustedClientIp } from "../../api/_lib/clientIp.js";
+import { checkRateLimit } from "../../api/_lib/rateLimit.js";
+import { RedisStoreUnavailableError } from "../../api/_lib/redisStore.js";
 
 const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
   res.statusCode = statusCode;
@@ -66,6 +69,30 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
+    const ip = getTrustedClientIp(req);
+    try {
+      const limit = await checkRateLimit(ip, "cloud_delete_account");
+      const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+      res.setHeader("x-ratelimit-remaining", String(limit.remaining));
+      res.setHeader("x-ratelimit-reset", String(limit.resetAt));
+      if (!limit.allowed) {
+        sendJson(res, 429, {
+          error: {
+            code: "CLOUD_RATE_LIMITED",
+            message: "Too many delete-account attempts. Try again later."
+          },
+          retryAfter,
+          remaining: limit.remaining
+        });
+        return;
+      }
+    } catch (error) {
+      if (!(error instanceof RedisStoreUnavailableError)) {
+        throw error;
+      }
+      // Best effort: account deletion must still be possible when limiter storage is degraded.
+    }
+
     const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       method: "GET",
       headers: {
@@ -110,4 +137,3 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
   }
 }
-

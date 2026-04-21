@@ -1,4 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { getTrustedClientIp } from "./clientIp.js";
+import { applyApiSecurityHeaders } from "./httpSecurity.js";
 
 export const PARSER_IMPROVEMENT_MAX_PDF_BYTES = 15 * 1024 * 1024;
 export const PARSER_IMPROVEMENT_MAX_MULTIPART_BYTES = PARSER_IMPROVEMENT_MAX_PDF_BYTES + 256 * 1024;
@@ -43,6 +45,7 @@ const createRouteError = (message: string, code: string, statusCode: number): Ro
 };
 
 export const sendJson = (res: ServerResponse, statusCode: number, payload: unknown) => {
+  applyApiSecurityHeaders(res);
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -123,15 +126,7 @@ const isPdfMagicHeader = (fileBuffer: Buffer): boolean => fileBuffer.subarray(0,
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const getClientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers["x-forwarded-for"];
-  const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (candidate && typeof candidate === "string") {
-    const first = candidate.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-  return req.socket.remoteAddress ?? "unknown";
+  return getTrustedClientIp(req);
 };
 
 export const parseParserImprovementSubmission = async (
