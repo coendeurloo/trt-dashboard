@@ -193,6 +193,35 @@ const clearOAuthHashFromUrl = (): void => {
   window.history.replaceState({}, document.title, cleanUrl);
 };
 
+const readOAuthRedirectErrorFromLocation = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const errorCode = String(params.get("error_code") ?? "").trim().toLowerCase();
+  const error = String(params.get("error") ?? "").trim().toLowerCase();
+
+  if (errorCode === "bad_oauth_state") {
+    return "AUTH_OAUTH_STATE_INVALID";
+  }
+  if (error === "access_denied") {
+    return "AUTH_UNAUTHORIZED";
+  }
+  return null;
+};
+
+const clearOAuthErrorParamsFromUrl = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_code");
+  url.searchParams.delete("error_description");
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+};
+
 const normalizeConsentStatus = (
   consent: CloudConsentState | null
 ): CloudConsentStatus => {
@@ -262,7 +291,7 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
 
             if (pendingOAuthState) {
               try {
-                const hashSession = await parseOAuthHashSession(window.location.hash, pendingOAuthState.state);
+                const hashSession = await parseOAuthHashSession(window.location.hash);
                 if (hashSession) {
                   nextSession = hashSession;
                   usedOAuthReturn = true;
@@ -276,6 +305,14 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
             } else if (containsOAuthHash) {
               oauthErrorMessage = "AUTH_OAUTH_STATE_INVALID";
               clearOAuthHashFromUrl();
+            }
+
+            if (!oauthErrorMessage) {
+              oauthErrorMessage = readOAuthRedirectErrorFromLocation();
+              if (oauthErrorMessage) {
+                clearPendingOAuthState();
+                clearOAuthErrorParamsFromUrl();
+              }
             }
           }
         }
@@ -431,8 +468,8 @@ export const useCloudAuth = (isShareMode: boolean): UseCloudAuthResult => {
     }
 
     const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-    const oauthState = persistPendingOAuthState(intent);
-    window.location.assign(buildGoogleOAuthUrl(redirectTo, oauthState));
+    persistPendingOAuthState(intent);
+    window.location.assign(buildGoogleOAuthUrl(redirectTo));
   };
 
   const requestUnlockEmail = async (email: string) => {
