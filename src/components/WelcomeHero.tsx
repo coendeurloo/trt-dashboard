@@ -226,16 +226,19 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
       <div className="relative z-[1] grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,500px)]">
         <div>
           <div className="max-w-2xl">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300/85">
+              {tr("Voor TRT, biohackers en bodybuilders", "For TRT, biohackers, and bodybuilders")}
+            </p>
             <h3 className="text-balance text-2xl font-semibold leading-tight text-slate-100 sm:text-3xl">
               {tr(
-                "Gebouwd voor TRT, enhanced athletes en protocolwijzigingen",
-                "Built for TRT, enhanced athletes, and protocol changes"
+                "Je bloedwaarden, gekoppeld aan wat je echt doet.",
+                "Your bloodwork, connected to what you're actually doing."
               )}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">
               {tr(
-                "Upload je lab-PDF en zie wat dosis, middelen, supplementen en timing met je biomarkers doen. Privacy-first, maar niet generiek.",
-                "Upload your lab PDF and see how dose, compounds, supplements, and timing affect your biomarkers. Privacy-first, but not generic."
+                "Upload je lab-PDF en koppel elke wijziging - dosis, middelen, supplementen, timing - aan de biomarkers die ertoe doen. Privacy-first.",
+                "Upload your lab PDF and connect every change - dose, compounds, supplements, timing - to the biomarkers that matter. Privacy-first."
               )}
             </p>
             {showCloudAuthCta ? (

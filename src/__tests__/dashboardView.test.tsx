@@ -159,8 +159,9 @@ describe("DashboardView first-visit hero", () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, reports: [], visibleReports: [] }} />);
 
-    expect(screen.getByText("Built for TRT, enhanced athletes, and protocol changes")).toBeTruthy();
-    expect(screen.getByText(/Privacy-first, but not generic./i)).toBeTruthy();
+    expect(screen.getByText("For TRT, biohackers, and bodybuilders")).toBeTruthy();
+    expect(screen.getByText("Your bloodwork, connected to what you're actually doing.")).toBeTruthy();
+    expect(screen.getByText(/connect every change - dose, compounds, supplements, timing - to the biomarkers that matter/i)).toBeTruthy();
     expect(screen.getByRole("img", { name: "LabTracker dashboard preview" })).toBeTruthy();
 
     const demoButton = screen.getByRole("button", { name: "See a live demo" });
