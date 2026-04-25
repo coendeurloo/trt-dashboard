@@ -934,7 +934,6 @@ const DashboardView = ({
             cloudConfigured={cloudConfigured}
             onLoadDemo={onLoadDemo}
             onUploadClick={onUploadClick}
-            onSetUserProfile={(profile) => onUpdateSettings({ userProfile: profile })}
             onOpenCloudAuth={onOpenCloudAuth}
           />
         ) : visibleReports.length === 0 ? (

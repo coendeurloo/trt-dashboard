@@ -144,8 +144,8 @@ describe("ProtocolImpactView", () => {
 
   it("renders title, subtitle and selector", () => {
     render(<ProtocolImpactView {...baseProps} />);
-    expect(screen.getByText("Protocol Impact")).toBeTruthy();
-    expect(screen.getByText(/See what changed in your labs after each protocol update./i)).toBeTruthy();
+    expect(screen.getByText("Change Impact")).toBeTruthy();
+    expect(screen.getByText(/See which protocol change likely moved your biomarkers/i)).toBeTruthy();
     expect(screen.getByLabelText("Protocol change")).toBeTruthy();
   });
 
@@ -167,7 +167,7 @@ describe("ProtocolImpactView", () => {
     const listbox = screen.getByRole("listbox");
     fireEvent.click(within(listbox).getByText(/01 Oct 2024/i));
     expect(within(changesSection).getByText(/115 mg\/week -> 105 mg\/week/i)).toBeTruthy();
-    expect(screen.getByText("Limited data")).toBeTruthy();
+    expect(screen.getAllByText("Early signal").length).toBeGreaterThan(0);
   });
 
   it("shows three simplified marker cards for the same top three changes", () => {
@@ -185,7 +185,7 @@ describe("ProtocolImpactView", () => {
     render(<ProtocolImpactView {...baseProps} />);
     expect(screen.getByText(/2 improved/i)).toBeTruthy();
     expect(screen.getByText(/1 worsened/i)).toBeTruthy();
-    expect(screen.getByText("High confidence")).toBeTruthy();
+    expect(screen.getAllByText("Strong signal").length).toBeGreaterThan(0);
   });
 
   it("shows protocol changes as a secondary compact section", () => {

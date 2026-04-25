@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Activity, ArrowRight, ChevronDown, Target } from "lucide-react";
 import { ProtocolImpactDoseEvent, ProtocolImpactMarkerRow } from "../analytics";
 import { formatAxisTick } from "../chartHelpers";
 import { getMarkerDisplayName, trLocale } from "../i18n";
@@ -80,15 +80,55 @@ const measurementLine = (row: ProtocolImpactMarkerRow): string => {
   return `${beforeValue} -> ${afterValue} ${row.unit}`;
 };
 
+const formatSignedDelta = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return "-";
+  }
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}${Math.abs(Number(formatAxisTick(value)))}%`;
+};
+
+const buildProtocolChangeSummary = (event: ProtocolImpactDoseEvent, tr: Translator): string => {
+  const compoundSummary = summarizeCompounds(event.fromCompounds, event.toCompounds);
+  if (event.fromDose !== event.toDose) {
+    const fromDose = event.fromDose === null ? "?" : `${formatAxisTick(event.fromDose)} mg/wk`;
+    const toDose = event.toDose === null ? "?" : `${formatAxisTick(event.toDose)} mg/wk`;
+    const compound = compoundSummary.added[0] ?? compoundSummary.kept[0] ?? event.toCompounds[0] ?? "";
+    return compound ? `${fromDose} -> ${toDose} · ${compound}` : `${fromDose} -> ${toDose}`;
+  }
+  if (compoundSummary.added.length > 0 || compoundSummary.removed.length > 0) {
+    const added = compoundSummary.added.length > 0 ? `${tr("toegevoegd", "added")}: ${compoundSummary.added.join(", ")}` : "";
+    const removed = compoundSummary.removed.length > 0 ? `${tr("gestopt", "removed")}: ${compoundSummary.removed.join(", ")}` : "";
+    return [added, removed].filter(Boolean).join(" · ");
+  }
+  return tr("Protocolwijziging", "Protocol update");
+};
+
+const buildMainImpactSentence = (
+  row: ProtocolImpactMarkerRow | undefined,
+  language: AppLanguage,
+  tr: Translator
+): string => {
+  if (!row || row.deltaPct === null || !Number.isFinite(row.deltaPct)) {
+    return tr("Nog geen sterk signaal gemeten na deze wijziging.", "No strong signal measured after this change yet.");
+  }
+  const marker = getMarkerDisplayName(row.marker, language);
+  const direction = row.deltaPct > 0 ? tr("steeg", "rose") : row.deltaPct < 0 ? tr("daalde", "dropped") : tr("bleef vlak", "stayed flat");
+  return tr(
+    `${marker} ${direction} ${Math.abs(Number(formatAxisTick(row.deltaPct)))}% na deze wijziging.`,
+    `${marker} ${direction} ${Math.abs(Number(formatAxisTick(row.deltaPct)))}% after this change.`
+  );
+};
+
 const ProtocolImpactHeader = ({ tr, isDarkTheme }: { tr: Translator; isDarkTheme: boolean }) => (
   <header className="space-y-2">
     <h2 className={`text-xl font-semibold sm:text-2xl ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
-      {tr("Protocol-impact", "Protocol Impact")}
+      {tr("Change Impact", "Change Impact")}
     </h2>
     <p className={`max-w-2xl text-sm leading-relaxed ${tone(isDarkTheme, "text-slate-300", "text-slate-600")}`}>
       {tr(
-        "Bekijk wat er in je labs veranderde na elke protocol-update.",
-        "See what changed in your labs after each protocol update."
+        "Zie welke protocolwijziging waarschijnlijk je biomarkers bewoog, en waar je de volgende labronde op moet letten.",
+        "See which protocol change likely moved your biomarkers, and what to watch on the next lab round."
       )}
     </p>
   </header>
@@ -208,6 +248,91 @@ const ProtocolImpactEventSelector = ({
         </ul>
       ) : null}
     </div>
+  );
+};
+
+const ProtocolImpactStoryHero = ({
+  event,
+  rows,
+  markers,
+  language,
+  tr,
+  isDarkTheme
+}: {
+  event: ProtocolImpactDoseEvent;
+  rows: ProtocolImpactMarkerRow[];
+  markers: ProtocolImpactMarkerRow[];
+  language: AppLanguage;
+  tr: Translator;
+  isDarkTheme: boolean;
+}) => {
+  const primary = markers[0];
+  const summary = getEventOutcomeSummary(rows, event);
+  const confidence = getConfidenceLabel(event.eventConfidence, tr);
+  const protocolSummary = buildProtocolChangeSummary(event, tr);
+  const measuredCount = summary.measuredRows.length;
+
+  return (
+    <section
+      className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 ${
+        isDarkTheme
+          ? "border border-cyan-400/25 bg-[radial-gradient(circle_at_12%_15%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(8,47,73,0.72))] shadow-[0_24px_70px_-42px_rgba(34,211,238,0.85)]"
+          : "border border-cyan-200 bg-[radial-gradient(circle_at_12%_15%,rgba(14,165,233,0.14),transparent_34%),linear-gradient(135deg,#ffffff,#eaf8ff)] shadow-sm"
+      }`}
+    >
+      <div className="relative z-[1] grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)] lg:items-stretch">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${tone(isDarkTheme, "border-cyan-400/35 bg-cyan-500/10 text-cyan-100", "border-cyan-200 bg-cyan-50 text-cyan-800")}`}>
+              <Activity className="h-3.5 w-3.5" />
+              {tr("Grootste gemeten signaal", "Largest measured signal")}
+            </span>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${confidence.toneClass}`}>
+              {confidence.label}
+            </span>
+          </div>
+          <h3 className={`mt-4 max-w-3xl text-2xl font-semibold leading-tight sm:text-4xl ${tone(isDarkTheme, "text-slate-50", "text-slate-950")}`}>
+            {buildMainImpactSentence(primary, language, tr)}
+          </h3>
+          <div className={`mt-4 flex flex-wrap items-center gap-2 text-sm ${tone(isDarkTheme, "text-slate-300", "text-slate-600")}`}>
+            <span>{formatDate(event.changeDate)}</span>
+            <ArrowRight className="h-4 w-4" />
+            <span className={tone(isDarkTheme, "text-slate-100", "text-slate-900")}>{protocolSummary}</span>
+          </div>
+        </div>
+
+        <div className={`rounded-2xl border p-4 ${tone(isDarkTheme, "border-slate-700/70 bg-slate-950/35", "border-cyan-100 bg-white/75")}`}>
+          <div className="flex items-center gap-2">
+            <Target className={`h-4 w-4 ${tone(isDarkTheme, "text-cyan-200", "text-cyan-700")}`} />
+            <p className={`text-sm font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+              {tr("Impact snapshot", "Impact snapshot")}
+            </p>
+          </div>
+          <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <dt className={`text-[11px] uppercase tracking-wide ${tone(isDarkTheme, "text-slate-500", "text-slate-500")}`}>{tr("Beter", "Better")}</dt>
+              <dd className={`mt-1 text-2xl font-semibold ${tone(isDarkTheme, "text-emerald-200", "text-emerald-700")}`}>{summary.improved}</dd>
+            </div>
+            <div>
+              <dt className={`text-[11px] uppercase tracking-wide ${tone(isDarkTheme, "text-slate-500", "text-slate-500")}`}>{tr("Bewaken", "Watch")}</dt>
+              <dd className={`mt-1 text-2xl font-semibold ${tone(isDarkTheme, "text-rose-200", "text-rose-700")}`}>{summary.worsened}</dd>
+            </div>
+            <div>
+              <dt className={`text-[11px] uppercase tracking-wide ${tone(isDarkTheme, "text-slate-500", "text-slate-500")}`}>{tr("Gemeten", "Measured")}</dt>
+              <dd className={`mt-1 text-2xl font-semibold ${tone(isDarkTheme, "text-cyan-100", "text-cyan-800")}`}>{measuredCount}</dd>
+            </div>
+          </dl>
+          {primary ? (
+            <div className={`mt-4 rounded-xl border px-3 py-2 ${tone(isDarkTheme, "border-slate-700/70 bg-slate-900/50", "border-slate-200 bg-slate-50")}`}>
+              <p className={`text-xs ${tone(isDarkTheme, "text-slate-400", "text-slate-500")}`}>{tr("Voor -> na", "Before -> after")}</p>
+              <p className={`mt-1 text-sm font-semibold ${tone(isDarkTheme, "text-slate-100", "text-slate-900")}`}>
+                {measurementLine(primary)} <span className={deltaToneClass(primary.deltaPct, isDarkTheme)}>({formatSignedDelta(primary.deltaPct)})</span>
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -606,6 +731,14 @@ const ProtocolImpactView = ({ protocolDoseEvents, settings, language }: Protocol
               events={protocolDoseEvents}
               selectedEventId={selectedEvent.id}
               onSelect={setSelectedEventId}
+              tr={tr}
+              isDarkTheme={isDarkTheme}
+            />
+            <ProtocolImpactStoryHero
+              event={selectedEvent}
+              rows={selectedEvent.rows}
+              markers={topMarkers}
+              language={settings.language}
               tr={tr}
               isDarkTheme={isDarkTheme}
             />

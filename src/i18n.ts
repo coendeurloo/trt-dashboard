@@ -143,8 +143,8 @@ export const UI_TEXT = {
     en: "OCR was only partially successful. Some markers may be missing."
   },
   pdfLowConfidenceLocalWarning: {
-    nl: "De parserzekerheid is laag. Controleer datum, markerwaarden en referenties voor je opslaat.",
-    en: "Parser confidence is low. Check date, marker values, and references before saving."
+    nl: "Sommige gevonden rijen lijken onzeker. Controleer datum, waardes en referenties voor je opslaat.",
+    en: "Some extracted rows look uncertain. Check date, values, and references before saving."
   }
 } as const;
 

@@ -35,7 +35,7 @@ describe("ParserUploadSummaryModal", () => {
     );
 
     expect(screen.getByText("2 biomarkers found")).toBeTruthy();
-    expect(screen.getByText(/needs review before saving/i)).toBeTruthy();
+    expect(screen.getByText(/a few rows need checking before saving/i)).toBeTruthy();
     expect(screen.queryByText(/confidence/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Send PDF to improve parser" }));
@@ -120,8 +120,6 @@ describe("ParserUploadSummaryModal", () => {
     );
 
     expect(screen.queryByText(/Only a few markers were found/i)).toBeNull();
-    expect(
-      screen.getByText(/Parser quality signals indicate this report needs extra review before saving/i)
-    ).toBeTruthy();
+    expect(screen.getByText(/A few quality signals need an extra check before saving/i)).toBeTruthy();
   });
 });

@@ -29,6 +29,7 @@ import {
 } from "./cloud/authClient";
 import type { CloudConsentPayload } from "./cloud/consentClient";
 import { getDemoSnapshot } from "./demoData";
+import { USER_PROFILES } from "./data/userProfiles";
 import { blankAnnotations, normalizeAnalysisTextForDisplay } from "./chartHelpers";
 import { getMarkerDisplayName, getTabLabel, trLocale } from "./i18n";
 import {
@@ -492,11 +493,27 @@ const App = () => {
   const [isUploadPanelOpen, setIsUploadPanelOpen] = useState(false);
   const [recentAnalysesStatus, setRecentAnalysesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [showFirstReportProfilePicker, setShowFirstReportProfilePicker] = useState(false);
   const [onboardingReport, setOnboardingReport] = useState<LabReport | null>(null);
   const [onboardingEntryPoint, setOnboardingEntryPoint] = useState<OnboardingEntryPoint | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [doseResponseInput, setDoseResponseInput] = useState("");
   const [dashboardView, setDashboardView] = useState<"primary" | "all">("primary");
+  const startFirstReportOnboarding = useCallback((report: LabReport) => {
+    setOnboardingReport(report);
+    setOnboardingEntryPoint("first_report");
+    setShowFirstReportProfilePicker(true);
+  }, []);
+  const continueFirstReportOnboarding = useCallback(
+    (profile?: UserProfile) => {
+      if (profile) {
+        updateSettings({ userProfile: profile });
+      }
+      setShowFirstReportProfilePicker(false);
+      setShowOnboardingWizard(true);
+    },
+    [updateSettings]
+  );
   const openCloudAuthModal = useCallback((view: CloudAuthView = "signin", prefillEmail?: string | null) => {
     setCloudAuthModalView(view);
     setCloudAuthModalPrefillEmail(
@@ -2430,9 +2447,7 @@ const App = () => {
     const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
     const outcome = savePreparedReports([prepared]);
     if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
-      setOnboardingReport(outcome.firstSavedReport);
-      setOnboardingEntryPoint("first_report");
-      setShowOnboardingWizard(true);
+      startFirstReportOnboarding(outcome.firstSavedReport);
     }
 
     if (outcome.saved === 0 && outcome.skippedConflicts > 0) {
@@ -2497,9 +2512,7 @@ const App = () => {
     const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
     const outcome = savePreparedReports([prepared]);
     if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
-      setOnboardingReport(outcome.firstSavedReport);
-      setOnboardingEntryPoint("first_report");
-      setShowOnboardingWizard(true);
+      startFirstReportOnboarding(outcome.firstSavedReport);
     }
 
     if (outcome.saved > 0 || outcome.skippedExact > 0) {
@@ -2566,9 +2579,7 @@ const App = () => {
     const isFirstReport = reports.length === 0 && !appData.settings.onboardingCompleted;
     const outcome = savePreparedReports(prepared);
     if (outcome.saved > 0 && isFirstReport && outcome.firstSavedReport) {
-      setOnboardingReport(outcome.firstSavedReport);
-      setOnboardingEntryPoint("first_report");
-      setShowOnboardingWizard(true);
+      startFirstReportOnboarding(outcome.firstSavedReport);
     }
     const conflictDates = new Set(outcome.conflictSkippedTestDates);
     if (conflictDates.size > 0) {
@@ -4706,6 +4717,81 @@ const App = () => {
         ) : null}
       </AnimatePresence>
 
+      {/* Profile choice after first successful upload */}
+      <AnimatePresence>
+        {showFirstReportProfilePicker && onboardingReport ? (
+          <motion.div
+            className="app-modal-overlay z-[92]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="first-report-profile-title"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              className={`app-modal-shell w-full max-w-3xl p-4 sm:p-5 ${
+                resolvedTheme === "light"
+                  ? "border border-cyan-500/35 bg-white/95 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.45)]"
+                  : "border border-cyan-500/40 bg-slate-900/95"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p
+                    id="first-report-profile-title"
+                    className={`text-lg font-semibold ${resolvedTheme === "light" ? "text-slate-900" : "text-cyan-100"}`}
+                  >
+                    {tr("Je rapport staat erin. Waar moeten we op focussen?", "Your report is in. What should we focus on?")}
+                  </p>
+                  <p className={`mt-1 text-sm ${resolvedTheme === "light" ? "text-slate-600" : "text-slate-300"}`}>
+                    {tr(
+                      "Kies nu je profiel zodat tabs, biomarkers en AI-context meteen op jouw situatie aansluiten.",
+                      "Pick your profile now so tabs, biomarkers, and AI context match your situation."
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => continueFirstReportOnboarding()}
+                  className={`rounded-md border px-2.5 py-1.5 text-xs ${
+                    resolvedTheme === "light"
+                      ? "border-slate-300 text-slate-700 hover:border-slate-400"
+                      : "border-slate-600 text-slate-300 hover:border-slate-500"
+                  }`}
+                >
+                  {tr("Overslaan", "Skip")}
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {USER_PROFILES.map((profile) => (
+                  <button
+                    key={profile.id}
+                    type="button"
+                    onClick={() => continueFirstReportOnboarding(profile.id)}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      resolvedTheme === "light"
+                        ? "border-slate-300 bg-slate-50 hover:border-cyan-500/60 hover:bg-cyan-500/10"
+                        : "border-slate-700 bg-slate-900/60 hover:border-cyan-400/60 hover:bg-cyan-500/10"
+                    }`}
+                  >
+                    <p className={`text-sm font-semibold ${resolvedTheme === "light" ? "text-slate-900" : "text-slate-100"}`}>
+                      {appData.settings.language === "nl" ? profile.labelNl : profile.labelEn}
+                    </p>
+                    <p className={`mt-1 text-xs leading-5 ${resolvedTheme === "light" ? "text-slate-600" : "text-slate-400"}`}>
+                      {appData.settings.language === "nl" ? profile.descriptionNl : profile.descriptionEn}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
       {/* Onboarding wizard after first report upload */}
       <AnimatePresence>
         {showOnboardingWizard && onboardingReport ? (
@@ -4722,6 +4808,7 @@ const App = () => {
               onAddCheckIn={addCheckIn}
               onComplete={() => {
                 setShowOnboardingWizard(false);
+                setShowFirstReportProfilePicker(false);
                 setOnboardingReport(null);
                 setOnboardingEntryPoint(null);
                 if (onboardingEntryPoint === "first_report") {
@@ -4730,6 +4817,7 @@ const App = () => {
               }}
               onCancel={() => {
                 setShowOnboardingWizard(false);
+                setShowFirstReportProfilePicker(false);
                 setOnboardingReport(null);
                 setOnboardingEntryPoint(null);
               }}

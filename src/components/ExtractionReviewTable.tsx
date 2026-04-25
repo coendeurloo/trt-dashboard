@@ -219,8 +219,8 @@ const ExtractionReviewTable = ({
       }
       if (code === "PDF_LOW_CONFIDENCE_LOCAL") {
         return tr(
-          "De parserzekerheid is laag. Controleer datum, biomarkerwaarden en referentiebereiken voordat je opslaat.",
-          "Parser confidence is low. Check date, biomarker values, and reference ranges before saving."
+          "Sommige uitgelezen rijen lijken onzeker. Controleer datum, waarden en referentiebereiken voordat je opslaat.",
+          "Some extracted rows look uncertain. Check date, values, and reference ranges before saving."
         );
       }
       if (code === "PDF_UNKNOWN_LAYOUT") {
@@ -302,8 +302,8 @@ const ExtractionReviewTable = ({
   const lowQualityReviewMessage =
     draft.markers.length > 3
       ? tr(
-          "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
-          "Parser quality signals indicate this report needs extra review before saving."
+          "We hebben biomarkers gevonden, maar een paar signalen vragen om extra controle voordat je opslaat.",
+          "We found biomarkers, but a few signals need an extra check before saving."
         )
       : draft.markers.length > 1
       ? tr(

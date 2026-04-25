@@ -34,11 +34,11 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
       return tr("Er zijn weinig biomarkers gevonden.", "Only a few biomarkers were found.");
     }
     if (reason === "confidence_very_low") {
-      return tr("Parser confidence is erg laag.", "Parser confidence is very low.");
+      return tr("De gevonden rijen lijken niet betrouwbaar genoeg.", "The extracted rows do not look reliable enough.");
     }
     return tr(
-      "Confidence en unitdekking zijn laag.",
-      "Confidence and unit coverage are low."
+      "Er missen waarschijnlijk waarden of eenheden.",
+      "Values or units are probably missing."
     );
   };
 
@@ -51,27 +51,27 @@ const ParserUncertaintyModal = ({ open, language, assessment, onUseAi, onSkip }:
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-100">
-              {tr("Parser is onzeker over dit rapport", "Parser is uncertain about this report")}
+              {tr("We moeten dit rapport extra controleren", "This report needs an extra check")}
             </h3>
             <p className="mt-1 text-sm text-slate-300">
               {tr(
-                "Je kunt doorgaan met lokaal resultaat, of AI een extra poging laten doen.",
-                "You can continue with the local result, or let AI try an extra pass."
+                "We vonden wel data, maar sommige rijen kunnen ontbreken of verkeerd zijn. Je kunt lokaal doorgaan of AI een extra poging laten doen.",
+                "We found data, but some rows may be missing or wrong. You can continue locally or let AI try an extra pass."
               )}
             </p>
           </div>
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/45 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Waarom onzeker?", "Why uncertain?")}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{tr("Wat viel op?", "What looked off?")}</p>
           <ul className="mt-2 space-y-1 text-sm text-slate-200">
             {assessment.reasons.map((reason) => (
               <li key={reason}>• {reasonLabel(reason)}</li>
             ))}
           </ul>
           <p className="mt-3 text-xs text-slate-400">
-            {tr("Biomarkers", "Biomarkers")}: {assessment.markerCount} · {tr("Confidence", "Confidence")}:{" "}
-            {Math.round(assessment.confidence * 100)}% · {tr("Unitdekking", "Unit coverage")}:{" "}
+            {tr("Biomarkers", "Biomarkers")}: {assessment.markerCount} · {tr("Herkenningsscore", "Match score")}:{" "}
+            {Math.round(assessment.confidence * 100)}% · {tr("Rijen met eenheid", "Rows with units")}:{" "}
             {Math.round(assessment.unitCoverage * 100)}%
           </p>
         </div>

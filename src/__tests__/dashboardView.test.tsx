@@ -159,20 +159,21 @@ describe("DashboardView first-visit hero", () => {
     const { props } = buildProps();
     render(<DashboardView {...{ ...props, reports: [], visibleReports: [] }} />);
 
-    expect(screen.getByText("Your data stays on your device. AI only if you want it.")).toBeTruthy();
+    expect(screen.getByText("Built for TRT, enhanced athletes, and protocol changes")).toBeTruthy();
+    expect(screen.getByText(/Privacy-first, but not generic./i)).toBeTruthy();
     expect(screen.getByRole("img", { name: "LabTracker dashboard preview" })).toBeTruthy();
 
     const demoButton = screen.getByRole("button", { name: "See a live demo" });
-    const uploadButton = screen.getByRole("button", { name: "Upload your own PDF" });
+    const uploadButton = screen.getByRole("button", { name: "Upload your lab PDF" });
     expect(demoButton.className).toContain("border-cyan-400/55");
     expect(uploadButton.className).toContain("border-cyan-400/55");
     expect(demoButton.className).toContain("bg-cyan-500/15");
     expect(uploadButton.className).toContain("bg-cyan-500/15");
 
     expect(screen.getByText("How it works")).toBeTruthy();
-    expect(screen.getByText("Upload your lab PDF")).toBeTruthy();
-    expect(screen.getByText("See your trends")).toBeTruthy();
-    expect(screen.getByText("Optimize your protocol")).toBeTruthy();
+    expect(screen.getAllByText("Upload your lab PDF").length).toBeGreaterThan(0);
+    expect(screen.getByText("See what your protocol is doing")).toBeTruthy();
+    expect(screen.getByText("Adjust with context")).toBeTruthy();
     expect(screen.queryByText("Sync & backup")).toBeNull();
     expect(screen.getByText("Local processing by default")).toBeTruthy();
     expect(screen.getByText("Works with many lab formats")).toBeTruthy();

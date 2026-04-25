@@ -525,7 +525,7 @@ const AppShell = ({
 
   return (
     <div
-      className={`min-h-screen ${isCompactDensity ? "px-2.5 py-3 sm:px-4 lg:px-5" : "px-3 py-4 sm:px-5 lg:px-6"} ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}
+      className={`min-h-screen max-w-full overflow-x-hidden ${isCompactDensity ? "px-2.5 py-3 sm:px-4 lg:px-5" : "px-3 py-4 sm:px-5 lg:px-6"} ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}
     >
       <input
         ref={hiddenUploadInputRef}
@@ -632,8 +632,8 @@ const AppShell = ({
         </aside>
 
         <main className={`min-w-0 flex-1 ${isCompactDensity ? "space-y-2.5" : "space-y-3"}`} id="dashboard-export-root">
-          <header className={`${isCompactDensity ? "space-y-2.5" : "space-y-3"} px-1 py-0.5 ${hideDashboardDesktopHeader ? "lg:hidden" : ""}`}>
-            <div className="flex items-center gap-2 lg:hidden">
+          <header className={`${isCompactDensity ? "space-y-2.5" : "space-y-3"} min-w-0 px-1 py-0.5 ${hideDashboardDesktopHeader ? "lg:hidden" : ""}`}>
+            <div className="flex min-w-0 items-center gap-2 lg:hidden">
               <button
                 type="button"
                 aria-expanded={isMobileMenuOpen}
@@ -655,11 +655,11 @@ const AppShell = ({
                 className={`h-6 w-6 shrink-0 rounded-md border p-0.5 ${isLightTheme ? "border-slate-300 bg-white" : "border-slate-700/70 bg-slate-900/75"}`}
               />
               {!hideDashboardMobileTitle ? <p className={`min-w-0 truncate text-sm font-semibold ${isLightTheme ? "text-slate-900" : "text-slate-100"}`}>{activeTabTitle}</p> : null}
-              <div className="flex-1" />
+              <div className="min-w-0 flex-1" />
               {!isReviewMode ? (
                 <button
                   type="button"
-                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                    className={`inline-flex max-w-[42vw] shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
                       quickUploadDisabled
                         ? isLightTheme
                           ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
@@ -672,7 +672,7 @@ const AppShell = ({
                   disabled={quickUploadDisabled}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  {tr("Snelle upload", "Quick Upload")}
+                  <span className="truncate">{tr("Snelle upload", "Quick Upload")}</span>
                 </button>
               ) : null}
             </div>

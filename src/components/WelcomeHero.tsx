@@ -1,11 +1,11 @@
 import { motion } from "framer-motion";
 import { BarChart3, FileText, Lock, Play, Sparkles, Upload } from "lucide-react";
 import dashboardFirstVisitPreview from "../assets/dashboard-first-visit.png";
-import { USER_PROFILES } from "../data/userProfiles";
 import { trLocale } from "../i18n";
 import { AppLanguage, ThemeMode, UserProfile } from "../types";
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { USER_PROFILES } from "../data/userProfiles";
 
 export interface WelcomeHeroProps {
   language: AppLanguage;
@@ -13,11 +13,10 @@ export interface WelcomeHeroProps {
   cloudConfigured: boolean;
   onLoadDemo: (profile: UserProfile) => void;
   onUploadClick: () => void;
-  onSetUserProfile: (profile: UserProfile) => void;
   onOpenCloudAuth: (view: "signin" | "signup") => void;
 }
 
-const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadClick, onSetUserProfile, onOpenCloudAuth }: WelcomeHeroProps) => {
+const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadClick, onOpenCloudAuth }: WelcomeHeroProps) => {
   const tr = (nl: string, en: string): string => trLocale(language, nl, en);
   const isLightTheme = theme === "light";
   const [pendingAction, setPendingAction] = useState<"demo" | "upload" | null>(null);
@@ -35,19 +34,19 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
     },
     {
       icon: BarChart3,
-      title: tr("Bekijk je trends", "See your trends"),
+      title: tr("Zie wat je protocol doet", "See what your protocol is doing"),
       description: tr(
-        "Zie in seconden hoe je biomarkers bewegen, inclusief referentiebereiken en trendrichting.",
-        "Charts, reference ranges, and changes over time — visible immediately."
+        "Koppel labwaarden aan dosis-, middel- en supplementwijzigingen.",
+        "Connect biomarkers to dose, compound, and supplement changes."
       ),
       preview: "trends" as const
     },
     {
       icon: Sparkles,
-      title: tr("Optimaliseer je protocol", "Optimize your protocol"),
+      title: tr("Stuur bij met context", "Adjust with context"),
       description: tr(
-        "Koppel je protocol aan je labs en laat AI alleen meedenken als jij daar expliciet voor kiest.",
-        "Connect protocols to your labs and use AI only if you explicitly opt in."
+        "Gebruik trends, alerts en AI Coach alleen wanneer jij daar expliciet voor kiest.",
+        "Use trends, alerts, and AI Coach only when you explicitly opt in."
       ),
       preview: "protocol" as const
     }
@@ -151,14 +150,8 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
   };
 
   const continueWithProfile = (profile: UserProfile) => {
-    onSetUserProfile(profile);
-    const action = pendingAction;
     setPendingAction(null);
-    if (action === "demo") {
-      onLoadDemo(profile);
-      return;
-    }
-    onUploadClick();
+    onLoadDemo(profile);
   };
 
   const profilePickerModal =
@@ -191,7 +184,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
               <p className={`mt-1 text-sm ${isLightTheme ? "text-slate-600" : "text-slate-300"}`}>
                 {tr(
                   "Kies wat nu het beste past. Geen zorgen, je kunt dit later altijd aanpassen in Instellingen.",
-                  "Pick what fits best for now. Don't worry, you can always change this later in settings."
+                  "Pick a demo profile. For your own PDF, we ask this after upload so you can start first."
                 )}
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -227,17 +220,23 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
-      className="welcome-hero relative overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-8"
+      className="welcome-hero relative max-w-full overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 sm:p-8"
     >
       <div className="welcome-hero-halo" aria-hidden />
       <div className="relative z-[1] grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,500px)]">
         <div>
           <div className="max-w-2xl">
             <h3 className="text-balance text-2xl font-semibold leading-tight text-slate-100 sm:text-3xl">
-              {tr("Begrijp wat je bloedwaarden je vertellen", "Understand what your blood work is telling you")}
+              {tr(
+                "Gebouwd voor TRT, enhanced athletes en protocolwijzigingen",
+                "Built for TRT, enhanced athletes, and protocol changes"
+              )}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">
-              {tr("Jouw data blijft op jouw apparaat. AI alleen als jij dat wil.", "Your data stays on your device. AI only if you want it.")}
+              {tr(
+                "Upload je lab-PDF en zie wat dosis, middelen, supplementen en timing met je biomarkers doen. Privacy-first, maar niet generiek.",
+                "Upload your lab PDF and see how dose, compounds, supplements, and timing affect your biomarkers. Privacy-first, but not generic."
+              )}
             </p>
             {showCloudAuthCta ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm">
@@ -294,7 +293,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
             <div className="flex flex-col gap-1.5">
               <button
                 type="button"
-                onClick={() => setPendingAction("upload")}
+                onClick={onUploadClick}
                 className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
                   isLightTheme
                     ? "border-cyan-600/45 bg-cyan-500/20 text-cyan-900 hover:border-cyan-700/70 hover:bg-cyan-500/30"
@@ -302,10 +301,10 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
                 }`}
               >
                 <Upload className="h-4 w-4" />
-                {tr("Upload je eigen PDF", "Upload your own PDF")}
+                {tr("Upload je lab-PDF", "Upload your lab PDF")}
               </button>
               <p className="text-xs text-slate-400">
-                {tr("Direct beginnen met je eigen data", "Jump straight in with your own data")}
+                {tr("Eerst uploaden, daarna pas je profiel kiezen.", "Upload first, then pick your profile.")}
               </p>
             </div>
           </div>
@@ -327,7 +326,7 @@ const WelcomeHero = ({ language, theme, cloudConfigured, onLoadDemo, onUploadCli
 
         </div>
         <div>
-          <div className="relative rounded-xl border border-slate-700/80 bg-slate-950/60 p-2 shadow-[0_18px_40px_-30px_rgba(8,145,178,0.75)]">
+          <div className="relative max-w-full overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/60 p-2 shadow-[0_18px_40px_-30px_rgba(8,145,178,0.75)]">
             <img
               src={dashboardFirstVisitPreview}
               alt={tr("Dashboardvoorbeeld van LabTracker", "LabTracker dashboard preview")}

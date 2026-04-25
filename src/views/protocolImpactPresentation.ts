@@ -251,18 +251,18 @@ export const getConfidenceLabel = (
 ): { label: string; toneClass: string } => {
   if (confidence === "High") {
     return {
-      label: tr("Hoge betrouwbaarheid", "High confidence"),
+      label: tr("Sterk signaal", "Strong signal"),
       toneClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
     };
   }
   if (confidence === "Medium") {
     return {
-      label: tr("Beperkte data", "Limited data"),
+      label: tr("Vroeg signaal", "Early signal"),
       toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-200"
     };
   }
   return {
-    label: tr("Lage betrouwbaarheid", "Low confidence"),
+    label: tr("Nog een lab nodig", "Needs another lab"),
     toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200"
   };
 };

@@ -73,8 +73,8 @@ const ParserUploadSummaryModal = ({
           )
       : summary.needsReview
         ? tr(
-            "Dit rapport heeft controle nodig voordat je het opslaat.",
-            "This report needs review before saving."
+            "We hebben data gevonden, maar een paar rijen vragen om controle voordat je opslaat.",
+            "We found data, but a few rows need checking before saving."
           )
         : tr(
             "Controleer de biomarkers en sla het rapport op wanneer je klaar bent.",
@@ -101,11 +101,11 @@ const ParserUploadSummaryModal = ({
         ? summary.warnings > 0
           ? tr(
               "Er zijn parserwaarschuwingen gevonden. Controleer de gevonden biomarkers zorgvuldig voordat je opslaat.",
-              "Parser warnings were detected. Review the extracted biomarkers carefully before saving."
+              "Some extraction warnings were detected. Review the extracted biomarkers carefully before saving."
             )
           : tr(
-              "Parserkwaliteitssignalen geven aan dat dit rapport extra controle nodig heeft voordat je opslaat.",
-              "Parser quality signals indicate this report needs extra review before saving."
+              "Een paar kwaliteitssignalen vragen om extra controle voordat je opslaat.",
+              "A few quality signals need an extra check before saving."
             )
         : summary.warnings > 0
           ? tr(
@@ -161,7 +161,7 @@ const ParserUploadSummaryModal = ({
                     : "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
                 }`}
               >
-                {isReviewState ? tr("Controle nodig", "Needs review") : tr("Klaar om te controleren", "Ready to review")}
+                {isReviewState ? tr("Controleer enkele rijen", "Check a few rows") : tr("Klaar om te controleren", "Ready to review")}
               </span>
               <span className="rounded-full border border-slate-600/80 bg-slate-900/70 px-2.5 py-1 text-slate-300">
                 {tr("Route", "Route")}: {routeText}
