@@ -24,7 +24,7 @@ const draft: ExtractionDraft = {
   ],
   extraction: {
     provider: "gemini",
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     confidence: 0.9,
     needsReview: true,
     warnings: ["PDF_LOW_CONFIDENCE_LOCAL"]

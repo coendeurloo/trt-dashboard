@@ -43,6 +43,9 @@ import { AnalystMemory } from "./types/analystMemory";
 import { coerceAnalystMemory } from "./analystMemory";
 import { canonicalizeMarker } from "./unitConversion";
 import { loadAnalystMemoryInputHash, saveAnalystMemoryInputHash } from "./storage";
+import { buildAiCoachSummary } from "./aiCoachSummary";
+import { buildAiCoachQuestionContext } from "./aiCoachRetrieval";
+import type { AiCoachQuestionContext } from "./aiCoachRetrieval";
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
@@ -217,13 +220,11 @@ type NarrativeSectionKey =
   | typeof COMPARISON_REQUIRED_NARRATIVE_SECTION_KEYS[number]
   | "supplement_tweaks";
 
-const ANALYSIS_MODEL_CANDIDATES = [
-  "claude-sonnet-4-20250514",
-  "claude-3-7-sonnet-20250219",
-  "claude-3-7-sonnet-latest",
-  "claude-3-5-sonnet-latest"
-] as const;
-const GEMINI_ANALYSIS_MODEL_CANDIDATES = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"] as const;
+const ASK_AI_MODEL_CANDIDATES = ["claude-sonnet-4-6"] as const;
+const FULL_ANALYSIS_MODEL_CANDIDATES = ["claude-sonnet-4-6"] as const;
+const DEEP_ANALYSIS_MODEL_CANDIDATES = ["claude-opus-4-7", "claude-sonnet-4-6"] as const;
+const GEMINI_ANALYSIS_MODEL_CANDIDATES = ["gemini-2.5-flash"] as const;
+const GEMINI_DEEP_ANALYSIS_MODEL_CANDIDATES = ["gemini-2.5-pro", "gemini-2.5-flash"] as const;
 type AnalysisProvider = "claude" | "gemini";
 
 const BASE_ANALYSIS_MAX_TOKENS = 2400;
@@ -246,7 +247,7 @@ const MAX_MEMORY_WATCHLIST_IN_PROMPT = 4;
 const MEMORY_ANALYSIS_SUMMARY_MAX_CHARS = 1200;
 const MEMORY_GENERATION_MAX_TOKENS = 700;
 const MEMORY_GENERATION_MODEL = "claude-haiku-4-5";
-const MEMORY_GENERATION_FALLBACK_MODEL = "claude-3-5-sonnet-latest";
+const MEMORY_GENERATION_FALLBACK_MODEL = "claude-sonnet-4-6";
 const parseMarkerCap = (): number => {
   const raw = Number(import.meta.env.VITE_AI_ANALYSIS_MARKER_CAP ?? 60);
   if (!Number.isFinite(raw)) {
@@ -1002,6 +1003,7 @@ interface FullAnalysisParams {
   fullSupplementActionability: SupplementActionabilityDecision;
   benchmarkSection: string;
   supplementActionsNeeded: boolean;
+  questionContext?: AiCoachQuestionContext | null;
 }
 
 interface ComparisonParams {
@@ -1156,10 +1158,41 @@ function buildQuestionPrompt(params: FullAnalysisParams & { customQuestion: stri
   const {
     today, unitSystem, language, profile, personalContext, markerPresenceAcrossScope, latestReportAllMarkers, memory, payload, supplementContext, signals,
     fullPremiumInsightPack, fullActionability, fullSupplementActionability,
-    benchmarkSection, supplementActionsNeeded, customQuestion
+    benchmarkSection, supplementActionsNeeded, customQuestion, questionContext
   } = params;
 
   const safeQuestion = customQuestion.trim();
+  const layeredPayload = questionContext
+    ? {
+        type: "questionFocusedLayered",
+        units: unitSystem,
+        userProfile: profile,
+        personalContext,
+        fullPictureSummary: questionContext.fullPictureSummary,
+        focusedEvidence: questionContext.focusedEvidence,
+        latestReportEvidence: buildLatestReportEvidence(payload),
+        markerPresenceAcrossScope,
+        latestReportAllMarkers,
+        currentSupplements: supplementContext,
+        userQuestion: safeQuestion,
+        signals: questionContext.focusedEvidence.focusedSignals,
+        actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
+      }
+    : {
+        type: "questionFocusedFull",
+        units: unitSystem,
+        userProfile: profile,
+        personalContext,
+        reports: payload,
+        latestReportEvidence: buildLatestReportEvidence(payload),
+        markerPresenceAcrossScope,
+        latestReportAllMarkers,
+        currentSupplements: supplementContext,
+        userQuestion: safeQuestion,
+        signals,
+        premiumInsights: fullPremiumInsightPack,
+        actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
+      };
   const systemText = buildSystemPromptText({
     profile,
     language,
@@ -1170,26 +1203,15 @@ function buildQuestionPrompt(params: FullAnalysisParams & { customQuestion: stri
   const stableDataText = buildStableDataText({
     benchmarkSection,
     memoryContext: buildMemoryContext(memory),
-    payload: {
-      type: "questionFocusedFull",
-      units: unitSystem,
-      userProfile: profile,
-      personalContext,
-      reports: payload,
-      latestReportEvidence: buildLatestReportEvidence(payload),
-      markerPresenceAcrossScope,
-      latestReportAllMarkers,
-      currentSupplements: supplementContext,
-      userQuestion: safeQuestion,
-      signals,
-      premiumInsights: fullPremiumInsightPack,
-      actionability: { clinical: fullActionability, supplement: fullSupplementActionability }
-    }
+    payload: layeredPayload
   });
   const variableText = [
     `Today is ${today}.`,
     buildMemoryMetaLine(memory),
     "Scope: answer the user question first. This is a targeted Q&A run, not a full timeline recap.",
+    questionContext
+      ? "Context: fullPictureSummary is the broad overview; focusedEvidence contains the detailed data selected for this question. Do not assume omitted markers are normal or absent. Use markerPresenceAcrossScope and latestReportAllMarkers for missing-marker statements."
+      : "Context: the data block contains a broad question-focused analysis packet.",
     `USER QUESTION:
 - "${safeQuestion}"`,
     `Question-first rules:
@@ -2934,6 +2956,22 @@ export const analyzeLabDataWithClaude = async ({
   const trackedMarkerNames = Array.from(new Set(payload.flatMap((report) => report.markers.map((marker) => marker.m))));
   const benchmarkSection = buildBenchmarkContext(trackedMarkerNames.slice(0, MAX_BENCHMARK_MARKERS_IN_PROMPT));
   const maxTokens = deepMode ? BASE_DEEP_ANALYSIS_MAX_TOKENS : BASE_ANALYSIS_MAX_TOKENS;
+  const questionContext = normalizedCustomQuestion
+    ? buildAiCoachQuestionContext({
+        question: normalizedCustomQuestion,
+        reports: sanitizedPayload,
+        summary: buildAiCoachSummary({
+          reports: sanitizedPayload,
+          language: _language,
+          profile,
+          unitSystem,
+          personalContext,
+          supplementContext,
+          signals
+        }),
+        signals
+      })
+    : null;
 
   const fullPrompt = buildFullAnalysisPrompt({
     today,
@@ -2971,7 +3009,8 @@ export const analyzeLabDataWithClaude = async ({
         fullSupplementActionability,
         benchmarkSection,
         supplementActionsNeeded: fullSupplementActionability.supplementActionsNeeded,
-        customQuestion: normalizedCustomQuestion
+        customQuestion: normalizedCustomQuestion,
+        questionContext
       })
     : null;
 
@@ -3166,14 +3205,28 @@ export const analyzeLabDataWithClaude = async ({
         : ["claude", "gemini"];
 
   const primaryProvider = providerPlan[0] ?? "claude";
+
+  const resolveModelCandidates = (provider: AnalysisProvider): readonly string[] => {
+    if (provider === "gemini") {
+      return deepMode ? GEMINI_DEEP_ANALYSIS_MODEL_CANDIDATES : GEMINI_ANALYSIS_MODEL_CANDIDATES;
+    }
+    if (deepMode) {
+      return DEEP_ANALYSIS_MODEL_CANDIDATES;
+    }
+    if (isQuestionFocusedRun) {
+      return ASK_AI_MODEL_CANDIDATES;
+    }
+    return FULL_ANALYSIS_MODEL_CANDIDATES;
+  };
+
   providerLoop: for (const provider of providerPlan) {
-    const modelCandidates = provider === "gemini" ? GEMINI_ANALYSIS_MODEL_CANDIDATES : ANALYSIS_MODEL_CANDIDATES;
+    const modelCandidates = resolveModelCandidates(provider);
 
     modelLoop: for (const model of modelCandidates) {
       for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES_PER_MODEL; attempt += 1) {
         let result: { status: number; body: ClaudeResponse; retryAfterSeconds: number | null };
         try {
-        result = await tryModel(model, provider, prompt);
+          result = await tryModel(model, provider, prompt);
         } catch (error) {
           if (error instanceof Error && error.message === "AI_REQUEST_ABORTED") {
             throw error;
@@ -3312,4 +3365,3 @@ export const analyzeLabDataWithClaude = async ({
   }
   throw new Error(`AI_REQUEST_FAILED:${lastStatus || "unknown"}:${lastErrorMessage || ""}`);
 };
-

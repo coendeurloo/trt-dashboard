@@ -49,7 +49,7 @@ interface CachedEntry {
 
 const MAX_JSON_BYTES = 18 * 1024 * 1024;
 const PRIMARY_MODEL = "gemini-2.5-flash-lite";
-const TECHNICAL_FALLBACK_MODEL = "gemini-2.0-flash";
+const TECHNICAL_FALLBACK_MODEL = "gemini-2.5-flash";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const DAY_TTL_SECONDS = 48 * 60 * 60;

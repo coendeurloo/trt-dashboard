@@ -8,6 +8,10 @@ import { resolveCanonicalMarker } from "../markerNormalization";
 const genericProfile = __pdfParsingInternals.detectParserProfile("", "random-report.pdf");
 
 describe("pdfParsing fallback layers", () => {
+  it("uses Gemini 2.5 Flash as the parser AI fallback", () => {
+    expect(__pdfParsingInternals.geminiModelCandidates).toEqual(["gemini-2.5-flash-lite", "gemini-2.5-flash"]);
+  });
+
   it("uses one adaptive profile and toggles behavior from text signals", () => {
     const defaultProfile = __pdfParsingInternals.detectParserProfile("Results for your Doctor", "x.pdf");
     const keywordRangeProfile = __pdfParsingInternals.detectParserProfile(
@@ -2153,4 +2157,3 @@ describe("assessParserUncertainty", () => {
     expect(result.reasons).toContain("confidence_and_unit_coverage_low");
   });
 });
-

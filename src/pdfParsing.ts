@@ -311,7 +311,7 @@ const LOCAL_AI_EXTRACTION_CACHE_MAX_ENTRIES = 30;
 const MAX_PDF_RESCUE_BYTES = 7_000_000;
 const GEMINI_MODEL_CANDIDATES = [
   "gemini-2.5-flash-lite",
-  "gemini-2.0-flash"
+  "gemini-2.5-flash"
 ] as const;
 const SPATIAL_ROW_Y_GROUP_TOLERANCE = 2;
 const SPATIAL_CLUSTER_GAP = 42;
@@ -6680,6 +6680,7 @@ export const extractLabData = async (file: File, options: ExtractLabDataOptions 
 };
 
 export const __pdfParsingInternals = {
+  geminiModelCandidates: GEMINI_MODEL_CANDIDATES,
   detectParserProfile,
   extractDateCandidate,
   shouldUseOcrFallback,

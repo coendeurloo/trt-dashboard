@@ -152,7 +152,9 @@ describe("analyzeLabDataWithClaude", () => {
       }
     });
 
-    const fetchMock = vi.fn(async () => {
+    const capturedBodies: Array<{ payload?: { stream?: boolean; model?: string } }> = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      capturedBodies.push(init?.body ? JSON.parse(String(init.body)) : {});
       return new Response(stream, {
         status: 200,
         headers: {
@@ -170,6 +172,7 @@ describe("analyzeLabDataWithClaude", () => {
       unitSystem: "eu",
       language: "en",
       externalAiAllowed: true,
+      customQuestion: "What does my testosterone trend mean?",
       onStreamEvent: (event) => {
         if (event.type === "delta" && event.delta) {
           deltas.push(event.delta);
@@ -179,6 +182,8 @@ describe("analyzeLabDataWithClaude", () => {
 
     expect(deltas.join("")).toContain("Hello world");
     expect(result.text).toContain("Hello world");
+    expect(capturedBodies[0]?.payload?.stream).toBe(true);
+    expect(capturedBodies[0]?.payload?.model).toBe("claude-sonnet-4-6");
   });
 
   it("keeps symptoms/notes out unless explicitly opted in", async () => {
@@ -264,7 +269,196 @@ describe("analyzeLabDataWithClaude", () => {
     expect(capturedPrompt).toContain("Question-first rules:");
     expect(capturedPrompt).not.toContain("Tell the story of how decisions led to outcomes.");
     const data = extractDataBlock(capturedPrompt);
+    expect(data.type).toBe("questionFocusedLayered");
+    expect(data.fullPictureSummary).toBeTruthy();
+    expect(data.focusedEvidence).toBeTruthy();
     expect(data.userQuestion).toBe("Why is my testosterone stable but energy still low?");
+  });
+
+  it("selects focused evidence plus a compact summary for Ask AI questions", async () => {
+    const olderReport: LabReport = {
+      ...sampleReport,
+      id: "r-old",
+      testDate: "2026-01-01",
+      createdAt: "2026-01-01T10:00:00.000Z",
+      markers: [
+        {
+          ...sampleReport.markers[0],
+          id: "hct-old",
+          marker: "Hematocrit",
+          canonicalMarker: "Hematocrit",
+          value: 0.49,
+          unit: "L/L",
+          referenceMin: 0.4,
+          referenceMax: 0.52
+        },
+        {
+          ...sampleReport.markers[0],
+          id: "hb-old",
+          marker: "Hemoglobin",
+          canonicalMarker: "Hemoglobin",
+          value: 9.5,
+          unit: "mmol/L",
+          referenceMin: 8.5,
+          referenceMax: 11
+        },
+        {
+          ...sampleReport.markers[0],
+          id: "test-old",
+          value: 18.1
+        }
+      ]
+    };
+    const latestReport: LabReport = {
+      ...olderReport,
+      id: "r-new",
+      testDate: "2026-02-01",
+      createdAt: "2026-02-01T10:00:00.000Z",
+      markers: [
+        {
+          ...olderReport.markers[0],
+          id: "hct-new",
+          value: 0.54
+        },
+        {
+          ...olderReport.markers[1],
+          id: "hb-new",
+          value: 10.7
+        },
+        {
+          ...olderReport.markers[2],
+          id: "test-new",
+          value: 24.2
+        }
+      ]
+    };
+
+    let capturedPrompt = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        capturedPrompt = extractPromptTextFromPayload(body?.payload);
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            stop_reason: "end_turn"
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    await analyzeLabDataWithClaude({
+      reports: [olderReport, latestReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      customQuestion: "Why is my hematocrit high?"
+    });
+
+    const data = extractDataBlock(capturedPrompt);
+    const summary = data.fullPictureSummary as { latestReport?: { markerCount?: number } } | undefined;
+    const focusedEvidence = data.focusedEvidence as
+      | {
+          selectionMode?: string;
+          matchedMarkers?: string[];
+          relatedMarkers?: string[];
+          reports?: Array<{ markers?: Array<{ m?: string }> }>;
+        }
+      | undefined;
+    const focusedMarkers = focusedEvidence?.reports?.flatMap((report) => report.markers?.map((marker) => marker.m) ?? []) ?? [];
+
+    expect(summary?.latestReport?.markerCount).toBe(3);
+    expect(focusedEvidence?.selectionMode).toBe("focused");
+    expect(focusedEvidence?.matchedMarkers).toContain("Hematocrit");
+    expect(focusedEvidence?.relatedMarkers).toEqual(expect.arrayContaining(["Hematocrit", "Hemoglobin"]));
+    expect(focusedMarkers).toEqual(expect.arrayContaining(["Hematocrit", "Hemoglobin"]));
+    expect(focusedMarkers).not.toContain("Testosterone");
+    expect(data.latestReportAllMarkers).toEqual(expect.arrayContaining(["Hematocrit", "Hemoglobin", "Testosterone"]));
+  });
+
+  it("uses the Ask AI model list without falling through to full or deep Claude candidates", async () => {
+    const attemptedModels: string[] = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      const model = String(body?.payload?.model ?? "");
+      attemptedModels.push(model);
+      if (model === "claude-sonnet-4-6") {
+        return new Response(
+          JSON.stringify({
+            error: { message: "model not found" }
+          }),
+          { status: 404 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Gemini fallback answer" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      customQuestion: "Why is testosterone stable?"
+    });
+
+    expect(result.provider).toBe("gemini");
+    expect(attemptedModels).toEqual(["claude-sonnet-4-6", "gemini-2.5-flash"]);
+    expect(attemptedModels).not.toContain("claude-opus-4-7");
+    expect(attemptedModels).not.toContain("claude-sonnet-4-20250514");
+    expect(attemptedModels.some((model) => model.includes("claude-3-"))).toBe(false);
+    expect(attemptedModels).not.toContain("gemini-2.0-flash");
+  });
+
+  it("uses Gemini Flash for normal fallback and Gemini Pro only for deep Gemini runs", async () => {
+    const attemptedModels: string[] = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      attemptedModels.push(String(body?.payload?.model ?? ""));
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn"
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      providerPreference: "gemini",
+      customQuestion: "Why is testosterone stable?"
+    });
+    await analyzeLabDataWithClaude({
+      reports: [sampleReport],
+      protocols: [],
+      supplementTimeline: [],
+      unitSystem: "eu",
+      language: "en",
+      externalAiAllowed: true,
+      providerPreference: "gemini",
+      deepMode: true
+    });
+
+    expect(attemptedModels).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
   });
 
   it("retries overloaded responses with backoff before succeeding", async () => {

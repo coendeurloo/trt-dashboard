@@ -65,7 +65,7 @@ describe("useAnalysis personal context forwarding", () => {
     analyzeLabDataWithClaudeMock.mockResolvedValue({
       text: "ok",
       provider: "claude",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       fallbackUsed: false,
       actionsNeeded: false,
       actionReasons: [],
@@ -125,7 +125,7 @@ describe("useAnalysis personal context forwarding", () => {
     analyzeLabDataWithClaudeMock.mockResolvedValue({
       text: "ok",
       provider: "claude",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       fallbackUsed: false,
       actionsNeeded: false,
       actionReasons: [],

@@ -42,7 +42,8 @@ const mimeTypes = {
   ".woff2": "font/woff2"
 };
 const MAX_JSON_BYTES = 18 * 1024 * 1024;
-const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.0-flash"];
+const GEMINI_ANALYSIS_MODEL = "gemini-2.5-flash";
+const GEMINI_EXTRACT_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"];
 
 const sendJson = (res, statusCode, payload) => {
   res.writeHead(statusCode, {
@@ -258,7 +259,7 @@ const server = http.createServer(async (req, res) => {
       let lastErrorStatus = 500;
       let lastErrorText = "";
 
-      for (const model of GEMINI_MODELS) {
+      for (const model of GEMINI_EXTRACT_MODELS) {
         const geminiResponse = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
           {
@@ -350,7 +351,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = await readJsonBody(req);
-      const model = typeof body?.payload?.model === "string" ? body.payload.model : GEMINI_MODELS[0];
+      const model = typeof body?.payload?.model === "string" ? body.payload.model : GEMINI_ANALYSIS_MODEL;
 
       const geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
